@@ -12,6 +12,7 @@
     "sim": "node scripts/sim.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
