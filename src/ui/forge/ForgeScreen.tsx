@@ -32,6 +32,24 @@ const remembered = () => {
 
 type Mode = 'entry' | 'sign-in' | 'prompt'
 
+/**
+ * Sign-in links land here with ?signin=<token>. The token is single-use, so it is verified once per page load and
+ * every mount (StrictMode mounts twice) awaits the same verification before asking for the session.
+ */
+let verifying: Promise<void> | undefined
+function verifyFromUrl(deps: ForgeDeps): Promise<void> {
+  if (!verifying) {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('signin')
+    if (token) {
+      params.delete('signin')
+      window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`)
+    }
+    verifying = token ? deps.verifySignIn(token) : Promise.resolve()
+  }
+  return verifying
+}
+
 /** Loadout first; forge new only when nothing fits (R1, R2, KTD11). */
 export function ForgeScreen({ deps = liveForgeDeps }: { deps?: ForgeDeps }) {
   const [session, setSession] = useState<SessionView>()
@@ -67,20 +85,14 @@ export function ForgeScreen({ deps = liveForgeDeps }: { deps?: ForgeDeps }) {
     }
   }, [])
 
-  // sign-in links land here with ?signin=<token>; then reopen the forge the player left
+  // finish any sign-in link, then reopen the forge the player left
   useEffect(() => {
     let live = true
     ;(async () => {
-      const params = new URLSearchParams(window.location.search)
-      const token = params.get('signin')
-      if (token) {
-        params.delete('signin')
-        window.history.replaceState(null, '', `${window.location.pathname}${params.size ? `?${params}` : ''}`)
-        try {
-          await deps.verifySignIn(token)
-        } catch (e) {
-          if (live) setError(e instanceof Error ? e.message : 'that sign-in link did not work')
-        }
+      try {
+        await verifyFromUrl(deps)
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : 'that sign-in link did not work')
       }
       const s = await deps.session().catch(() => ({ signedIn: false }))
       if (!live) return
