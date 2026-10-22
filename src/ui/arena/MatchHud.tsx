@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { Build } from '../../charter/build'
 import type { HudHero, HudState } from '../../arena/client/match-view'
 import { SynergyPanel } from './staging/Panels'
+
+// synergies depend only on the roster, not on the 10 Hz match state
+const Synergies = memo(SynergyPanel)
 
 const cd = (left: number) => (left > 0.05 ? Math.ceil(left).toString() : '')
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -19,7 +22,7 @@ export function MatchHud({ state, side, builds }: { state: HudState; side: 0 | 1
         <span className="team-b">{alive(1)} alive</span>
       </div>
       <div className="hud-left">
-        <SynergyPanel builds={builds} />
+        <Synergies builds={builds} />
       </div>
       <button className="hud-stats-toggle" aria-pressed={stats} onClick={() => setStats(!stats)}>
         {stats ? 'Hide stats' : 'Stats'}

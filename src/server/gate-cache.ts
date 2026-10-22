@@ -3,7 +3,7 @@ import { BUILD_SLOTS, swapAlternatives, type Build } from '../charter/build'
 import { CATALOG_VERSION } from '../charter/templates/catalog'
 import type { BuildSlot } from '../charter/types'
 import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from '../sim/calibration'
-import { runGate, type GateOptions, type GateOutcome } from '../sim/gate'
+import { gateStamp, runGate, type GateOptions, type GateOutcome } from '../sim/gate'
 import type { Db } from './db'
 
 /**
@@ -34,7 +34,7 @@ export function gateKey(build: Build, options: GateOptions = {}): string {
 /** Rebuild the gate's outcome for this build from a cached result. */
 function replay(input: Build, cached: Cached): GateOutcome {
   const slots = Object.fromEntries(BUILD_SLOTS.map((s) => [s, { ...input.slots[s], retuneSteps: cached.retuneSteps }])) as Build['slots']
-  const stamp = { catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, aiCalibrationVersion: AI_CALIBRATION_VERSION, winRate: Math.round(cached.winRate * 1000) / 1000 }
+  const stamp = gateStamp(cached.winRate)
   const gate = cached.state === 'ready' ? { state: 'ready' as const, ...stamp } : { state: 'blocked' as const, strongestSlot: cached.strongestSlot, ...stamp }
   const build = { ...input, slots, gate }
   return cached.state === 'ready'

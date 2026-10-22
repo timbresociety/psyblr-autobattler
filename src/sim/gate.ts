@@ -84,6 +84,9 @@ function strongestSlot(build: Build, base: number, options: GateOptions): BuildS
  * The balance gate (KTD7): measure the build, retune every slot down one budget step at a time until it sits at or
  * under the ceiling, and block it if the retune limit is reached first.
  */
+/** The versions a gate result was earned against, plus its rounded win rate; `isGateStale` checks the same three. */
+export const gateStamp = (winRate: number) => ({ catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, aiCalibrationVersion: AI_CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 })
+
 export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   let steps = 0
   let build = withSteps(input, 0)
@@ -93,7 +96,7 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
     build = withSteps(input, steps)
     winRate = winRateVsField(build, options)
   }
-  const stamp = { catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, aiCalibrationVersion: AI_CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 }
+  const stamp = gateStamp(winRate)
   if (winRate <= PASS_LINE) return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...stamp } } }
   const slot = strongestSlot(build, winRate, options)
   return {

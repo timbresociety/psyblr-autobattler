@@ -188,6 +188,10 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   let drawn: Vec3[] = prev.map((p) => ({ ...p }))
   let last = performance.now()
   let stopped = false
+  const publish = () => {
+    store.set(hud(arena, views, clock.paused, backend, quality))
+    store.flush()
+  }
   const guard = createGuard()
   let quality: QualityLevel = 'full'
   let frameNo = 0
@@ -239,7 +243,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)
       if (releaseIfDead(arena.match)) hooks.released?.()
-      arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+      if (events.length) arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
       physics?.events(events, arena.match)
       if (events.length) hooks.events?.(events)
     }
@@ -293,7 +297,8 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
     hooks.frame?.(dt, alpha)
     renderer.render(scene, camera)
-    store.set(hud(arena, views, clock.paused, backend, quality))
+    // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
+    if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality))
     requestAnimationFrame(loop)
   }
   requestAnimationFrame(loop)
@@ -315,23 +320,23 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       cameras.yaw = arena.match.heroes[hero!].yaw
       cameras.pitch = -0.15
       cameras.set('hero')
-      store.flush()
+      publish()
       return true
     },
     handBack: () => {
       handBack(arena.match)
       cameras.set('free')
-      store.flush()
+      publish()
     },
     positions: () => drawn,
     pause: () => {
       clock.paused = arena.match.paused = true
-      store.flush()
+      publish()
     },
     resume: () => {
       clock.paused = arena.match.paused = false
       last = performance.now()
-      store.flush()
+      publish()
     },
     quality: () => quality,
     stop: () => {

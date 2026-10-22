@@ -4,7 +4,8 @@ import type { StageId } from './types'
 /**
  * Forge pricing (R45, KTD18). One credit is about one US cent of provider spend. The hero is priced as one blended
  * number, twice the estimated cost of every generation a full forge makes, with the optional form weighted by how
- * often players take it; each paid stage then charges its share on confirm, in proportion to its own cost.
+ * often players take it. Each paid stage charges twice its own cost on confirm, so a forge that takes the form pays
+ * a little more than HERO_PRICE and one that skips it a little less.
  * Refresh the estimates once live costs are measured.
  */
 
@@ -43,7 +44,7 @@ export const HERO_PRICE = Math.round(
   MARKUP * Object.entries(STAGE_COST).reduce((sum, [stage, cost]) => sum + (stage === 'form' ? cost! * TYPICAL.formTakeUp : cost!), 0),
 )
 
-/** Each paid stage charges its share of the blended price, in proportion to its cost. */
+/** Each paid stage charges twice its own cost (the 100% markup), charged on confirm. */
 export const STAGE_PRICES: Partial<Record<StageId, number>> = Object.fromEntries(Object.entries(STAGE_COST).map(([stage, cost]) => [stage, Math.round(cost! * MARKUP)]))
 
 export function stagePrice(stage: StageId): number {

@@ -1,3 +1,4 @@
+import { clamp } from '../engine/maths'
 import { setVolume } from './effects/sound'
 
 /** Volume and mute (R41), remembered between visits; storage can be unavailable, so every access is guarded. */
@@ -11,7 +12,7 @@ export interface AudioSettings {
 export function loadAudio(): AudioSettings {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? 'null') as Partial<AudioSettings> | null
-    if (raw && typeof raw.volume === 'number') return { volume: Math.max(0, Math.min(1, raw.volume)), muted: raw.muted === true }
+    if (raw && typeof raw.volume === 'number') return { volume: clamp(raw.volume, 0, 1), muted: raw.muted === true }
   } catch {
     // private window or blocked storage: fall through to the default
   }

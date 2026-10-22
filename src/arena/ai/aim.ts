@@ -1,6 +1,6 @@
 import { chest } from '../engine/deliveries'
 import { ENGINE } from '../engine/calibration'
-import { atan2, wrapAngle, type Vec3 } from '../engine/maths'
+import { distance, sub, wrapAngle, yawPitch, type Vec3 } from '../engine/maths'
 import { next } from '../engine/rng'
 import type { BrainState, HeroState, MatchState } from '../engine/state'
 import { AI } from './calibration'
@@ -17,18 +17,11 @@ export function aimPoint(match: MatchState, brain: BrainState, from: Vec3, targe
   if (!speed || !seen || seen.target !== target.id || match.tick <= seen.tick) return at
   const dt = (match.tick - seen.tick) / ENGINE.tickHz
   const v = { x: (target.position.x - seen.x) / dt, y: (target.position.y - seen.y) / dt, z: (target.position.z - seen.z) / dt }
-  const dx = at.x - from.x
-  const dy = at.y - from.y
-  const dz = at.z - from.z
-  const flight = Math.sqrt(dx * dx + dy * dy + dz * dz) / speed
+  const flight = distance(at, from) / speed
   return { x: at.x + v.x * flight * AI.lead, y: at.y + v.y * flight * AI.lead, z: at.z + v.z * flight * AI.lead }
 }
 
-export const anglesTo = (from: Vec3, to: Vec3) => {
-  const dx = to.x - from.x
-  const dz = to.z - from.z
-  return { yaw: atan2(dx, dz), pitch: atan2(to.y - from.y, Math.sqrt(dx * dx + dz * dz)) }
-}
+export const anglesTo = (from: Vec3, to: Vec3) => yawPitch(sub(to, from))
 
 /** Move the hand one tick toward the wanted angles; returns how far off it still is, radians. */
 export function trackAim(match: MatchState, brain: BrainState, want: { yaw: number; pitch: number }, swung: boolean): number {

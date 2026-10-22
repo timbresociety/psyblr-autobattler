@@ -6,10 +6,10 @@ import type { Delivery } from './types'
  */
 export const GEOMETRY_DEFAULTS = { speed: 30, projectileRadius: 0.3, meleeArc: 90, width: 1 } as const
 
-/** A cone's default arc spans its end radius at its range, in whole degrees so every platform reads the same number. */
+/** A cone's default arc spans its end radius at its range, rounded to whole degrees and stored as `arcDegrees`, so the engine reads a fixed number. */
 export const coneArc = (range: number, radius: number) => Math.round((2 * Math.atan(radius / Math.max(range, 0.1)) * 180) / Math.PI)
 
-/** The kinds that need each field. */
+/** The geometry fields this delivery's kind needs but does not have. */
 export function missingGeometry(d: Delivery): string[] {
   const need: (keyof Delivery)[] = d.kind === 'projectile' ? ['speed', 'projectileRadius'] : d.kind === 'melee' || d.kind === 'cone' ? ['arcDegrees'] : d.kind === 'beam' ? ['width'] : []
   return need.filter((k) => !(typeof d[k] === 'number' && (d[k] as number) > 0))

@@ -2,7 +2,7 @@ import type { Build } from '../../charter/build'
 import { ENGINE, ticks } from './calibration'
 import { COMBAT_RULES } from './deliveries'
 import { initHero } from './effects'
-import type { Vec3 } from './maths'
+import { clamp, type Vec3 } from './maths'
 import { next } from './rng'
 import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state'
 import { tick, type TickRules } from './tick'
@@ -48,7 +48,7 @@ function defaultSpot(match: MatchState, side: Team, index: number, count: number
 /** Keep a staged spot on its own half of the arena (R1, R2). */
 function ownHalf(side: Team, p: Vec3): Vec3 {
   const z = side === 0 ? Math.min(-0.5, p.z) : Math.max(0.5, p.z)
-  return { x: Math.max(-ENGINE.arena.halfWidth, Math.min(ENGINE.arena.halfWidth, p.x)), y: Math.max(0, Math.min(ENGINE.arena.ceiling, p.y)), z }
+  return { x: clamp(p.x, -ENGINE.arena.halfWidth, ENGINE.arena.halfWidth), y: clamp(p.y, 0, ENGINE.arena.ceiling), z }
 }
 
 export function createMatch(teamA: Combatant[], teamB: Combatant[], seed: number, options: { profile?: Profile; formations?: [Vec3[]?, Vec3[]?] } = {}): Arena {

@@ -16,8 +16,6 @@ export function chooseBackend(env: BackendEnv): Backend {
   return env.hasWebGPU && !env.forceWebGL ? 'webgpu' : 'webgl2'
 }
 
-export const browserHasWebGPU = () => typeof navigator !== 'undefined' && 'gpu' in navigator
-
 /** `?webgl` in the URL forces the WebGL2 backend. */
 export const forceWebGLFlag = (search: string) => new URLSearchParams(search).has('webgl')
 

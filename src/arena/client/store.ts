@@ -6,6 +6,8 @@ export interface Store<T> {
   get: () => T
   set: (next: T) => void
   subscribe: (listener: () => void) => () => void
+  /** Would a `set` now reach listeners? Lets the writer skip building a value nobody will see. */
+  due: () => boolean
   /** Notify now, ignoring the rate (staging changes, pause, match end). */
   flush: () => void
 }
@@ -13,11 +15,9 @@ export interface Store<T> {
 export function createStore<T>(initial: T, hz = 10, now: () => number = () => performance.now()): Store<T> {
   let value = initial
   let last = -Infinity
-  let pending = false
   const listeners = new Set<() => void>()
   const emit = () => {
     last = now()
-    pending = false
     for (const l of listeners) l()
   }
   return {
@@ -25,12 +25,12 @@ export function createStore<T>(initial: T, hz = 10, now: () => number = () => pe
     set: (next) => {
       value = next
       if (now() - last >= 1000 / hz) emit()
-      else pending = true
     },
     subscribe: (l) => {
       listeners.add(l)
       return () => listeners.delete(l)
     },
-    flush: () => (pending || true) && emit(),
+    due: () => now() - last >= 1000 / hz,
+    flush: emit,
   }
 }

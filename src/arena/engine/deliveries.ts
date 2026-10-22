@@ -3,7 +3,7 @@ import type { BuildSlot, Effect, Template } from '../../charter/types'
 import { ENGINE, ticks } from './calibration'
 import { applyEffect, enemiesOf, firePassive, passiveHooks, sumBuff, tickStatuses, type Ctx } from './effects'
 import { clampToArena } from './locomotion'
-import { PI, add, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
+import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
 import { capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 import type { TickRules } from './tick'
 
@@ -77,7 +77,7 @@ function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Temp
   const pull = template.delivery.kind === 'grapple' || template.tags.some((t) => PULL_TAGS.includes(t))
   const away = sub(target.position, caster.position)
   const dir = normalize(pull ? scale(away, -1) : { x: away.x, y: away.y + Math.sqrt(away.x * away.x + away.z * away.z) * 0.25, z: away.z })
-  const metres = pull ? Math.max(0, Math.min(distanceM, distance(target.position, caster.position) - 1.5)) : distanceM
+  const metres = pull ? clamp(distance(target.position, caster.position) - 1.5, 0, distanceM) : distanceM
   const n = ticks(ENGINE.knockbackTime)
   if (metres <= 0 || n <= 0) return
   target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n }

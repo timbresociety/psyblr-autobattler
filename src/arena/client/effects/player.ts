@@ -53,6 +53,18 @@ export interface Effects {
   stats: () => { meshes: number; particles: number }
 }
 
+// one fan per whole-degree arc, shared by every cone effect
+const cones = new Map<number, THREE.CircleGeometry>()
+function coneGeometry(degrees: number): THREE.CircleGeometry {
+  const key = Math.round(degrees)
+  let g = cones.get(key)
+  if (!g) {
+    const arc = (key * Math.PI) / 180
+    cones.set(key, (g = new THREE.CircleGeometry(1, 24, Math.PI / 2 - arc / 2, arc)))
+  }
+  return g
+}
+
 export function createEffects(ctrl: ArenaController, packages: (HeroPackage | undefined)[] = []): Effects {
   const { scene, arena } = ctrl
   const cosmetic = new Particles(BUDGET.cosmetic)
@@ -128,10 +140,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       }
       case 'cone': {
         const dir = extra.dir ?? new THREE.Vector3(0, 0, 1)
-        const arc = ((extra.arc ?? 90) * Math.PI) / 180
         show('cone', c, dur, (m) => {
-          m.geometry.dispose()
-          m.geometry = new THREE.CircleGeometry(1, 24, Math.PI / 2 - arc / 2, arc)
+          m.geometry = coneGeometry(extra.arc ?? 90)
           m.position.set(at.x, 0.06, at.z)
           m.rotation.set(-Math.PI / 2, 0, Math.atan2(dir.x, dir.z))
           m.scale.setScalar(extra.range ?? size)

@@ -34,6 +34,8 @@ export class Particles {
   private readonly color: THREE.InstancedBufferAttribute
   private readonly now = uniform(0)
   private seed = 1
+  /** Slots ever written; the mesh draws only these, so an idle pool costs no vertex work. */
+  private used = 0
 
   constructor(count: number, additive = true) {
     this.ring = ring(count)
@@ -57,6 +59,7 @@ export class Particles {
     material.opacityNode = float(1).sub(age).mul(live)
     this.mesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(1, 0), material, count)
     this.mesh.frustumCulled = false
+    this.mesh.count = 0
   }
 
   private rnd() {
@@ -78,6 +81,7 @@ export class Particles {
         this.meta.setXYZW(i, now, spec.life * (0.6 + this.rnd() * 0.4), spec.size * (0.6 + this.rnd() * 0.8), spec.gravity ?? 0)
         this.color.setXYZ(i, spec.color.r, spec.color.g, spec.color.b)
       }
+      if (start + n > this.used) this.mesh.count = this.used = start + n
       for (const [attr, size] of [[this.origin, 3], [this.velocity, 3], [this.meta, 4], [this.color, 3]] as const) {
         attr.addUpdateRange(start * size, n * size)
         attr.needsUpdate = true

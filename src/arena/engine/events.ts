@@ -1,3 +1,4 @@
+import type { SizeClass } from '../../charter/sizes'
 import type { BuildSlot } from '../../charter/types'
 import type { Vec3 } from './maths'
 
@@ -8,6 +9,6 @@ export type MatchEvent =
   | { type: 'impact'; hero: number; slot: BuildSlot; at: Vec3; radius: number; arcDegrees?: number; width?: number; range: number }
   | { type: 'hit'; source: number; target: number; slot: BuildSlot; amount: number; heavy: boolean }
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
-  | { type: 'resize'; hero: number; phase: 'start' | 'end'; size: string }
+  | { type: 'resize'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }
   | { type: 'end'; winner: 0 | 1 | 'draw'; reason: 'wipe' | 'time' }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { armyModifiers } from '../../charter/synergy'
 import { attachControls } from '../../arena/client/controls'
 import { createEffects } from '../../arena/client/effects/player'
@@ -123,7 +123,7 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
 
 function Live({ controller, staged, locked, started, paused, onLeave, onRematch }: { controller: ArenaController; staged: StagingResult; locked: boolean; started: boolean; paused: boolean; onLeave: () => void; onRematch: () => void }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
-  const builds = staged.formation[staged.side].map((p) => staged.loadout[p.hero].build)
+  const builds = useMemo(() => staged.formation[staged.side].map((p) => staged.loadout[p.hero].build), [staged])
   const controlled = state.controlled !== undefined ? state.heroes[state.controlled] : undefined
   const over = state.winner !== undefined
   useEffect(() => {

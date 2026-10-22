@@ -2,7 +2,7 @@ import type { BuildSlot, Template } from '../../charter/types'
 import { ENGINE } from '../engine/calibration'
 import { chest, isRanged } from '../engine/deliveries'
 import { alliesOf, enemiesOf, hpFraction } from '../engine/effects'
-import { PI, TAU, distance, wrapAngle } from '../engine/maths'
+import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths'
 import type { Arena } from '../engine/match'
 import { next } from '../engine/rng'
 import { AIM_STEPS, capsule, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state'
@@ -92,17 +92,15 @@ function incoming(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]) 
   const me = chest(hero)
   for (const p of m.projectiles) {
     if (m.heroes[p.owner].team === hero.team) continue
-    const to = { x: me.x - p.position.x, y: me.y - p.position.y, z: me.z - p.position.z }
-    const along = to.x * p.step.x + to.y * p.step.y + to.z * p.step.z
-    const stepLen = p.step.x * p.step.x + p.step.y * p.step.y + p.step.z * p.step.z
-    const dist = Math.sqrt(to.x * to.x + to.y * to.y + to.z * to.z)
+    const to = sub(me, p.position)
+    const along = dot(to, p.step)
+    const stepLen = lengthSq(p.step)
+    const dist = length(to)
     if (along <= 0 || dist > AI.seeDistance || stepLen === 0) continue
     const t = along / stepLen
-    const cx = p.position.x + p.step.x * t - me.x
-    const cy = p.position.y + p.step.y * t - me.y
-    const cz = p.position.z + p.step.z * t - me.z
     const size = setups[p.owner].kit[p.slot].delivery.projectileRadius ?? 0.3
-    if (Math.sqrt(cx * cx + cy * cy + cz * cz) <= capsule(hero).radius + size + 0.6) return p
+    const closest = { x: p.position.x + p.step.x * t - me.x, y: p.position.y + p.step.y * t - me.y, z: p.position.z + p.step.z * t - me.z }
+    if (length(closest) <= capsule(hero).radius + size + 0.6) return p
   }
   return undefined
 }
