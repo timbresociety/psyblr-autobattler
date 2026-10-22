@@ -28,3 +28,37 @@ create table if not exists builds (
   updated_at timestamptz not null default now()
 );
 create index if not exists builds_device on builds (device_id);
+
+-- Hero Forge: accounts and sign-in (KTD5)
+create table if not exists accounts (
+  id text primary key,
+  email text not null,
+  email_normalized text not null unique,
+  created_ip text,
+  created_at timestamptz not null default now()
+);
+
+-- single-use magic-link tokens, stored only as hashes
+create table if not exists login_tokens (
+  token_hash text primary key,
+  email text not null,
+  expires_at timestamptz not null,
+  used_at timestamptz
+);
+
+-- sessions, stored only as hashes; expire after 30 days idle
+create table if not exists sessions (
+  id_hash text primary key,
+  account_id text not null references accounts(id),
+  device_id text,
+  last_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+-- durable abuse counters keyed by subject and time bucket (per IP, per email, global)
+create table if not exists counters (
+  key text not null,
+  bucket text not null,
+  count integer not null default 0,
+  primary key (key, bucket)
+);

@@ -43,3 +43,8 @@ export function errorResponse(error: unknown): Response {
 
 export const needDevice = () => Response.json({ error: 'missing or invalid x-device-id' }, { status: 401 })
 export const tooMany = () => Response.json({ error: 'too many requests' }, { status: 429 })
+
+/** The client IP as Vercel reports it (the first x-forwarded-for hop). */
+export function clientIp(request: Request): string {
+  return (request.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'unknown'
+}
