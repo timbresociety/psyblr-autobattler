@@ -78,6 +78,7 @@ function checkInput(input: HeroRequest) {
       throw new InputError('a skill name, description or visual direction is too long')
     }
   }
+  if (tooLong(input.description, MAX_CHAT)) throw new InputError('description too long')
   if ((input.photoUrls ?? []).length > MAX_PHOTOS) throw new InputError(`at most ${MAX_PHOTOS} photos`)
   if ((input.photoUrls ?? []).some((url) => !/^https:\/\//.test(url))) throw new InputError('photos must be https URLs')
 }
@@ -121,6 +122,7 @@ const proposalSchema = (): Record<string, unknown> => ({
 
 function describeHero(input: HeroRequest): Anthropic.Beta.BetaContentBlockParam[] {
   const lines = [`Hero: ${input.heroName}`]
+  if (input.description) lines.push(`Description: ${input.description}`)
   for (const slot of BUILD_SLOTS) {
     const skill = input.skills[slot]
     if (skill && (skill.name || skill.flavour)) lines.push(`${slot}: "${skill.name}" — ${skill.flavour}`)

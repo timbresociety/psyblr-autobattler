@@ -67,11 +67,13 @@ const reject = (build: Build, errors: LimitHit[]): OpResult => ({ ok: false, bui
 
 const describe = (spec: Pick<SkillSpec, 'name' | 'flavour'>) => `${spec.name} ${spec.flavour}`.trim()
 
-function pickTemplates(roleId: RoleId, skills: Partial<Record<BuildSlot, Pick<SkillSpec, 'name' | 'flavour'>>>): Record<BuildSlot, Template> {
+function pickTemplates(roleId: RoleId, skills: Partial<Record<BuildSlot, Pick<SkillSpec, 'name' | 'flavour'>>>, description = ''): Record<BuildSlot, Template> {
   const picks = {} as Record<BuildSlot, Template>
   for (const slot of BUILD_SLOTS) {
     const exclude = slot === 'active2' ? [picks.active1.id] : []
-    picks[slot] = matchTemplate(roleId, SLOT_KIND[slot], describe(skills[slot] ?? { name: '', flavour: '' }), exclude).template
+    // a slot the player has not described yet takes its cue from the hero description
+    const text = describe(skills[slot] ?? { name: '', flavour: '' }) || description
+    picks[slot] = matchTemplate(roleId, SLOT_KIND[slot], text, exclude).template
   }
   return picks
 }
@@ -102,6 +104,8 @@ export function inferRole(heroName: string, skills: Partial<Record<BuildSlot, Pi
 
 export interface ProposalInput {
   heroName: string
+  /** The player's opening description of the whole hero (F1). */
+  description?: string
   roleId?: RoleId
   skills: Partial<Record<BuildSlot, { name: string; flavour: string; visual?: string }>>
   spread?: Spread
@@ -109,9 +113,9 @@ export interface ProposalInput {
 
 /** The engine's first proposal for a new hero (F1): role, a template per slot and the role's default spread. */
 export function proposeBuild(input: ProposalInput): OpResult {
-  const roleId = input.roleId ?? inferRole(input.heroName, input.skills)
+  const roleId = input.roleId ?? inferRole(`${input.heroName} ${input.description ?? ''}`, input.skills)
   const role = getRole(roleId)
-  const picks = pickTemplates(roleId, input.skills)
+  const picks = pickTemplates(roleId, input.skills, input.description)
   const slots = {} as Record<BuildSlot, SkillSpec>
   for (const slot of BUILD_SLOTS) {
     const skill = input.skills[slot]
