@@ -196,3 +196,39 @@ describe('hydrateBuild (R4)', () => {
     expect(hydrateBuild(raw).ok).toBe(false)
   })
 })
+
+describe('setStatTarget (drag a detailed stat, AE4)', () => {
+  it('dragging armor up finds a legal spread with more armor', async () => {
+    const { setStatTarget } = await import('./build')
+    const { deriveSheet } = await import('./stats')
+    const build = mage()
+    const before = deriveSheet(getRole('mage'), build.spread).sheet.armor
+    const result = setStatTarget(build, 'armor', before + 5)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(deriveSheet(getRole('mage'), result.build.spread).sheet.armor).toBeGreaterThan(before)
+      expect(spentPoints(result.build.spread)).toBeLessThanOrEqual(POOL_SIZE)
+    }
+  })
+
+  it('dragging a stat past its cap stops at the closest reachable value and names the limit', async () => {
+    const { setStatTarget } = await import('./build')
+    const { deriveSheet } = await import('./stats')
+    const build = mage()
+    const cap = getRole('mage').caps.armor
+    const result = setStatTarget(build, 'armor', cap + 50)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const reached = deriveSheet(getRole('mage'), result.build.spread).sheet.armor
+      expect(reached).toBeLessThanOrEqual(cap)
+      expect(result.limits.some((l) => l.field === 'armor')).toBe(true)
+      expect(result.limits.find((l) => l.field === 'armor')?.allowed).toBe(reached)
+    }
+  })
+
+  it('a stat no attribute feeds cannot be dragged and says so', async () => {
+    const { setStatTarget } = await import('./build')
+    const result = setStatTarget(mage(), 'fireRate', 99)
+    expect(result.ok).toBe(true)
+  })
+})

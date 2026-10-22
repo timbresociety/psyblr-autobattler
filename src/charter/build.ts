@@ -161,6 +161,36 @@ export function setAttribute(build: Build, attr: Attribute, value: number): OpRe
   return ok({ ...build, spread }, [...limits, ...statCaps(build, spread)])
 }
 
+/**
+ * Drag one detailed stat toward a value (R14, AE4). Points are still spent on core attributes (KTD3), so this
+ * searches every legal spread (a few hundred) for the one closest to the target that changes the other stats
+ * least. If the target is out of reach, the closest reachable value is used and the limit is named.
+ */
+export function setStatTarget(build: Build, stat: SecondaryStat, target: number): OpResult {
+  const role = getRole(build.roleId)
+  const current = deriveSheet(role, build.spread).sheet
+  const caps = role.attributeCaps
+  let best: { spread: Spread; score: number; value: number } | undefined
+  for (let s = 0; s <= Math.min(caps.strength, POOL_SIZE); s++) {
+    for (let a = 0; a <= Math.min(caps.agility, POOL_SIZE - s); a++) {
+      const i = Math.min(caps.intellect, POOL_SIZE - s - a)
+      const spread = { strength: s, agility: a, intellect: i }
+      const sheet = deriveSheet(role, spread).sheet
+      const miss = Math.abs(sheet[stat] - target) / role.caps[stat]
+      let drift = 0
+      for (const other of Object.keys(sheet) as SecondaryStat[]) if (other !== stat) drift += Math.abs(sheet[other] - current[other]) / role.caps[other]
+      const score = miss * 100 + drift
+      if (!best || score < best.score - 1e-9) best = { spread, score, value: sheet[stat] }
+    }
+  }
+  if (!best) return ok(build)
+  const limits: LimitHit[] = []
+  if (Math.abs(best.value - target) > Math.max(0.01, role.caps[stat] * 0.01)) {
+    limits.push({ reason: target > role.caps[stat] ? 'stat-cap' : 'pool-exceeded', field: stat, requested: target, allowed: best.value })
+  }
+  return ok({ ...build, spread: best.spread }, limits)
+}
+
 export type StatGoal = 'max' | 'more' | 'less'
 
 /** How much one point in each attribute moves a stat for this role, relative to the stat's cap. */
