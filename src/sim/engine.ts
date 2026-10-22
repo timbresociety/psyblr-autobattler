@@ -1,6 +1,7 @@
 import { BUILD_SLOTS, type Build } from '../charter/build'
 import { retuneFactor, scaleMagnitudes } from '../charter/budget'
 import { getRole } from '../charter/roles'
+import { SIZES } from '../charter/sizes'
 import { deriveSheet } from '../charter/stats'
 import { getTemplate } from '../charter/templates/catalog'
 import type { BuildSlot, DamageType, Effect, RoleId, SecondarySheet, Template } from '../charter/types'
@@ -33,6 +34,9 @@ export interface Unit {
   team: 0 | 1
   name: string
   roleId: RoleId
+  /** Metres added to this unit's hitbox and to its melee reach (size class, KTD8). */
+  hitRadius: number
+  reachBonus: number
   sheet: SecondarySheet
   kit: Record<BuildSlot, Template>
   maxHp: number
@@ -91,7 +95,7 @@ function prepare(build: Build, powerScale: number) {
   if (!byScale) prepared.set(build, (byScale = new Map()))
   let entry = byScale.get(powerScale)
   if (!entry) {
-    const { sheet } = deriveSheet(getRole(build.roleId), build.spread)
+    const { sheet } = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass)
     const kit = {} as Record<BuildSlot, Template>
     for (const slot of BUILD_SLOTS) {
       const spec = build.slots[slot]
@@ -107,7 +111,7 @@ function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit 
   const { sheet, kit } = prepare(c.build, c.powerScale ?? 1)
   const cooldowns = { basic: 0, active1: 0, active2: 0, passive: 0, ultimate: CALIBRATION.ultimateStartCooldown, movement: 0 }
   const unit: Unit = {
-    id, team, name: c.build.heroName, roleId: c.build.roleId, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
+    id, team, name: c.build.heroName, roleId: c.build.roleId, hitRadius: SIZES[c.build.sizeClass ?? 'medium'].hitRadius, reachBonus: SIZES[c.build.sizeClass ?? 'medium'].reachBonus, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
     stunnedUntil: 0, invulnerableUntil: 0, slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, hitCount: 0,
     lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {},
   }
@@ -204,24 +208,24 @@ export function enemiesHit(battle: Battle, caster: Unit, template: Template, tar
   const enemies = enemiesOf(battle, caster)
   switch (delivery.kind) {
     case 'aura':
-      return enemies.filter((e) => distance(caster, e) <= (delivery.radius ?? 0))
+      return enemies.filter((e) => distance(caster, e) <= (delivery.radius ?? 0) + e.hitRadius)
     case 'self':
       return []
     case 'zone':
-      return target ? enemies.filter((e) => dist(e.position, delivery.range ? target.position : caster.position) <= (delivery.radius ?? 0)) : []
+      return target ? enemies.filter((e) => dist(e.position, delivery.range ? target.position : caster.position) <= (delivery.radius ?? 0) + e.hitRadius) : []
     case 'cone':
-      return target ? enemies.filter((e) => distance(caster, e) <= delivery.range && distance(target, e) <= (delivery.radius ?? 0)) : []
+      return target ? enemies.filter((e) => distance(caster, e) <= delivery.range + e.hitRadius && distance(target, e) <= (delivery.radius ?? 0) + e.hitRadius) : []
     case 'beam': {
       if (!target) return []
       const d = distance(caster, target) || 1
       const far = { x: caster.position.x + ((target.position.x - caster.position.x) / d) * delivery.range, y: caster.position.y + ((target.position.y - caster.position.y) / d) * delivery.range }
-      return enemies.filter((e) => distanceToSegment(e.position, caster.position, far) <= 1.5)
+      return enemies.filter((e) => distanceToSegment(e.position, caster.position, far) <= 1.5 + e.hitRadius)
     }
     case 'projectile':
       if (!target) return []
-      return delivery.radius ? enemies.filter((e) => distance(target, e) <= (delivery.radius ?? 0)) : [target]
+      return delivery.radius ? enemies.filter((e) => distance(target, e) <= (delivery.radius ?? 0) + e.hitRadius) : [target]
     default:
-      return target && distance(caster, target) <= Math.max(delivery.range, caster.kit.basic.delivery.range) + 1 ? [target] : []
+      return target && distance(caster, target) <= Math.max(delivery.range, caster.kit.basic.delivery.range) + 1 + caster.reachBonus + target.hitRadius ? [target] : []
   }
 }
 
@@ -377,7 +381,7 @@ function act(battle: Battle, unit: Unit, dt: number) {
   const d = distance(unit, target)
   const step = moveSpeed(unit) * dt
   if (d > want) moveToward(unit, target.position, step, want)
-  if (d <= unit.kit.basic.delivery.range + 0.5 && battle.time >= unit.nextAttackAt) basicAttack(battle, unit, target)
+  if (d <= unit.kit.basic.delivery.range + 0.5 + unit.reachBonus + target.hitRadius && battle.time >= unit.nextAttackAt) basicAttack(battle, unit, target)
 }
 
 /** Advance the battle by one step. */

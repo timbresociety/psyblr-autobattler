@@ -1,4 +1,5 @@
 import { matchTemplate, nearestAlternatives, tokenize } from './match'
+import { isSizeClass, type SizeClass } from './sizes'
 import { ROLE_IDS, getRole, isRoleId } from './roles'
 import { ATTRIBUTES, ATTRIBUTE_GAINS, POOL_SIZE, deriveSheet, spentPoints, validateSpread } from './stats'
 import { hasTemplate, poolFor } from './templates/catalog'
@@ -68,6 +69,8 @@ export interface Build {
   roleId: RoleId
   slots: Record<BuildSlot, SkillSpec>
   spread: Spread
+  /** Body size class; medium when absent (R14, KTD8). */
+  sizeClass?: SizeClass
   gate: GateResult
 }
 
@@ -152,7 +155,7 @@ export function proposeBuild(input: ProposalInput): OpResult {
 /** Stat-cap notes for secondary stats that sit at their ceiling under this spread. */
 function statCaps(build: Build, spread: Spread): LimitHit[] {
   const role = getRole(build.roleId)
-  const { sheet, capped } = deriveSheet(role, spread)
+  const { sheet, capped } = deriveSheet(role, spread, build.sizeClass)
   return capped.map((stat) => ({ reason: 'stat-cap' as const, field: stat, requested: sheet[stat], allowed: role.caps[stat] }))
 }
 
@@ -188,14 +191,14 @@ export function setAttribute(build: Build, attr: Attribute, value: number): OpRe
  */
 export function setStatTarget(build: Build, stat: SecondaryStat, target: number): OpResult {
   const role = getRole(build.roleId)
-  const current = deriveSheet(role, build.spread).sheet
+  const current = deriveSheet(role, build.spread, build.sizeClass).sheet
   const caps = role.attributeCaps
   let best: { spread: Spread; score: number; value: number } | undefined
   for (let s = 0; s <= Math.min(caps.strength, POOL_SIZE); s++) {
     for (let a = 0; a <= Math.min(caps.agility, POOL_SIZE - s); a++) {
       const i = Math.min(caps.intellect, POOL_SIZE - s - a)
       const spread = { strength: s, agility: a, intellect: i }
-      const sheet = deriveSheet(role, spread).sheet
+      const sheet = deriveSheet(role, spread, build.sizeClass).sheet
       const miss = Math.abs(sheet[stat] - target) / role.caps[stat]
       let drift = 0
       for (const other of Object.keys(sheet) as SecondaryStat[]) if (other !== stat) drift += Math.abs(sheet[other] - current[other]) / role.caps[other]
@@ -350,8 +353,10 @@ export function hydrateBuild(raw: unknown): OpResult {
   for (const attr of ATTRIBUTES) spread[attr] = typeof rawSpread[attr] === 'number' ? (rawSpread[attr] as number) : NaN
   const check = validateSpread(getRole(roleId), spread)
   if (!check.ok || ATTRIBUTES.some((a) => Number.isNaN(spread[a]))) return reject(empty, check.ok ? [invalidField('spread')] : check.errors)
+  if (input.sizeClass !== undefined && !isSizeClass(input.sizeClass)) return fail('sizeClass')
   const build: Build = {
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
+    ...(input.sizeClass !== undefined && input.sizeClass !== 'medium' ? { sizeClass: input.sizeClass as SizeClass } : {}),
     heroName: str(input.heroName, TEXT_LIMITS.heroName),
     roleId,
     slots,

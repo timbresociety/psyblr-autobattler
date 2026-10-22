@@ -7,7 +7,7 @@ import { STAT_LABEL } from './labels'
 /** The always-visible stat split (R14): drag any detailed stat; the engine solves the points underneath. */
 export function StatSplit({ build, onTarget }: { build: Build; onTarget: (stat: SecondaryStat, value: number) => void }) {
   const role = getRole(build.roleId)
-  const { sheet } = deriveSheet(role, build.spread)
+  const { sheet } = deriveSheet(role, build.spread, build.sizeClass)
   const left = POOL_SIZE - spentPoints(build.spread)
   return (
     <section className="panel stat-split" aria-label="Stat split">
