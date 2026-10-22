@@ -1,0 +1,10 @@
+.arena { position: fixed; inset: 0; top: var(--tabs-height, 44px); background: #10141c; color: #e8eef8; overflow: hidden; }
+.arena-canvas { position: absolute; inset: 0; }
+.arena-overlay { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; background: rgba(8, 10, 16, 0.72); font-size: 15px; }
+.arena-progress { width: min(360px, 70vw); height: 6px; border-radius: 3px; background: #2a3342; overflow: hidden; }
+.arena-progress > div { height: 100%; background: #6fd0ff; transition: width 0.2s; }
+.arena-top { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; align-items: center; padding: 6px 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.55); font: 600 15px/1.2 ui-sans-serif, system-ui; }
+.arena-top .timer { font-variant-numeric: tabular-nums; font-size: 18px; }
+.arena-top .team-a { color: #6fb7ff; }
+.arena-top .team-b { color: #ff8a70; }
+.arena-result { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); white-space: nowrap; margin: 0; padding: 6px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.7); }

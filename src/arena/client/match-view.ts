@@ -1,0 +1,232 @@
+import * as THREE from 'three'
+import { BUILD_SLOTS } from '../../charter/build'
+import type { BuildSlot } from '../../charter/types'
+import type { HeroPackage } from '../../forge/package'
+import { aiCommands } from '../ai/brain'
+import { ENGINE } from '../engine/calibration'
+import type { MatchEvent } from '../engine/events'
+import type { Vec3 } from '../engine/maths'
+import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match'
+import type { Command, Team } from '../engine/state'
+import { tick } from '../engine/tick'
+import { createAnimator, onEvents, settle, type Animator } from './animation'
+import { loadHeroView, type HeroView } from './heroes'
+import { createClock, frame } from './loop'
+import { buildMap, lights, type ArenaMap } from './map'
+import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
+import { createStore, type Store } from './store'
+
+/**
+ * A live match in the browser (U13, KTD15): the engine and the AI tick at 60 Hz on a fixed clock, heroes are drawn
+ * between the last two states, and the HUD reads a store that updates about 10 times a second.
+ */
+
+export interface MatchSetup {
+  teams: [Combatant[], Combatant[]]
+  formations?: [Vec3[]?, Vec3[]?]
+  /** Forged heroes' packages, by hero index; demo and Creator heroes have none. */
+  packages?: (HeroPackage | undefined)[]
+  seed: number
+  /** The side the streamer staged first and may control (R2, R14). */
+  side: Team
+}
+
+export interface HudHero {
+  id: number
+  name: string
+  team: Team
+  alive: boolean
+  hp: number
+  maxHp: number
+  /** Seconds left and the full cooldown, per slot. */
+  cooldowns: Record<BuildSlot, { left: number; total: number }>
+  damageDealt: number
+  airborne: boolean
+  fallback: boolean
+}
+
+export interface HudState {
+  seconds: number
+  timerSeconds: number
+  paused: boolean
+  winner?: Team | 'draw'
+  reason?: 'wipe' | 'time'
+  heroes: HudHero[]
+  controlled?: number
+  backend?: Backend
+  healthShare: [number, number]
+}
+
+/** What the effects, physics and cameras need each frame; later units plug in here. */
+export interface FrameHooks {
+  events?: (events: MatchEvent[]) => void
+  frame?: (dt: number, alpha: number) => void
+  /** The controlled hero's command for this tick, or undefined to leave it to the AI. */
+  human?: () => Command | undefined
+}
+
+export interface ArenaController {
+  arena: Arena
+  store: Store<HudState>
+  scene: THREE.Scene
+  camera: THREE.PerspectiveCamera
+  map: ArenaMap
+  views: HeroView[]
+  renderer: Awaited<ReturnType<typeof createRenderer>>['renderer']
+  hooks: FrameHooks
+  /** Interpolated positions from the last frame, for cameras and effects. */
+  positions: () => Vec3[]
+  pause: () => void
+  resume: () => void
+  stop: () => void
+}
+
+/** Is any 3D backend available at all? Neither WebGPU nor WebGL2 means the game cannot run here (R40). */
+export function canRender(): boolean {
+  if (typeof navigator !== 'undefined' && 'gpu' in navigator) return true
+  try {
+    return !!document.createElement('canvas').getContext('webgl2')
+  } catch {
+    return false
+  }
+}
+
+function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend): HudState {
+  const { match, setups } = arena
+  return {
+    seconds: match.tick / ENGINE.tickHz,
+    timerSeconds: arena.timerTicks / ENGINE.tickHz,
+    paused,
+    winner: match.winner,
+    reason: match.endReason,
+    controlled: match.human,
+    backend,
+    healthShare: [healthShare(match, 0), healthShare(match, 1)],
+    heroes: match.heroes.map((h) => ({
+      id: h.id,
+      name: setups[h.id].build.heroName,
+      team: h.team,
+      alive: h.alive,
+      hp: h.hp,
+      maxHp: h.maxHp,
+      damageDealt: h.damageDealt,
+      airborne: h.airborne,
+      fallback: views[h.id]?.fallback ?? false,
+      cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
+    })),
+  }
+}
+
+export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
+  const canvas = document.createElement('canvas')
+  canvas.style.cssText = 'width:100%;height:100%;display:block'
+  host.append(canvas)
+  const { renderer, backend } = await createRenderer(canvas, { forceWebGL: forceWebGLFlag(window.location.search) })
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio))
+  renderer.shadowMap.enabled = true
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(0x10141c)
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
+  const map = buildMap()
+  scene.add(map.group)
+  lights(scene)
+
+  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
+  const builds = arena.setups.map((s) => s.build)
+  let loaded = 0
+  onProgress(0, builds.length)
+  // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
+  const views = await Promise.all(
+    builds.map(async (build, i) => {
+      const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer)
+      onProgress(++loaded, builds.length)
+      return view
+    }),
+  )
+  views.forEach((v) => scene.add(v.root))
+  // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
+  await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
+
+  const animators: Animator[] = arena.match.heroes.map(createAnimator)
+  const rules = matchRules(arena)
+  const clock = createClock()
+  const store = createStore<HudState>(hud(arena, views, false, backend))
+  const hooks: FrameHooks = {}
+  let prev: Vec3[] = arena.match.heroes.map((h) => ({ ...h.position }))
+  let drawn: Vec3[] = prev.map((p) => ({ ...p }))
+  let last = performance.now()
+  let stopped = false
+
+  const resize = () => {
+    const w = host.clientWidth
+    const h = host.clientHeight
+    renderer.setSize(w, h, false)
+    camera.aspect = w / Math.max(1, h)
+    camera.updateProjectionMatrix()
+  }
+  resize()
+  window.addEventListener('resize', resize)
+  camera.position.set(0, 26, -38)
+  camera.lookAt(0, 0, 0)
+
+  const loop = () => {
+    if (stopped) return
+    const now = performance.now()
+    const dt = Math.min(0.25, (now - last) / 1000)
+    last = now
+    const { ticks, alpha } = frame(clock, dt)
+    for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
+      prev = arena.match.heroes.map((h) => ({ ...h.position }))
+      const commands = aiCommands(arena)
+      const human = arena.match.human
+      if (human !== undefined) commands[human] = hooks.human?.()
+      const events = tick(arena.match, arena.setups, commands, rules)
+      arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+      if (events.length) hooks.events?.(events)
+    }
+    const t = now / 1000
+    drawn = arena.match.heroes.map((h, i) => {
+      const p = prev[i]
+      const c = h.position
+      const at = { x: p.x + (c.x - p.x) * alpha, y: p.y + (c.y - p.y) * alpha, z: p.z + (c.z - p.z) * alpha }
+      const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
+      const view = views[i]
+      view.root.position.set(at.x, at.y, at.z)
+      view.root.rotation.y = h.yaw
+      view.pose(settle(animators[i], h, moved, arena.match.tick, dt), t + i, dt)
+      return at
+    })
+    hooks.frame?.(dt, alpha)
+    renderer.render(scene, camera)
+    store.set(hud(arena, views, clock.paused, backend))
+    requestAnimationFrame(loop)
+  }
+  requestAnimationFrame(loop)
+
+  return {
+    arena,
+    store,
+    scene,
+    camera,
+    map,
+    views,
+    renderer,
+    hooks,
+    positions: () => drawn,
+    pause: () => {
+      clock.paused = arena.match.paused = true
+      store.flush()
+    },
+    resume: () => {
+      clock.paused = arena.match.paused = false
+      last = performance.now()
+      store.flush()
+    },
+    stop: () => {
+      stopped = true
+      window.removeEventListener('resize', resize)
+      renderer.dispose()
+      canvas.remove()
+    },
+  }
+}
