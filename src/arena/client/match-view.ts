@@ -16,6 +16,7 @@ import { handBack, releaseIfDead, take } from './takeover'
 import { loadHeroView, type HeroView } from './heroes'
 import { createClock, frame } from './loop'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map'
+import { buildRuins } from './ruins'
 import { CosmeticPhysics, PHYSICS } from './physics'
 import { atLeast, createGuard, observe, type QualityLevel } from './quality'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
@@ -159,10 +160,12 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
  */
 async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>>['renderer'], scene: THREE.Scene, camera: THREE.Camera) {
   try {
-    const [{ RenderPipeline }, { pass }, { bloom }] = await Promise.all([import('three/webgpu'), import('three/tsl'), import('three/addons/tsl/display/BloomNode.js')])
+    const [{ RenderPipeline }, { pass, screenUV, smoothstep, float }, { bloom }] = await Promise.all([import('three/webgpu'), import('three/tsl'), import('three/addons/tsl/display/BloomNode.js')])
     const scenePass = pass(scene, camera)
     const color = scenePass.getTextureNode('output')
-    const pipeline = new RenderPipeline(renderer, color.add(bloom(color, 0.55, 0.35, 0.82)))
+    // a soft vignette pulls the eye to the fight in the middle of the frame
+    const vignette = float(1).sub(smoothstep(0.35, 0.85, screenUV.sub(0.5).length()).mul(0.35))
+    const pipeline = new RenderPipeline(renderer, color.add(bloom(color, 0.55, 0.35, 0.82)).mul(vignette))
     return { pipeline, enabled: true }
   } catch {
     return undefined
@@ -345,6 +348,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     }),
   )
   views.forEach((v) => scene.add(v.root))
+  // the ruins come from the engine's own cover, so what is drawn is exactly what blocks (R25)
+  const ruins = arena.match.cover ? buildRuins(arena.match.cover.pieces) : undefined
+  if (ruins) {
+    scene.add(ruins.group)
+    map.proxies.push(...ruins.proxies)
+  }
   const physics = await physicsReady
   const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
   debris.count = 0
@@ -368,7 +377,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const cameras = new Cameras(camera)
   // the free camera starts behind the streamer's half, looking across the arena
   if (setup.side === 1) {
-    cameras.free.set(0, 22, 34)
+    cameras.free.set(0, 13, 27)
     cameras.yaw = Math.PI
   }
   stage.resize()
@@ -406,12 +415,20 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       // the controlled hero died: control goes back to watching from the free camera (AE1)
       if (releaseIfDead(arena.match)) cameras.set('free')
       physics?.events(events, arena.match)
+      for (const e of events) {
+        if (e.type === 'cover-hit') ruins?.hit(e.index, e.health)
+        else if (e.type === 'cover-broken') {
+          ruins?.broken(e.index)
+          physics?.burst(e.at, 12)
+        }
+      }
       if (events.length) {
         arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
         hooks.emit.events(events)
       }
     }
     physics?.step(dt)
+    ruins?.update(dt)
     drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
     drawDebris(debris, physics)
     drawMarkers(markers, rings, arena, views, drawn)

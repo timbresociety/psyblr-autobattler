@@ -12,6 +12,8 @@ export const ENGINE = {
   /** Vertical speed when flying up or down, as a fraction of flight speed. */
   climbFraction: 0.7,
   /** Every hero is a vertical capsule this tall and wide at medium size, plus its size class's hitbox. */
+  /** Largest radius a hero collides with walls at; hit capsules can be bigger (huge, colossal). */
+  bodyRadiusCap: 0.9,
   capsule: { height: 1.8, radius: 0.4 },
   /** Where shots leave from and melee measures to, as a fraction of capsule height. */
   chest: 0.6,

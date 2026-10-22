@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ENGINE } from '../../../arena/engine/calibration'
+import { RUINS } from '../../../arena/engine/cover'
 import type { Team } from '../../../arena/engine/state'
 import { TEAM_COLORS } from '../../../arena/client/map'
 import { DetailsPanel, SynergyPanel } from './Panels'
@@ -67,7 +68,8 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
     const r = board.current!.getBoundingClientRect()
     return clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom
   }
-  const say = (reason: string) => setNotice(reason === 'wrong-half' ? 'That spot is on the other half.' : reason === 'full' ? `A side holds at most ${MAX_PER_SIDE} heroes.` : 'Too close to another hero.')
+  const say = (reason: string) =>
+    setNotice(reason === 'wrong-half' ? 'That spot is on the other half.' : reason === 'full' ? `A side holds at most ${MAX_PER_SIDE} heroes.` : reason === 'in-ruins' ? 'That spot is inside the ruins.' : 'Too close to another hero.')
 
   const drop = (hero: number, clientX: number, clientY: number) => {
     const { x, z } = world(clientX, clientY)
@@ -147,6 +149,16 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
           <rect x={-W} y={0} width={2 * W} height={L} fill={editing === 0 ? '#2c4258' : '#1e2833'} />
           <rect x={-W} y={-L} width={2 * W} height={L} fill={editing === 1 ? '#5a3a36' : '#33292a'} />
           <line x1={-W} x2={W} y1={0} y2={0} stroke="#f2e6c9" strokeWidth={0.3} />
+          {/* the ruins, seen from above: grey stone blocks cover, warm timber marks barricades that can be broken */}
+          <g aria-hidden="true">
+            {RUINS.filter((p) => p.base <= 0).map((p, i) =>
+              p.shape.kind === 'column' ? (
+                <circle key={i} cx={p.shape.x} cy={-p.shape.z} r={p.shape.r} fill="#b9ad98" />
+              ) : (
+                <rect key={i} x={p.shape.x - p.shape.hx} y={-p.shape.z - p.shape.hz} width={p.shape.hx * 2} height={p.shape.hz * 2} rx={0.2} fill={p.health ? '#a8753e' : '#b9ad98'} />
+              ),
+            )}
+          </g>
           {([0, 1] as const).map((s) =>
             formation[s].map((p, i) => (
               <g key={`${s}-${i}`} transform={`translate(${p.x} ${-p.z})`} onPointerDown={(e) => onTokenDown(e, s, i)} className="token" data-testid={`token-${s}-${i}`}>

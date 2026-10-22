@@ -37,7 +37,7 @@ export function tick(match: MatchState, setups: readonly HeroSetup[], commands: 
     const command = commands[i] ?? IDLE
     hero.yaw = (command.aimYaw / AIM_STEPS) * TAU
     hero.pitch = (command.aimPitch / AIM_STEPS) * TAU
-    if (!hero.knockback) move(hero, setups[i], command)
+    if (!hero.knockback) move(hero, setups[i], command, match)
     rules.act?.(match, setups, i, command, events)
   }
   rules.after?.(match, setups, events)

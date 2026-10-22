@@ -24,8 +24,9 @@ export function pullIn(from: THREE.Vector3, to: THREE.Vector3, proxies: THREE.Bo
 
 export class Cameras {
   yaw = 0
-  pitch = -0.45
-  readonly free = new THREE.Vector3(0, 22, -34)
+  // a low, close opening view sells the ruins and the fighters; the streamer flies out from here
+  pitch = -0.32
+  readonly free = new THREE.Vector3(0, 13, -27)
   private blend = 1
   private from = new THREE.Vector3()
   private fromQ = new THREE.Quaternion()

@@ -57,9 +57,9 @@ describe('staging (U16)', () => {
     for (const x of [-12, -6, 0, 6]) await placeAt(/Bezos/, x, -10)
     expect(screen.getByText(/Tank ×4 · stacked past 3/)).toBeTruthy()
     expect(screen.getByTestId('team-bonus').className).not.toContain('lit')
-    await placeAt(/Musk/, -12, -16)
-    await placeAt(/Huang/, -6, -16)
-    await placeAt(/Satya/, 0, -16)
+    await placeAt(/Musk/, -12, -14)
+    await placeAt(/Huang/, -4, -14)
+    await placeAt(/Satya/, 3, -14)
     expect(screen.getByTestId('team-bonus').className).toContain('lit')
   })
 

@@ -1,3 +1,5 @@
+import { RUINS, initialCoverHealth, type CoverPiece } from './cover'
+import { keepOut } from './locomotion'
 import type { Build } from '../../charter/build'
 import { ENGINE, ticks } from './calibration'
 import { COMBAT_RULES } from './deliveries'
@@ -51,9 +53,17 @@ function ownHalf(side: Team, p: Vec3): Vec3 {
   return { x: clamp(p.x, -ENGINE.arena.halfWidth, ENGINE.arena.halfWidth), y: clamp(p.y, 0, ENGINE.arena.ceiling), z }
 }
 
-export function createMatch(teamA: Combatant[], teamB: Combatant[], seed: number, options: { profile?: Profile; formations?: [Vec3[]?, Vec3[]?] } = {}): Arena {
+export function createMatch(
+  teamA: Combatant[],
+  teamB: Combatant[],
+  seed: number,
+  /** `cover: false` plays on an open floor (tests); the default is the ruins every real match uses. */
+  options: { profile?: Profile; formations?: [Vec3[]?, Vec3[]?]; cover?: readonly CoverPiece[] | false } = {},
+): Arena {
   const profile = options.profile ?? LIVE_PROFILE
   const match = emptyMatch(seed)
+  const pieces = options.cover === undefined ? RUINS : options.cover
+  if (pieces) match.cover = { pieces, health: initialCoverHealth(pieces) }
   const setups: HeroSetup[] = []
   const add = (team: Combatant[], side: Team) =>
     team.forEach((c, i) => {
@@ -61,6 +71,8 @@ export function createMatch(teamA: Combatant[], teamB: Combatant[], seed: number
       const staged = options.formations?.[side]?.[i]
       const spot = staged ? ownHalf(side, staged) : defaultSpot(match, side, i, team.length)
       const hero = createHero(setup, setups.length, side, spot)
+      // nobody starts inside the stone: a spot on a wall moves to its nearest face
+      keepOut(hero, match)
       initHero(hero, setup)
       setups.push(setup)
       match.heroes.push(hero)

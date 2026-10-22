@@ -37,5 +37,11 @@ export const AI = {
   /** Focus fire looks this far past its own range for a weaker target, metres. */
   focusReach: 8,
   /** Ranged heroes hold this fraction of their range. */
+  /** Metres ahead the AI looks for a wall in its way. */
+  probe: 2.5,
+  /** Cover at or under this height is hopped over rather than walked around. */
+  hopHeight: 1.6,
+  /** Furthest cover it will run to when falling back. */
+  hideReach: 16,
   rangedHold: 0.8,
 } as const

@@ -1,12 +1,13 @@
 import { geometryOf } from '../../charter/geometry'
 import type { BuildSlot, Template } from '../../charter/types'
 import { ENGINE } from '../engine/calibration'
-import { chest, isRanged } from '../engine/deliveries'
+import { coverHit } from '../engine/cover'
+import { canSee, chest, isRanged } from '../engine/deliveries'
 import { alliesOf, enemiesOf, hpFraction } from '../engine/effects'
 import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths'
 import type { Arena } from '../engine/match'
 import { next } from '../engine/rng'
-import { AIM_STEPS, capsule, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state'
+import { AIM_STEPS, bodyRadius, capsule, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state'
 import { aimPoint, anglesTo, trackAim } from './aim'
 import { AI } from './calibration'
 
@@ -82,12 +83,65 @@ function chooseTarget(m: MatchState, hero: HeroState, setup: HeroSetup): HeroSta
   if (setup.build.roleId === 'assassin') return enemies.reduce((a, b) => (hpFraction(b) < hpFraction(a) - 1e-9 ? b : a))
   const scan = preferredDistance(setup) + AI.focusReach
   const inReach = enemies.filter((e) => gapTo(hero, e) <= scan)
-  if (inReach.length) return inReach.reduce((a, b) => (effective(b) < effective(a) - 1e-9 ? b : a))
+  // a target it can actually shoot beats one hiding behind the ruins (R25)
+  const visible = inReach.filter((e) => canSee(m, chest(hero), chest(e)))
+  const pool = visible.length ? visible : inReach
+  if (pool.length) return pool.reduce((a, b) => (effective(b) < effective(a) - 1e-9 ? b : a))
   return enemies.reduce((a, b) => (gapTo(hero, b) < gapTo(hero, a) - 1e-9 ? b : a))
 }
 
 function newBrain(hero: HeroState): BrainState {
-  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0, vertical: 0 }, yaw: hero.yaw, pitch: 0, overshoot: 0 }
+  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0, vertical: 0 }, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0 }
+}
+
+/** The far side of the nearest piece of cover from `threat`, within reach: where a hurt hero breaks line of sight. */
+function hidingSpot(m: MatchState, hero: HeroState, threat: HeroState): { x: number; z: number } | undefined {
+  if (!m.cover) return undefined
+  let best: { x: number; z: number; d: number } | undefined
+  m.cover.pieces.forEach((piece, i) => {
+    if (m.cover!.health[i] === 0 || piece.base > 0.5 || piece.top < 1.6) return
+    const s = piece.shape
+    const extent = s.kind === 'column' ? s.r : Math.max(s.hx, s.hz)
+    const ax = s.x - threat.position.x
+    const az = s.z - threat.position.z
+    const len = Math.sqrt(ax * ax + az * az) || 1
+    const x = s.x + (ax / len) * (extent + bodyRadius(hero) + 0.6)
+    const z = s.z + (az / len) * (extent + bodyRadius(hero) + 0.6)
+    const d = Math.sqrt((x - hero.position.x) * (x - hero.position.x) + (z - hero.position.z) * (z - hero.position.z))
+    if (d <= AI.hideReach && (!best || d < best.d)) best = { x, z, d }
+  })
+  return best && { x: best.x, z: best.z }
+}
+
+/**
+ * Steer a wanted ground direction around the ruins: look a few metres ahead and, if a wall is there, walk along it,
+ * keeping the same side until the way clears; low cover is hopped instead (R25).
+ */
+function steer(m: MatchState, hero: HeroState, brain: BrainState, mx: number, mz: number): { x: number; z: number; hop: boolean } {
+  const len = Math.sqrt(mx * mx + mz * mz)
+  if (!m.cover || len < 1e-6) return { x: mx, z: mz, hop: false }
+  const p = hero.position
+  const waist = { x: p.x, y: p.y + 0.9, z: p.z }
+  const ahead = (x: number, z: number) => coverHit(m.cover!.pieces, m.cover!.health, waist, { x: p.x + (x / len) * AI.probe, y: p.y + 0.9, z: p.z + (z / len) * AI.probe }, bodyRadius(hero))
+  const wall = ahead(mx, mz)
+  if (!wall) {
+    brain.detour = 0
+    return { x: mx, z: mz, hop: false }
+  }
+  if (m.cover.pieces[wall.index].top - p.y <= AI.hopHeight) return { x: mx, z: mz, hop: true }
+  if (brain.detour === 0) brain.detour = brain.strafe
+  // walk along the wall, leaning a little toward where it wants to go; switch sides if that way is blocked too
+  const first: 1 | -1 = brain.detour === -1 ? -1 : 1
+  for (const side of [first, first === 1 ? -1 : 1] as const) {
+    const tx = -mz * side
+    const tz = mx * side
+    if (!ahead(tx, tz)) {
+      brain.detour = side
+      return { x: tx * 0.85 + mx * 0.15, z: tz * 0.85 + mz * 0.15, hop: false }
+    }
+  }
+  // boxed in: go up and over
+  return { x: mx, z: mz, hop: true }
 }
 
 /** A projectile from an enemy heading close enough to hit, within sight. */
@@ -139,8 +193,14 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     const gap = gapTo(hero, target)
     // falls back only toward living teammates; alone, it fights to the end rather than kiting forever
     const allies = alliesOf(m, hero).length > 1
-    if (allies && hpFraction(hero) < AI.retreatBelow && nearestGap(m, hero) <= AI.nearRadius && !best) brain.action = 'retreat'
-    else brain.action = gap > preferredDistance(setup) + 0.5 ? 'approach' : 'hold'
+    if (allies && hpFraction(hero) < AI.retreatBelow && nearestGap(m, hero) <= AI.nearRadius && !best) {
+      brain.action = 'retreat'
+      brain.hide = hidingSpot(m, hero, target)
+    } else {
+      // a ranged hero with no line on its target moves until it has one, rather than shooting the wall
+      const blind = isRanged(setup) && !canSee(m, chest(hero), chest(target))
+      brain.action = gap > preferredDistance(setup) + 0.5 || blind ? 'approach' : 'hold'
+    }
     if (next(m.ai) < AI.strafeFlip) brain.strafe = brain.strafe === 1 ? -1 : 1
   }
 }
@@ -181,25 +241,39 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     moveX = brain.dodge.x + (closing ? (dx / flat) * AI.dodgeAdvance : 0)
     moveZ = brain.dodge.z + (closing ? (dz / flat) * AI.dodgeAdvance : 0)
   } else if (brain.action === 'approach') [moveX, moveZ] = [dx / flat, dz / flat]
-  else if (brain.action === 'retreat') [moveX, moveZ] = [-dx / flat, -dz / flat]
+  else if (brain.action === 'retreat' && brain.hide) {
+    const hx = brain.hide.x - hero.position.x
+    const hz = brain.hide.z - hero.position.z
+    const h = Math.sqrt(hx * hx + hz * hz)
+    ;[moveX, moveZ] = h > 0.5 ? [hx / h, hz / h] : [0, 0]
+  } else if (brain.action === 'retreat') [moveX, moveZ] = [-dx / flat, -dz / flat]
   else if (isRanged(setup)) [moveX, moveZ] = [(-dz / flat) * brain.strafe * 0.6, (dx / flat) * brain.strafe * 0.6]
   // melee in contact stays on the target instead of circling off it
   else if (closing) [moveX, moveZ] = [dx / flat, dz / flat]
+  // walk around walls, or hop low cover
+  const steered = steer(m, hero, brain, moveX, moveZ)
+  ;[moveX, moveZ] = [steered.x, steered.z]
   // follow a target into the air, and come back down when it lands
   if (m.tick >= brain.dodgeUntil && Math.abs(dy) > 1) vertical = dy > 0 ? 1 : -1
+  if (steered.hop) vertical = 1
 
   // buttons: a decided skill fires once the aim settles (self and auras need no aim); the basic attack when in reach
   let buttons = 0
   const kind = castTemplate?.delivery.kind
   const aimless = kind === 'self' || kind === 'aura' || (kind === 'zone' && !castTemplate?.delivery.range)
-  if (brain.cast && (aimless || off <= AI.fireTolerance || brain.cast.escape)) {
+  // aimed shots and swings wait for a clear line; blasts from above and self-casts do not
+  // line of sight is checked only when a shot is otherwise ready, since it is the costly test
+  let seen: boolean | undefined
+  const sight = () => (seen ??= canSee(m, from, chest(target)))
+  const lobbed = kind === 'zone' || kind === 'blink' || kind === 'dash' || kind === 'grapple'
+  if (brain.cast && (aimless || brain.cast.escape || (off <= AI.fireTolerance && (lobbed || sight())))) {
     buttons |= slotBit(brain.cast.slot as BuildSlot)
     brain.cast = undefined
   }
   // a sword swing only needs the target inside its arc; a shot needs the aim to settle
   const basic = setup.kit.basic.delivery
   const basicTolerance = basic.arcDegrees ? Math.max(AI.fireTolerance, ((basic.arcDegrees / 2) * PI) / 180 * AI.arcUse) : AI.fireTolerance
-  if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack) buttons |= slotBit('basic')
+  if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight()) buttons |= slotBit('basic')
   return { moveX, moveZ, vertical, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
 }
 

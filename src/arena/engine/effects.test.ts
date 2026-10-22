@@ -14,7 +14,8 @@ function fight(a: Build[], b: Build[], seed = 1) {
     a.map((build) => ({ build })),
     b.map((build) => ({ build })),
     seed,
-    { profile: GATE_PROFILE },
+    // rule tests place heroes by hand, so they play on the open floor
+    { profile: GATE_PROFILE, cover: false },
   )
   const rules = matchRules(arena)
   const events: MatchEvent[] = []

@@ -1,4 +1,5 @@
 import { ENGINE } from '../../../arena/engine/calibration'
+import { RUINS, initialCoverHealth, pushOut } from '../../../arena/engine/cover'
 import type { Team } from '../../../arena/engine/state'
 
 /**
@@ -29,20 +30,26 @@ export function onOwnHalf(side: Team, x: number, z: number): boolean {
   return side === 0 ? z <= -1 : z >= 1
 }
 
+const ruinsHealth = initialCoverHealth(RUINS)
+/** True when a hero standing at (x, z) would be inside a piece of the ruins (R25). */
+export const inRuins = (x: number, z: number) => pushOut(RUINS, ruinsHealth, { x, y: 0, z }, ENGINE.capsule.radius + 0.2, ENGINE.capsule.height)
+
 const crowded = (list: Placement[], x: number, z: number, ignore?: number) => list.some((p, i) => i !== ignore && (p.x - x) ** 2 + (p.z - z) ** 2 < SPACING ** 2)
 
-export type PlaceResult = { ok: true; formation: Formation } | { ok: false; reason: 'wrong-half' | 'full' | 'crowded' }
+export type PlaceResult = { ok: true; formation: Formation } | { ok: false; reason: 'wrong-half' | 'full' | 'crowded' | 'in-ruins' }
 
 export function place(f: Formation, side: Team, hero: number, x: number, z: number): PlaceResult {
   const list = f[side]
   if (list.length >= MAX_PER_SIDE) return { ok: false, reason: 'full' }
   if (!onOwnHalf(side, x, z)) return { ok: false, reason: 'wrong-half' }
+  if (inRuins(x, z)) return { ok: false, reason: 'in-ruins' }
   if (crowded(list, x, z)) return { ok: false, reason: 'crowded' }
   return { ok: true, formation: withSide(f, side, [...list, { hero, x, z }]) }
 }
 
 export function move(f: Formation, side: Team, index: number, x: number, z: number): PlaceResult {
   if (!onOwnHalf(side, x, z)) return { ok: false, reason: 'wrong-half' }
+  if (inRuins(x, z)) return { ok: false, reason: 'in-ruins' }
   if (crowded(f[side], x, z, index)) return { ok: false, reason: 'crowded' }
   return { ok: true, formation: withSide(f, side, f[side].map((p, i) => (i === index ? { ...p, x, z } : p))) }
 }
@@ -64,8 +71,14 @@ export function autoDeploy(f: Formation, side: Team, loadout: number, count: num
     const slot = i % perRank
     const x = (slot - (inRank - 1) / 2) * 4
     const z = (side === 0 ? -1 : 1) * (10 + rank * 4)
-    const r = place(next, side, i % Math.max(1, loadout), x, z)
-    if (r.ok) next = r.formation
+    // a spot on the ruins slides along the rank until it is clear
+    for (const shift of [0, 1.5, -1.5, 3, -3]) {
+      const r = place(next, side, i % Math.max(1, loadout), x + shift, z)
+      if (r.ok) {
+        next = r.formation
+        break
+      }
+    }
   }
   return next
 }

@@ -11,4 +11,7 @@ export type MatchEvent =
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
   | { type: 'resize'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }
+  /** A shot or blast struck a piece of cover; breakable pieces report their health left. */
+  | { type: 'cover-hit'; index: number; at: Vec3; health: number }
+  | { type: 'cover-broken'; index: number; at: Vec3 }
   | { type: 'end'; winner: 0 | 1 | 'draw'; reason: 'wipe' | 'time' }

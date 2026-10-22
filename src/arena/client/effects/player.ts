@@ -221,6 +221,14 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             m.scale.set(c.radius, c.height / 2, c.radius)
             forms.set(e.hero, m)
           } else dropForm(e.hero)
+        } else if (e.type === 'cover-hit') {
+          // stone chips where a shot meets cover
+          impacts.spawn({ count: 10, at: e.at, speed: 3.5, spread: 0.1, life: 0.5, size: 0.05, color: new THREE.Color(0.85, 0.8, 0.7), gravity: 9 }, clock)
+        } else if (e.type === 'cover-broken') {
+          // a barricade bursting: a cloud of dust and splinters, and a thump in the camera
+          cosmetic.spawn({ count: 90, at: e.at, speed: 4, spread: 1.2, life: 1.3, size: 0.16, color: new THREE.Color(0.75, 0.66, 0.52), gravity: 1.5, lift: 1 }, clock)
+          impacts.spawn({ count: 30, at: e.at, speed: 7, spread: 0.4, life: 0.8, size: 0.07, color: new THREE.Color(0.55, 0.38, 0.22), gravity: 12 }, clock)
+          shake = Math.max(shake, 0.35)
         } else if (e.type === 'death') {
           // the engine sends no resize end for a hero that dies transformed
           dropForm(e.hero)

@@ -24,7 +24,7 @@ describe('demo AI (U7)', () => {
   it('uses an escape skill below 30% health when an enemy is near', () => {
     const build = defaultBuild('assassin')
     const sprint = { ...build, slots: { ...build.slots, movement: { ...build.slots.movement, templateId: 'shared-sprint-burst' } } }
-    const a = createMatch([{ build: sprint }], [{ build: defaultBuild('fighter') }], 1, { formations: [[{ x: 0, y: 0, z: -2 }], [{ x: 0, y: 0, z: 2 }]] })
+    const a = createMatch([{ build: sprint }], [{ build: defaultBuild('fighter') }], 1, { formations: [[{ x: 0, y: 0, z: -2 }], [{ x: 0, y: 0, z: 2 }]], cover: false })
     a.match.heroes[0].hp = a.match.heroes[0].maxHp * 0.2
     expect(getTemplate('shared-sprint-burst').ai.use).toBe('escape')
     expect(casts(run(a, 60), 0)).toContain('movement')
@@ -34,7 +34,7 @@ describe('demo AI (U7)', () => {
     const build = defaultBuild('fighter')
     const meteor = { ...build, slots: { ...build.slots, ultimate: { ...build.slots.ultimate, templateId: 'fighter-meteor-combo' } } }
     const setup = (hpFraction: number) => {
-      const a = createMatch([{ build: meteor }], [{ build: defaultBuild('tank') }], 2, { formations: [[{ x: 0, y: 0, z: -1 }], [{ x: 0, y: 0, z: 1 }]] })
+      const a = createMatch([{ build: meteor }], [{ build: defaultBuild('tank') }], 2, { formations: [[{ x: 0, y: 0, z: -1 }], [{ x: 0, y: 0, z: 1 }]], cover: false })
       a.match.heroes[0].cooldowns.ultimate = 0
       a.match.heroes[1].hp = a.match.heroes[1].maxHp * hpFraction
       return a
@@ -85,7 +85,7 @@ describe('demo AI (U7)', () => {
   it('dodges some projectiles it can see, and never one beyond sight', () => {
     let dodged = 0
     for (let seed = 1; seed <= 20; seed++) {
-      const a = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], seed, { formations: [[{ x: 0, y: 0, z: -10 }], [{ x: 0, y: 0, z: 10 }]] })
+      const a = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], seed, { formations: [[{ x: 0, y: 0, z: -10 }], [{ x: 0, y: 0, z: 10 }]], cover: false })
       aiCommands(a)
       const me = chest(a.match.heroes[0])
       a.match.projectiles.push({ id: 1, owner: 1, slot: 'basic', position: { x: me.x, y: me.y, z: me.z + AI.seeDistance - 4 }, step: { x: 0, y: 0, z: -0.5 }, ticksLeft: 60 })

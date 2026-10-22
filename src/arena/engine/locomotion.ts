@@ -2,7 +2,8 @@ import { locomotion } from '../../charter/locomotion'
 import { SIZES } from '../../charter/sizes'
 import { DT, ENGINE } from './calibration'
 import { clamp } from './maths'
-import type { Command, HeroSetup, HeroState } from './state'
+import { pushOut } from './cover'
+import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 
 /** Ground speed now: the sheet's move speed with buffs, the strongest slow, and any transformation's speed (KTD2). */
 export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
@@ -18,7 +19,7 @@ export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
 export const heroLocomotion = (hero: HeroState, setup: HeroSetup) => locomotion(moveSpeed(hero, setup))
 
 /** Move one tick by the command: run on the ground, or fly and hold altitude in the air (KTD2). */
-export function move(hero: HeroState, setup: HeroSetup, command: Command) {
+export function move(hero: HeroState, setup: HeroSetup, command: Command, match?: MatchState) {
   const { ground, flight } = heroLocomotion(hero, setup)
   let mx = command.moveX
   let mz = command.moveZ
@@ -33,7 +34,16 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command) {
   p.x += mx * speed * DT
   p.z += mz * speed * DT
   if (hero.airborne) p.y += command.vertical * flight * ENGINE.climbFraction * DT
+  keepOut(hero, match)
+}
+
+/** Keep a hero inside the arena and out of every standing piece of cover; returns whether it touched cover. */
+export function keepOut(hero: HeroState, match: MatchState | undefined): boolean {
   clampToArena(hero)
+  if (!match?.cover) return false
+  const touched = pushOut(match.cover.pieces, match.cover.health, hero.position, bodyRadius(hero), capsule(hero).height)
+  if (touched) clampToArena(hero)
+  return touched
 }
 
 export function clampToArena(hero: HeroState) {

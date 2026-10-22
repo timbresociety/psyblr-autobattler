@@ -38,7 +38,7 @@ type Paint = 'skin' | 'hair' | 'suit' | 'trim' | 'dark' | 'glove' | 'boot'
 
 /** Body parts: geometry, centre in the bind pose, the bone that carries it, and its paint. */
 function parts(): [THREE.BufferGeometry, number, number, BoneName, Paint][] {
-  const cap = (r: number, h: number) => new THREE.CapsuleGeometry(r, h, 8, 22, 3)
+  const cap = (r: number, h: number) => new THREE.CapsuleGeometry(r, h, 6, 18, 2)
   const limb = (r: number, h: number) => new THREE.CapsuleGeometry(r, h, 6, 16, 2)
   const hair = new THREE.SphereGeometry(0.128, 18, 7, 0, Math.PI * 2, 0, Math.PI * 0.55)
   const parts: [THREE.BufferGeometry, number, number, BoneName, Paint][] = [
@@ -48,10 +48,15 @@ function parts(): [THREE.BufferGeometry, number, number, BoneName, Paint][] {
     [new THREE.CylinderGeometry(0.06, 0.07, 0.12, 16, 2), 0, 1.72, 'mixamorigNeck', 'skin'],
     [new THREE.SphereGeometry(0.12, 24, 16), 0, 1.88, 'mixamorigHead', 'skin'],
     [hair, 0, 1.9, 'mixamorigHead', 'hair'],
+    // a belt with a buckle cinches the waist, the way a hero suit reads at a distance
+    [new THREE.TorusGeometry(0.175, 0.03, 6, 20).rotateX(Math.PI / 2), 0, 1.12, 'mixamorigHips', 'boot'],
+    [new THREE.BoxGeometry(0.07, 0.06, 0.03).translate(0, 0, 0.18), 0, 1.12, 'mixamorigHips', 'glove'],
   ]
   for (const side of [1, -1]) {
     const L = side === 1 ? 'Left' : 'Right'
     parts.push(
+      // broad shoulder pads give the silhouette its heroic V
+      [new THREE.SphereGeometry(0.1, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1.15, 0.8, 1), 0.23 * side, 1.62, `mixamorig${L}Arm` as BoneName, 'trim'],
       [limb(0.055, 0.2), 0.24 * side, 1.5, `mixamorig${L}Arm` as BoneName, 'suit'],
       [limb(0.045, 0.2), 0.24 * side, 1.2, `mixamorig${L}ForeArm` as BoneName, 'skin'],
       [new THREE.SphereGeometry(0.05, 14, 10), 0.24 * side, 1.04, `mixamorig${L}ForeArm` as BoneName, 'glove'],

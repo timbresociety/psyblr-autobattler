@@ -6,6 +6,7 @@ import { deriveSheet } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, DamageType, SecondarySheet, Template } from '../../charter/types'
 import { ENGINE } from './calibration'
+import type { CoverHealth, CoverPiece } from './cover'
 import type { Vec3 } from './maths'
 import { aiSeed, rngState, type RngState } from './rng'
 
@@ -100,6 +101,8 @@ export interface MatchState {
   human?: number
   /** Each AI hero's memory, kept in the state so AI play snapshots and replays exactly (KTD7). */
   brains?: BrainState[]
+  /** The ruins on this map and each piece's health; absent on an open test floor. */
+  cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
 }
 
 export interface BrainState {
@@ -121,6 +124,10 @@ export interface BrainState {
   overshoot: number
   /** The target's last seen position, to lead moving targets. */
   seen?: { x: number; y: number; z: number; tick: number; target: number }
+  /** Which way it is walking around the wall in front of it (R25); 0 when the way is clear. */
+  detour: -1 | 0 | 1
+  /** The spot behind cover it falls back to when retreating. */
+  hide?: { x: number; z: number }
 }
 
 export interface HeroSetup {
@@ -156,6 +163,9 @@ export function emptyMatch(seed: number): MatchState {
 }
 
 /** The capsule a hero occupies now: base at its feet. */
+/** The body that bumps into walls: the hit capsule's radius, capped so big heroes still fit through gaps. */
+export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, capsule(hero).radius)
+
 export function capsule(hero: HeroState): { radius: number; height: number } {
   const profile = SIZES[hero.size]
   const grow = 1 + Math.max(0, profile.hitRadius) / 3
