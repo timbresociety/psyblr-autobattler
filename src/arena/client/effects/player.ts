@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { BuildSlot } from '../../../charter/types'
 import type { HeroPackage } from '../../../forge/package'
 import { capsule } from '../../engine/state'
+import { atLeast } from '../quality'
 import { chest } from '../../engine/deliveries'
 import type { MatchEvent } from '../../engine/events'
 import { defaultRecipe } from '../../recipes/defaults'
@@ -56,6 +57,11 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   const { scene, arena } = ctrl
   const cosmetic = new Particles(BUDGET.cosmetic)
   const impacts = new Particles(BUDGET.impact)
+  // the frame-rate guard's third step halves every spawn (U18, R26)
+  for (const pool of [cosmetic, impacts]) {
+    const spawn = pool.spawn.bind(pool)
+    pool.spawn = (spec, now) => spawn(atLeast(ctrl.quality(), 'fewer-particles') ? { ...spec, count: Math.ceil(spec.count / 2) } : spec, now)
+  }
   scene.add(cosmetic.mesh, impacts.mesh)
   const pool = new Map<string, THREE.Mesh[]>()
   const live: Live[] = []

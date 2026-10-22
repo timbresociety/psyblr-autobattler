@@ -7,7 +7,6 @@
 .arena-top .timer { font-variant-numeric: tabular-nums; font-size: 18px; }
 .arena-top .team-a { color: #6fb7ff; }
 .arena-top .team-b { color: #ff8a70; }
-.arena-result { position: absolute; top: 44px; left: 50%; transform: translateX(-50%); white-space: nowrap; margin: 0; padding: 6px 12px; border-radius: 8px; background: rgba(0, 0, 0, 0.7); }
 
 .staging-pick h2 { margin: 0 0 8px; }
 .staging { position: fixed; inset: 0; top: var(--tabs-height, 44px); display: grid; grid-template-columns: minmax(200px, 260px) 1fr minmax(240px, 320px); grid-template-rows: 1fr auto; gap: 12px; padding: 12px; background: #10141c; color: #e8eef8; }
@@ -55,3 +54,14 @@
 .reticle { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 6px #000; pointer-events: none; }
 .arena-hint { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 10px; background: rgba(8, 10, 16, 0.78); text-align: center; }
 .arena-hint p { margin: 4px 0; }
+
+.countdown { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-size: 96px; font-weight: 800; color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.pause-menu, .result { gap: 10px; }
+.pause-menu .column { display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+.result table { border-collapse: collapse; font-size: 13px; max-height: 50vh; overflow: auto; display: block; }
+.result td, .result th { padding: 3px 10px; text-align: left; }
+.result tr.team-0 td:first-child { color: #7fb4ff; }
+.result tr.team-1 td:first-child { color: #ff8f7f; }
+.result tr.dead { opacity: 0.55; }
+.volume { display: inline-flex; gap: 8px; align-items: center; }
+.hud-volume { position: absolute; top: 8px; right: 110px; }

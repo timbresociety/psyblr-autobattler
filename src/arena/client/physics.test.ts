@@ -56,4 +56,12 @@ describe('cosmetic physics (U15)', () => {
     expect(pose.sleeping).toBe(true)
     expect(pose.position.y).toBeLessThan(0.5)
   })
+
+  it('a rematch builds a fresh world after the last one is freed', async () => {
+    const first = (await play(true, 20)).physics!
+    first.dispose()
+    expect(first.debrisPoses()).toEqual([])
+    const second = await play(true, 20)
+    expect(second.physics!.broken).toBe(false)
+  }, 120_000)
 })

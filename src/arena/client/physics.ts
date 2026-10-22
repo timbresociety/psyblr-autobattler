@@ -18,6 +18,17 @@ export const PHYSICS = {
 }
 
 type Quat = { x: number; y: number; z: number; w: number }
+
+// Rapier's WASM loads once per page; a second init on a rematch corrupted its memory
+let rapier: Promise<typeof RAPIER> | undefined
+const loadRapier = () =>
+  (rapier ??= import('@dimforge/rapier3d-compat').then(async (m) => {
+    await m.default.init()
+    return m.default
+  }).catch((e: unknown) => {
+    rapier = undefined
+    throw e
+  }))
 const UPRIGHT: Quat = { x: 0, y: 0, z: 0, w: 1 }
 
 function slerpToUpright(q: Quat, t: number): Quat {
@@ -51,9 +62,18 @@ export class CosmeticPhysics {
   }
 
   static async create(): Promise<CosmeticPhysics> {
-    const R = (await import('@dimforge/rapier3d-compat')).default
-    await R.init()
+    const R = await loadRapier()
     return new CosmeticPhysics(R, new R.World({ x: 0, y: -18, z: 0 }))
+  }
+
+  /** Free the world's WASM memory when the match ends; the instance is inert afterwards. */
+  dispose() {
+    if (this.broken) return
+    this.broken = true
+    this.tumbling.clear()
+    this.fallen.clear()
+    this.debris.length = 0
+    this.world.free()
   }
 
   /** Bodies awake right now; the cap keeps this under `PHYSICS.maxBodies`. */
