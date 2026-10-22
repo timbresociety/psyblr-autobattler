@@ -19,6 +19,8 @@ export interface Profile {
 
 export const LIVE_PROFILE: Profile = { timerSeconds: 300 }
 export const GATE_PROFILE: Profile = { timerSeconds: 60, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
+/** Team fights in the balance report need longer to play out than duels. */
+export const GATE_TEAM_PROFILE: Profile = { timerSeconds: 120, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
 
 /** A hero entering a match; army synergy has already set its power scale and damage bonus. */
 export interface Combatant {

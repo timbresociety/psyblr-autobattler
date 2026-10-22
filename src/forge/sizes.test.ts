@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { hydrateBuild } from '../charter/build'
 import { getRole } from '../charter/roles'
 import { deriveSheet } from '../charter/stats'
-import { createBattle, simulate, step } from '../sim/engine'
+import { cast } from '../arena/engine/deliveries'
+import type { MatchEvent } from '../arena/engine/events'
+import { createMatch } from '../arena/engine/match'
+import { simulate } from '../sim/engine'
 import { defaultBuild } from '../sim/fixtures'
 import { sizeCost } from './sizes'
 
@@ -30,17 +33,12 @@ describe('size classes (U2)', () => {
     const mage = defaultBuild('mage')
     const caster = { ...mage, slots: { ...mage.slots, active1: { ...mage.slots.active1, templateId: 'mage-frost-nova' } } }
     const reach = (sizeClass?: 'huge') => {
-      const battle = createBattle([{ build: caster }], [{ build: { ...defaultBuild('tank'), ...(sizeClass ? { sizeClass } : {}) } }], 1)
-      const [me, foe] = battle.units
-      me.position = { x: 0, y: 0 }
-      foe.position = { x: 4.6, y: 0 }
-      for (const u of [me, foe]) for (const s of Object.keys(u.cooldowns) as (keyof typeof u.cooldowns)[]) u.cooldowns[s] = 99
-      me.cooldowns.active1 = 0
-      me.hp = me.maxHp * 0.5
-      foe.cooldowns.basic = 99
-      const before = foe.slows.length
-      step(battle)
-      return foe.slows.length > before
+      const arena = createMatch([{ build: caster }], [{ build: { ...defaultBuild('tank'), ...(sizeClass ? { sizeClass } : {}) } }], 1, {
+        formations: [[{ x: 0, y: 0, z: -2.5 }], [{ x: 0, y: 0, z: 2.5 }]],
+      })
+      const events: MatchEvent[] = []
+      cast({ match: arena.match, setups: arena.setups, events }, 0, 'active1')
+      return arena.match.heroes[1].slows.length > 0
     }
     expect(reach()).toBe(false)
     expect(reach('huge')).toBe(true)

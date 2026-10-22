@@ -3,9 +3,9 @@ import { BUILD_SLOTS, type Build } from '../charter/build'
 import { buildPackage, validatePackage, type HeroPackage } from '../forge/package'
 import { confirm } from '../forge/stages'
 import type { Forge } from '../forge/types'
-import { runGate } from '../sim/gate'
 import type { Db } from './db'
 import { ForgeError, commit, presetBatches, type RunnerDeps } from './forge-runner'
+import { cachedGate } from './gate-cache'
 import { blobStoreId, isOwnForgeAssetUrl } from './photo-url'
 import { NotFoundError } from './store'
 
@@ -15,7 +15,7 @@ import { NotFoundError } from './store'
  */
 export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forge> {
   if (!forge.build || !forge.spec) throw new ForgeError('nothing to publish', 409)
-  const gate = runGate({ ...forge.build, gate: { state: 'checking' } }, deps.gateOptions)
+  const gate = await cachedGate(deps.db, { ...forge.build, gate: { state: 'checking' } }, deps.gateOptions)
   if (gate.state === 'blocked') {
     const stats = forge.stages.stats
     const blocked: Forge = {

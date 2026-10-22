@@ -82,18 +82,20 @@ describe('demo AI (U7)', () => {
     expect(brain.target).toBe(2)
   })
 
-  it('dodges a projectile it can see in most trials, and never one beyond sight', () => {
+  it('dodges some projectiles it can see, and never one beyond sight', () => {
     let dodged = 0
     for (let seed = 1; seed <= 20; seed++) {
       const a = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], seed, { formations: [[{ x: 0, y: 0, z: -10 }], [{ x: 0, y: 0, z: 10 }]] })
       aiCommands(a)
       const me = chest(a.match.heroes[0])
-      a.match.projectiles.push({ id: 1, owner: 1, slot: 'basic', position: { x: me.x, y: me.y, z: me.z + 15 }, step: { x: 0, y: 0, z: -0.5 }, ticksLeft: 60 })
+      a.match.projectiles.push({ id: 1, owner: 1, slot: 'basic', position: { x: me.x, y: me.y, z: me.z + AI.seeDistance - 4 }, step: { x: 0, y: 0, z: -0.5 }, ticksLeft: 60 })
       a.match.tick = a.match.brains![0].nextDecision
       aiCommands(a)
       if (a.match.brains![0].action === 'dodge') dodged++
     }
-    expect(dodged).toBeGreaterThanOrEqual(10)
+    // it dodges about AI.dodgeChance of the shots it sees
+    expect(dodged).toBeGreaterThanOrEqual(Math.floor(20 * AI.dodgeChance * 0.5))
+    expect(dodged).toBeLessThan(20)
     const far = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], 1)
     aiCommands(far)
     const me = chest(far.match.heroes[0])

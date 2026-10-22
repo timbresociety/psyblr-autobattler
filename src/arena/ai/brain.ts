@@ -136,7 +136,9 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     brain.dodge = { x: (-threat.step.z / len) * side, z: (threat.step.x / len) * side, vertical: hero.airborne ? (next(m.ai) < 0.5 ? 1 : -1) : 0 }
   } else if (m.tick >= brain.dodgeUntil) {
     const gap = gapTo(hero, target)
-    if (hpFraction(hero) < AI.retreatBelow && nearestGap(m, hero) <= AI.nearRadius && !best) brain.action = 'retreat'
+    // falls back only toward living teammates; alone, it fights to the end rather than kiting forever
+    const allies = alliesOf(m, hero).length > 1
+    if (allies && hpFraction(hero) < AI.retreatBelow && nearestGap(m, hero) <= AI.nearRadius && !best) brain.action = 'retreat'
     else brain.action = gap > preferredDistance(setup) + 0.5 ? 'approach' : 'hold'
     if (next(m.ai) < AI.strafeFlip) brain.strafe = brain.strafe === 1 ? -1 : 1
   }
@@ -171,10 +173,17 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   let moveZ = 0
   let vertical: -1 | 0 | 1 = 0
   const dy = target.position.y - hero.position.y
-  if (m.tick < brain.dodgeUntil) ({ x: moveX, z: moveZ, vertical } = brain.dodge)
-  else if (brain.action === 'approach') [moveX, moveZ] = [dx / flat, dz / flat]
+  const closing = gapTo(hero, target) > preferredDistance(setup) + 0.5
+  if (m.tick < brain.dodgeUntil) {
+    // sidestep the shot, but keep closing in while doing it, the way a player weaves forward
+    ;({ vertical } = brain.dodge)
+    moveX = brain.dodge.x + (closing ? (dx / flat) * AI.dodgeAdvance : 0)
+    moveZ = brain.dodge.z + (closing ? (dz / flat) * AI.dodgeAdvance : 0)
+  } else if (brain.action === 'approach') [moveX, moveZ] = [dx / flat, dz / flat]
   else if (brain.action === 'retreat') [moveX, moveZ] = [-dx / flat, -dz / flat]
-  else [moveX, moveZ] = [(-dz / flat) * brain.strafe * 0.6, (dx / flat) * brain.strafe * 0.6]
+  else if (isRanged(setup)) [moveX, moveZ] = [(-dz / flat) * brain.strafe * 0.6, (dx / flat) * brain.strafe * 0.6]
+  // melee in contact stays on the target instead of circling off it
+  else if (closing) [moveX, moveZ] = [dx / flat, dz / flat]
   // follow a target into the air, and come back down when it lands
   if (m.tick >= brain.dodgeUntil && Math.abs(dy) > 1) vertical = dy > 0 ? 1 : -1
 
@@ -186,7 +195,10 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     buttons |= slotBit(brain.cast.slot as BuildSlot)
     brain.cast = undefined
   }
-  if (off <= AI.fireTolerance && gapTo(hero, target) <= setup.kit.basic.delivery.range + ENGINE.meleeSlack) buttons |= slotBit('basic')
+  // a sword swing only needs the target inside its arc; a shot needs the aim to settle
+  const basic = setup.kit.basic.delivery
+  const basicTolerance = basic.arcDegrees ? Math.max(AI.fireTolerance, ((basic.arcDegrees / 2) * PI) / 180 * AI.arcUse) : AI.fireTolerance
+  if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack) buttons |= slotBit('basic')
   return { moveX, moveZ, vertical, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
 }
 

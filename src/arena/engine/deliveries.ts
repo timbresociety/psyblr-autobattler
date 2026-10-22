@@ -38,7 +38,8 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
   const reach = SIZES[caster.size].reachBonus
   switch (d.kind) {
     case 'melee': {
-      const inReach = enemies.filter((e) => gap(from, e) <= d.range + ENGINE.meleeSlack + reach && inArc(from, dir, e, d.arcDegrees ?? 90))
+      // reach runs from the caster's body, not its chest: surface to surface, the way players and the AI judge it
+      const inReach = enemies.filter((e) => gap(from, e) - capsule(caster).radius <= d.range + ENGINE.meleeSlack + reach && inArc(from, dir, e, d.arcDegrees ?? 90))
       return { hit: nearest(from, inReach), at: add(from, scale(dir, d.range)) }
     }
     case 'cone':
@@ -65,7 +66,7 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
       return { hit: [], at: from }
     default: {
       // dashes, blinks and grapples go for the nearest enemy in a narrow arc ahead
-      const inReach = enemies.filter((e) => gap(from, e) <= d.range + reach && inArc(from, dir, e, ENGINE.lungeArc))
+      const inReach = enemies.filter((e) => gap(from, e) - capsule(caster).radius <= d.range + reach && inArc(from, dir, e, ENGINE.lungeArc))
       return { hit: nearest(from, inReach), at: add(from, scale(dir, d.range)) }
     }
   }
