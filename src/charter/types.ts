@@ -49,3 +49,69 @@ export interface LimitHit {
 }
 
 export type Validation = { ok: true } | { ok: false; errors: LimitHit[] }
+
+/** The kind of slot a template fills. A build has two `active` slots (R1). */
+export type SlotKind = 'basic' | 'active' | 'passive' | 'ultimate' | 'movement'
+
+/** The six slots of every build: basic attack, two actives, passive, ultimate, movement (R1). */
+export type BuildSlot = 'basic' | 'active1' | 'active2' | 'passive' | 'ultimate' | 'movement'
+
+export type DamageType = 'physical' | 'spirit'
+
+/** Which sheet stat a magnitude scales with. */
+export type ScalingStat = 'weaponDamage' | 'spiritPower'
+
+export type Effect =
+  | { kind: 'damage'; amount: number; ratio: number; scaling: ScalingStat; type: DamageType; overTime?: number }
+  | { kind: 'heal'; amount: number; ratio: number; target: 'self' | 'ally' | 'allies'; overTime?: number }
+  | { kind: 'shield'; amount: number; ratio: number; target: 'self' | 'ally' | 'allies'; duration: number }
+  | { kind: 'stun'; duration: number }
+  | { kind: 'slow'; pct: number; duration: number }
+  | { kind: 'displace'; distance: number }
+  | { kind: 'mobility'; distance: number; invulnerable?: number }
+  | { kind: 'buff'; stat: 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduction'; pct: number; duration: number; target: 'self' | 'allies' }
+  | { kind: 'execute'; thresholdPct: number; bonusPct: number }
+
+export interface Delivery {
+  kind: 'melee' | 'projectile' | 'beam' | 'cone' | 'zone' | 'self' | 'aura' | 'dash' | 'blink' | 'grapple'
+  /** Metres to the target or the far edge of the effect. */
+  range: number
+  /** Metres; area effects only. */
+  radius?: number
+}
+
+/** When a passive's effects apply. */
+export type PassiveTrigger = 'always' | 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill'
+
+/** How the battle AI should use a template (R17). */
+export interface AiHint {
+  use: 'always' | 'open' | 'engage' | 'poke' | 'finisher' | 'escape' | 'peel' | 'sustain' | 'support'
+  /** Higher fires first when several skills are ready. */
+  priority: number
+  /** Use only when the caster is below this health fraction. */
+  selfHealthBelow?: number
+  /** Use only when the target is below this health fraction. */
+  targetHealthBelow?: number
+  /** Use only with at least this many enemies inside the effect. */
+  minTargets?: number
+}
+
+export interface Template {
+  id: string
+  /** The mechanic's catalogue name; the player's own skill name is shown on top (R5). */
+  name: string
+  slot: SlotKind
+  roles: RoleId[]
+  /** Mechanic vocabulary used by the matcher (R5, R7). */
+  tags: string[]
+  delivery: Delivery
+  effects: Effect[]
+  /** Seconds; 0 for basic attacks and passives. */
+  cooldown: number
+  trigger?: PassiveTrigger
+  ai: AiHint
+  /** Optional until the Forge decides how animations attach. */
+  animationHook?: string
+  /** A hand-tuned budget, recorded with its reason (KTD2). */
+  override?: { budget: number; reason: string }
+}
