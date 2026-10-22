@@ -1,0 +1,198 @@
+import { describe, expect, it } from 'vitest'
+import {
+  BUILD_SLOTS,
+  allocate,
+  changeRole,
+  editSkillText,
+  hydrateBuild,
+  proposeBuild,
+  requestStats,
+  setAttribute,
+  swapAlternatives,
+  swapTemplate,
+} from './build'
+import { getRole } from './roles'
+import { POOL_SIZE, spentPoints } from './stats'
+import { getTemplate } from './templates/catalog'
+import type { Build } from './build'
+
+const kameSkills = {
+  basic: { name: 'Ki Shot', flavour: 'fires small energy blasts' },
+  active1: { name: 'Rewind', flavour: 'rewind the last 5 seconds' },
+  active2: { name: 'Fire Orb', flavour: 'hurls a fireball' },
+  passive: { name: 'Genius', flavour: 'focus and intellect' },
+  ultimate: { name: 'Big Beam', flavour: 'a giant kamehameha wave' },
+  movement: { name: 'Blink', flavour: 'teleports a short way' },
+}
+
+function mage(): Build {
+  const result = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: kameSkills })
+  if (!result.ok) throw new Error('proposal failed')
+  return result.build
+}
+
+describe('proposeBuild', () => {
+  it('fills all six slots from the role pools and spends the role default spread', () => {
+    const build = mage()
+    for (const slot of BUILD_SLOTS) expect(getTemplate(build.slots[slot].templateId).roles).toContain('mage')
+    expect(build.slots.active1.templateId).not.toBe(build.slots.active2.templateId)
+    expect(spentPoints(build.spread)).toBe(POOL_SIZE)
+    expect(build.gate.state).toBe('draft')
+  })
+
+  it('assigns a role from the descriptions when none is given', () => {
+    const result = proposeBuild({ heroName: 'Healer', skills: { active1: { name: 'Mend', flavour: 'heals allies and shields them' }, ultimate: { name: 'Revive', flavour: 'resurrects the whole team' } } })
+    expect(result.ok && result.build.roleId).toBe('support')
+  })
+})
+
+describe('allocate and setAttribute (AE4)', () => {
+  it('dragging an attribute past its cap stops at the cap and names the limit', () => {
+    const build = mage()
+    const cap = getRole('mage').attributeCaps.intellect
+    const result = setAttribute(build, 'intellect', cap + 5)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.build.spread.intellect).toBeLessThanOrEqual(cap)
+      expect(result.limits.map((l) => l.reason)).toContain('attribute-cap')
+    }
+  })
+
+  it('setAttribute never spends more than the pool', () => {
+    const build = { ...mage(), spread: { strength: 0, agility: 0, intellect: 0 } }
+    const filled = setAttribute(setAttributeOk(setAttributeOk(build, 'strength', 14), 'intellect', 14), 'agility', 16)
+    expect(filled.ok && spentPoints(filled.build.spread)).toBeLessThanOrEqual(POOL_SIZE)
+    expect(filled.ok ? filled.limits.map((l) => l.reason) : []).toContain('pool-exceeded')
+  })
+
+  it('allocating more than the pool is rejected and the build keeps its last valid state', () => {
+    const build = mage()
+    const result = allocate(build, { strength: 20, agility: 10, intellect: 10 })
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.errors.map((e) => e.reason)).toContain('pool-exceeded')
+      expect(result.build).toBe(build)
+    }
+  })
+
+  it('a valid allocation resets the gate to draft', () => {
+    const build: Build = { ...mage(), gate: { state: 'ready', catalogVersion: 1 } }
+    const result = allocate(build, { strength: 10, agility: 10, intellect: 10 })
+    expect(result.ok && result.build.gate.state).toBe('draft')
+  })
+})
+
+function setAttributeOk(build: Build, attr: 'strength' | 'agility' | 'intellect', value: number): Build {
+  const r = setAttribute(build, attr, value)
+  if (!r.ok) throw new Error('unexpected')
+  return r.build
+}
+
+describe('requestStats (AE2)', () => {
+  it('"max armor, max regen, max health" clamps to caps and reports which limits were hit', () => {
+    const result = requestStats(mage(), { armor: 'max', regen: 'max', maxHealth: 'max' })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.build.spread.strength).toBe(getRole('mage').attributeCaps.strength)
+      expect(spentPoints(result.build.spread)).toBeLessThanOrEqual(POOL_SIZE)
+      expect(result.limits.length).toBeGreaterThan(0)
+      expect(result.limits.map((l) => l.field)).toContain('strength')
+    }
+  })
+
+  it('"more agile, less armor" moves points from Strength to Agility', () => {
+    const before = mage()
+    const result = requestStats(before, { moveSpeed: 'more', armor: 'less' })
+    expect(result.ok && result.build.spread.agility).toBeGreaterThan(before.spread.agility)
+    expect(result.ok && result.build.spread.strength).toBeLessThan(before.spread.strength)
+  })
+})
+
+describe('changeRole (AE3)', () => {
+  it('Mage "Rewind" to Tank keeps the name and visuals, picks a Tank template and refunds all points', () => {
+    const build = editSkillTextOk(mage(), 'active1', { visual: 'blue clock aura' })
+    const result = changeRole(build, 'tank')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      const rewind = result.build.slots.active1
+      expect(rewind.name).toBe('Rewind')
+      expect(rewind.visual).toBe('blue clock aura')
+      expect(getTemplate(rewind.templateId).roles).toContain('tank')
+      expect(spentPoints(result.build.spread)).toBe(0)
+      expect(result.build.roleId).toBe('tank')
+      expect(result.build.gate.state).toBe('draft')
+    }
+  })
+})
+
+function editSkillTextOk(build: Build, slot: 'active1', text: { visual: string }): Build {
+  const r = editSkillText(build, slot, text)
+  if (!r.ok) throw new Error('unexpected')
+  return r.build
+}
+
+describe('swapTemplate (R7)', () => {
+  it('accepts one of the offered alternatives and marks the slot as swapped', () => {
+    const build = mage()
+    const [alt] = swapAlternatives(build, 'active1')
+    const result = swapTemplate(build, 'active1', alt.id)
+    expect(result.ok && result.build.slots.active1.templateId).toBe(alt.id)
+    expect(result.ok && result.build.slots.active1.swapped).toBe(true)
+  })
+
+  it('rejects a template outside the offered alternatives', () => {
+    const build = mage()
+    const offered = new Set(swapAlternatives(build, 'active1').map((t) => t.id))
+    const outsider = ['mage-time-stop', 'tank-chain-hook', 'mage-mana-shield', 'mage-gravity-well'].find((id) => !offered.has(id) && id !== build.slots.active1.templateId)
+    expect(swapTemplate(build, 'active1', outsider as string).ok).toBe(false)
+  })
+})
+
+describe('editSkillText', () => {
+  it('editing an unswapped description re-matches its template', () => {
+    const build = mage()
+    const result = editSkillText(build, 'active2', { flavour: 'freezes everyone around' })
+    expect(result.ok && getTemplate(result.build.slots.active2.templateId).tags).toContain('freeze')
+  })
+
+  it('editing a hand-swapped description asks before replacing the template', () => {
+    const build = mage()
+    const [alt] = swapAlternatives(build, 'active2')
+    const swapped = swapTemplate(build, 'active2', alt.id)
+    if (!swapped.ok) throw new Error('unexpected')
+    const result = editSkillText(swapped.build, 'active2', { flavour: 'freezes everyone around' })
+    expect(result.ok && result.needsConfirm).toBe(true)
+    expect(result.ok && result.build.slots.active2.templateId).toBe(alt.id)
+  })
+})
+
+describe('hydrateBuild (R4)', () => {
+  it('ignores injected power numbers and retune steps from untrusted input', () => {
+    const build = mage()
+    const raw = JSON.parse(JSON.stringify(build))
+    raw.slots.active1.retuneSteps = -5
+    raw.slots.active1.damage = 99999
+    raw.damage = 99999
+    raw.gate = { state: 'ready' }
+    const result = hydrateBuild(raw)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.build.slots.active1.retuneSteps).toBe(0)
+      expect('damage' in result.build.slots.active1).toBe(false)
+      expect('damage' in result.build).toBe(false)
+      expect(result.build.gate.state).toBe('draft')
+    }
+  })
+
+  it('rejects a template ID outside the role pool for its slot', () => {
+    const raw = JSON.parse(JSON.stringify(mage()))
+    raw.slots.active1.templateId = 'tank-chain-hook'
+    expect(hydrateBuild(raw).ok).toBe(false)
+  })
+
+  it('rejects an invalid spread', () => {
+    const raw = JSON.parse(JSON.stringify(mage()))
+    raw.spread = { strength: 30, agility: 30, intellect: 30 }
+    expect(hydrateBuild(raw).ok).toBe(false)
+  })
+})
