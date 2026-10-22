@@ -1,3 +1,4 @@
+import type { SizeClass } from './sizes'
 /** Shared Charter types. Framework-free: used by the creator, the simulation and serverless functions (KTD1). */
 
 export type RoleId = 'tank' | 'fighter' | 'assassin' | 'mage' | 'marksman' | 'support'
@@ -71,6 +72,8 @@ export type Effect =
   | { kind: 'mobility'; distance: number; invulnerable?: number }
   | { kind: 'buff'; stat: 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduction'; pct: number; duration: number; target: 'self' | 'allies' }
   | { kind: 'execute'; thresholdPct: number; bonusPct: number }
+  /** A transformation: the hero takes another size class for a while, up or down (R23, KTD14). */
+  | { kind: 'resize'; sizeClass: SizeClass; duration: number }
 
 export interface Delivery {
   kind: 'melee' | 'projectile' | 'beam' | 'cone' | 'zone' | 'self' | 'aura' | 'dash' | 'blink' | 'grapple'
@@ -78,6 +81,14 @@ export interface Delivery {
   range: number
   /** Metres; area effects only. */
   radius?: number
+  /** Projectiles: travel speed in m/s (R43). */
+  speed?: number
+  /** Projectiles: the size of the travelling shot, in metres (R43). */
+  projectileRadius?: number
+  /** Melee and cones: the full width of the arc, in degrees (R43). */
+  arcDegrees?: number
+  /** Beams: width in metres (R43). */
+  width?: number
 }
 
 /** When a passive's effects apply. */

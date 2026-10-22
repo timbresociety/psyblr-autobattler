@@ -9,7 +9,7 @@ import { SUPPORT } from './support'
 import { TANK } from './tank'
 
 /** Bump when template numbers change, so stored gate results can be re-checked. */
-export const CATALOG_VERSION = 1
+export const CATALOG_VERSION = 2
 
 export const RAW_TEMPLATES: readonly Template[] = [...TANK, ...FIGHTER, ...ASSASSIN, ...MAGE, ...MARKSMAN, ...SUPPORT, ...SHARED]
 

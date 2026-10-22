@@ -1,7 +1,7 @@
 import { BUILD_SLOTS, type Build } from '../charter/build'
 import { retuneFactor, scaleMagnitudes } from '../charter/budget'
 import { getRole } from '../charter/roles'
-import { SIZES } from '../charter/sizes'
+import { SIZES, type SizeClass } from '../charter/sizes'
 import { deriveSheet } from '../charter/stats'
 import { getTemplate } from '../charter/templates/catalog'
 import type { BuildSlot, DamageType, Effect, RoleId, SecondarySheet, Template } from '../charter/types'
@@ -65,6 +65,9 @@ export interface Unit {
   /** Times of recent burst heals received, for diminishing returns. */
   recentHeals: number[]
   casts: Partial<Record<BuildSlot, number>>
+  /** The build's own size class, and any transformation into another one (KTD14). */
+  chosenSize: SizeClass
+  resize?: { size: SizeClass; until: number }
 }
 
 export interface Battle {
@@ -114,7 +117,7 @@ function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit 
   const unit: Unit = {
     id, team, name: c.build.heroName, roleId: c.build.roleId, hitRadius: size.hitRadius, reachBonus: size.reachBonus, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
     stunnedUntil: 0, invulnerableUntil: 0, slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, hitCount: 0,
-    lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {},
+    lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {}, chosenSize: c.build.sizeClass ?? 'medium',
   }
   const passive = kit.passive
   if ((passive.trigger ?? 'always') === 'always') {
@@ -318,6 +321,14 @@ function applyEffect(battle: Battle, caster: Unit, template: Template, e: Effect
       }
       break
     }
+    case 'resize': {
+      const profile = SIZES[e.sizeClass]
+      scaleHealth(caster, profile.healthMul / SIZES[caster.resize?.size ?? caster.chosenSize].healthMul)
+      caster.resize = { size: e.sizeClass, until: now + e.duration }
+      caster.hitRadius = profile.hitRadius
+      caster.reachBonus = profile.reachBonus
+      break
+    }
     case 'mobility':
     case 'execute':
       break
@@ -340,10 +351,22 @@ function basicAttack(battle: Battle, unit: Unit, target: Unit) {
   if (unit.hitCount % 3 === 0) firePassive(battle, unit, 'everyThirdHit', target)
 }
 
+/** A transformation changes the body, so health scales with it and keeps its fraction. */
+function scaleHealth(unit: Unit, ratio: number) {
+  unit.maxHp *= ratio
+  unit.hp *= ratio
+}
+
 function tickStatuses(battle: Battle, unit: Unit, dt: number) {
   const now = battle.time
   unit.slows = unit.slows.filter((s) => s.until > now)
   unit.buffs = unit.buffs.filter((b) => b.until > now)
+  if (unit.resize && unit.resize.until <= now) {
+    scaleHealth(unit, SIZES[unit.chosenSize].healthMul / SIZES[unit.resize.size].healthMul)
+    unit.resize = undefined
+    unit.hitRadius = SIZES[unit.chosenSize].hitRadius
+    unit.reachBonus = SIZES[unit.chosenSize].reachBonus
+  }
   if (unit.shieldUntil <= now) unit.shield = 0
   for (const dot of unit.dots) dealDamage(battle, dot.source, unit, dot.perSecond * dt, dot.type)
   unit.dots = unit.dots.filter((d) => d.until > now)
@@ -364,7 +387,9 @@ function tickStatuses(battle: Battle, unit: Unit, dt: number) {
 
 export function moveSpeed(unit: Unit): number {
   const slow = unit.slows.reduce((m, s) => Math.max(m, s.pct / 100), 0)
-  return unit.sheet.moveSpeed * (1 + sumBuff(unit, 'moveSpeed')) * (1 - slow)
+  // the sheet already carries the chosen size's speed; a transformation swaps it for the new class's
+  const resized = unit.resize ? SIZES[unit.resize.size].speedMul / SIZES[unit.chosenSize].speedMul : 1
+  return unit.sheet.moveSpeed * (1 + sumBuff(unit, 'moveSpeed')) * (1 - slow) * resized
 }
 
 function act(battle: Battle, unit: Unit, dt: number) {

@@ -58,7 +58,7 @@ function parts(): [THREE.BufferGeometry, number, number, BoneName][] {
   return parts
 }
 
-export const SIZE_SCALE: Record<SizeClass, number> = { tiny: 0.8, small: 0.9, medium: 1, large: 1.15, huge: 1.3 }
+export const SIZE_SCALE: Record<SizeClass, number> = { tiny: 0.8, small: 0.9, medium: 1, large: 1.15, huge: 1.3, colossal: 1.6 }
 
 export function bodyGeometry(): THREE.BufferGeometry {
   const pieces = parts().map(([geo, x, y, bone]) => {

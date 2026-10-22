@@ -4,7 +4,7 @@
  * the reverse. Health multipliers were tuned so each class averages about 50% against the field in the
  * abstract simulation; the balance gate still prices each individual build at its size.
  */
-export type SizeClass = 'tiny' | 'small' | 'medium' | 'large' | 'huge'
+export type SizeClass = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'colossal'
 
 export interface SizeProfile {
   label: string
@@ -16,7 +16,11 @@ export interface SizeProfile {
   speedMul: number
 }
 
+/** The classes a player can choose (R44). */
 export const SIZE_CLASSES: readonly SizeClass[] = ['tiny', 'small', 'medium', 'large', 'huge']
+
+/** Every class, including `colossal`, which only a transformation reaches (R44, KTD14). */
+export const ALL_SIZE_CLASSES: readonly SizeClass[] = [...SIZE_CLASSES, 'colossal']
 
 export const SIZES: Record<SizeClass, SizeProfile> = {
   tiny: { label: 'Tiny', hitRadius: -0.6, reachBonus: -0.5, healthMul: 0.996, speedMul: 1.16 },
@@ -24,8 +28,14 @@ export const SIZES: Record<SizeClass, SizeProfile> = {
   medium: { label: 'Medium', hitRadius: 0, reachBonus: 0, healthMul: 1, speedMul: 1 },
   large: { label: 'Large', hitRadius: 0.9, reachBonus: 0.5, healthMul: 1.003, speedMul: 0.88 },
   huge: { label: 'Huge', hitRadius: 1.8, reachBonus: 1, healthMul: 1.009, speedMul: 0.78 },
+  colossal: { label: 'Colossal', hitRadius: 2.4, reachBonus: 2, healthMul: 1.2, speedMul: 0.85 },
 }
 
+export function isAnySizeClass(value: unknown): value is SizeClass {
+  return typeof value === 'string' && (ALL_SIZE_CLASSES as readonly string[]).includes(value)
+}
+
+/** A class a player may choose; `colossal` is reachable only by transforming. */
 export function isSizeClass(value: unknown): value is SizeClass {
   return typeof value === 'string' && (SIZE_CLASSES as readonly string[]).includes(value)
 }
