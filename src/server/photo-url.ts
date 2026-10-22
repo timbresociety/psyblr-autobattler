@@ -21,3 +21,17 @@ export function isOwnPhotoUrl(url: string, env: Record<string, string | undefine
     return false
   }
 }
+
+const FORGE_ASSET = /^forge\/[0-9a-f-]{36}\/[a-z0-9]+\/\d+\/[a-z0-9-]+\.(png|webp|svg|glb|fbx|json)$|^forge\/[0-9a-f-]{36}\/package\.json$/
+
+/** Forge outputs live under forge/<forgeId>/ in this deployment's store (KTD9); nothing else is accepted. */
+export function isOwnForgeAssetUrl(url: string, env: Record<string, string | undefined> = process.env): boolean {
+  const store = blobStoreId(env)
+  if (!store) return false
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' && parsed.hostname === `${store}.public.blob.vercel-storage.com` && FORGE_ASSET.test(parsed.pathname.slice(1))
+  } catch {
+    return false
+  }
+}

@@ -78,3 +78,13 @@ export async function applyFloor(spec: SpecSheet, registry: Registry, imageUrls:
   const residual = breaches.some((k) => after[k] || !OFFENDING[k].test(text))
   return { spec: { ...next, flags: { ...flags, sexual: false, minors: false, endorsement: false } }, blocked: residual }
 }
+
+/** The R25 breach an image carries, judged by the moderation adapter alone (KTD10), or undefined when clean. */
+export async function imageBreach(registry: Registry, imageUrl: string, realPerson: boolean): Promise<string | undefined> {
+  const flags = await moderate(registry, { imageUrl })
+  const real = realPerson || flags.realPerson
+  if (flags.minors) return REASONS.minors
+  if (real && flags.sexual) return REASONS.sexual
+  if (real && flags.endorsement) return REASONS.endorsement
+  return undefined
+}

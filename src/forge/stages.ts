@@ -92,3 +92,12 @@ export function confirm(forge: Forge, stage: StageId): Transition {
   const next = STAGE_ORDER[STAGE_ORDER.indexOf(stage) + 1] ?? 'published'
   return update(forge, stage, { status: 'approved' }, { current: next })
 }
+
+/** Record a pick among a ready stage's options (which sheet, which motion variant); no regeneration. */
+export function choose(forge: Forge, stage: StageId, choice: Record<string, unknown>): Transition {
+  const blocked = guard(forge, stage)
+  if (blocked) return blocked
+  const s = forge.stages[stage]
+  if (s.status !== 'ready') return reject('bad-status')
+  return update(forge, stage, { inputs: { ...s.inputs, choice: { ...(s.inputs.choice as object | undefined), ...choice } } })
+}

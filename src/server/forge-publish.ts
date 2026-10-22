@@ -1,0 +1,62 @@
+import { randomUUID } from 'node:crypto'
+import { BUILD_SLOTS, type Build } from '../charter/build'
+import { buildPackage, validatePackage, type HeroPackage } from '../forge/package'
+import { confirm } from '../forge/stages'
+import type { Forge } from '../forge/types'
+import { runGate } from '../sim/gate'
+import type { Db } from './db'
+import { saveForge } from './forge-store'
+import { ForgeError, presetBatches, type RunnerDeps } from './forge-runner'
+import { blobStoreId, isOwnForgeAssetUrl } from './photo-url'
+import { NotFoundError } from './store'
+
+/**
+ * Publish a forge at the stats confirm (U10): run the Charter gate on the forged build, write the package,
+ * and create a global-loadout hero (R21, R22). A blocked gate keeps the forge at stats.
+ */
+export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forge> {
+  if (!forge.build || !forge.spec) throw new ForgeError('nothing to publish', 409)
+  const gate = runGate({ ...forge.build, gate: { state: 'checking' } }, deps.gateOptions)
+  if (gate.state === 'blocked') {
+    const stats = forge.stages.stats
+    const blocked: Forge = {
+      ...forge,
+      stages: { ...forge.stages, stats: { ...stats, failure: `The balance gate blocked this build (wins ${Math.round(gate.winRate * 100)}% against the field). Lower ${gate.strongestSlot ?? 'its strongest skill'} or move points to defence.`, inputs: { ...stats.inputs, gate: { winRate: gate.winRate, strongestSlot: gate.strongestSlot ?? null, alternatives: (gate.alternatives ?? []).map((t) => t.id) } } } },
+    }
+    const saved = await saveForge(deps.db, forge.version, blocked)
+    if (!saved) throw new ForgeError('the forge changed in another tab; reload it', 409)
+    return saved
+  }
+  const build: Build = gate.build
+  const pkg = buildPackage(forge, build, presetBatches(forge))
+  const strict = blobStoreId(deps.registry.env) !== undefined
+  const problems = validatePackage(pkg, strict ? (url) => isOwnForgeAssetUrl(url, deps.registry.env) : undefined)
+  if (problems.length) throw new ForgeError(`the hero package is incomplete: ${problems.join('; ')}`, 409)
+
+  const next = confirm(forge, 'stats')
+  if (!next.ok) throw new ForgeError('the stats are not ready to confirm', 409)
+  const heroId = randomUUID()
+  const packageUrl = await deps.copy(`forge/${forge.id}/package.json`, `data:application/json;base64,${Buffer.from(JSON.stringify(pkg)).toString('base64')}`)
+  const original = { ...build, heroId }
+  const skills = Object.fromEntries(BUILD_SLOTS.map((s) => [s, { name: build.slots[s].name, flavour: build.slots[s].flavour, visual: build.slots[s].visual }]))
+  const published = await saveForge(deps.db, forge.version, { ...next.forge, build: original, publishedHeroId: heroId })
+  if (!published) throw new ForgeError('the forge changed in another tab; reload it', 409)
+  await deps.db.query(
+    `insert into heroes (id, name, name_lower, creator_device, photos, skills, original_build, spec, package_url, creator_account)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [heroId, pkg.heroName, pkg.heroName.toLowerCase(), forge.deviceId ?? `account:${forge.accountId}`, JSON.stringify([pkg.assets.front]), JSON.stringify(skills), JSON.stringify(original), JSON.stringify(pkg.spec), packageUrl, forge.accountId],
+  )
+  if (forge.deviceId) await deps.db.query('insert into builds (id, hero_id, device_id, build) values ($1, $2, $3, $4)', [randomUUID(), heroId, forge.deviceId, JSON.stringify(original)])
+  return published
+}
+
+/** A published hero's package by hero ID (R22). */
+export async function loadHeroPackage(db: Db, heroId: string, fetchImpl: typeof fetch = fetch): Promise<HeroPackage> {
+  const { rows } = await db.query<{ package_url: string | null }>('select package_url from heroes where id = $1 and not hidden', [heroId])
+  const url = rows[0]?.package_url
+  if (!url) throw new NotFoundError('this hero has no forge package')
+  if (url.startsWith('data:application/json;base64,')) return JSON.parse(Buffer.from(url.slice(29), 'base64').toString('utf8'))
+  const res = await fetchImpl(url)
+  if (!res.ok) throw new Error(`package download failed: ${res.status}`)
+  return (await res.json()) as HeroPackage
+}

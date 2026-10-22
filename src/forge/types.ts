@@ -13,6 +13,8 @@ export interface StepState {
   provider?: string
   taskId?: string
   status: 'pending' | 'running' | 'done' | 'failed'
+  /** When a request claimed the step (ms); a claim older than the step timeout is taken over (KTD1). */
+  claimedAt?: number
   outputs?: Record<string, string>
 }
 

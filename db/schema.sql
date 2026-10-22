@@ -80,3 +80,21 @@ create table if not exists credit_ledger (
   unique (kind, ref)
 );
 create index if not exists credit_ledger_account on credit_ledger (account_id);
+
+-- Hero Forge: one row per forge session; `version` makes every advance a conditional update (KTD1).
+create table if not exists forges (
+  id text primary key,
+  account_id text not null references accounts(id),
+  device_id text,
+  version integer not null,
+  state jsonb not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists forges_account on forges (account_id, updated_at desc);
+
+-- Forged heroes on the Charter's heroes table (KTD9, KTD12). Production already has the table, so columns are
+-- added in place; every statement here is safe to run again.
+alter table heroes add column if not exists spec jsonb;
+alter table heroes add column if not exists package_url text;
+alter table heroes add column if not exists creator_account text;
