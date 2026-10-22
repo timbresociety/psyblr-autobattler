@@ -9,7 +9,9 @@ import { STAGE_PRICES } from '../forge/pricing'
 import { allFakes, fakeImage, fakeMesh } from '../forge/providers/fakes'
 import type { Registry } from '../forge/providers/router'
 import type { AnyProvider, ImageRequest, MeshProvider } from '../forge/providers/types'
-import { STAGE_ORDER, begin } from '../forge/stages'
+import { STAGE_ORDER, begin, createForge } from '../forge/stages'
+import { ARENA_BUDGET } from '../forge/arena-asset'
+import { defaultBuild } from '../sim/fixtures'
 import type { Forge, StageId } from '../forge/types'
 import { balance, claimFreeGrant } from './credits'
 import { SCHEMA_SQL, type Db } from './db'
@@ -37,7 +39,8 @@ function registry(extra: AnyProvider[] = []): Registry {
 }
 
 function deps(reg = registry()): RunnerDeps {
-  return { db, registry: reg, copy: async (pathname) => (copies.push(pathname), `https://blob.test/${pathname}`), publish: publishForge, gateOptions: { duelsPerMember: 2 } }
+  // the arena packer passes GLBs through: the fake copies have no file behind them
+  return { db, registry: reg, copy: async (pathname) => (copies.push(pathname), `https://blob.test/${pathname}`), packArena: async (url) => ({ focus: url, other: url }), publish: publishForge, gateOptions: { duelsPerMember: 2 } }
 }
 
 let n = 0
@@ -73,7 +76,14 @@ async function runStage(d: RunnerDeps, forge: Forge, stage: StageId): Promise<Fo
 /** Drive a forge with a confirmed-ready spec all the way to published. */
 async function finish(d: RunnerDeps, forge: Forge): Promise<Forge> {
   let f = await act(d, forge, { type: 'confirm', stage: 'spec' })
-  for (const stage of STAGE_ORDER.slice(1)) f = await runStage(d, f, stage)
+  for (const stage of STAGE_ORDER.slice(1)) {
+    // the form stage is optional: a hero whose ultimate transforms is offered it, and these flows skip it
+    if (stage === 'form') {
+      if (f.current === 'form') f = await act(d, f, { type: 'skip', stage: 'form' })
+      continue
+    }
+    f = await runStage(d, f, stage)
+  }
   return f
 }
 
@@ -93,7 +103,7 @@ describe('forge runner (U9)', () => {
     expect(done.current).toBe('published')
     expect(done.publishedHeroId).toBeTruthy()
     const { rows } = await db.query<{ ref: string; amount: number }>("select ref, amount from credit_ledger where kind = 'charge' and account_id = $1", [a])
-    const total = Object.values(STAGE_PRICES).reduce((s, p) => s + (p ?? 0), 0)
+    const total = Object.entries(STAGE_PRICES).reduce((s, [stage, p]) => s + (stage === 'form' ? 0 : (p ?? 0)), 0)
     expect(rows).toHaveLength(6)
     expect(new Set(rows.map((r) => r.ref.split(':')[1]))).toEqual(new Set(['concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate']))
     expect(await balance(db, a)).toBe(before - total)
@@ -211,6 +221,40 @@ describe('forge runner (U9)', () => {
     const primed = await saveForge(db, f.version, { ...t.forge, stages: { ...t.forge.stages, mesh: { ...t.forge.stages.mesh, steps: planSteps(t.forge, 'mesh') } } })
     await Promise.all([advance(d, primed!), advance(d, primed!)])
     expect(meshStarts).toBe(1)
+  })
+
+  it('the motion stage yields the archival rig and both arena versions of the hero (R35)', async () => {
+    const d = deps()
+    let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('ready')
+    const a = f.stages.motion.artifacts
+    expect(a.rig).toBeTruthy()
+    expect(a['arena-focus']).toBeTruthy()
+    expect(a['arena-other']).toBeTruthy()
+    expect(Object.keys(a).some((k) => k.startsWith('arena-retarget-'))).toBe(true)
+  })
+
+  it('a provider failure on the arena mesh fails the motion stage and charges nothing', async () => {
+    const reg = registry()
+    reg.providers = reg.providers.map((p) =>
+      p.capability === 'mesh' ? { ...p, start: (req: Parameters<MeshProvider['start']>[0]) => (req.faceLimit === ARENA_BUDGET.maxTriangles ? Promise.resolve({ ok: false as const, kind: 'failed' as const, reason: 'no low-poly today' }) : (p as MeshProvider).start(req)) } : p,
+    ) as AnyProvider[]
+    const d = deps(reg)
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    const before = await balance(db, a)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('failed')
+    expect(f.stages.motion.failure).toMatch(/no low-poly today/)
+    expect(await balance(db, a)).toBe(before)
+  })
+
+  it('the form stage draws a concept, then builds its mesh (R34)', () => {
+    const forge = { ...createForge('f', 'a'), build: defaultBuild('tank') } as Forge
+    expect(planSteps(forge, 'form').map((s) => s.name)).toEqual(['form-concept', 'form-mesh'])
   })
 
   it('effect requests carry the template shape; a beam has a range and no radius (R18)', async () => {

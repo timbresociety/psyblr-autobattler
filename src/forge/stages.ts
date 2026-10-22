@@ -1,8 +1,10 @@
+import type { Build } from '../charter/build'
+import { getTemplate } from '../charter/templates/catalog'
 import type { BuildSlot } from '../charter/types'
 import type { Forge, StageId, StageState, Transition } from './types'
 
 /** The forge's stages in order; each is confirmed before the next starts (R11). */
-export const STAGE_ORDER: readonly StageId[] = ['spec', 'concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate', 'stats']
+export const STAGE_ORDER: readonly StageId[] = ['spec', 'concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate', 'form', 'stats']
 
 /** The stages that generate a skill's effect, and the slot each one dresses (R18). */
 export const EFFECT_SLOT: Partial<Record<StageId, BuildSlot>> = { active1: 'active1', active2: 'active2', ultimate: 'ultimate' }
@@ -16,6 +18,7 @@ export const STAGE_TABLE: Record<StageId, { paid: boolean; retryCap: number }> =
   active1: { paid: true, retryCap: 3 },
   active2: { paid: true, retryCap: 3 },
   ultimate: { paid: true, retryCap: 3 },
+  form: { paid: true, retryCap: 3 },
   stats: { paid: false, retryCap: 99 },
 }
 
@@ -30,13 +33,27 @@ export function createForge(id: string, accountId: string, prompt = '', referenc
 
 const reject = (reason: Extract<Transition, { ok: false }>['reason']): Transition => ({ ok: false, reason })
 
+/** A stage's state; forges saved before a stage existed (the form stage) read it as a fresh draft. */
+export const stageOf = (forge: Forge, stage: StageId): StageState => forge.stages[stage] ?? emptyStage(stage)
+
 function update(forge: Forge, stage: StageId, patch: Partial<StageState>, extra: Partial<Forge> = {}): Transition {
-  return { ok: true, forge: { ...forge, ...extra, version: forge.version + 1, stages: { ...forge.stages, [stage]: { ...forge.stages[stage], ...patch } } } }
+  return { ok: true, forge: { ...forge, ...extra, version: forge.version + 1, stages: { ...forge.stages, [stage]: { ...stageOf(forge, stage), ...patch } } } }
+}
+
+/** The optional form stage is offered only to a hero whose ultimate transforms it (R34, KTD14). */
+export function formAvailable(build: Build | undefined): boolean {
+  return !!build && getTemplate(build.slots.ultimate.templateId).effects.some((e) => e.kind === 'resize')
+}
+
+/** The size class the hero's transformation reaches, which the form mesh is scaled to. */
+export function formSize(build: Build | undefined) {
+  const resize = build && getTemplate(build.slots.ultimate.templateId).effects.find((e) => e.kind === 'resize')
+  return resize && resize.kind === 'resize' ? resize.sizeClass : undefined
 }
 
 /** Checks shared by every action on a stage: it must be the current stage and not yet approved. */
 function guard(forge: Forge, stage: StageId): Transition | undefined {
-  if (forge.stages[stage].status === 'approved') return reject('frozen')
+  if (stageOf(forge, stage).status === 'approved') return reject('frozen')
   if (forge.current !== stage) return reject('out-of-order')
   return undefined
 }
@@ -45,7 +62,7 @@ function guard(forge: Forge, stage: StageId): Transition | undefined {
 export function begin(forge: Forge, stage: StageId): Transition {
   const blocked = guard(forge, stage)
   if (blocked) return blocked
-  const s = forge.stages[stage]
+  const s = stageOf(forge, stage)
   if (s.status !== 'draft' && s.status !== 'failed') return reject('bad-status')
   // regenerating after an edit is a retry too, so editing cannot bypass the cap
   const spends = s.generations > 0
@@ -92,9 +109,21 @@ export function editInputs(forge: Forge, stage: StageId, inputs: Record<string, 
 export function confirm(forge: Forge, stage: StageId): Transition {
   const blocked = guard(forge, stage)
   if (blocked) return blocked
-  if (forge.stages[stage].status !== 'ready') return reject('bad-status')
+  if (stageOf(forge, stage).status !== 'ready') return reject('bad-status')
   const next = STAGE_ORDER[STAGE_ORDER.indexOf(stage) + 1] ?? 'published'
-  return update(forge, stage, { status: 'approved' }, { current: next })
+  const approved = update(forge, stage, { status: 'approved' }, { current: next })
+  // a hero with no transformation has no form to make, so the form stage passes by at no charge
+  if (approved.ok && next === 'form' && !formAvailable(forge.build)) return skip(approved.forge, 'form')
+  return approved
+}
+
+/** Skip an optional stage at no charge (R34). Only the form stage is optional. */
+export function skip(forge: Forge, stage: StageId): Transition {
+  if (stage !== 'form') return reject('bad-status')
+  const blocked = guard(forge, stage)
+  if (blocked) return blocked
+  if (stageOf(forge, stage).status === 'generating') return reject('bad-status')
+  return update(forge, stage, { status: 'approved', artifacts: {}, inputs: { ...stageOf(forge, stage).inputs, skipped: true } }, { current: 'stats' })
 }
 
 /** Record a pick among a ready stage's options (which sheet, which motion variant); no regeneration. */

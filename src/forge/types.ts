@@ -4,7 +4,7 @@ import type { SizeClass } from '../charter/sizes'
 import type { BuildSlot } from '../charter/types'
 
 /** The stages of a forge, in order (R11). */
-export type StageId = 'spec' | 'concept' | 'mesh' | 'motion' | 'active1' | 'active2' | 'ultimate' | 'stats'
+export type StageId = 'spec' | 'concept' | 'mesh' | 'motion' | 'active1' | 'active2' | 'ultimate' | 'form' | 'stats'
 
 export type StageStatus = 'draft' | 'generating' | 'ready' | 'approved' | 'failed'
 

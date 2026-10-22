@@ -46,6 +46,7 @@ export function StagePanel({ forge, balance, busy, act, sizeCost }: Props) {
               onRetry={() => act({ type: 'retry', stage })}
               onConfirm={() => act({ type: 'confirm', stage })}
               onChoose={(choice) => act({ type: 'choose', stage, choice })}
+              {...(stage === 'form' ? { onSkip: () => act({ type: 'skip', stage }) } : {})}
             />
           )}
         </>

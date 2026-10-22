@@ -18,7 +18,7 @@ export function parseAction(body: Record<string, unknown>): ForgeAction | undefi
   if (!isStage(stage)) return undefined
   if (action === 'edit') return { type: 'edit', stage, inputs: obj(body.inputs) }
   if (action === 'choose') return { type: 'choose', stage, choice: obj(body.choice) }
-  if (action === 'start' || action === 'retry' || action === 'confirm') return { type: action, stage }
+  if (action === 'start' || action === 'retry' || action === 'confirm' || action === 'skip') return { type: action, stage }
   return undefined
 }
 

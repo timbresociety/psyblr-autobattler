@@ -5,7 +5,7 @@ import { SIZES, type SizeClass } from '../../charter/sizes'
 import { buildSpec } from '../../forge/director/director'
 import { fakeDirectorBrain } from '../../forge/director/fake'
 import { stagePrice } from '../../forge/pricing'
-import { begin, choose, confirm, createForge, editInputs, retry, succeed } from '../../forge/stages'
+import { begin, choose, confirm, createForge, editInputs, retry, succeed, skip } from '../../forge/stages'
 import type { Forge, StageId, Transition } from '../../forge/types'
 import type { ForgeAction, ForgeDeps } from './forge-api'
 import { EXAMPLE_PROMPT, ForgeScreen } from './ForgeScreen'
@@ -66,6 +66,8 @@ function memoryDeps(options: { signedIn?: boolean; balance?: number } = {}) {
         const next = ok(confirm(f, action.stage))
         return action.stage === 'stats' ? { ...next, publishedHeroId: 'hero-new' } : next
       }
+      case 'skip':
+        return ok(skip(f, action.stage))
     }
   }
   const deps: ForgeDeps = {
@@ -152,9 +154,10 @@ describe('Forge screen (U11)', () => {
 
   it('without enough credits, the stage offers a purchase (AE2)', async () => {
     const { deps } = memoryDeps({ balance: 5 })
+    const concept = stagePrice('concept')
     await openSpec(deps)
     await click('Confirm spec')
-    expect((await screen.findByRole('button', { name: /Generate · 10 credits/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect((await screen.findByRole('button', { name: new RegExp(`Generate · ${concept} credits`) }) as HTMLButtonElement).disabled).toBe(true)
     await click(/Buy 300 credits/)
     expect(deps.purchase).toHaveBeenCalledWith('small')
   })
@@ -177,6 +180,8 @@ describe('Forge screen (U11)', () => {
       await click(/Generate/)
       await click('Confirm')
     }
+    // a hero whose ultimate transforms is offered a form, which this flow skips
+    if (current()!.current === 'form') await click('Skip, no form')
     await screen.findByRole('heading', { name: 'Stat split' })
     await click('Save split')
     await click('Publish hero')
