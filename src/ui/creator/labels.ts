@@ -4,7 +4,7 @@ export const STAT_LABEL: Record<SecondaryStat, string> = {
   maxHealth: 'Health',
   armor: 'Armor',
   magicResist: 'Spirit resist',
-  moveSpeed: 'Move speed',
+  moveSpeed: 'Locomotion',
   attackSpeed: 'Attack speed',
   weaponDamage: 'Weapon damage',
   fireRate: 'Fire rate',

@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SCHEMA_SQL, type Db } from './db'
-import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, stagePrice } from '../forge/pricing'
+import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, STAGE_PRICES, stagePrice } from '../forge/pricing'
 import { balance, claimFreeGrant, ledgerBalance, placeHold, settleHold } from './credits'
 import { fakePayments, handleStripeEvent, packById, pickPayments, verifyStripeSignature } from './payments'
 
@@ -36,7 +36,8 @@ describe('pricing', () => {
   it('the free grant covers one hero with every capped retry, and spec/stats are free', () => {
     expect(stagePrice('spec')).toBe(0)
     expect(stagePrice('stats')).toBe(0)
-    expect(FREE_GRANT).toBe((10 + 60 + 50 + 15 + 15 + 20) * 4)
+    // every paid stage, the optional form included, with all three retries
+    expect(FREE_GRANT).toBe(Object.values(STAGE_PRICES).reduce((s, p) => s + (p ?? 0), 0) * 4)
   })
 })
 

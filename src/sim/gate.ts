@@ -2,7 +2,7 @@ import { BUILD_SLOTS, SLOT_KIND, swapAlternatives, type Build } from '../charter
 import { MAX_RETUNE_STEPS } from '../charter/budget'
 import { CATALOG_VERSION, defaultTemplate } from '../charter/templates/catalog'
 import type { BuildSlot, Template } from '../charter/types'
-import { CALIBRATION_VERSION } from './calibration'
+import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from './calibration'
 import { simulate, type BattleResult, type Combatant } from './engine'
 import { referenceField } from './field'
 
@@ -84,6 +84,9 @@ function strongestSlot(build: Build, base: number, options: GateOptions): BuildS
  * The balance gate (KTD7): measure the build, retune every slot down one budget step at a time until it sits at or
  * under the ceiling, and block it if the retune limit is reached first.
  */
+/** The versions a gate result was earned against, plus its rounded win rate; `isGateStale` checks the same three. */
+export const gateStamp = (winRate: number) => ({ catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, aiCalibrationVersion: AI_CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 })
+
 export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   let steps = 0
   let build = withSteps(input, 0)
@@ -93,7 +96,7 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
     build = withSteps(input, steps)
     winRate = winRateVsField(build, options)
   }
-  const stamp = { catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 }
+  const stamp = gateStamp(winRate)
   if (winRate <= PASS_LINE) return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...stamp } } }
   const slot = strongestSlot(build, winRate, options)
   return {
@@ -105,7 +108,8 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   }
 }
 
-/** True when a stored gate result was earned against older catalogue or calibration numbers. */
+/** True when a stored gate result was earned against older catalogue, engine or AI numbers. */
 export function isGateStale(build: Build): boolean {
-  return build.gate.state !== 'draft' && (build.gate.catalogVersion !== CATALOG_VERSION || build.gate.calibrationVersion !== CALIBRATION_VERSION)
+  const g = build.gate
+  return g.state !== 'draft' && (g.catalogVersion !== CATALOG_VERSION || g.calibrationVersion !== CALIBRATION_VERSION || g.aiCalibrationVersion !== AI_CALIBRATION_VERSION)
 }

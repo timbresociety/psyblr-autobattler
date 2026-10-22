@@ -1,5 +1,6 @@
+import { defaultBuild } from '../sim/fixtures'
 import { describe, expect, it } from 'vitest'
-import { STAGE_ORDER, STAGE_TABLE, begin, confirm, createForge, editInputs, fail, retry, succeed } from './stages'
+import { STAGE_ORDER, STAGE_TABLE, begin, confirm, createForge, editInputs, fail, retry, succeed, formAvailable, formSize, skip } from './stages'
 import type { Forge, StageId } from './types'
 
 function ok<T extends { ok: boolean }>(r: T): Extract<T, { ok: true }> {
@@ -92,7 +93,30 @@ describe('forge state machine (U1)', () => {
 
   it('confirming stats publishes the forge', () => {
     let forge = createForge('f1', 'a')
-    for (const id of STAGE_ORDER) forge = ok(confirm(ready(forge, id), id)).forge
+    // with no transforming ultimate the form stage passes by on its own
+    for (const id of STAGE_ORDER) if (forge.current === id) forge = ok(confirm(ready(forge, id), id)).forge
     expect(forge.current).toBe('published')
+    expect(forge.stages.form.inputs.skipped).toBe(true)
+  })
+
+  it('offers the form stage only to a hero whose ultimate transforms it (R34)', () => {
+    const titan = defaultBuild('tank')
+    const withTitan = { ...titan, slots: { ...titan.slots, ultimate: { ...titan.slots.ultimate, templateId: 'tank-titan-form' } } }
+    const plain = { ...titan, slots: { ...titan.slots, ultimate: { ...titan.slots.ultimate, templateId: 'tank-earthquake' } } }
+    expect(formAvailable(withTitan)).toBe(true)
+    expect(formSize(withTitan)).toBe('colossal')
+    expect(formAvailable(plain)).toBe(false)
+    const atUltimate = (build: typeof titan) => {
+      let forge: Forge = { ...createForge('f', 'a'), build }
+      for (const id of STAGE_ORDER.slice(0, STAGE_ORDER.indexOf('ultimate') + 1)) forge = ok(confirm(ready(forge, id), id)).forge
+      return forge
+    }
+    expect(atUltimate(plain).current).toBe('stats')
+    const offered = atUltimate(withTitan)
+    expect(offered.current).toBe('form')
+    const skipped = ok(skip(offered, 'form')).forge
+    expect(skipped.current).toBe('stats')
+    expect(skipped.stages.form.artifacts).toEqual({})
+    expect(skip(skipped, 'stats').ok).toBe(false)
   })
 })

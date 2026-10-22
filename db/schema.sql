@@ -98,3 +98,11 @@ create index if not exists forges_account on forges (account_id, updated_at desc
 alter table heroes add column if not exists spec jsonb;
 alter table heroes add column if not exists package_url text;
 alter table heroes add column if not exists creator_account text;
+
+-- Balance gate results (KTD6). The engine is deterministic, so a gate result is a pure function of a build's numbers
+-- and the catalogue, engine and AI versions; the key hashes exactly those, and cosmetic edits never re-run the gate.
+create table if not exists gate_cache (
+  key text primary key,
+  outcome jsonb not null,
+  created_at timestamptz not null default now()
+);

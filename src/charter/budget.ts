@@ -1,3 +1,5 @@
+import { geometryMultiplier, missingGeometry } from './geometry'
+import { ALL_SIZE_CLASSES } from './sizes'
 import type { Delivery, Effect, SecondarySheet, SlotKind, Template, Validation, LimitHit } from './types'
 
 /**
@@ -70,11 +72,16 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
       return (effect.pct / 100) * effect.duration * BUFF_WEIGHT[effect.stat] * (effect.target === 'allies' ? 1.8 : 1)
     case 'execute':
       return (effect.thresholdPct / 100) * (effect.bonusPct / 100) * 500
+    case 'resize': {
+      // size classes are tuned to be even against the field, so a transformation pays a small fee per class it jumps (R29)
+      const steps = Math.abs(ALL_SIZE_CLASSES.indexOf(effect.sizeClass) - ALL_SIZE_CLASSES.indexOf('medium'))
+      return effect.duration * steps * 2
+    }
   }
 }
 
 export function scoreTemplate(template: Template): number {
-  const raw = template.effects.reduce((sum, effect) => sum + effectValue(effect, template.delivery), 0) * rangeMultiplier(template.delivery)
+  const raw = template.effects.reduce((sum, effect) => sum + effectValue(effect, template.delivery), 0) * rangeMultiplier(template.delivery) * geometryMultiplier(template.delivery)
   switch (template.slot) {
     case 'basic':
       return raw
@@ -143,6 +150,7 @@ export function validateTemplate(template: Template): Validation {
   if (!COOLDOWN_SLOTS.includes(template.slot) && template.cooldown !== 0) fail('cooldown')
   if (template.override && !template.override.reason?.trim()) fail('override.reason')
   if (template.override && !(template.override.budget > 0)) fail('override.budget')
+  for (const field of missingGeometry(template.delivery)) fail(`delivery.${field}`)
   for (const effect of template.effects ?? []) {
     for (const [key, value] of Object.entries(effect)) {
       if (typeof value === 'number' && (!Number.isFinite(value) || value < 0)) fail(`effects.${effect.kind}.${key}`)

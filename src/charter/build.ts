@@ -60,6 +60,7 @@ export interface GateResult {
   winRate?: number
   catalogVersion?: number
   calibrationVersion?: number
+  aiCalibrationVersion?: number
   strongestSlot?: BuildSlot
 }
 

@@ -1,3 +1,5 @@
+import type { EffectRecipe } from '../arena/recipes/schema'
+import { validateRecipe } from '../arena/recipes/validate'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { proposeBuild } from '../charter/build'
@@ -7,7 +9,9 @@ import { STAGE_PRICES } from '../forge/pricing'
 import { allFakes, fakeImage, fakeMesh } from '../forge/providers/fakes'
 import type { Registry } from '../forge/providers/router'
 import type { AnyProvider, ImageRequest, MeshProvider } from '../forge/providers/types'
-import { STAGE_ORDER, begin } from '../forge/stages'
+import { STAGE_ORDER, begin, createForge } from '../forge/stages'
+import { ARENA_BUDGET } from '../forge/arena-asset'
+import { defaultBuild } from '../sim/fixtures'
 import type { Forge, StageId } from '../forge/types'
 import { balance, claimFreeGrant } from './credits'
 import { SCHEMA_SQL, type Db } from './db'
@@ -35,7 +39,8 @@ function registry(extra: AnyProvider[] = []): Registry {
 }
 
 function deps(reg = registry()): RunnerDeps {
-  return { db, registry: reg, copy: async (pathname) => (copies.push(pathname), `https://blob.test/${pathname}`), publish: publishForge, gateOptions: { duelsPerMember: 2 } }
+  // the arena packer passes GLBs through: the fake copies have no file behind them
+  return { db, registry: reg, copy: async (pathname) => (copies.push(pathname), `https://blob.test/${pathname}`), packArena: async (url) => ({ focus: url, other: url }), publish: publishForge, gateOptions: { duelsPerMember: 2 } }
 }
 
 let n = 0
@@ -71,7 +76,14 @@ async function runStage(d: RunnerDeps, forge: Forge, stage: StageId): Promise<Fo
 /** Drive a forge with a confirmed-ready spec all the way to published. */
 async function finish(d: RunnerDeps, forge: Forge): Promise<Forge> {
   let f = await act(d, forge, { type: 'confirm', stage: 'spec' })
-  for (const stage of STAGE_ORDER.slice(1)) f = await runStage(d, f, stage)
+  for (const stage of STAGE_ORDER.slice(1)) {
+    // the form stage is optional: a hero whose ultimate transforms is offered it, and these flows skip it
+    if (stage === 'form') {
+      if (f.current === 'form') f = await act(d, f, { type: 'skip', stage: 'form' })
+      continue
+    }
+    f = await runStage(d, f, stage)
+  }
   return f
 }
 
@@ -91,10 +103,16 @@ describe('forge runner (U9)', () => {
     expect(done.current).toBe('published')
     expect(done.publishedHeroId).toBeTruthy()
     const { rows } = await db.query<{ ref: string; amount: number }>("select ref, amount from credit_ledger where kind = 'charge' and account_id = $1", [a])
-    const total = Object.values(STAGE_PRICES).reduce((s, p) => s + (p ?? 0), 0)
+    const total = Object.entries(STAGE_PRICES).reduce((s, [stage, p]) => s + (stage === 'form' ? 0 : (p ?? 0)), 0)
     expect(rows).toHaveLength(6)
     expect(new Set(rows.map((r) => r.ref.split(':')[1]))).toEqual(new Set(['concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate']))
     expect(await balance(db, a)).toBe(before - total)
+    // every effect stage stored a valid recipe, and the ultimate stage also stored the passive's (R33)
+    for (const stage of ['active1', 'active2', 'ultimate'] as const) {
+      const effect = done.stages[stage].inputs.effect as { recipe: EffectRecipe }
+      expect(validateRecipe(effect.recipe), stage).toEqual([])
+    }
+    expect(validateRecipe((done.stages.ultimate.inputs.passive as { recipe: EffectRecipe }).recipe)).toEqual([])
   })
 
   it('every stored artifact is our Blob copy under forge/<id>/<stage>/<attempt>/', async () => {
@@ -205,6 +223,40 @@ describe('forge runner (U9)', () => {
     expect(meshStarts).toBe(1)
   })
 
+  it('the motion stage yields the archival rig and both arena versions of the hero (R35)', async () => {
+    const d = deps()
+    let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('ready')
+    const a = f.stages.motion.artifacts
+    expect(a.rig).toBeTruthy()
+    expect(a['arena-focus']).toBeTruthy()
+    expect(a['arena-other']).toBeTruthy()
+    expect(Object.keys(a).some((k) => k.startsWith('arena-retarget-'))).toBe(true)
+  })
+
+  it('a provider failure on the arena mesh fails the motion stage and charges nothing', async () => {
+    const reg = registry()
+    reg.providers = reg.providers.map((p) =>
+      p.capability === 'mesh' ? { ...p, start: (req: Parameters<MeshProvider['start']>[0]) => (req.faceLimit === ARENA_BUDGET.maxTriangles ? Promise.resolve({ ok: false as const, kind: 'failed' as const, reason: 'no low-poly today' }) : (p as MeshProvider).start(req)) } : p,
+    ) as AnyProvider[]
+    const d = deps(reg)
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    const before = await balance(db, a)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('failed')
+    expect(f.stages.motion.failure).toMatch(/no low-poly today/)
+    expect(await balance(db, a)).toBe(before)
+  })
+
+  it('the form stage draws a concept, then builds its mesh (R34)', () => {
+    const forge = { ...createForge('f', 'a'), build: defaultBuild('tank') } as Forge
+    expect(planSteps(forge, 'form').map((s) => s.name)).toEqual(['form-concept', 'form-mesh'])
+  })
+
   it('effect requests carry the template shape; a beam has a range and no radius (R18)', async () => {
     const d = deps()
     let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
@@ -246,7 +298,7 @@ describe('forge runner (U9)', () => {
 })
 
 describe('publish (U10)', () => {
-  it('a published hero appears in global search, records device and account, and loads package version 1', async () => {
+  it('a published hero appears in global search, records device and account, and loads package version 2', async () => {
     const d = deps()
     const a = await account()
     const done = await finish(d, await specReady(d, a))
@@ -257,7 +309,7 @@ describe('publish (U10)', () => {
     expect(hits.map((h) => h.id)).toContain(done.publishedHeroId)
     // the package bytes went through the copier as a data URL; load it the same way
     await db.query('update heroes set package_url = $2 where id = $1', [done.publishedHeroId, `data:application/json;base64,${Buffer.from(JSON.stringify({ packageVersion: 1 })).toString('base64')}`])
-    expect((await loadHeroPackage(db, done.publishedHeroId!)).packageVersion).toBe(1)
+    expect((await loadHeroPackage(db, done.publishedHeroId!)).packageVersion).toBe(2)
   })
 
   it('when the publish commit loses a race, the hero rows it wrote are removed', async () => {
@@ -280,5 +332,67 @@ describe('publish (U10)', () => {
     expect(after.current).toBe('stats')
     expect(after.publishedHeroId).toBeUndefined()
     expect(after.stages.stats.failure).toMatch(/balance gate blocked/)
+  })
+})
+
+describe('forges stored before the arena (review #1, #5)', () => {
+  it('a forge saved before the form stage and the arena hero loads, finishes and publishes with its rigged model', async () => {
+    const d = deps()
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh', 'motion'] as const) f = await runStage(d, f, stage)
+    // what an older build stored: no form stage, and a motion stage with only the archival rig and motions
+    const motion = f.stages.motion
+    const legacyArtifacts = Object.fromEntries(Object.entries(motion.artifacts).filter(([k]) => !k.startsWith('arena-')))
+    const { form: _form, ...stages } = f.stages
+    const legacy = { ...f, stages: { ...stages, motion: { ...motion, artifacts: legacyArtifacts } } } as unknown as Forge
+    await saveForge(db, f.version, legacy)
+    const loaded = await loadForge(db, f.id, a)
+    expect(loaded.stages.form.status).toBe('draft')
+    f = loaded
+    for (const stage of STAGE_ORDER.slice(STAGE_ORDER.indexOf('active1'))) {
+      if (stage === 'form') {
+        if (f.current === 'form') f = await act(d, f, { type: 'skip', stage: 'form' })
+        continue
+      }
+      f = await runStage(d, f, stage)
+    }
+    // publishing validates the package, which needs an arena hero: the rigged model stands in, as for a v1 package
+    expect(f.current).toBe('published')
+    expect(f.publishedHeroId).toBeTruthy()
+  })
+})
+
+describe('arena hero and form stage (U11)', () => {
+  it('an arena pack over the triangle budget fails the motion stage and charges nothing', async () => {
+    const d = { ...deps(), packArena: async () => Promise.reject(new Error(`arena mesh has 12000 triangles, over the ${ARENA_BUDGET.maxTriangles} budget`)) }
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    const before = await balance(db, a)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('failed')
+    expect(f.stages.motion.failure).toMatch(/triangles/)
+    expect(await balance(db, a)).toBe(before)
+  })
+
+  it('a hero whose ultimate transforms is offered the form stage, pays for it once, and publishes', async () => {
+    const d = deps()
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    // the default tank's ultimate is Titan Form, which turns it colossal
+    const tank = defaultBuild('tank', f.build!.heroName)
+    expect(await saveForge(db, f.version, { ...f, build: tank })).toBeTruthy()
+    f = await loadForge(db, f.id, a)
+    for (const stage of ['concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate'] as const) f = await runStage(d, f, stage)
+    expect(f.current).toBe('form')
+    const before = await balance(db, a)
+    f = await runStage(d, f, 'form')
+    expect(before - (await balance(db, a))).toBe(STAGE_PRICES.form)
+    expect(f.stages.form.artifacts['form-mesh']).toBeTruthy()
+    f = await runStage(d, f, 'stats')
+    expect(f.current).toBe('published')
+    const { rows } = await db.query<{ ref: string }>("select ref from credit_ledger where kind = 'charge' and account_id = $1 and ref like $2", [a, `${f.id}:form:%`])
+    expect(rows).toHaveLength(1)
   })
 })

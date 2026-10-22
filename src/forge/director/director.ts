@@ -35,6 +35,7 @@ export async function runDirector(input: DirectorInput, registry: Registry): Pro
 /** Turn a confirmed draft into the spec sheet and its Charter build; every theme lands on a buildable template (R10, R20). */
 export function buildSpec(draft: DraftSpec): { spec: SpecSheet; build: Build } {
   const skillsBySlot = Object.fromEntries(draft.skills.map((s) => [s.slot, { name: s.name, flavour: s.theme }]))
+  const lookBySlot = Object.fromEntries(draft.skills.filter((s) => s.look).map((s) => [s.slot, s.look]))
   const result = proposeBuild({ heroName: draft.heroName, roleId: draft.roleId, description: draft.description, skills: skillsBySlot })
   const build: Build = { ...result.build, ...(draft.sizeClass !== 'medium' ? { sizeClass: draft.sizeClass } : {}) }
   const skills: SkillTheme[] = BUILD_SLOTS.map((slot) => ({
@@ -42,6 +43,7 @@ export function buildSpec(draft: DraftSpec): { spec: SpecSheet; build: Build } {
     name: build.slots[slot].name || skillsBySlot[slot]?.name || slot,
     theme: skillsBySlot[slot]?.flavour ?? '',
     templateId: build.slots[slot].templateId,
+    ...(lookBySlot[slot] ? { look: lookBySlot[slot] } : {}),
   }))
   const spec: SpecSheet = {
     heroName: draft.heroName,

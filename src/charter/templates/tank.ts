@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, heal, movement, passive, phys, push, shield, slow, spirit, stun, ultimate, move } from './dsl'
+import { active, ai, at, basic, buff, heal, movement, passive, phys, push, shield, slow, spirit, stun, ultimate, move, resize } from './dsl'
 
 export const TANK = [
   basic({ id: 'tank-heavy-strike', name: 'Heavy Strike', roles: ['tank'], tags: ['melee', 'punch', 'strike', 'heavy', 'hammer', 'smash'], delivery: at.melee(3), effects: [phys(10, 1)], ai: ai('always', 1) }),
@@ -17,7 +17,7 @@ export const TANK = [
   passive({ id: 'tank-last-stand', name: 'Last Stand', roles: ['tank'], tags: ['last-stand', 'survive', 'rage', 'endure', 'low-health'], delivery: at.self(), effects: [buff('damageReduction', 30, 4), heal(40, 0.2)], trigger: 'lowHealth', ai: ai('always', 0) }),
   passive({ id: 'tank-regenerating-core', name: 'Regenerating Core', roles: ['tank'], tags: ['regen', 'heal', 'recover', 'core', 'healing-factor'], delivery: at.self(), effects: [heal(8, 0.05, 'self', 1)], trigger: 'always', ai: ai('always', 0) }),
 
-  ultimate({ id: 'tank-titan-form', name: 'Titan Form', roles: ['tank'], tags: ['transform', 'titan', 'giant', 'form', 'power-up', 'buff'], delivery: at.self(), effects: [buff('damageReduction', 45, 8), buff('damage', 25, 8), heal(120, 0.5)], cooldown: 70, ai: ai('engage', 9, { minTargets: 2 }) }),
+  ultimate({ id: 'tank-titan-form', name: 'Titan Form', roles: ['tank'], tags: ['transform', 'titan', 'giant', 'form', 'power-up', 'buff'], delivery: at.self(), effects: [resize('colossal', 8), buff('damageReduction', 45, 8), buff('damage', 25, 8), heal(120, 0.5)], cooldown: 70, ai: ai('engage', 9, { minTargets: 2 }) }),
   ultimate({ id: 'tank-earthquake', name: 'Earthquake', roles: ['tank'], tags: ['earthquake', 'stun', 'zone', 'earth', 'quake', 'slam', 'ground'], delivery: at.zone(0, 7), effects: [stun(1.5), phys(120, 1.2)], cooldown: 70, ai: ai('engage', 9, { minTargets: 3 }) }),
   ultimate({ id: 'tank-unbreakable', name: 'Unbreakable', roles: ['tank'], tags: ['invulnerable', 'shield', 'unbreakable', 'immortal', 'fortress'], delivery: at.aura(6), effects: [shield(250, 5, 'allies', 1), slow(30, 3)], cooldown: 75, ai: ai('support', 9, { selfHealthBelow: 0.5 }) }),
 
