@@ -25,7 +25,7 @@ export const POOL_SIZE = 30
  * Strength is bulk, Agility is weapon tempo and mobility, Intellect is skill power and cooldowns.
  */
 export const ATTRIBUTE_GAINS: Record<Attribute, Partial<SecondarySheet>> = {
-  strength: { maxHealth: 28, armor: 1.1, regen: 0.35, weaponDamage: 0.6 },
+  strength: { maxHealth: 70, armor: 1.1, regen: 0.2, weaponDamage: 0.6 },
   agility: { moveSpeed: 0.06, attackSpeed: 0.035, fireRate: 0.035, weaponDamage: 1.4, lifesteal: 0.25, ammo: 0.6 },
   intellect: { spiritPower: 2.6, cooldownReduction: 0.9, magicResist: 1.1, regen: 0.15 },
 }
