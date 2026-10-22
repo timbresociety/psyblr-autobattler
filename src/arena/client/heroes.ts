@@ -43,11 +43,7 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
     root,
     fallback,
     pose: (state, t) => {
-      if (state.kind === 'dead') {
-        root.rotation.x = -Math.PI / 2
-        return
-      }
-      root.rotation.x = 0
+      if (state.kind === 'dead') return
       hero.animate(state.kind === 'idle' ? t * 0.2 : t, state.kind === 'fly')
     },
   }

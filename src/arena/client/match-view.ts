@@ -13,6 +13,7 @@ import { createAnimator, onEvents, settle, type Animator } from './animation'
 import { loadHeroView, type HeroView } from './heroes'
 import { createClock, frame } from './loop'
 import { buildMap, lights, type ArenaMap } from './map'
+import { CosmeticPhysics, PHYSICS } from './physics'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
 import { createStore, type Store } from './store'
 
@@ -136,16 +137,26 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
   const builds = arena.setups.map((s) => s.build)
   let loaded = 0
-  onProgress(0, builds.length)
+  // Rapier loads with the heroes, so Start waits for both (R40)
+  const total = builds.length + 1
+  onProgress(0, total)
+  const physicsReady = CosmeticPhysics.create().then((p) => (onProgress(++loaded, total), p))
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
   const views = await Promise.all(
     builds.map(async (build, i) => {
       const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer)
-      onProgress(++loaded, builds.length)
+      onProgress(++loaded, total)
       return view
     }),
   )
   views.forEach((v) => scene.add(v.root))
+  const physics = await physicsReady
+  const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
+  debris.count = 0
+  scene.add(debris)
+  const tmp = new THREE.Object3D()
+  const yawQ = new THREE.Quaternion()
+  const up = new THREE.Vector3(0, 1, 0)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
@@ -184,20 +195,41 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)
       arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+      physics.events(events, arena.match)
       if (events.length) hooks.events?.(events)
     }
     const t = now / 1000
+    physics.step(dt)
     drawn = arena.match.heroes.map((h, i) => {
       const p = prev[i]
       const c = h.position
       const at = { x: p.x + (c.x - p.x) * alpha, y: p.y + (c.y - p.y) * alpha, z: p.z + (c.z - p.z) * alpha }
       const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
       const view = views[i]
-      view.root.position.set(at.x, at.y, at.z)
-      view.root.rotation.y = h.yaw
       view.pose(settle(animators[i], h, moved, arena.match.tick, dt), t + i, dt * (hooks.timeScale?.() ?? 1))
+      // physics only changes how a body looks: a tumble on top of the engine's position, or where a fallen body lies
+      const fallen = physics.fallenPose(i)
+      if (fallen) {
+        view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
+        view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
+        return at
+      }
+      view.root.position.set(at.x, at.y, at.z)
+      yawQ.setFromAxisAngle(up, h.yaw)
+      const tumble = physics.rotation(i)
+      if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
+      else view.root.quaternion.copy(yawQ)
       return at
     })
+    const pieces = physics.debrisPoses()
+    debris.count = pieces.length
+    pieces.forEach((d, k) => {
+      tmp.position.set(d.position.x, d.position.y, d.position.z)
+      tmp.quaternion.set(d.rotation.x, d.rotation.y, d.rotation.z, d.rotation.w)
+      tmp.updateMatrix()
+      debris.setMatrixAt(k, tmp.matrix)
+    })
+    debris.instanceMatrix.needsUpdate = true
     hooks.frame?.(dt, alpha)
     renderer.render(scene, camera)
     store.set(hud(arena, views, clock.paused, backend))
