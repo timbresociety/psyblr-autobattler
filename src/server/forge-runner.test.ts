@@ -298,7 +298,7 @@ describe('forge runner (U9)', () => {
 })
 
 describe('publish (U10)', () => {
-  it('a published hero appears in global search, records device and account, and loads package version 1', async () => {
+  it('a published hero appears in global search, records device and account, and loads package version 2', async () => {
     const d = deps()
     const a = await account()
     const done = await finish(d, await specReady(d, a))
@@ -309,7 +309,7 @@ describe('publish (U10)', () => {
     expect(hits.map((h) => h.id)).toContain(done.publishedHeroId)
     // the package bytes went through the copier as a data URL; load it the same way
     await db.query('update heroes set package_url = $2 where id = $1', [done.publishedHeroId, `data:application/json;base64,${Buffer.from(JSON.stringify({ packageVersion: 1 })).toString('base64')}`])
-    expect((await loadHeroPackage(db, done.publishedHeroId!)).packageVersion).toBe(1)
+    expect((await loadHeroPackage(db, done.publishedHeroId!)).packageVersion).toBe(2)
   })
 
   it('when the publish commit loses a race, the hero rows it wrote are removed', async () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, type Build } from '../charter/build'
-import { buildPackage, validatePackage, type HeroPackage } from '../forge/package'
+import { buildPackage, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package'
 import { confirm } from '../forge/stages'
 import type { Forge } from '../forge/types'
 import type { Db } from './db'
@@ -57,8 +57,9 @@ export async function loadHeroPackage(db: Db, heroId: string, fetchImpl: typeof 
   const { rows } = await db.query<{ package_url: string | null }>('select package_url from heroes where id = $1 and not hidden', [heroId])
   const url = rows[0]?.package_url
   if (!url) throw new NotFoundError('this hero has no forge package')
-  if (url.startsWith('data:application/json;base64,')) return JSON.parse(Buffer.from(url.slice(29), 'base64').toString('utf8'))
+  // packages stored before version 2 are upgraded as they load (AE7)
+  if (url.startsWith('data:application/json;base64,')) return upgradePackage(JSON.parse(Buffer.from(url.slice(29), 'base64').toString('utf8')))
   const res = await fetchImpl(url)
   if (!res.ok) throw new Error(`package download failed: ${res.status}`)
-  return (await res.json()) as HeroPackage
+  return upgradePackage((await res.json()) as HeroPackageV1)
 }
