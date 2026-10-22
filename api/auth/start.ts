@@ -1,4 +1,4 @@
-import { AuthError, startSignIn } from '../../src/server/accounts'
+import { startSignIn } from '../../src/server/accounts'
 import { getDb } from '../../src/server/db'
 import { pickEmailSender } from '../../src/server/email'
 import { clientIp, errorResponse, readJson } from '../../src/server/http'
@@ -11,7 +11,6 @@ export async function POST(request: Request): Promise<Response> {
     await startSignIn(await getDb(), String(body.email ?? ''), clientIp(request), pickEmailSender(process.env), base)
     return Response.json({ sent: true })
   } catch (error) {
-    if (error instanceof AuthError) return Response.json({ error: error.message }, { status: error.status })
     return errorResponse(error)
   }
 }

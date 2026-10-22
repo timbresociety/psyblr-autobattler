@@ -1,7 +1,7 @@
 import type { SizeClass } from '../../charter/sizes'
 import type { SizeCost } from '../../forge/sizes'
 import { STAGE_ORDER } from '../../forge/stages'
-import type { Forge, StageId } from '../../forge/types'
+import type { Forge } from '../../forge/types'
 import type { ForgeAction } from './forge-api'
 import { GenerateStage, STAGE_TITLE } from './stages/GenerateStage'
 import { SpecStage } from './stages/SpecStage'
@@ -39,7 +39,7 @@ export function StagePanel({ forge, balance, busy, act, sizeCost }: Props) {
           {stage !== 'spec' && stage !== 'stats' && (
             <GenerateStage
               forge={forge}
-              stage={stage as StageId}
+              stage={stage}
               balance={balance}
               busy={busy}
               onStart={() => act({ type: 'start', stage })}

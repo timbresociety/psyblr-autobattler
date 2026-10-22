@@ -1,7 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { PACKS, type CreditPack } from '../forge/pricing'
 import { isProduction } from '../forge/providers/router'
-import type { FetchLike } from '../forge/providers/live/http'
+import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http'
 import type { Env } from '../forge/providers/types'
 import { grantPurchase } from './credits'
 import type { Db } from './db'
@@ -45,6 +45,7 @@ export function stripePayments(env: Env, fetchImpl: FetchLike = fetch): Payments
         cancel_url: `${returnUrl}?purchase=cancelled`,
       })
       const res = await fetchImpl('https://api.stripe.com/v1/checkout/sessions', {
+        signal: AbortSignal.timeout(TIMEOUT_MS),
         method: 'POST',
         headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' },
         body: form.toString(),
@@ -88,7 +89,11 @@ export async function handleStripeEvent(db: Db, payload: string, signature: stri
   const session = event.data.object
   if (session.payment_status && session.payment_status !== 'paid') return { granted: 0 }
   const pack = PACKS.find((p) => p.amountCents === session.amount_total && p.currency === session.currency)
-  if (!pack || !session.client_reference_id) return { granted: 0 }
+  if (!pack || !session.client_reference_id) {
+    // the player paid but we cannot tell for what: fail loudly so Stripe retries and the owner sees it
+    console.error('stripe: paid checkout matched no credit pack', { event: event.id, amount: session.amount_total, currency: session.currency })
+    throw Object.assign(new Error('paid checkout matched no credit pack'), { status: 500 })
+  }
   const fresh = await grantPurchase(db, session.client_reference_id, pack.credits, `stripe:${event.id}`)
   return { granted: fresh ? pack.credits : 0 }
 }

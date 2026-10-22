@@ -2,8 +2,8 @@ import { STAGE_ORDER } from '../../src/forge/stages'
 import type { StageId } from '../../src/forge/types'
 import { balance } from '../../src/server/credits'
 import { getDb } from '../../src/server/db'
-import { forgeDeps, forgeLimited } from '../../src/server/forge-env'
-import { ForgeError, act, type ForgeAction } from '../../src/server/forge-runner'
+import { forgeDeps, forgeLimited, forgeUnavailable } from '../../src/server/forge-env'
+import { act, type ForgeAction } from '../../src/server/forge-runner'
 import { loadForge } from '../../src/server/forge-store'
 import { clientIp, errorResponse, readJson, tooMany } from '../../src/server/http'
 import { requireAccount } from '../../src/server/sessions'
@@ -29,14 +29,13 @@ export async function POST(request: Request): Promise<Response> {
     const { accountId } = await requireAccount(request, db)
     if (await forgeLimited(db, accountId, clientIp(request))) return tooMany()
     const deps = forgeDeps(db)
-    if (!deps) return Response.json({ error: 'the forge is not configured on this deployment' }, { status: 503 })
+    if (!deps) return forgeUnavailable()
     const body = await readJson(request, 20_000)
     const action = parseAction(body)
     if (!action || typeof body.id !== 'string') return Response.json({ error: 'unknown action' }, { status: 400 })
     const forge = await act(deps, await loadForge(db, body.id, accountId), action)
     return Response.json({ forge, balance: await balance(db, accountId) })
   } catch (error) {
-    if (error instanceof ForgeError) return Response.json({ error: error.message }, { status: error.status })
     return errorResponse(error)
   }
 }

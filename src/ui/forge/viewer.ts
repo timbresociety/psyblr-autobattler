@@ -1,5 +1,6 @@
 import type { Delivery } from '../../charter/types'
 import type { Preset } from '../../forge/motion/library'
+import type { EffectShape } from '../../forge/package'
 
 /**
  * Viewer decisions, kept free of three.js so they test without WebGL (U12). The viewer loads the rigged GLB when
@@ -55,7 +56,7 @@ export function effectWindow(delivery: Pick<Delivery, 'kind' | 'range'>, clipSec
 }
 
 /** The effect's world size, from the mechanic's own range and radius (R18). */
-export function effectScale(shape: { delivery: string; range: number; radius?: number }): { width: number; height: number } {
+export function effectScale(shape: EffectShape): { width: number; height: number } {
   if (shape.radius !== undefined) return { width: shape.radius * 2, height: shape.radius * 2 }
   if (shape.delivery === 'beam') return { width: shape.range, height: 1 }
   return { width: Math.max(1.5, Math.min(shape.range, 4)), height: Math.max(1.5, Math.min(shape.range, 4)) }

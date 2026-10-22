@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS } from '../forge/pricing'
-import { bump, dayBucket, readCount } from './accounts'
+import { bump, dayBucket } from './accounts'
 import type { Db } from './db'
 
 /**
@@ -34,6 +34,12 @@ async function credit(db: Db, accountId: string, kind: 'grant' | 'purchase', amo
   return rows.length > 0
 }
 
+/** Whether the account already took its one free hero (R3). */
+export async function freeClaimed(db: Db, accountId: string): Promise<boolean> {
+  const { rows } = await db.query("select 1 from credit_ledger where kind = 'grant' and ref = $1", [`free:${accountId}`])
+  return rows.length > 0
+}
+
 export async function balance(db: Db, accountId: string): Promise<number> {
   const { rows } = await db.query<{ available: number }>('select available from credit_accounts where account_id = $1', [accountId])
   return rows[0]?.available ?? 0
@@ -42,13 +48,11 @@ export async function balance(db: Db, accountId: string): Promise<number> {
 /** The one-time free grant (R3): once per account, once per IP per day, and under a global daily cap. */
 export async function claimFreeGrant(db: Db, accountId: string, ip: string, now = new Date()): Promise<number> {
   const day = dayBucket(now)
-  const already = await db.query("select 1 from credit_ledger where kind = 'grant' and ref = $1", [`free:${accountId}`])
-  if (already.rows.length) throw new CreditError('the free hero has already been claimed', 409)
-  if ((await readCount(db, `grant-ip:${ip}`, day)) >= 1) throw new CreditError('a free hero was already claimed from this network today', 429)
-  if ((await readCount(db, 'grant-global', day)) >= GLOBAL_DAILY_FREE_GRANTS) throw new CreditError('free heroes are paused for today; try again tomorrow', 429)
+  if (await freeClaimed(db, accountId)) throw new CreditError('the free hero has already been claimed', 409)
+  // count first, then check: concurrent claims each see their own increment
+  if ((await bump(db, `grant-ip:${ip}`, day)) > 1) throw new CreditError('a free hero was already claimed from this network today', 429)
+  if ((await bump(db, 'grant-global', day)) > GLOBAL_DAILY_FREE_GRANTS) throw new CreditError('free heroes are paused for today; try again tomorrow', 429)
   if (!(await credit(db, accountId, 'grant', FREE_GRANT, `free:${accountId}`))) throw new CreditError('the free hero has already been claimed', 409)
-  await bump(db, `grant-ip:${ip}`, day)
-  await bump(db, 'grant-global', day)
   return balance(db, accountId)
 }
 

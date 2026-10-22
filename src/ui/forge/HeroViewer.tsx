@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { Delivery } from '../../charter/types'
+import type { EffectShape } from '../../forge/package'
 import { effectScale, effectWindow, pickAnimation, viewerSource, type MotionPlay } from './viewer'
 
 export interface HeroViewerProps {
@@ -10,7 +11,7 @@ export interface HeroViewerProps {
   /** Extra GLBs whose animations are merged in (retarget batches). */
   motionUrls?: string[]
   motion?: MotionPlay
-  effect?: { url: string; delivery: Pick<Delivery, 'kind' | 'range'>; shape: { delivery: string; range: number; radius?: number } }
+  effect?: { url: string; delivery: Pick<Delivery, 'kind' | 'range'>; shape: EffectShape }
   /** Aura or body element colour for the passive preview. */
   aura?: string
   label: string
@@ -85,7 +86,9 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, lab
     let pose: ((preset: string, t: number) => void) | undefined
     const preset = motion?.kind === 'preset' ? motion.preset : 'idle'
 
+    let disposed = false
     const useMannequin = () => {
+      if (disposed) return
       const m = mannequin()
       stage.add(m.root)
       pose = m.pose
@@ -94,6 +97,7 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, lab
       const loader = new GLTFLoader()
       Promise.all([meshUrl!, ...motionUrls.filter((u) => viewerSource(u) === 'glb')].map((u) => loader.loadAsync(u)))
         .then(([main, ...extra]) => {
+          if (disposed) return
           stage.add(main.scene)
           const clips = [...main.animations, ...extra.flatMap((g) => g.animations)]
           const name = motion ? pickAnimation(motion, clips.map((c) => c.name)) : undefined
@@ -142,14 +146,17 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, lab
     })
 
     return () => {
+      disposed = true
       renderer.setAnimationLoop(null)
       renderer.dispose()
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh
         mesh.geometry?.dispose()
         const mat = mesh.material as THREE.Material | THREE.Material[] | undefined
-        if (Array.isArray(mat)) mat.forEach((m) => m.dispose())
-        else mat?.dispose()
+        for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+          ;(m as THREE.Material & { map?: THREE.Texture | null }).map?.dispose()
+          m.dispose()
+        }
       })
       renderer.domElement.remove()
     }

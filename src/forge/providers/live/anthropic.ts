@@ -64,6 +64,11 @@ export function anthropicModeration(env: Env, fetchImpl?: FetchLike): Moderation
     async classify(request): Promise<Outcome<ContentFlags>> {
       const content: Anthropic.Beta.BetaContentBlockParam[] = []
       if (request.imageUrl?.startsWith('https://')) content.push({ type: 'image', source: { type: 'url', url: request.imageUrl } })
+      else if (request.imageUrl) {
+        const inline = /^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/.exec(request.imageUrl)
+        if (!inline) return { ok: false, kind: 'failed', reason: 'unsupported image format for moderation' }
+        content.push({ type: 'image', source: { type: 'base64', media_type: inline[1] as 'image/png', data: inline[2] } })
+      }
       content.push({ type: 'text', text: `<content>\n${request.text ?? '(image only)'}\n</content>` })
       const outcome = await structured(env, fetchImpl, MODERATION_SYSTEM, content, FLAGS_SCHEMA)
       return outcome.ok === true ? { ok: true, value: outcome.value as ContentFlags } : (outcome as Outcome<ContentFlags>)

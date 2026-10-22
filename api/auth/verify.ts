@@ -1,4 +1,4 @@
-import { AuthError, verifySignIn } from '../../src/server/accounts'
+import { verifySignIn } from '../../src/server/accounts'
 import { getDb } from '../../src/server/db'
 import { clientIp, deviceId, errorResponse, readJson } from '../../src/server/http'
 import { sessionCookie } from '../../src/server/sessions'
@@ -10,7 +10,6 @@ export async function POST(request: Request): Promise<Response> {
     const signedIn = await verifySignIn(await getDb(), String(body.token ?? ''), clientIp(request), deviceId(request))
     return Response.json({ accountId: signedIn.accountId, isNew: signedIn.isNew }, { headers: { 'set-cookie': sessionCookie(signedIn.sessionId, process.env) } })
   } catch (error) {
-    if (error instanceof AuthError) return Response.json({ error: error.message }, { status: error.status })
     return errorResponse(error)
   }
 }

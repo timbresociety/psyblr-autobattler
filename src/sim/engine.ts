@@ -110,8 +110,9 @@ function prepare(build: Build, powerScale: number) {
 function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit {
   const { sheet, kit } = prepare(c.build, c.powerScale ?? 1)
   const cooldowns = { basic: 0, active1: 0, active2: 0, passive: 0, ultimate: CALIBRATION.ultimateStartCooldown, movement: 0 }
+  const size = SIZES[c.build.sizeClass ?? 'medium']
   const unit: Unit = {
-    id, team, name: c.build.heroName, roleId: c.build.roleId, hitRadius: SIZES[c.build.sizeClass ?? 'medium'].hitRadius, reachBonus: SIZES[c.build.sizeClass ?? 'medium'].reachBonus, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
+    id, team, name: c.build.heroName, roleId: c.build.roleId, hitRadius: size.hitRadius, reachBonus: size.reachBonus, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
     stunnedUntil: 0, invulnerableUntil: 0, slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, hitCount: 0,
     lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {},
   }

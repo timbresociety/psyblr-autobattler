@@ -4,9 +4,9 @@ import type { AnyProvider, Capability, Env, Outcome } from './types'
 export const DEFAULT_ORDER: Record<Capability, string[]> = {
   director: ['openai-compatible', 'anthropic'],
   image: ['openai-image'],
-  mesh: ['tripo'],
-  rig: ['tripo'],
-  retarget: ['tripo'],
+  mesh: ['tripo-mesh'],
+  rig: ['tripo-rig'],
+  retarget: ['tripo-retarget'],
   moderation: ['anthropic-moderation'],
 }
 

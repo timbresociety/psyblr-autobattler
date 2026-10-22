@@ -85,8 +85,7 @@ export async function verifySignIn(db: Db, token: string, ip: string, deviceId: 
   let isNew = false
   let account = (await db.query<{ id: string }>('select id from accounts where email_normalized = $1', [normalized])).rows[0]
   if (!account) {
-    if ((await readCount(db, `accounts-ip:${ip}`, dayBucket(now))) >= LIMITS.accountsPerIpPerDay) throw new AuthError('too many new accounts from this network today', 429)
-    await bump(db, `accounts-ip:${ip}`, dayBucket(now))
+    if ((await bump(db, `accounts-ip:${ip}`, dayBucket(now))) > LIMITS.accountsPerIpPerDay) throw new AuthError('too many new accounts from this network today', 429)
     account = { id: randomUUID() }
     await db.query('insert into accounts (id, email, email_normalized, created_ip) values ($1, $2, $3, $4)', [account.id, email, normalized, ip])
     isNew = true

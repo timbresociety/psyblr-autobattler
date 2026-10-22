@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { CreatorScreen } from './creator/CreatorScreen'
-import { ForgeScreen } from './forge/ForgeScreen'
+
+// the Forge (and the sim it prices sizes with) loads only when its tab opens
+const ForgeScreen = lazy(() => import('./forge/ForgeScreen').then((m) => ({ default: m.ForgeScreen })))
 
 type Tab = 'forge' | 'creator'
 
@@ -16,7 +18,13 @@ export function App() {
           </button>
         ))}
       </nav>
-      {tab === 'forge' ? <ForgeScreen /> : <CreatorScreen />}
+      {tab === 'forge' ? (
+        <Suspense fallback={<p className="muted">Loading the Forge…</p>}>
+          <ForgeScreen />
+        </Suspense>
+      ) : (
+        <CreatorScreen />
+      )}
     </>
   )
 }

@@ -1,6 +1,6 @@
 import { isProduction } from '../forge/providers/router'
 import type { Env } from '../forge/providers/types'
-import type { FetchLike } from '../forge/providers/live/http'
+import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http'
 
 /** Sends sign-in links (KTD5). The fake keeps an outbox for tests and local development; production never uses it. */
 export interface EmailSender {
@@ -29,6 +29,7 @@ export function resendSender(env: Env, fetchImpl: FetchLike = fetch): EmailSende
     available: () => !!(env.RESEND_API_KEY && env.EMAIL_FROM),
     async send(to, subject, text) {
       const res = await fetchImpl('https://api.resend.com/emails', {
+        signal: AbortSignal.timeout(TIMEOUT_MS),
         method: 'POST',
         headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
         body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, text }),

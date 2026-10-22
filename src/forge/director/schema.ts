@@ -1,3 +1,4 @@
+import { BUILD_SLOTS } from '../../charter/build'
 import { ROLE_IDS, isRoleId } from '../../charter/roles'
 import { SIZE_CLASSES, isSizeClass, type SizeClass } from '../../charter/sizes'
 import type { BuildSlot, RoleId } from '../../charter/types'
@@ -40,7 +41,6 @@ export interface DirectorOutput {
   spec?: DraftSpec
 }
 
-const SLOTS: BuildSlot[] = ['basic', 'active1', 'active2', 'passive', 'ultimate', 'movement']
 const str = { type: 'string' }
 
 /** The structured-output schema the live director must follow (KTD4). */
@@ -68,7 +68,7 @@ export const DIRECTOR_SCHEMA: Record<string, unknown> = {
         silhouette: str,
         signatureElements: { type: 'array', items: str },
         basicStyle: { type: 'string', enum: ['melee', 'ranged'] },
-        skills: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['slot', 'name', 'theme'], properties: { slot: { type: 'string', enum: SLOTS }, name: str, theme: str } } },
+        skills: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['slot', 'name', 'theme'], properties: { slot: { type: 'string', enum: [...BUILD_SLOTS] }, name: str, theme: str } } },
         passiveVisual: { type: 'string', enum: ['aura', 'body-element'] },
         passiveElement: str,
         flags: { type: 'object', additionalProperties: false, required: ['realPerson', 'sexual', 'minors', 'endorsement'], properties: { realPerson: { type: 'boolean' }, sexual: { type: 'boolean' }, minors: { type: 'boolean' }, endorsement: { type: 'boolean' } } },
@@ -90,7 +90,7 @@ export function parseDirectorOutput(raw: unknown): DirectorOutput | undefined {
   let spec: DraftSpec | undefined
   if (v.spec) {
     const s = v.spec as Record<string, unknown>
-    const skills = Array.isArray(s.skills) ? (s.skills as Record<string, unknown>[]).filter((k) => SLOTS.includes(k.slot as BuildSlot) && isStr(k.name, 40) && isStr(k.theme, 280)) : []
+    const skills = Array.isArray(s.skills) ? (s.skills as Record<string, unknown>[]).filter((k) => BUILD_SLOTS.includes(k.slot as BuildSlot) && isStr(k.name, 40) && isStr(k.theme, 280)) : []
     if (!isStr(s.heroName, 60) || !isRoleId(s.roleId) || !isSizeClass(s.sizeClass) || !isStr(s.description, 1000) || skills.length < 3) return undefined
     spec = {
       heroName: s.heroName,

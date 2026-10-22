@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { candidates, pollTask, providerOrder, route, type Registry } from './router'
 import { allFakes, fakeImage, fakeMesh, fakeRetarget, fakeRig } from './fakes'
 import type { ImageProvider, Outcome } from './types'
+import { createRegistry } from './registry'
 
 function imageProvider(id: string, outcome: Outcome<{ urls: string[] }>, available = true): ImageProvider {
   return { id, capability: 'image', available: () => available, generate: vi.fn(async () => outcome) }
@@ -61,6 +62,11 @@ describe('provider router (U3)', () => {
     if (started.ok !== 'pending') return
     const done = await pollTask(registry, started.provider, (p) => (p as ReturnType<typeof fakeMesh>).poll(started.taskId))
     expect(done).toMatchObject({ ok: true, provider: 'fake-mesh' })
+  })
+
+  it('every registered provider id is unique, so a task polls on the adapter that started it', () => {
+    const ids = createRegistry({}).providers.map((p) => p.id)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('fakes are deterministic', async () => {

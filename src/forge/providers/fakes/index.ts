@@ -1,4 +1,4 @@
-import type { ContentFlags } from '../../types'
+import { keywordFlags } from '../../keywords'
 import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, RetargetProvider, RigProvider } from '../types'
 
 /**
@@ -97,14 +97,7 @@ export function fakeRetarget(script: FakeScript = {}): RetargetProvider {
   return fakeTask('fake-retarget', 'retarget', (r, h) => ({ url: `fake://motion/${h}-${(r as { presets: string[] }).presets.join('+')}.glb`, format: 'glb' }), script, (r: { riggedUrl: string; presets: string[] }) => `${r.riggedUrl}|${r.presets.join(',')}`) as RetargetProvider
 }
 
-const SEXUAL = /\b(nude|naked|sex|sexual|porn|nsfw|explicit|topless|lingerie|xxx|onlyfans)\b/i
-const MINORS = /\b(child|children|kid|kids|minor|minors|underage|teen|teenager|schoolgirl|schoolboy|loli|shota)\b/i
-const ENDORSE = /\b(endorse|endorses|endorsed|sponsored by|official (?:partner|ambassador)|recommends playing)\b/i
-
-/** Keyword moderation: the offline floor and the keyword backstop of KTD10. */
-export function keywordFlags(text: string, realPerson = false): ContentFlags {
-  return { realPerson, sexual: SEXUAL.test(text), minors: MINORS.test(text), endorsement: ENDORSE.test(text) }
-}
+export { keywordFlags }
 
 export function fakeModeration(): ModerationProvider {
   return {

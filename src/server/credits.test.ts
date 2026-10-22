@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SCHEMA_SQL, type Db } from './db'
 import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, stagePrice } from '../forge/pricing'
 import { balance, claimFreeGrant, ledgerBalance, placeHold, settleHold } from './credits'
@@ -99,10 +99,24 @@ describe('payments (U8)', () => {
     expect(await balance(db, a)).toBe(PACKS[1].credits)
   })
 
-  it('a webhook with a mismatched amount grants nothing', async () => {
+  it('a paid webhook with a mismatched amount grants nothing and fails loudly so Stripe retries', async () => {
     const a = await account()
     const { payload, header, t } = signed(completed('evt_2', a, 1))
-    expect(await handleStripeEvent(db, payload, header, env, t)).toEqual({ granted: 0 })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await expect(handleStripeEvent(db, payload, header, env, t)).rejects.toMatchObject({ status: 500 })
+    expect(log).toHaveBeenCalled()
+    log.mockRestore()
+    expect(await balance(db, a)).toBe(0)
+  })
+
+  it('an unpaid or non-checkout event grants nothing', async () => {
+    const a = await account()
+    const unpaid = completed('evt_4', a, PACKS[0].amountCents)
+    unpaid.data.object.payment_status = 'unpaid'
+    const u = signed(unpaid)
+    expect(await handleStripeEvent(db, u.payload, u.header, env, u.t)).toEqual({ granted: 0 })
+    const other = signed({ ...completed('evt_5', a, PACKS[0].amountCents), type: 'charge.refunded' })
+    expect(await handleStripeEvent(db, other.payload, other.header, env, other.t)).toEqual({ granted: 0 })
     expect(await balance(db, a)).toBe(0)
   })
 

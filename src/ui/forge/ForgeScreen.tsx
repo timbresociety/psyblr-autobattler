@@ -109,18 +109,25 @@ export function ForgeScreen({ deps = liveForgeDeps }: { deps?: ForgeDeps }) {
 
   // while a stage generates, poll; each poll also advances the provider work (KTD1)
   const generating = view && view.forge.current !== 'published' && view.forge.stages[view.forge.current].status === 'generating'
+  const [pollTick, setPollTick] = useState(0)
+  const forgeId = view?.forge.id
   useEffect(() => {
-    if (!generating || !view) return
-    const id = view.forge.id
+    if (!generating || !forgeId) return
     const timer = setTimeout(() => {
+      const next = () => setPollTick((t) => t + 1)
+      // a hidden tab waits; the forge keeps going server-side and catches up on the next visible poll
+      if (document.hidden) return next()
       const mine = seq.current
-      deps.get(id).then(
-        (next) => mine === seq.current && setView(next),
-        () => undefined,
-      )
+      deps
+        .get(forgeId)
+        .then(
+          (fresh) => mine === seq.current && setView((prev) => (prev && prev.forge.version === fresh.forge.version && prev.balance === fresh.balance ? prev : fresh)),
+          () => undefined,
+        )
+        .finally(next)
     }, POLL_MS)
     return () => clearTimeout(timer)
-  }, [generating, view, deps])
+  }, [generating, forgeId, pollTick, deps])
 
   const act = (action: ForgeAction) => view && run(() => deps.act(view.forge.id, action))
 

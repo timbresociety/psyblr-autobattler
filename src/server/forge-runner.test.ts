@@ -7,14 +7,14 @@ import { STAGE_PRICES } from '../forge/pricing'
 import { allFakes, fakeImage, fakeMesh } from '../forge/providers/fakes'
 import type { Registry } from '../forge/providers/router'
 import type { AnyProvider, ImageRequest, MeshProvider } from '../forge/providers/types'
-import { begin } from '../forge/stages'
-import { STAGE_ORDER } from '../forge/stages'
+import { STAGE_ORDER, begin } from '../forge/stages'
 import type { Forge, StageId } from '../forge/types'
 import { balance, claimFreeGrant } from './credits'
 import { SCHEMA_SQL, type Db } from './db'
 import { forgeLimited, FORGE_LIMITS } from './forge-env'
 import { loadHeroPackage, publishForge } from './forge-publish'
-import { act, advance, effectShape, planSteps, startForge, type RunnerDeps } from './forge-runner'
+import { effectShape } from '../forge/package'
+import { TASK_TIMEOUT_MS, act, advance, planSteps, startForge, type RunnerDeps } from './forge-runner'
 import { loadForge, saveForge } from './forge-store'
 import { createHero, searchHeroes } from './store'
 
@@ -143,6 +143,37 @@ describe('forge runner (U9)', () => {
     expect(await balance(db, a)).toBe(before)
   })
 
+  it('a generated image that cannot be screened is not kept, and the hold is released (KTD10)', async () => {
+    const reg = registry()
+    reg.providers = reg.providers.filter((p) => p.capability !== 'moderation')
+    const d = deps(reg)
+    const a = await account()
+    let f = await act(deps(), await specReady(deps(), a), { type: 'confirm', stage: 'spec' })
+    const before = await balance(db, a)
+    f = await act(d, f, { type: 'start', stage: 'concept' })
+    expect(f.stages.concept.status).toBe('failed')
+    expect(f.stages.concept.failure).toMatch(/could not be screened/)
+    expect(copies.filter((c) => c.includes('/concept/'))).toHaveLength(0)
+    expect(await balance(db, a)).toBe(before)
+  })
+
+  it('a provider task that never finishes fails the stage after the deadline and releases the hold', async () => {
+    let clock = Date.now()
+    const reg = registry()
+    reg.providers = reg.providers.map((p) => (p.capability === 'mesh' ? { ...p, poll: async () => ({ ok: 'pending' as const, taskId: 'stuck' }) } : p)) as AnyProvider[]
+    const d = { ...deps(reg), now: () => clock }
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    f = await runStage(d, f, 'concept')
+    const before = await balance(db, a)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'mesh' }))
+    expect(f.stages.mesh.status).toBe('generating')
+    clock += TASK_TIMEOUT_MS + 1
+    f = await advance(d, f)
+    expect(f.stages.mesh.status).toBe('failed')
+    expect(await balance(db, a)).toBe(before)
+  })
+
   it('another account cannot read or act on a forge', async () => {
     const d = deps()
     const f = await specReady(d, await account())
@@ -227,6 +258,17 @@ describe('publish (U10)', () => {
     // the package bytes went through the copier as a data URL; load it the same way
     await db.query('update heroes set package_url = $2 where id = $1', [done.publishedHeroId, `data:application/json;base64,${Buffer.from(JSON.stringify({ packageVersion: 1 })).toString('base64')}`])
     expect((await loadHeroPackage(db, done.publishedHeroId!)).packageVersion).toBe(1)
+  })
+
+  it('when the publish commit loses a race, the hero rows it wrote are removed', async () => {
+    const d = deps()
+    let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
+    for (const stage of STAGE_ORDER.slice(1, -1)) f = await runStage(d, f, stage)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'stats' }))
+    await db.query('update forges set version = version + 1 where id = $1', [f.id])
+    await expect(publishForge(d, f)).rejects.toMatchObject({ status: 409 })
+    const { rows } = await db.query('select 1 from heroes where creator_account = $1', [f.accountId])
+    expect(rows).toHaveLength(0)
   })
 
   it('a blocked gate result does not publish', async () => {

@@ -5,8 +5,7 @@ import { confirm } from '../forge/stages'
 import type { Forge } from '../forge/types'
 import { runGate } from '../sim/gate'
 import type { Db } from './db'
-import { saveForge } from './forge-store'
-import { ForgeError, presetBatches, type RunnerDeps } from './forge-runner'
+import { ForgeError, commit, presetBatches, type RunnerDeps } from './forge-runner'
 import { blobStoreId, isOwnForgeAssetUrl } from './photo-url'
 import { NotFoundError } from './store'
 
@@ -23,9 +22,7 @@ export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forg
       ...forge,
       stages: { ...forge.stages, stats: { ...stats, failure: `The balance gate blocked this build (wins ${Math.round(gate.winRate * 100)}% against the field). Lower ${gate.strongestSlot ?? 'its strongest skill'} or move points to defence.`, inputs: { ...stats.inputs, gate: { winRate: gate.winRate, strongestSlot: gate.strongestSlot ?? null, alternatives: (gate.alternatives ?? []).map((t) => t.id) } } } },
     }
-    const saved = await saveForge(deps.db, forge.version, blocked)
-    if (!saved) throw new ForgeError('the forge changed in another tab; reload it', 409)
-    return saved
+    return commit(deps.db, forge, blocked)
   }
   const build: Build = gate.build
   const pkg = buildPackage(forge, build, presetBatches(forge))
@@ -39,15 +36,20 @@ export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forg
   const packageUrl = await deps.copy(`forge/${forge.id}/package.json`, `data:application/json;base64,${Buffer.from(JSON.stringify(pkg)).toString('base64')}`)
   const original = { ...build, heroId }
   const skills = Object.fromEntries(BUILD_SLOTS.map((s) => [s, { name: build.slots[s].name, flavour: build.slots[s].flavour, visual: build.slots[s].visual }]))
-  const published = await saveForge(deps.db, forge.version, { ...next.forge, build: original, publishedHeroId: heroId })
-  if (!published) throw new ForgeError('the forge changed in another tab; reload it', 409)
+  // hero rows first, so a published forge always has its hero; if the forge commit then loses, undo them
   await deps.db.query(
     `insert into heroes (id, name, name_lower, creator_device, photos, skills, original_build, spec, package_url, creator_account)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [heroId, pkg.heroName, pkg.heroName.toLowerCase(), forge.deviceId ?? `account:${forge.accountId}`, JSON.stringify([pkg.assets.front]), JSON.stringify(skills), JSON.stringify(original), JSON.stringify(pkg.spec), packageUrl, forge.accountId],
   )
   if (forge.deviceId) await deps.db.query('insert into builds (id, hero_id, device_id, build) values ($1, $2, $3, $4)', [randomUUID(), heroId, forge.deviceId, JSON.stringify(original)])
-  return published
+  try {
+    return await commit(deps.db, forge, { ...next.forge, build: original, publishedHeroId: heroId })
+  } catch (error) {
+    await deps.db.query('delete from builds where hero_id = $1', [heroId])
+    await deps.db.query('delete from heroes where id = $1', [heroId])
+    throw error
+  }
 }
 
 /** A published hero's package by hero ID (R22). */

@@ -6,7 +6,8 @@ import { errorResponse } from '../../src/server/http'
 export async function GET(request: Request): Promise<Response> {
   try {
     const id = new URL(request.url).searchParams.get('id') ?? ''
-    return Response.json(await loadHeroPackage(await getDb(), id))
+    // a package is written once at publish and never changes
+    return Response.json(await loadHeroPackage(await getDb(), id), { headers: { 'cache-control': 'public, max-age=300, s-maxage=86400' } })
   } catch (error) {
     return errorResponse(error)
   }

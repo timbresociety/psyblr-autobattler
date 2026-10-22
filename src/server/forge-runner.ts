@@ -6,10 +6,11 @@ import type { BuildSlot, SecondaryStat } from '../charter/types'
 import { buildSpec, runDirector } from '../forge/director/director'
 import { applyFloor, imageBreach } from '../forge/director/floor'
 import { MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
+import { effectShape, numbered, pick } from '../forge/package'
 import { stagePrice } from '../forge/pricing'
 import { pollTask, route, type Registry, type Routed } from '../forge/providers/router'
 import type { Asset, ImageProvider, ImageRequest, MeshProvider, RetargetProvider, RigProvider, TaskProvider } from '../forge/providers/types'
-import { STAGE_TABLE, begin, choose, confirm, createForge, editInputs, fail, retry, succeed } from '../forge/stages'
+import { EFFECT_SLOT, STAGE_TABLE, begin, choose, confirm, createForge, editInputs, fail, retry, succeed } from '../forge/stages'
 import type { Forge, SpecSheet, StageId, StageState, StepState, Transition } from '../forge/types'
 import { placeHold, settleHold } from './credits'
 import type { Db } from './db'
@@ -47,10 +48,11 @@ export interface RunnerDeps {
 /** A claimed step whose request died is taken over after this long. */
 export const STEP_TIMEOUT_MS = 120_000
 
+/** A provider task still unfinished after this long fails the stage and releases its hold. */
+export const TASK_TIMEOUT_MS = 20 * 60_000
+
 /** The house art style every visual is generated in (R19). */
 export const HOUSE_STYLE = 'Hyper-realistic cinematic 3D game character, physically based materials, dramatic studio lighting, full body in a neutral A-pose on a plain background.'
-
-const SLOT_OF: Partial<Record<StageId, BuildSlot>> = { active1: 'active1', active2: 'active2', ultimate: 'ultimate' }
 
 const REASONS: Record<Extract<Transition, { ok: false }>['reason'], string> = {
   'retry-cap': 'no retries left for this stage',
@@ -74,7 +76,8 @@ function patchStep(forge: Forge, stage: StageId, name: string, patch: Partial<St
   return patchStage(forge, stage, { steps: forge.stages[stage].steps.map((s) => (s.name === name ? { ...s, ...patch } : s)) })
 }
 
-async function commit(db: Db, before: Forge, next: Forge): Promise<Forge> {
+/** Save `next` over `before`, or tell the player another tab got there first. */
+export async function commit(db: Db, before: Forge, next: Forge): Promise<Forge> {
   const saved = await saveForge(db, before.version, next)
   if (!saved) throw new ForgeError('the forge changed in another tab; reload it', 409)
   return saved
@@ -304,15 +307,9 @@ export function planSteps(forge: Forge, stage: StageId): StepState[] {
   }
 }
 
-/** The shape an effect's art must match: the template's delivery, range and radius (R18). */
-export function effectShape(templateId: string): NonNullable<ImageRequest['shape']> {
-  const { kind, range, radius } = getTemplate(templateId).delivery
-  return { delivery: kind, range, ...(radius !== undefined ? { radius } : {}) }
-}
-
 /** What a generation was asked for, stored on the stage so the package can record it (R18). */
 function stageRecord(forge: Forge, stage: StageId): Record<string, unknown> {
-  const slot = SLOT_OF[stage]
+  const slot = EFFECT_SLOT[stage]
   if (!slot) return {}
   const record: Record<string, unknown> = { effect: { slot, shape: effectShape(forge.build!.slots[slot].templateId) } }
   if (stage === 'ultimate') record.passive = { visual: forge.spec!.passiveVisual, element: forge.spec!.passiveElement ?? null, shape: effectShape(forge.build!.slots.passive.templateId) }
@@ -340,9 +337,8 @@ function passiveRequest(forge: Forge): ImageRequest {
 
 /** The sheet the player picked becomes the mesh input. */
 function chosenSheet(forge: Forge): string {
-  const concept = forge.stages.concept
-  const pick = Number((concept.inputs.choice as { sheet?: unknown } | undefined)?.sheet ?? 0)
-  return concept.artifacts[`sheet-${pick}`] ?? concept.artifacts['sheet-0']
+  const sheets = numbered(forge.stages.concept.artifacts, 'sheet')
+  return sheets[pick(forge, 'concept', 'sheet')] ?? sheets[0]
 }
 
 type StepValue = { urls: string[] } | Asset
@@ -351,7 +347,7 @@ async function startStep(deps: RunnerDeps, forge: Forge, stage: StageId, name: s
   const r = deps.registry
   const image = (req: ImageRequest) => route<ImageProvider, StepValue>(r, 'image', (p) => p.generate(req))
   if (name === 'sheet') return image({ kind: 'sheet', prompt: conceptPrompt(forge), references: forge.referenceUrls })
-  if (name === 'effect') return image(effectRequest(forge, stage, SLOT_OF[stage]!))
+  if (name === 'effect') return image(effectRequest(forge, stage, EFFECT_SLOT[stage]!))
   if (name === 'passive') return image(passiveRequest(forge))
   if (name === 'mesh') return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: true, faceLimit: 20_000 }))
   if (name === 'rig') return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: forge.stages.mesh.artifacts.mesh, skeleton: 'mixamo' }))
@@ -374,14 +370,12 @@ async function collect(deps: RunnerDeps, forge: Forge, stage: StageId, name: str
   const base = `forge/${forge.id}/${stage}/${forge.stages[stage].attempt}`
   const entries: [string, string, string][] = 'urls' in value ? value.urls.map((u, i) => [`${name}-${i}`, u, extension(u, 'png')]) : [[name, value.url, value.format]]
   if ('urls' in value) {
-    for (const [, url] of entries) {
-      const breach = await imageBreach(deps.registry, url, forge.spec!.flags.realPerson)
-      if (breach) return { breach }
-    }
+    const breaches = await Promise.all(entries.map(([, url]) => imageBreach(deps.registry, url, forge.spec!.flags.realPerson)))
+    const breach = breaches.find(Boolean)
+    if (breach) return { breach }
   }
-  const outputs: Record<string, string> = {}
-  for (const [key, url, ext] of entries) outputs[key] = await deps.copy(`${base}/${key}.${ext}`, url)
-  return { outputs }
+  const copied = await Promise.all(entries.map(([key, url, ext]) => deps.copy(`${base}/${key}.${ext}`, url)))
+  return { outputs: Object.fromEntries(entries.map(([key], i) => [key, copied[i]])) }
 }
 
 type StepResult = Forge | 'wait'
@@ -417,6 +411,7 @@ async function runStep(deps: RunnerDeps, forge: Forge, stage: StageId, step: Ste
     return settleStep(deps, claimed, stage, { ...step, status: 'running', taskId: undefined }, await startStep(deps, claimed, stage, step.name))
   }
   if (step.status === 'running' && step.taskId && step.provider) {
+    if (now - (step.claimedAt ?? now) > TASK_TIMEOUT_MS) return failStage(deps, forge, stage, step, `${step.provider}: the task did not finish in time`)
     const outcome = await pollTask<StepValue>(deps.registry, step.provider, (p) => (p as TaskProvider<unknown>).poll(step.taskId!))
     return settleStep(deps, forge, stage, step, outcome)
   }
@@ -434,6 +429,11 @@ async function reconcile(deps: RunnerDeps, forge: Forge): Promise<void> {
 
 /** Move the current stage forward as far as it can go right now. Safe to call from any number of polls. */
 export async function advance(deps: RunnerDeps, forge: Forge): Promise<Forge> {
+  if (forge.current === 'published' || forge.stages[forge.current].status !== 'generating') {
+    // nothing to run: only close a hold a crashed request may have left open
+    await reconcile(deps, forge)
+    return forge
+  }
   let current = forge
   for (let i = 0; i < 32; i++) {
     const stage = current.current

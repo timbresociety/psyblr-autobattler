@@ -1,4 +1,4 @@
-import { keywordFlags } from '../providers/fakes'
+import { OFFENDING, keywordFlags } from '../keywords'
 import { route, type Registry } from '../providers/router'
 import type { ModerationProvider } from '../providers/types'
 import type { ContentFlags, SpecSheet } from '../types'
@@ -8,12 +8,6 @@ import type { ContentFlags, SpecSheet } from '../types'
  * It removes only sexual depictions of real people, anything involving minors, and real people shown endorsing
  * the game. It does not trust the director's flags alone: a separate moderation call and a keyword check both vote.
  */
-
-const OFFENDING: Record<'sexual' | 'minors' | 'endorsement', RegExp> = {
-  sexual: /\b(nude|naked|sex|sexual|porn|nsfw|explicit|topless|lingerie|xxx|onlyfans)\b/i,
-  minors: /\b(child|children|kid|kids|minor|minors|underage|teen|teenager|schoolgirl|schoolboy|loli|shota)\b/i,
-  endorsement: /\b(endorse|endorses|endorsed|sponsored by|official (?:partner|ambassador)|recommends playing)\b/i,
-}
 
 const REASONS = {
   sexual: 'sexual depictions of real people are not allowed',
@@ -53,8 +47,8 @@ export interface FloorResult {
 
 export async function applyFloor(spec: SpecSheet, registry: Registry, imageUrls: string[] = []): Promise<FloorResult> {
   const text = specText(spec)
-  const votes = [spec.flags, keywordFlags(text, spec.flags.realPerson), await moderate(registry, { text })]
-  for (const imageUrl of imageUrls) votes.push(await moderate(registry, { imageUrl }))
+  const moderated = await Promise.all([moderate(registry, { text }), ...imageUrls.map((imageUrl) => moderate(registry, { imageUrl }))])
+  const votes = [spec.flags, keywordFlags(text, spec.flags.realPerson), ...moderated]
   const flags = anyFlag(...votes)
   const breaches = (['sexual', 'minors', 'endorsement'] as const).filter((k) => flags[k] && (k === 'minors' || flags.realPerson))
   if (!breaches.length) return { spec: { ...spec, flags }, blocked: false }
@@ -81,7 +75,10 @@ export async function applyFloor(spec: SpecSheet, registry: Registry, imageUrls:
 
 /** The R25 breach an image carries, judged by the moderation adapter alone (KTD10), or undefined when clean. */
 export async function imageBreach(registry: Registry, imageUrl: string, realPerson: boolean): Promise<string | undefined> {
-  const flags = await moderate(registry, { imageUrl })
+  // an image nobody could screen never passes: there is no keyword fallback for pixels
+  const routed = await route<ModerationProvider, ContentFlags>(registry, 'moderation', (p) => p.classify({ imageUrl }))
+  if (routed.ok !== true) return 'the image could not be screened, so it was not kept'
+  const flags = routed.value
   const real = realPerson || flags.realPerson
   if (flags.minors) return REASONS.minors
   if (real && flags.sexual) return REASONS.sexual

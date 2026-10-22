@@ -52,7 +52,7 @@ const asset = (url: string | undefined, format: Asset['format']): Asset | undefi
 export function tripoMesh(env: Env, fetchImpl: FetchLike = fetch): MeshProvider {
   const t = tripo(env, fetchImpl)
   return {
-    id: 'tripo',
+    id: 'tripo-mesh',
     capability: 'mesh',
     available: t.available,
     start: (r) => t.create({ type: 'image_to_model', file: { type: 'url', url: r.imageUrl }, quad: r.quad, face_limit: r.faceLimit, texture: true, pbr: true }),
@@ -64,7 +64,7 @@ export function tripoMesh(env: Env, fetchImpl: FetchLike = fetch): MeshProvider 
 export function tripoRig(env: Env, fetchImpl: FetchLike = fetch): RigProvider {
   const t = tripo(env, fetchImpl)
   return {
-    id: 'tripo',
+    id: 'tripo-rig',
     capability: 'rig',
     available: t.available,
     start: (r) => t.create({ type: 'animate_rig', file: { type: 'url', url: r.modelUrl }, spec: r.skeleton, out_format: 'glb', rig_type: 'biped' }),
@@ -75,7 +75,7 @@ export function tripoRig(env: Env, fetchImpl: FetchLike = fetch): RigProvider {
 export function tripoRetarget(env: Env, fetchImpl: FetchLike = fetch): RetargetProvider {
   const t = tripo(env, fetchImpl)
   return {
-    id: 'tripo',
+    id: 'tripo-retarget',
     capability: 'retarget',
     available: t.available,
     start: (r) => t.create({ type: 'animate_retarget', file: { type: 'url', url: r.riggedUrl }, animations: r.presets.slice(0, 5), out_format: 'glb', animate_in_place: true }),

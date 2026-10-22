@@ -50,6 +50,9 @@ export function pickCopier(env: Env, fetchImpl: FetchLike = fetch): CopyFn | und
   return isProduction(env) ? undefined : async (_pathname, sourceUrl) => sourceUrl
 }
 
+/** The forge needs a Blob store in production; without one its routes answer 503. */
+export const forgeUnavailable = () => Response.json({ error: 'the forge is not configured on this deployment' }, { status: 503 })
+
 export function forgeDeps(db: Db, env: Env = process.env): RunnerDeps | undefined {
   const copy = pickCopier(env)
   return copy ? { db, registry: serverRegistry(env), copy, publish: publishForge } : undefined
@@ -60,7 +63,6 @@ export const FORGE_LIMITS = { perAccount: 90, perIp: 180 }
 
 export async function forgeLimited(db: Db, accountId: string, ip: string, now = new Date()): Promise<boolean> {
   const minute = now.toISOString().slice(0, 16)
-  const a = await bump(db, `forge-acct:${accountId}`, minute)
-  const i = await bump(db, `forge-ip:${ip}`, minute)
+  const [a, i] = await Promise.all([bump(db, `forge-acct:${accountId}`, minute), bump(db, `forge-ip:${ip}`, minute)])
   return a > FORGE_LIMITS.perAccount || i > FORGE_LIMITS.perIp
 }

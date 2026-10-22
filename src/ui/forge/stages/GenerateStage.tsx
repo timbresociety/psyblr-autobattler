@@ -1,10 +1,9 @@
 import { lazy, Suspense } from 'react'
 import { getTemplate } from '../../../charter/templates/catalog'
-import type { BuildSlot } from '../../../charter/types'
 import { playable } from '../../../forge/motion/library'
-import { motionOptions } from '../../../forge/package'
+import { effectShape, motionOptions, numbered, type EffectShape } from '../../../forge/package'
 import { stagePrice } from '../../../forge/pricing'
-import { STAGE_TABLE } from '../../../forge/stages'
+import { EFFECT_SLOT, STAGE_TABLE } from '../../../forge/stages'
 import type { Forge, StageId } from '../../../forge/types'
 
 const HeroViewer = lazy(() => import('../HeroViewer').then((m) => ({ default: m.HeroViewer })))
@@ -19,14 +18,6 @@ export const STAGE_TITLE: Record<StageId, string> = {
   ultimate: 'Passive and ultimate',
   stats: 'Stat split',
 }
-
-const SLOT_OF: Partial<Record<StageId, BuildSlot>> = { active1: 'active1', active2: 'active2', ultimate: 'ultimate' }
-
-const numbered = (artifacts: Record<string, string>, prefix: string) =>
-  Object.keys(artifacts)
-    .filter((k) => new RegExp(`^${prefix}-\\d+$`).test(k))
-    .sort((a, b) => Number(a.split('-')[1]) - Number(b.split('-')[1]))
-    .map((k) => artifacts[k])
 
 interface Props {
   forge: Forge
@@ -57,7 +48,7 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
   const price = stagePrice(stage)
   const left = STAGE_TABLE[stage].retryCap - s.retriesUsed
   const choice = (s.inputs.choice ?? {}) as Record<string, number>
-  const slot = SLOT_OF[stage]
+  const slot = EFFECT_SLOT[stage]
   const motionArtifacts = forge.stages.motion.artifacts
   const rig = motionArtifacts.rig
   const motions = numbered(motionArtifacts, 'retarget')
@@ -88,7 +79,7 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
       const effects = numbered(s.artifacts, 'effect')
       const passive = numbered(s.artifacts, 'passive')
       const template = getTemplate(forge.build!.slots[slot].templateId)
-      const shape = (s.inputs.effect as { shape: { delivery: string; range: number; radius?: number } } | undefined)?.shape ?? { delivery: template.delivery.kind, range: template.delivery.range }
+      const shape = (s.inputs.effect as { shape: EffectShape } | undefined)?.shape ?? effectShape(template.id)
       return (
         <>
           <Picks label="Effect" urls={effects} chosen={choice.effect ?? 0} onPick={(i) => onChoose({ effect: i })} busy={busy} />

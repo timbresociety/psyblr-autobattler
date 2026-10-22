@@ -1,7 +1,11 @@
+import type { BuildSlot } from '../charter/types'
 import type { Forge, StageId, StageState, Transition } from './types'
 
 /** The forge's stages in order; each is confirmed before the next starts (R11). */
 export const STAGE_ORDER: readonly StageId[] = ['spec', 'concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate', 'stats']
+
+/** The stages that generate a skill's effect, and the slot each one dresses (R18). */
+export const EFFECT_SLOT: Partial<Record<StageId, BuildSlot>> = { active1: 'active1', active2: 'active2', ultimate: 'ultimate' }
 
 /** Which stages spend credits, and how many retries each allows after its first generation (R4). */
 export const STAGE_TABLE: Record<StageId, { paid: boolean; retryCap: number }> = {
