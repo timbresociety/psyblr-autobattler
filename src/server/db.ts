@@ -30,3 +30,8 @@ export function getDb(): Promise<Db> {
   })
   return db
 }
+
+/** Development server only: serve the API from an in-memory database (scripts/dev-api.ts). */
+export function useDevDb(dev: Promise<Db>): void {
+  db = dev
+}
