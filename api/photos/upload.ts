@@ -8,7 +8,9 @@ const uploads = new RateLimiter({ limit: 15, windowMs: 60 * 60 * 1000 })
 export async function POST(request: Request): Promise<Response> {
   if (!deviceId(request)) return needDevice()
   if (overLimit(request, uploads)) return tooMany()
-  const length = Number(request.headers.get('content-length') ?? 0)
+  // require a declared size, so an unbounded chunked body is never buffered
+  const length = Number(request.headers.get('content-length') ?? NaN)
+  if (!Number.isFinite(length)) return Response.json({ error: 'content-length required' }, { status: 411 })
   if (length > MAX_PHOTO_BYTES) return Response.json({ error: 'photo too large' }, { status: 413 })
   try {
     return Response.json(await uploadPhoto(new Uint8Array(await request.arrayBuffer())))

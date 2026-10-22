@@ -1,10 +1,8 @@
 import { BUILD_SLOTS, type Build } from '../charter/build'
 import { ROLE_IDS } from '../charter/roles'
 import { armyModifiers } from '../charter/synergy'
-import type { RoleId } from '../charter/types'
-import { simulate } from './engine'
 import { referenceArmy, referenceField, randomBuild, sampleBuilds } from './field'
-import { GATE_CEILING, runGate, winRateVsField } from './gate'
+import { GATE_CEILING, playScored, runGate, winRateVsField } from './gate'
 import { createRng } from './rng'
 
 /**
@@ -54,7 +52,7 @@ const rng = createRng(SEED)
 const pick = <T>(xs: readonly T[]) => xs[Math.floor(rng() * xs.length)]
 const armies: { label: string; builds: Build[] }[] = []
 for (const role of ROLE_IDS) armies.push({ label: `10x ${role}`, builds: Array.from({ length: 10 }, (_, i) => randomBuild(role, rng, `${role}-${i}`)) })
-for (let a = 0; a < 6; a++) armies.push({ label: `themed mix ${a + 1}`, builds: Array.from({ length: 10 }, (_, i) => randomBuild(pick(ROLE_IDS) as RoleId, rng, `mix-${a}-${i}`)) })
+for (let a = 0; a < 6; a++) armies.push({ label: `themed mix ${a + 1}`, builds: Array.from({ length: 10 }, (_, i) => randomBuild(pick(ROLE_IDS), rng, `mix-${a}-${i}`)) })
 
 let unique = 0
 let total = 0
@@ -81,13 +79,7 @@ const armyRates = armies.map((army) => {
   const mine = armyModifiers(army.builds.map(gated).filter((b): b is Build => !!b))
   const fight = (from: number, count: number) => {
     let score = 0
-    for (let s = from; s < from + count; s++) {
-      const flip = Math.floor(s / refs.length) % 2 === 1
-      const ref = refs[s % refs.length]
-      const r = flip ? simulate(ref, mine, SEED * 31 + s) : simulate(mine, ref, SEED * 31 + s)
-      const me = flip ? 1 : 0
-      score += r.winner === me ? 1 : r.winner === 'draw' ? 0.5 : 0
-    }
+    for (let s = from; s < from + count; s++) score += playScored(mine, refs[s % refs.length], Math.floor(s / refs.length) % 2 === 1, SEED * 31 + s)
     return score
   }
   let score = fight(0, ARMY_SEEDS)

@@ -82,14 +82,28 @@ export const hpFraction = (u: Unit) => u.hp / u.maxHp
 const sumBuff = (u: Unit, stat: Stat) => u.buffs.reduce((s, b) => (b.stat === stat ? s + b.pct / 100 : s), 0)
 export const isRanged = (u: Unit) => u.kit.basic.delivery.range > 4
 
-function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit {
-  const role = getRole(c.build.roleId)
-  const { sheet } = deriveSheet(role, c.build.spread)
-  const kit = {} as Record<BuildSlot, Template>
-  for (const slot of BUILD_SLOTS) {
-    const spec = c.build.slots[slot]
-    kit[slot] = scaleMagnitudes(getTemplate(spec.templateId), retuneFactor(spec.retuneSteps) * (c.powerScale ?? 1))
+/** A build's sheet and scaled kit never change during fights, so they are prepared once per build and scale. */
+const prepared = new WeakMap<Build, Map<number, { sheet: SecondarySheet; kit: Record<BuildSlot, Template> }>>()
+
+function prepare(build: Build, powerScale: number) {
+  let byScale = prepared.get(build)
+  if (!byScale) prepared.set(build, (byScale = new Map()))
+  let entry = byScale.get(powerScale)
+  if (!entry) {
+    const { sheet } = deriveSheet(getRole(build.roleId), build.spread)
+    const kit = {} as Record<BuildSlot, Template>
+    for (const slot of BUILD_SLOTS) {
+      const spec = build.slots[slot]
+      kit[slot] = scaleMagnitudes(getTemplate(spec.templateId), retuneFactor(spec.retuneSteps) * powerScale)
+    }
+    entry = { sheet, kit }
+    byScale.set(powerScale, entry)
   }
+  return entry
+}
+
+function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit {
+  const { sheet, kit } = prepare(c.build, c.powerScale ?? 1)
   const cooldowns = { basic: 0, active1: 0, active2: 0, passive: 0, ultimate: CALIBRATION.ultimateStartCooldown, movement: 0 }
   const unit: Unit = {
     id, team, name: c.build.heroName, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,

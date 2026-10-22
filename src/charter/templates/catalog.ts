@@ -36,9 +36,14 @@ export function hasTemplate(id: string): boolean {
   return BY_ID.has(id)
 }
 
-/** A role's options for one slot kind, the role's own templates first. */
+const POOLS = new Map<string, Template[]>()
+
+/** A role's options for one slot kind, the role's own templates first. Computed once per pair; the catalogue never changes. */
 export function poolFor(role: RoleId, slot: SlotKind): Template[] {
-  return CATALOG.filter((t) => t.slot === slot && t.roles.includes(role))
+  const key = `${role}|${slot}`
+  let pool = POOLS.get(key)
+  if (!pool) POOLS.set(key, (pool = CATALOG.filter((t) => t.slot === slot && t.roles.includes(role))))
+  return pool
 }
 
 /** The template the engine proposes when a description gives no signal. */

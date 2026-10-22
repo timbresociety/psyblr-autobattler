@@ -11,6 +11,7 @@ import {
   type OpResult,
   type SkillText,
 } from '../../charter/build'
+import { POOL_SIZE, spentPoints } from '../../charter/stats'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
 import { liveDeps, type BuildRecord, type CreatorDeps, type HeroResult } from '../api'
 import { Loadout } from './Loadout'
@@ -146,7 +147,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
     const changed = changeRole(build, role)
     if (!changed.ok) return
     apply(changed)
-    setNotice(`All ${30} points are back in the pool. Drag the stats, or use the suggested split.`)
+    setNotice(`All ${POOL_SIZE} points are back in the pool. Drag the stats, or use the suggested split.`)
   }
   const onEdit = (slot: BuildSlot, text: SkillText, replace = false) => {
     if (!build) return {}
@@ -191,7 +192,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
               <div className="hero-meta">
                 <h1>{build.heroName}</h1>
                 <RoleSwitcher roleId={build.roleId} onChange={onRole} />
-                {build.spread.strength + build.spread.agility + build.spread.intellect === 0 && (
+                {spentPoints(build.spread) === 0 && (
                   <button className="ghost" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
                     Use suggested split
                   </button>

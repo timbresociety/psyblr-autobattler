@@ -10,6 +10,8 @@ export class RateLimiter {
 
   /** Records one hit for every key; returns false when any key is over its limit. */
   take(keys: string[], now = Date.now()): boolean {
+    // drop expired windows once the map grows, so a warm instance's memory stays bounded
+    if (this.hits.size > 5000) for (const [key, entry] of this.hits) if (now - entry.start >= this.options.windowMs) this.hits.delete(key)
     let allowed = true
     for (const key of keys.filter(Boolean)) {
       const entry = this.hits.get(key)

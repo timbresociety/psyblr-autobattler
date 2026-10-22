@@ -20,19 +20,10 @@ export interface ChatResponse extends ProposeResponse {
   understood: boolean
 }
 
-export interface HeroResult {
-  id: string
-  name: string
-  roleId: string
-  photo: string | null
-  useCount: number
-}
+import type { BuildRecord, HeroSummary } from '../server/store'
 
-export interface BuildRecord {
-  id: string
-  heroId: string
-  build: Build
-}
+export type { BuildRecord }
+export type HeroResult = HeroSummary
 
 export interface CreatorDeps {
   propose(hero: ProposalInput & { photoUrls?: string[] }): Promise<ProposeResponse>

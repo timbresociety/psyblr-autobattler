@@ -1,4 +1,4 @@
-import { ROLES } from '../../charter/roles'
+import { ROLES, getRole } from '../../charter/roles'
 import type { RoleId } from '../../charter/types'
 
 /** Roles are standard and engine-assigned; the player can change how the hero fights (R9, R10). */
@@ -13,7 +13,7 @@ export function RoleSwitcher({ roleId, onChange }: { roleId: RoleId; onChange: (
           </option>
         ))}
       </select>
-      <small>{ROLES.find((r) => r.id === roleId)?.description}</small>
+      <small>{getRole(roleId).description}</small>
     </label>
   )
 }

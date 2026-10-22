@@ -3,7 +3,7 @@ import { MAX_RETUNE_STEPS } from '../charter/budget'
 import { CATALOG_VERSION, defaultTemplate } from '../charter/templates/catalog'
 import type { BuildSlot, Template } from '../charter/types'
 import { CALIBRATION_VERSION } from './calibration'
-import { simulate, type Combatant } from './engine'
+import { simulate, type BattleResult, type Combatant } from './engine'
 import { referenceField } from './field'
 
 /** The R15 ceiling: no build may beat the reference field more often than this. */
@@ -28,6 +28,16 @@ export interface GateOutcome {
 
 const DEFAULTS = { duelsPerMember: 30, seed: 1 }
 
+/** One fight scored for side `me`: a win is 1, a draw is half. */
+export function scoreFor(result: BattleResult, me: 0 | 1): number {
+  return result.winner === me ? 1 : result.winner === 'draw' ? 0.5 : 0
+}
+
+/** Fight `mine` against `theirs`, swapping starting sides when `flip` is set, and score it for `mine`. */
+export function playScored(mine: Combatant[], theirs: Combatant[], flip: boolean, seed: number): number {
+  return flip ? scoreFor(simulate(theirs, mine, seed), 1) : scoreFor(simulate(mine, theirs, seed), 0)
+}
+
 /** Win rate of a build against the field; draws count half. */
 export function winRateVsField(build: Build, options: GateOptions = {}): number {
   const { duelsPerMember, seed } = { ...DEFAULTS, ...options }
@@ -36,12 +46,9 @@ export function winRateVsField(build: Build, options: GateOptions = {}): number 
   let score = 0
   let fights = 0
   field.forEach((opponent, f) => {
+    const them: Combatant[] = [{ build: opponent }]
     for (let i = 0; i < duelsPerMember; i++) {
-      const flip = i % 2 === 1
-      const s = seed * 100_003 + f * 1009 + i
-      const result = flip ? simulate([{ build: opponent }], [me], s) : simulate([me], [{ build: opponent }], s)
-      const mine = flip ? 1 : 0
-      score += result.winner === mine ? 1 : result.winner === 'draw' ? 0.5 : 0
+      score += playScored([me], them, i % 2 === 1, seed * 100_003 + f * 1009 + i)
       fights++
     }
   })
@@ -54,9 +61,8 @@ const withSteps = (build: Build, steps: number): Build => ({
 })
 
 /** The slot whose template matters most: swapping it to the role default drops the win rate the most. */
-function strongestSlot(build: Build, options: GateOptions): BuildSlot {
+function strongestSlot(build: Build, base: number, options: GateOptions): BuildSlot {
   let best: { slot: BuildSlot; drop: number } = { slot: 'ultimate', drop: -Infinity }
-  const base = winRateVsField(build, options)
   for (const slot of BUILD_SLOTS) {
     const fallback = defaultTemplate(build.roleId, SLOT_KIND[slot]).id
     if (build.slots[slot].templateId === fallback) continue
@@ -82,7 +88,7 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   }
   const stamp = { catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 }
   if (winRate <= GATE_CEILING) return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...stamp } } }
-  const slot = strongestSlot(build, options)
+  const slot = strongestSlot(build, winRate, options)
   return {
     state: 'blocked',
     winRate,

@@ -22,6 +22,21 @@ export const SLOT_KIND: Record<BuildSlot, SlotKind> = {
 }
 
 export const TEXT_LIMITS = { heroName: 60, name: 40, flavour: 280, visual: 200 } as const
+/** Reference photos per hero, and the longest chat message or hero description. */
+export const MAX_PHOTOS = 3
+export const MAX_CHAT = 500
+
+/** The template the other active slot holds, which this slot must not repeat (R1: two different actives). */
+export function otherActive(slots: Record<BuildSlot, { templateId: string }>, slot: BuildSlot): string[] {
+  if (slot === 'active1') return [slots.active2.templateId]
+  if (slot === 'active2') return [slots.active1.templateId]
+  return []
+}
+
+/** A rejection for a malformed field (unknown template, role or spread shape). */
+export function invalidField(field: string): LimitHit {
+  return { reason: 'stat-cap', field, requested: 0, allowed: 0 }
+}
 
 export interface SkillSpec {
   /** The player's skill name (R3). */
@@ -247,14 +262,13 @@ export function requestStats(build: Build, goals: Partial<Record<SecondaryStat, 
 
 /** The swap options offered for a slot (R7). */
 export function swapAlternatives(build: Build, slot: BuildSlot): Template[] {
-  const other = slot === 'active1' ? [build.slots.active2.templateId] : slot === 'active2' ? [build.slots.active1.templateId] : []
-  return nearestAlternatives(build.roleId, SLOT_KIND[slot], build.slots[slot].templateId, describe(build.slots[slot]), other)
+  return nearestAlternatives(build.roleId, SLOT_KIND[slot], build.slots[slot].templateId, describe(build.slots[slot]), otherActive(build.slots, slot))
 }
 
 /** Swap a slot to one of its offered alternatives. Anything else is rejected (R7). */
 export function swapTemplate(build: Build, slot: BuildSlot, templateId: string): OpResult {
   const offered = swapAlternatives(build, slot).map((t) => t.id)
-  if (!offered.includes(templateId)) return reject(build, [{ reason: 'stat-cap', field: `${slot}.templateId`, requested: 0, allowed: 0 }])
+  if (!offered.includes(templateId)) return reject(build, [invalidField(`${slot}.templateId`)])
   const slots = { ...build.slots, [slot]: { ...build.slots[slot], templateId, swapped: true, retuneSteps: 0 } }
   return ok({ ...build, slots })
 }
@@ -293,14 +307,12 @@ export function editSkillText(build: Build, slot: BuildSlot, text: SkillText, re
   if (flavourChanged) {
     if (current.swapped && !replace) needsConfirm = true
     else {
-      const other = slot === 'active1' ? [build.slots.active2.templateId] : slot === 'active2' ? [build.slots.active1.templateId] : []
-      next.templateId = matchTemplate(build.roleId, SLOT_KIND[slot], describe(next), other).template.id
+      next.templateId = matchTemplate(build.roleId, SLOT_KIND[slot], describe(next), otherActive(build.slots, slot)).template.id
       next.swapped = false
       next.retuneSteps = 0
     }
   }
-  const result = ok({ ...build, slots: { ...build.slots, [slot]: next } })
-  return result.ok ? { ...result, needsConfirm } : result
+  return { ok: true, build: { ...build, slots: { ...build.slots, [slot]: next }, gate: DRAFT }, limits: [], needsConfirm }
 }
 
 const str = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : '')
@@ -313,7 +325,7 @@ export function hydrateBuild(raw: unknown): OpResult {
   const input = (raw ?? {}) as Record<string, unknown>
   const roleId = input.roleId
   const empty = proposeBuild({ heroName: 'invalid', roleId: 'fighter', skills: {} }).build
-  const fail = (field: string) => reject(empty, [{ reason: 'stat-cap', field, requested: 0, allowed: 0 }])
+  const fail = (field: string) => reject(empty, [invalidField(field)])
   if (!isRoleId(roleId)) return fail('roleId')
   const rawSlots = (input.slots ?? {}) as Record<string, Record<string, unknown> | undefined>
   const slots = {} as Record<BuildSlot, SkillSpec>
@@ -336,7 +348,7 @@ export function hydrateBuild(raw: unknown): OpResult {
   const spread = {} as Spread
   for (const attr of ATTRIBUTES) spread[attr] = typeof rawSpread[attr] === 'number' ? (rawSpread[attr] as number) : NaN
   const check = validateSpread(getRole(roleId), spread)
-  if (!check.ok || ATTRIBUTES.some((a) => Number.isNaN(spread[a]))) return reject(empty, check.ok ? [{ reason: 'not-integer', field: 'spread', requested: 0, allowed: 0 }] : check.errors)
+  if (!check.ok || ATTRIBUTES.some((a) => Number.isNaN(spread[a]))) return reject(empty, check.ok ? [invalidField('spread')] : check.errors)
   const build: Build = {
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
     heroName: str(input.heroName, TEXT_LIMITS.heroName),

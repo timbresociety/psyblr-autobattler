@@ -2,8 +2,11 @@ import Anthropic from '@anthropic-ai/sdk'
 import {
   BUILD_SLOTS,
   SLOT_KIND,
+  MAX_CHAT,
+  MAX_PHOTOS,
   TEXT_LIMITS,
   allocate,
+  proposedSpread,
   changeRole,
   proposeBuild,
   requestStats,
@@ -18,8 +21,6 @@ import type { BuildSlot, LimitHit, SecondaryStat, Spread } from '../charter/type
 import { RateLimiter } from './rate-limit'
 import { parseStatWishes } from '../charter/chat'
 
-export { parseStatWishes }
-
 /**
  * Claude proposes, the catalogue disposes (KTD5). Claude may only return a role ID, template IDs and a
  * spread (or stat wishes for chat edits). Everything is validated and clamped by the Charter core, and
@@ -27,8 +28,6 @@ export { parseStatWishes }
  */
 
 export const MODEL = 'claude-opus-5-5'
-export const MAX_PHOTOS = 3
-export const MAX_CHAT = 500
 const TIMEOUT_MS = 15_000
 
 export class InputError extends Error {}
@@ -247,7 +246,6 @@ export async function chatEdit(build: Build, message: string, deps: ProposeDeps 
 }
 
 function allocateDefault(build: Build): Build {
-  const role = ROLES.find((r) => r.id === build.roleId)
-  const result = role ? allocate(build, role.defaultSpread) : undefined
-  return result?.ok ? result.build : build
+  const result = allocate(build, proposedSpread(build.roleId))
+  return result.ok ? result.build : build
 }

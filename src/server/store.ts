@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { BUILD_SLOTS, hydrateBuild, type Build } from '../charter/build'
+import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/build'
 import { runGate, type GateOptions } from '../sim/gate'
 import type { Db } from './db'
 
@@ -13,7 +13,6 @@ export class NotFoundError extends Error {}
 export class OwnershipError extends Error {}
 export class StoreInputError extends Error {}
 
-export const MAX_PHOTOS = 3
 const BLOB_HOST = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//
 
 export interface HeroSummary {
@@ -73,13 +72,13 @@ async function insertBuild(db: Db, heroId: string, deviceId: string, build: Buil
 export async function searchHeroes(db: Db, query: string, limit = 10): Promise<HeroSummary[]> {
   const q = query.trim().toLowerCase().slice(0, 60)
   if (!q) return []
-  const { rows } = await db.query<{ id: string; name: string; photos: string[]; original_build: Build; use_count: number }>(
-    `select id, name, photos, original_build, use_count from heroes
+  const { rows } = await db.query<{ id: string; name: string; photos: string[]; role_id: string; use_count: number }>(
+    `select id, name, photos, original_build->>'roleId' as role_id, use_count from heroes
      where not hidden and (name_lower like $1 or name_lower like $2)
      order by (name_lower like $1) desc, use_count desc, created_at asc limit $3`,
     [`${q.replace(/[%_]/g, '')}%`, `%${q.replace(/[%_]/g, '')}%`, limit],
   )
-  return rows.map((r) => ({ id: r.id, name: r.name, roleId: r.original_build.roleId, photo: r.photos[0] ?? null, useCount: r.use_count }))
+  return rows.map((r) => ({ id: r.id, name: r.name, roleId: r.role_id, photo: r.photos[0] ?? null, useCount: r.use_count }))
 }
 
 /** Add a hero from the global loadout for free: a new Build copied from the creator's original snapshot (R18, AE7). */
