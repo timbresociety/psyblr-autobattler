@@ -28,6 +28,12 @@ export const CALIBRATION = {
   overtimeStart: 40,
   /** Extra damage per second of overtime, as a fraction. */
   overtimeRamp: 0.05,
+  /** An area heal, shield or buff delivers at most this many allies' worth in total, shared across everyone it hits. */
+  alliesShare: 3,
+  /** Burst heals landing on one hero inside this window weaken each other (stacked healers). */
+  healWindow: 3,
+  /** Each recent burst heal cuts the next one by this fraction. */
+  healFalloff: 0.35,
   /** Default radius for an "allies" effect without its own radius, metres. */
   alliesRadius: 8,
 } as const

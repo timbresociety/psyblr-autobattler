@@ -42,7 +42,8 @@ export interface Unit {
   stunnedUntil: number
   invulnerableUntil: number
   slows: { pct: number; until: number }[]
-  buffs: { stat: Stat; pct: number; until: number }[]
+  /** `source` is the template that granted it; the same template refreshes its buff instead of stacking. */
+  buffs: { stat: Stat; pct: number; until: number; source: string }[]
   dots: { perSecond: number; type: DamageType; until: number; source: Unit }[]
   hots: { perSecond: number; until: number }[]
   cooldowns: Record<BuildSlot, number>
@@ -54,6 +55,10 @@ export interface Unit {
   damageBonus: number
   passiveExecute?: { thresholdPct: number; bonusPct: number }
   passiveRegen: number
+  /** Health per second an always-on aura gives allies in range (not the owner). */
+  auraHeal?: { perSecond: number; radius: number }
+  /** Times of recent burst heals received, for diminishing returns. */
+  recentHeals: number[]
   casts: Partial<Record<BuildSlot, number>>
 }
 
@@ -89,13 +94,17 @@ function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit 
   const unit: Unit = {
     id, team, name: c.build.heroName, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
     stunnedUntil: 0, invulnerableUntil: 0, slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, hitCount: 0,
-    lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, casts: {},
+    lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {},
   }
   const passive = kit.passive
   if ((passive.trigger ?? 'always') === 'always') {
     for (const e of passive.effects) {
-      if (e.kind === 'buff') unit.buffs.push({ stat: e.stat, pct: e.pct, until: Infinity })
-      if (e.kind === 'heal') unit.passiveRegen += e.amount + e.ratio * sheet.spiritPower
+      if (e.kind === 'buff') unit.buffs.push({ stat: e.stat, pct: e.pct, until: Infinity, source: passive.id })
+      if (e.kind === 'heal') {
+        const perSecond = e.amount + e.ratio * sheet.spiritPower
+        unit.passiveRegen += perSecond
+        if (e.target === 'allies') unit.auraHeal = { perSecond, radius: passive.delivery.radius ?? CALIBRATION.alliesRadius }
+      }
       if (e.kind === 'execute') unit.passiveExecute = { thresholdPct: e.thresholdPct, bonusPct: e.bonusPct }
     }
   }
@@ -232,6 +241,9 @@ export function applyTemplate(battle: Battle, caster: Unit, template: Template, 
   for (const e of template.effects) applyEffect(battle, caster, template, e, hit, executeBonus, now)
 }
 
+/** Area support effects share a fixed total across the allies they reach. */
+const share = (count: number) => Math.min(1, CALIBRATION.alliesShare / Math.max(1, count))
+
 function applyEffect(battle: Battle, caster: Unit, template: Template, e: Effect, hit: Unit[], executeBonus: (u: Unit) => number, now: number) {
   switch (e.kind) {
     case 'damage': {
@@ -243,19 +255,27 @@ function applyEffect(battle: Battle, caster: Unit, template: Template, e: Effect
       break
     }
     case 'heal': {
-      const amount = magnitude(e, caster.sheet.spiritPower)
-      for (const u of friendlyTargets(battle, caster, template, e.target)) {
+      const targets = friendlyTargets(battle, caster, template, e.target)
+      const amount = magnitude(e, caster.sheet.spiritPower) * share(targets.length)
+      for (const u of targets) {
         if (e.overTime) u.hots.push({ perSecond: amount / e.overTime, until: now + e.overTime })
-        else heal(u, amount)
+        else if (u === caster) heal(u, amount)
+        else {
+          u.recentHeals = u.recentHeals.filter((t) => t > now - CALIBRATION.healWindow)
+          heal(u, amount / (1 + CALIBRATION.healFalloff * u.recentHeals.length))
+          u.recentHeals.push(now)
+        }
       }
       break
     }
-    case 'shield':
-      for (const u of friendlyTargets(battle, caster, template, e.target)) {
-        u.shield += magnitude(e, caster.sheet.spiritPower)
+    case 'shield': {
+      const targets = friendlyTargets(battle, caster, template, e.target)
+      for (const u of targets) {
+        u.shield += magnitude(e, caster.sheet.spiritPower) * share(targets.length)
         u.shieldUntil = Math.max(u.shieldUntil, now + e.duration)
       }
       break
+    }
     case 'stun':
       for (const u of hit) if (u.invulnerableUntil <= now) u.stunnedUntil = Math.max(u.stunnedUntil, now + e.duration)
       break
@@ -272,7 +292,10 @@ function applyEffect(battle: Battle, caster: Unit, template: Template, e: Effect
     }
     case 'buff': {
       const targets = e.target === 'self' ? [caster] : friendlyTargets(battle, caster, template, 'allies')
-      for (const u of targets) u.buffs.push({ stat: e.stat, pct: e.pct, until: now + e.duration })
+      for (const u of targets) {
+        u.buffs = u.buffs.filter((b) => !(b.source === template.id && b.stat === e.stat))
+        u.buffs.push({ stat: e.stat, pct: e.pct * share(targets.length), until: now + e.duration, source: template.id })
+      }
       break
     }
     case 'mobility':
@@ -308,6 +331,11 @@ function tickStatuses(battle: Battle, unit: Unit, dt: number) {
   unit.hots = unit.hots.filter((h) => h.until > now)
   if (!unit.alive) return
   heal(unit, (unit.sheet.regen + unit.passiveRegen) * dt)
+  if (unit.auraHeal) {
+    const { perSecond, radius } = unit.auraHeal
+    const near = alliesOf(battle, unit).filter((a) => a !== unit && distance(unit, a) <= radius)
+    for (const a of near) heal(a, perSecond * dt * share(near.length))
+  }
   if (!unit.lowHealthFired && hpFraction(unit) < CALIBRATION.lowHealth) {
     unit.lowHealthFired = true
     firePassive(battle, unit, 'lowHealth', undefined)
