@@ -1,3 +1,4 @@
+import type { RecipeLook } from '../arena/recipes/schema'
 import type { Build } from '../charter/build'
 import type { SizeClass } from '../charter/sizes'
 import type { BuildSlot } from '../charter/types'
@@ -52,6 +53,8 @@ export interface SkillTheme {
   theme: string
   /** The Charter template the theme maps to, so only buildable choices are offered (R10, R20). */
   templateId: string
+  /** The director's colours and effect primitives for this skill (R33). */
+  look?: RecipeLook
 }
 
 export interface ContentFlags {

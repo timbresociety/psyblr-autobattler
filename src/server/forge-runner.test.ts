@@ -1,3 +1,5 @@
+import type { EffectRecipe } from '../arena/recipes/schema'
+import { validateRecipe } from '../arena/recipes/validate'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { proposeBuild } from '../charter/build'
@@ -95,6 +97,12 @@ describe('forge runner (U9)', () => {
     expect(rows).toHaveLength(6)
     expect(new Set(rows.map((r) => r.ref.split(':')[1]))).toEqual(new Set(['concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate']))
     expect(await balance(db, a)).toBe(before - total)
+    // every effect stage stored a valid recipe, and the ultimate stage also stored the passive's (R33)
+    for (const stage of ['active1', 'active2', 'ultimate'] as const) {
+      const effect = done.stages[stage].inputs.effect as { recipe: EffectRecipe }
+      expect(validateRecipe(effect.recipe), stage).toEqual([])
+    }
+    expect(validateRecipe((done.stages.ultimate.inputs.passive as { recipe: EffectRecipe }).recipe)).toEqual([])
   })
 
   it('every stored artifact is our Blob copy under forge/<id>/<stage>/<attempt>/', async () => {

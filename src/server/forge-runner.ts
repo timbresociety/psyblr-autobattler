@@ -1,3 +1,6 @@
+import { composeRecipe, passiveRecipe } from '../arena/recipes/defaults'
+import { lookFor } from '../arena/recipes/looks'
+import type { Delivery } from '../charter/types'
 import { randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, allocate, hydrateBuild, setStatTarget, swapTemplate, type Build } from '../charter/build'
 import { isSizeClass } from '../charter/sizes'
@@ -311,8 +314,15 @@ export function planSteps(forge: Forge, stage: StageId): StepState[] {
 function stageRecord(forge: Forge, stage: StageId): Record<string, unknown> {
   const slot = EFFECT_SLOT[stage]
   if (!slot) return {}
-  const record: Record<string, unknown> = { effect: { slot, shape: effectShape(forge.build!.slots[slot].templateId) } }
-  if (stage === 'ultimate') record.passive = { visual: forge.spec!.passiveVisual, element: forge.spec!.passiveElement ?? null, shape: effectShape(forge.build!.slots.passive.templateId) }
+  const shape = effectShape(forge.build!.slots[slot].templateId)
+  const skill = forge.spec!.skills.find((s) => s.slot === slot)
+  // the look comes from the director, or from the skill's own words; the recipe's hit layer is sized to the real area (R11)
+  const recipe = composeRecipe(shape.delivery as Delivery['kind'], skill?.look ?? lookFor(`${skill?.theme ?? ''} ${forge.build!.slots[slot].name}`))
+  const record: Record<string, unknown> = { effect: { slot, shape, recipe } }
+  if (stage === 'ultimate') {
+    const s = forge.spec!
+    record.passive = { visual: s.passiveVisual, element: s.passiveElement ?? null, shape: effectShape(forge.build!.slots.passive.templateId), recipe: passiveRecipe(s.passiveVisual, lookFor(s.passiveElement ?? s.description)) }
+  }
   return record
 }
 
