@@ -97,6 +97,29 @@ export interface MatchState {
   damageRamp?: { fromTick: number; perSecond: number }
   /** Who is driving each hero; the AI skips human-controlled ones (KTD4). */
   human?: number
+  /** Each AI hero's memory, kept in the state so AI play snapshots and replays exactly (KTD7). */
+  brains?: BrainState[]
+}
+
+export interface BrainState {
+  /** Tick of the next decision. */
+  nextDecision: number
+  target: number
+  /** A new target is taken only after the reaction delay. */
+  pending?: { target: number; at: number }
+  action: 'approach' | 'hold' | 'dodge' | 'retreat'
+  strafe: 1 | -1
+  /** Until this tick, keep dodging along `dodge`. */
+  dodgeUntil: number
+  dodge: { x: number; z: number; vertical: -1 | 0 | 1 }
+  /** The skill it has decided to use, pressed once the aim settles. */
+  cast?: { slot: 'movement' | 'ultimate' | 'active1' | 'active2'; escape: boolean }
+  /** Where the hand is pointing now, radians; it lags, overshoots and settles on the target. */
+  yaw: number
+  pitch: number
+  overshoot: number
+  /** The target's last seen position, to lead moving targets. */
+  seen?: { x: number; y: number; z: number; tick: number; target: number }
 }
 
 export interface HeroSetup {
