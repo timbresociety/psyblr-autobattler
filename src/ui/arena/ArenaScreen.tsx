@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { armyModifiers } from '../../charter/synergy'
+import { createEffects } from '../../arena/client/effects/player'
 import { canRender, startArena, type ArenaController, type HudState } from '../../arena/client/match-view'
 import { DEMO_HEROES, demoBuild } from '../../arena/demo/roster'
 import { Loading, Unsupported } from './Loading'
@@ -22,8 +23,16 @@ export function ArenaScreen() {
     startArena(host.current, { teams: [armyModifiers(moguls), armyModifiers(leaders)], seed: 1, side: 0 }, (done, total) => !cancelled && setProgress({ done, total }))
       .then((c) => {
         started = c
-        if (cancelled) c.stop()
-        else setController(c)
+        if (cancelled) return c.stop()
+        const effects = createEffects(c)
+        const base = c.camera.position.clone()
+        c.hooks.events = effects.events
+        c.hooks.timeScale = effects.timeScale
+        c.hooks.frame = (dt) => {
+          effects.frame(dt)
+          c.camera.position.copy(base).add(effects.shake())
+        }
+        setController(c)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
     return () => {

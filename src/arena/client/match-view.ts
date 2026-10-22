@@ -63,6 +63,8 @@ export interface FrameHooks {
   frame?: (dt: number, alpha: number) => void
   /** The controlled hero's command for this tick, or undefined to leave it to the AI. */
   human?: () => Command | undefined
+  /** Animation time scale; the effects slow it to near zero for a hit-stop (render only). */
+  timeScale?: () => number
 }
 
 export interface ArenaController {
@@ -193,7 +195,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       const view = views[i]
       view.root.position.set(at.x, at.y, at.z)
       view.root.rotation.y = h.yaw
-      view.pose(settle(animators[i], h, moved, arena.match.tick, dt), t + i, dt)
+      view.pose(settle(animators[i], h, moved, arena.match.tick, dt), t + i, dt * (hooks.timeScale?.() ?? 1))
       return at
     })
     hooks.frame?.(dt, alpha)
