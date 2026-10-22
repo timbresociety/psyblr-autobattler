@@ -1,6 +1,7 @@
 import type { Env } from '../forge/providers/types'
 import { isProduction } from '../forge/providers/router'
-import { LIMITS } from './accounts'
+import { LIMITS, getSession, type Session } from './accounts'
+import type { Db } from './db'
 
 export const SESSION_COOKIE = 'psyblr_session'
 
@@ -20,4 +21,11 @@ export function sessionCookie(sessionId: string, env: Env): string {
 
 export function clearedCookie(env: Env): string {
   return `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${isProduction(env) ? '; Secure' : ''}`
+}
+
+/** The signed-in account for a request, or a 401 error (KTD12: forge and credit routes need an account). */
+export async function requireAccount(request: Request, db: Db): Promise<Session> {
+  const session = await getSession(db, readSessionCookie(request))
+  if (!session) throw Object.assign(new Error('sign in first'), { status: 401 })
+  return session
 }

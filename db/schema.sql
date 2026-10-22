@@ -62,3 +62,21 @@ create table if not exists counters (
   count integer not null default 0,
   primary key (key, bucket)
 );
+
+-- Hero Forge: credits (KTD6). The ledger is the audit trail; credit_accounts.available is updated in the same
+-- statement as each ledger row so holds are atomic under concurrency.
+create table if not exists credit_accounts (
+  account_id text primary key references accounts(id),
+  available integer not null default 0 check (available >= 0)
+);
+
+create table if not exists credit_ledger (
+  id text primary key,
+  account_id text not null,
+  kind text not null check (kind in ('grant', 'hold', 'release', 'charge', 'purchase')),
+  amount integer not null check (amount >= 0),
+  ref text not null,
+  created_at timestamptz not null default now(),
+  unique (kind, ref)
+);
+create index if not exists credit_ledger_account on credit_ledger (account_id);

@@ -37,6 +37,8 @@ export function errorResponse(error: unknown): Response {
   if (error instanceof NotFoundError) return Response.json({ error: error.message }, { status: 404 })
   if (error instanceof OwnershipError) return Response.json({ error: error.message }, { status: 403 })
   if (error instanceof StoreInputError || error instanceof PhotoError) return Response.json({ error: error.message }, { status: 400 })
+  const status = (error as { status?: unknown } | null)?.status
+  if (error instanceof Error && typeof status === 'number' && status >= 400 && status < 500) return Response.json({ error: error.message }, { status })
   console.error(error)
   return Response.json({ error: 'server error' }, { status: 500 })
 }
