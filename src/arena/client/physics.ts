@@ -39,6 +39,8 @@ export class CosmeticPhysics {
   private readonly tumbling = new Map<number, Tumble>()
   private readonly fallen = new Map<number, RAPIER.RigidBody>()
   private readonly debris: RAPIER.RigidBody[] = []
+  /** Set when Rapier fails; physics then stays off, because it is cosmetic and must never stop a match (KTD12). */
+  broken = false
 
   private constructor(
     private readonly R: typeof RAPIER,
@@ -78,6 +80,15 @@ export class CosmeticPhysics {
 
   /** React to this tick's engine events. */
   events(events: readonly MatchEvent[], match: MatchState) {
+    if (this.broken) return
+    try {
+      this.react(events, match)
+    } catch {
+      this.broken = true
+    }
+  }
+
+  private react(events: readonly MatchEvent[], match: MatchState) {
     for (const e of events) {
       const hero = 'hero' in e ? match.heroes[e.hero] : undefined
       if (e.type === 'knockback' && hero) {
@@ -109,8 +120,15 @@ export class CosmeticPhysics {
   }
 
   step(dt: number) {
-    this.world.timestep = Math.min(dt, 1 / 30)
-    this.world.step()
+    // a zero or negative step (first frame, a hit-stop) is skipped: Rapier cannot step by nothing
+    if (this.broken || !(dt > 1e-4)) return
+    try {
+      this.world.timestep = Math.min(dt, 1 / 30)
+      this.world.step()
+    } catch {
+      this.broken = true
+      return
+    }
     for (const [id, t] of this.tumbling) {
       if (t.blend === undefined) continue
       t.blend -= dt
@@ -123,6 +141,7 @@ export class CosmeticPhysics {
 
   /** The tumble to draw a hero with, if any. Its position stays the engine's (KTD12). */
   rotation(hero: number): Quat | undefined {
+    if (this.broken) return undefined
     const t = this.tumbling.get(hero)
     if (!t) return undefined
     if (t.blend === undefined) return t.body.rotation()
@@ -131,6 +150,7 @@ export class CosmeticPhysics {
 
   /** Where a fallen hero's body lies, and how. */
   fallenPose(hero: number): { position: Vec3; rotation: Quat; sleeping: boolean } | undefined {
+    if (this.broken) return undefined
     const b = this.fallen.get(hero)
     if (!b) return undefined
     const p = b.translation()
@@ -138,6 +158,7 @@ export class CosmeticPhysics {
   }
 
   debrisPoses(): { position: Vec3; rotation: Quat }[] {
+    if (this.broken) return []
     return this.debris.map((b) => ({ position: b.translation(), rotation: b.rotation() }))
   }
 }

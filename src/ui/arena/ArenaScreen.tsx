@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { armyModifiers } from '../../charter/synergy'
+import { attachControls } from '../../arena/client/controls'
 import { createEffects } from '../../arena/client/effects/player'
+import { ControlHud, MatchHud } from './MatchHud'
 import { canRender, startArena, type ArenaController, type HudState, type MatchSetup } from '../../arena/client/match-view'
 import { Staging, type StagingResult } from './staging/Staging'
 import { Loading, Unsupported } from './Loading'
@@ -26,30 +28,39 @@ function Fight({ staged, onBack }: { staged: StagingResult; onBack: () => void }
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState<string>()
+  const [locked, setLocked] = useState(false)
+  const [started, setStarted] = useState(false)
 
   useEffect(() => {
     if (!host.current) return
     let cancelled = false
-    let started: ArenaController | undefined
+    let live: ArenaController | undefined
+    let detach: (() => void) | undefined
     const setup = matchSetup(staged)
     startArena(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }))
       .then((c) => {
-        started = c
+        live = c
         if (cancelled) return c.stop()
         const effects = createEffects(c, setup.packages)
-        const base = c.camera.position.clone()
         c.hooks.events = effects.events
         c.hooks.timeScale = effects.timeScale
+        // shake rides on top of wherever the cameras put the view this frame
         c.hooks.frame = (dt) => {
           effects.frame(dt)
-          c.camera.position.copy(base).add(effects.shake())
+          c.camera.position.add(effects.shake())
         }
+        c.hooks.released = () => c.cameras.set('free')
+        detach = attachControls(c, host.current!, (on) => {
+          setLocked(on)
+          if (on) setStarted(true)
+        })
         setController(c)
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
     return () => {
       cancelled = true
-      started?.stop()
+      detach?.()
+      live?.stop()
     }
   }, [staged])
 
@@ -64,28 +75,42 @@ function Fight({ staged, onBack }: { staged: StagingResult; onBack: () => void }
       ) : !controller ? (
         <Loading {...progress} />
       ) : (
-        <MatchStatus controller={controller} />
+        <Live controller={controller} staged={staged} locked={locked} started={started} onLeave={onBack} />
       )}
     </div>
   )
 }
 
-function MatchStatus({ controller }: { controller: ArenaController }) {
+function Live({ controller, staged, locked, started, onLeave }: { controller: ArenaController; staged: StagingResult; locked: boolean; started: boolean; onLeave: () => void }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
-  const left = Math.max(0, state.timerSeconds - state.seconds)
-  const alive = (team: 0 | 1) => state.heroes.filter((h) => h.team === team && h.alive).length
+  const builds = staged.formation[staged.side].map((p) => staged.loadout[p.hero].build)
+  const controlled = state.controlled !== undefined ? state.heroes[state.controlled] : undefined
   return (
-    <div className="arena-top" aria-live="polite">
-      <span className="team-a">{alive(0)} alive</span>
-      <span className="timer">
-        {Math.floor(left / 60)}:{String(Math.floor(left % 60)).padStart(2, '0')}
-      </span>
-      <span className="team-b">{alive(1)} alive</span>
+    <>
+      <MatchHud state={state} side={staged.side} builds={builds} />
+      {controlled && <ControlHud hero={controlled} />}
       {state.winner !== undefined && (
         <p className="arena-result">
-          {state.winner === 'draw' ? 'Draw' : state.winner === 0 ? 'Left side wins' : 'Right side wins'} · {state.reason === 'wipe' ? 'wipe' : 'time out'}
+          {state.winner === 'draw' ? 'Draw' : state.winner === staged.side ? 'Your side wins' : 'Enemy side wins'} · {state.reason === 'wipe' ? 'wipe' : 'time out'}
         </p>
       )}
-    </div>
+      {!locked && state.winner === undefined && (
+        <div className="arena-hint" role="status">
+          {started ? (
+            <>
+              <p>Mouse released.</p>
+              <p className="row">
+                <button className="primary" onClick={() => document.querySelector<HTMLCanvasElement>('.arena-canvas canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))}>
+                  Resume
+                </button>
+                <button onClick={onLeave}>Leave match</button>
+              </p>
+            </>
+          ) : (
+            <p>Click the arena to look around. Keys 1-0 take your heroes; Tab hands back.</p>
+          )}
+        </div>
+      )}
+    </>
   )
 }

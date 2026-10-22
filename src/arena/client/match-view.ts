@@ -10,6 +10,9 @@ import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Co
 import type { Command, Team } from '../engine/state'
 import { tick } from '../engine/tick'
 import { createAnimator, onEvents, settle, type Animator } from './animation'
+import { Cameras } from './camera'
+import { TEAM_COLORS } from './map'
+import { handBack, releaseIfDead, take } from './takeover'
 import { loadHeroView, type HeroView } from './heroes'
 import { createClock, frame } from './loop'
 import { buildMap, lights, type ArenaMap } from './map'
@@ -66,6 +69,8 @@ export interface FrameHooks {
   human?: () => Command | undefined
   /** Animation time scale; the effects slow it to near zero for a hit-stop (render only). */
   timeScale?: () => number
+  /** The controlled hero died and control went back to watching (AE1). */
+  released?: () => void
 }
 
 export interface ArenaController {
@@ -77,6 +82,11 @@ export interface ArenaController {
   views: HeroView[]
   renderer: Awaited<ReturnType<typeof createRenderer>>['renderer']
   hooks: FrameHooks
+  cameras: Cameras
+  side: Team
+  /** Take a living hero on the streamer's side; false if it cannot be taken (R14, AE2). */
+  take: (hero: number | undefined) => boolean
+  handBack: () => void
   /** Interpolated positions from the last frame, for cameras and effects. */
   positions: () => Vec3[]
   pause: () => void
@@ -179,8 +189,17 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   }
   resize()
   window.addEventListener('resize', resize)
-  camera.position.set(0, 26, -38)
-  camera.lookAt(0, 0, 0)
+  const cameras = new Cameras(camera)
+  // the free camera starts behind the streamer's half, looking across the arena
+  if (setup.side === 1) {
+    cameras.free.set(0, 22, 34)
+    cameras.yaw = Math.PI
+  }
+  // team-coloured markers over every hero, and a brighter one over the controlled hero (R38)
+  const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
+  arena.match.heroes.forEach((h, i) => markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
+  scene.add(markers)
+  const mark = new THREE.Object3D()
 
   const loop = () => {
     if (stopped) return
@@ -194,6 +213,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       const human = arena.match.human
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)
+      if (releaseIfDead(arena.match)) hooks.released?.()
       arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
       physics.events(events, arena.match)
       if (events.length) hooks.events?.(events)
@@ -230,6 +250,17 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       debris.setMatrixAt(k, tmp.matrix)
     })
     debris.instanceMatrix.needsUpdate = true
+    arena.match.heroes.forEach((h, i) => {
+      const at = drawn[i]
+      const controlled = arena.match.human === i
+      mark.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
+      // the controlled hero needs no marker: the camera sits on its shoulder
+      mark.scale.setScalar(h.alive && !controlled ? 1 : 0)
+      mark.updateMatrix()
+      markers.setMatrixAt(i, mark.matrix)
+    })
+    markers.instanceMatrix.needsUpdate = true
+    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
     hooks.frame?.(dt, alpha)
     renderer.render(scene, camera)
     store.set(hud(arena, views, clock.paused, backend))
@@ -246,6 +277,22 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
     views,
     renderer,
     hooks,
+    cameras,
+    side: setup.side,
+    take: (hero) => {
+      if (!take(arena.match, setup.side, hero)) return false
+      // the hero camera starts facing where the hero faces
+      cameras.yaw = arena.match.heroes[hero!].yaw
+      cameras.pitch = -0.15
+      cameras.set('hero')
+      store.flush()
+      return true
+    },
+    handBack: () => {
+      handBack(arena.match)
+      cameras.set('free')
+      store.flush()
+    },
     positions: () => drawn,
     pause: () => {
       clock.paused = arena.match.paused = true
