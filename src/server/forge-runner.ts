@@ -8,7 +8,7 @@ import { getTemplate } from '../charter/templates/catalog'
 import type { BuildSlot, SecondaryStat } from '../charter/types'
 import { buildSpec, runDirector } from '../forge/director/director'
 import { applyFloor, imageBreach } from '../forge/director/floor'
-import { MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
+import { FLIGHT_SET, MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
 import { effectShape, numbered, pick } from '../forge/package'
 import { stagePrice } from '../forge/pricing'
 import { pollTask, route, type Registry, type Routed } from '../forge/providers/router'
@@ -282,6 +282,7 @@ export function presetBatches(forge: Forge): string[][] {
   const build = forge.build!
   const motions = [
     ...MOVEMENT_SET,
+    ...FLIGHT_SET,
     ...basicMotions(forge.spec!.basicStyle),
     ...(['active1', 'active2', 'ultimate', 'movement'] as const).flatMap((slot) => motionsFor(getTemplate(build.slots[slot].templateId))),
   ]
