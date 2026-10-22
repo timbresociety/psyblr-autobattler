@@ -93,6 +93,10 @@ export interface MatchState {
   ai: RngState
   winner?: Team | 'draw'
   endReason?: 'wipe' | 'time'
+  /** Gate profile only: from this tick, damage ramps up by `perSecond` each second so duels end (KTD5). */
+  damageRamp?: { fromTick: number; perSecond: number }
+  /** Who is driving each hero; the AI skips human-controlled ones (KTD4). */
+  human?: number
 }
 
 export interface HeroSetup {
