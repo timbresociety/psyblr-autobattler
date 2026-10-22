@@ -96,6 +96,9 @@ export function motionOptions(forge: Pick<Forge, 'build' | 'spec'>, slot: BuildS
 }
 
 
+/** A motion stage approved before the arena hero existed: it has only the archival rig and motions. */
+export const isLegacyMotion = (forge: Forge) => !forge.stages.motion.artifacts['arena-focus']
+
 /** Assemble the manifest from an approved forge. `presetBatches` are the retarget calls, in step order. */
 export function buildPackage(forge: Forge, build: Build, presetBatches: string[][]): HeroPackage {
   const spec = forge.spec!
@@ -120,6 +123,8 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
   const formMesh = form && !form.inputs.skipped ? form.artifacts['form-mesh'] : undefined
   const size = formSize(build)
   const arenaMotions = numbered(motion, 'arena-retarget')
+  const rigged = { url: motion.rig, format: format(motion.rig ?? '', 'glb') }
+  const archival = presetBatches.map((presets, i) => ({ url: motion[`retarget-${i}`], format: format(motion[`retarget-${i}`] ?? '', 'glb'), presets }))
   return {
     packageVersion: PACKAGE_VERSION,
     forgeId: forge.id,
@@ -131,13 +136,16 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
       sheet,
       front: sheet[pick(forge, 'concept', 'sheet')] ?? sheet[0],
       quadMesh: { url: forge.stages.mesh.artifacts.mesh, format: 'fbx' },
-      rigged: { url: motion.rig, format: format(motion.rig ?? '', 'glb') },
-      motions: presetBatches.map((presets, i) => ({ url: motion[`retarget-${i}`], format: format(motion[`retarget-${i}`] ?? '', 'glb'), presets })),
-      arena: {
-        focus: { url: motion['arena-focus'], format: 'glb' },
-        other: { url: motion['arena-other'], format: 'glb' },
-        motions: presetBatches.map((presets, i) => ({ url: arenaMotions[i], format: 'glb' as const, presets })),
-      },
+      rigged,
+      motions: archival,
+      // a legacy forge fights with its rigged model, as an upgraded version 1 package does
+      arena: isLegacyMotion(forge)
+        ? { focus: rigged, other: rigged, motions: archival }
+        : {
+            focus: { url: motion['arena-focus'], format: 'glb' },
+            other: { url: motion['arena-other'], format: 'glb' },
+            motions: presetBatches.map((presets, i) => ({ url: arenaMotions[i], format: 'glb' as const, presets })),
+          },
     },
     slots,
     passive: {

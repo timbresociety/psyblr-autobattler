@@ -334,3 +334,31 @@ describe('publish (U10)', () => {
     expect(after.stages.stats.failure).toMatch(/balance gate blocked/)
   })
 })
+
+describe('forges stored before the arena (review #1, #5)', () => {
+  it('a forge saved before the form stage and the arena hero loads, finishes and publishes with its rigged model', async () => {
+    const d = deps()
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh', 'motion'] as const) f = await runStage(d, f, stage)
+    // what an older build stored: no form stage, and a motion stage with only the archival rig and motions
+    const motion = f.stages.motion
+    const legacyArtifacts = Object.fromEntries(Object.entries(motion.artifacts).filter(([k]) => !k.startsWith('arena-')))
+    const { form: _form, ...stages } = f.stages
+    const legacy = { ...f, stages: { ...stages, motion: { ...motion, artifacts: legacyArtifacts } } } as unknown as Forge
+    await saveForge(db, f.version, legacy)
+    const loaded = await loadForge(db, f.id, a)
+    expect(loaded.stages.form.status).toBe('draft')
+    f = loaded
+    for (const stage of STAGE_ORDER.slice(STAGE_ORDER.indexOf('active1'))) {
+      if (stage === 'form') {
+        if (f.current === 'form') f = await act(d, f, { type: 'skip', stage: 'form' })
+        continue
+      }
+      f = await runStage(d, f, stage)
+    }
+    // publishing validates the package, which needs an arena hero: the rigged model stands in, as for a v1 package
+    expect(f.current).toBe('published')
+    expect(f.publishedHeroId).toBeTruthy()
+  })
+})

@@ -64,7 +64,8 @@ export interface HeroState {
   size: SizeClass
   resizeUntil: number
   /** An engine-computed displacement in progress (KTD3): metres per tick until `until`. */
-  knockback?: { step: Vec3; until: number }
+  /** `grounded`: the hero was on the ground when hit, so it lands again when the knockback ends. */
+  knockback?: { step: Vec3; until: number; grounded?: boolean }
   hitCount: number
   lowHealthFired: boolean
   damageDealt: number

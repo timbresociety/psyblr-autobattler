@@ -39,3 +39,9 @@ export function hitFeel(e: Extract<MatchEvent, { type: 'hit' }>): HitFeel {
   if (!e.heavy) return { hitStop: 0, shake: 0, blood: 6 }
   return { hitStop: 0.065, shake: 0.35, blood: 22 }
 }
+
+/**
+ * The z-rotation that lays a cone fan (built around local +y, then turned flat by -90 degrees about x) along the aim
+ * direction `dir` on the ground.
+ */
+export const coneYaw = (dir: { x: number; z: number }) => Math.atan2(dir.x, dir.z) + Math.PI

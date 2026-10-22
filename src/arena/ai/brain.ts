@@ -39,6 +39,8 @@ function reach(setup: HeroSetup, t: Template): number {
   }
 }
 
+// a skill that only changes its caster (a transformation) needs no crowd of enemies to be worth casting
+const hurtsEnemies = (t: Template) => t.effects.some((e) => e.kind === 'damage' || e.kind === 'stun' || e.kind === 'slow' || e.kind === 'displace')
 const helpsFriends = (t: Template) => t.effects.some((e) => e.kind === 'heal' || e.kind === 'shield' || (e.kind === 'buff' && e.target === 'allies'))
 
 /** Whether a template's usage hint fits the moment (ported from the balance AI). */
@@ -47,7 +49,7 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
   const inReach = gapTo(hero, target) <= reach(setup, t)
   if (hint.selfHealthBelow !== undefined && hint.use !== 'escape' && hint.use !== 'sustain' && hpFraction(hero) >= hint.selfHealthBelow) return { ok: false }
   if (hint.targetHealthBelow !== undefined && hpFraction(target) >= hint.targetHealthBelow) return { ok: false }
-  if (hint.minTargets && enemiesOf(m, hero).filter((e) => distance(e.position, target.position) <= (t.delivery.radius ?? 2) + 1).length < hint.minTargets) return { ok: false }
+  if (hint.minTargets && hurtsEnemies(t) && enemiesOf(m, hero).filter((e) => distance(e.position, target.position) <= (t.delivery.radius ?? 2) + 1).length < hint.minTargets) return { ok: false }
   const near = nearestGap(m, hero)
   switch (hint.use) {
     case 'always':

@@ -27,16 +27,17 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   }
 
   const onKey = (down: boolean) => (e: KeyboardEvent) => {
-    if (e.code === 'Tab') {
+    if (down) extra(e.code)
+    // with the mouse free a menu may be open: Tab moves focus and digits take no hero behind it
+    if (e.code === 'Tab' && locked()) {
       e.preventDefault()
       if (down && c.arena.match.human !== undefined) c.handBack()
       return
     }
-    if (down && /^Digit\d$/.test(e.code)) {
-      c.take(heroForKey(c.arena.match, c.side, e.code))
+    if (/^Digit\d$/.test(e.code)) {
+      if (down && locked()) c.take(heroForKey(c.arena.match, c.side, e.code))
       return
     }
-    if (down) extra(e.code)
     if (e.code === 'Space') e.preventDefault()
     if (down) input.held.add(e.code)
     else input.held.delete(e.code)
@@ -50,7 +51,12 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   }
   const mouseup = (e: MouseEvent) => e.button === 0 && input.held.delete('Mouse0')
   const lockchange = () => {
-    if (!locked()) input.held.clear()
+    if (!locked()) {
+      input.held.clear()
+      // without the mouse a controlled hero cannot be steered, so the AI takes it back rather than leave it idle;
+      // the pause menu frees the mouse too, and keeps the hero until the match resumes
+      if (c.arena.match.human !== undefined && !c.arena.match.paused) c.handBack()
+    }
     onLockChange(locked())
   }
   window.addEventListener('keydown', keydown)

@@ -283,11 +283,12 @@ async function generate(deps: RunnerDeps, forge: Forge, stage: StageId, kind: 's
 // Steps
 
 /** Retarget batches: every preset the hero's motions need, at most 5 per call (KTD1, KTD7). */
-export function presetBatches(forge: Forge): string[][] {
+export function presetBatches(forge: Forge, { flight = true }: { flight?: boolean } = {}): string[][] {
   const build = forge.build!
   const motions = [
     ...MOVEMENT_SET,
-    ...FLIGHT_SET,
+    // motion stages finished before flight existed retargeted without it; their batches must be rebuilt the same way
+    ...(flight ? FLIGHT_SET : []),
     ...basicMotions(forge.spec!.basicStyle),
     ...(['active1', 'active2', 'ultimate', 'movement'] as const).flatMap((slot) => motionsFor(getTemplate(build.slots[slot].templateId))),
   ]

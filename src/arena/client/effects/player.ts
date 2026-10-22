@@ -9,7 +9,7 @@ import { defaultRecipe } from '../../recipes/defaults'
 import type { EffectRecipe, RecipeLayer } from '../../recipes/schema'
 import type { ArenaController } from '../match-view'
 import { Particles } from './particles'
-import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing'
+import { baseSize, coneYaw, hitFeel, layerSize, type ImpactEvent } from './sizing'
 import { playCast, playHit } from './sound'
 
 /**
@@ -143,7 +143,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
         show('cone', c, dur, (m) => {
           m.geometry = coneGeometry(extra.arc ?? 90)
           m.position.set(at.x, 0.06, at.z)
-          m.rotation.set(-Math.PI / 2, 0, Math.atan2(dir.x, dir.z))
+          m.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
           m.scale.setScalar(extra.range ?? size)
         }, (p, m) => ((m.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - p)))
         break
@@ -169,6 +169,12 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   }
 
   const v3 = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, p.y, p.z)
+
+  const dropForm = (hero: number) => {
+    const m = forms.get(hero)
+    if (m) m.visible = false
+    forms.delete(hero)
+  }
 
   return {
     events: (events) => {
@@ -214,12 +220,10 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             const c = capsule(hero)
             m.scale.set(c.radius, c.height / 2, c.radius)
             forms.set(e.hero, m)
-          } else {
-            const m = forms.get(e.hero)
-            if (m) m.visible = false
-            forms.delete(e.hero)
-          }
+          } else dropForm(e.hero)
         } else if (e.type === 'death') {
+          // the engine sends no resize end for a hero that dies transformed
+          dropForm(e.hero)
           const at = chest(arena.match.heroes[e.hero])
           impacts.spawn({ count: 40, at, speed: 5, spread: 0.3, life: 0.9, size: 0.08, color: new THREE.Color(1, 0.85, 0.6), gravity: 6 }, clock)
         }

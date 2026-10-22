@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { capsule, createHero, prepareHero } from '../../engine/state'
 import { defaultBuild } from '../../../sim/fixtures'
 import { defaultRecipe } from '../../recipes/defaults'
-import { baseSize, formScale, hitFeel, layerSize } from './sizing'
+import * as THREE from 'three'
+import { baseSize, coneYaw, formScale, hitFeel, layerSize } from './sizing'
 import { ring, take } from './ring'
 
 describe('effect kit runtime (U14)', () => {
@@ -34,6 +35,18 @@ describe('effect kit runtime (U14)', () => {
     const r2 = ring(10)
     take(r2, 8)
     expect(take(r2, 5)).toEqual([[8, 2], [0, 3]])
+  })
+
+  it('lays a cone along the aim, not behind the caster', () => {
+    for (const dir of [{ x: 0, z: 1 }, { x: 1, z: 0 }, { x: -0.6, z: -0.8 }]) {
+      const o = new THREE.Object3D()
+      o.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
+      o.updateMatrixWorld()
+      const centre = new THREE.Vector3(0, 1, 0).applyMatrix4(o.matrixWorld)
+      expect(centre.x).toBeCloseTo(dir.x)
+      expect(centre.y).toBeCloseTo(0)
+      expect(centre.z).toBeCloseTo(dir.z)
+    }
   })
 
   it('freezes and shakes only on heavy hits', () => {

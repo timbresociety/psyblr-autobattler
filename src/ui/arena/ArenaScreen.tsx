@@ -91,6 +91,8 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
   }, [controller, counting])
   const resume = useCallback(() => {
     controller?.resume()
+    // resuming leaves the mouse free; a hero nobody can steer goes back to the AI
+    if (controller?.arena.match.human !== undefined && !document.pointerLockElement) controller.handBack()
     setMenu(false)
   }, [controller])
   toggleMenu.current = () => (menu ? resume() : pause())

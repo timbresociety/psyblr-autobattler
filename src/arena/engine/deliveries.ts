@@ -80,7 +80,8 @@ function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Temp
   const metres = pull ? clamp(distance(target.position, caster.position) - 1.5, 0, distanceM) : distanceM
   const n = ticks(ENGINE.knockbackTime)
   if (metres <= 0 || n <= 0) return
-  target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n }
+  // moveKnockbacks steps in this same tick's after(), so the last step lands on tick + n - 1: n steps in all
+  target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n - 1, grounded: !target.airborne }
   ctx.events.push({ type: 'knockback', hero: target.id, phase: 'start' })
 }
 
@@ -179,6 +180,11 @@ function moveKnockbacks(ctx: Ctx) {
     if (hero.position.y > 0) hero.airborne = true
     clampToArena(hero)
     if (ctx.match.tick >= kb.until) {
+      // the lift is a launch, not a switch into flight: a hero knocked off the ground comes back down
+      if (kb.grounded) {
+        hero.position = { ...hero.position, y: 0 }
+        hero.airborne = false
+      }
       hero.knockback = undefined
       ctx.events.push({ type: 'knockback', hero: hero.id, phase: 'end' })
     }

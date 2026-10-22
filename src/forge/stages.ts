@@ -33,6 +33,12 @@ export function createForge(id: string, accountId: string, prompt = '', referenc
 
 const reject = (reason: Extract<Transition, { ok: false }>['reason']): Transition => ({ ok: false, reason })
 
+/** Fill in stages a stored forge predates (the form stage), so every reader can index `forge.stages` directly. */
+export function withAllStages(forge: Forge): Forge {
+  if (STAGE_ORDER.every((s) => forge.stages[s])) return forge
+  return { ...forge, stages: { ...(Object.fromEntries(STAGE_ORDER.map((s) => [s, emptyStage(s)])) as Forge['stages']), ...forge.stages } }
+}
+
 /** A stage's state; forges saved before a stage existed (the form stage) read it as a fresh draft. */
 export const stageOf = (forge: Forge, stage: StageId): StageState => forge.stages[stage] ?? emptyStage(stage)
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, type Build } from '../charter/build'
-import { buildPackage, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package'
+import { buildPackage, isLegacyMotion, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package'
 import { confirm } from '../forge/stages'
 import type { Forge } from '../forge/types'
 import type { Db } from './db'
@@ -25,7 +25,7 @@ export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forg
     return commit(deps.db, forge, blocked)
   }
   const build: Build = gate.build
-  const pkg = buildPackage(forge, build, presetBatches(forge))
+  const pkg = buildPackage(forge, build, presetBatches(forge, { flight: !isLegacyMotion(forge) }))
   const strict = blobStoreId(deps.registry.env) !== undefined
   const problems = validatePackage(pkg, strict ? (url) => isOwnForgeAssetUrl(url, deps.registry.env) : undefined)
   if (problems.length) throw new ForgeError(`the hero package is incomplete: ${problems.join('; ')}`, 409)

@@ -5,11 +5,11 @@ import { CATALOG } from '../../charter/templates/catalog'
 import { ai, at, phys, push, resize, active, ultimate } from '../../charter/templates/dsl'
 import type { BuildSlot, Template } from '../../charter/types'
 import { defaultBuild } from '../../sim/fixtures'
-import { ENGINE } from './calibration'
+import { ENGINE, ticks } from './calibration'
 import { COMBAT_RULES, cast, chest, landing } from './deliveries'
 import type { MatchEvent } from './events'
 import { PI, atan2 } from './maths'
-import { capsule, createHero, emptyMatch, prepareHero, type HeroSetup, type MatchState } from './state'
+import { IDLE, capsule, createHero, emptyMatch, prepareHero, slotBit, type HeroSetup, type MatchState } from './state'
 import { tick } from './tick'
 import { initHero } from './effects'
 
@@ -134,15 +134,31 @@ describe('3D deliveries (U4)', () => {
     expect(a.events).toContainEqual({ type: 'resize', hero: 0, phase: 'end', size: 'medium' })
   })
 
-  it('a 6 m knockback moves the target 6 m over several ticks, and a wall stops it', () => {
+  it('a 6 m knockback moves the target 6 m in exactly its ticks, lands it, and a wall stops it', () => {
     const a = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: 2 }])
-    a.fire()
-    const startZ = a.m.heroes[1].position.z
-    a.run(1)
-    expect(a.m.heroes[1].knockback).toBeDefined()
-    a.run(30)
-    const moved = Math.sqrt((a.m.heroes[1].position.z - startZ) ** 2 + a.m.heroes[1].position.y ** 2)
-    expect(moved).toBeCloseTo(6, 4)
+    const target = a.m.heroes[1]
+    // cast inside a tick, as play does: the knockback starts in act and steps in the same tick's after()
+    let at0 = { ...target.position }
+    a.events.push(...tick(a.m, a.setups, [{ ...IDLE, buttons: slotBit('active1') }], COMBAT_RULES))
+    let path = 0
+    let steps = 0
+    for (let i = 0; i < 30; i++) {
+      const now = { ...target.position }
+      if (now.x !== at0.x || now.y !== at0.y || now.z !== at0.z) {
+        steps++
+        if (target.knockback) path += Math.sqrt((now.x - at0.x) ** 2 + (now.y - at0.y) ** 2 + (now.z - at0.z) ** 2)
+      }
+      at0 = now
+      if (!target.knockback && steps) break
+      a.run(1)
+    }
+    expect(steps).toBe(ticks(ENGINE.knockbackTime))
+    expect(target.knockback).toBeUndefined()
+    // the launch lifted it, and a hero knocked off the ground lands again rather than flying on
+    expect(target.position.y).toBe(0)
+    expect(target.airborne).toBe(false)
+    expect(target.position.z - 2).toBeGreaterThan(5)
+    expect(path).toBeGreaterThan(4)
     const wall = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: ENGINE.arena.halfLength - 1 }])
     wall.m.heroes[0].position.z = ENGINE.arena.halfLength - 3
     wall.fire()
