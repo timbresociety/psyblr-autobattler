@@ -1,9 +1,10 @@
+import { geometryOf } from '../../charter/geometry'
 import { SIZES } from '../../charter/sizes'
 import type { BuildSlot, Effect, Template } from '../../charter/types'
 import { ENGINE, ticks } from './calibration'
-import { applyEffect, enemiesOf, firePassive, passiveHooks, sumBuff, tickStatuses, type Ctx } from './effects'
+import { enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects'
 import { clampToArena } from './locomotion'
-import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
+import { PI, add, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
 import { capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 import type { TickRules } from './tick'
 
@@ -12,7 +13,6 @@ import type { TickRules } from './tick'
  * sized from its own template numbers, which the effect renderer reads too, so what you see is what can hit you.
  */
 
-const PULL_TAGS = ['pull', 'hook', 'gravity', 'vortex', 'black-hole', 'drag']
 const CAST_ORDER: BuildSlot[] = ['movement', 'ultimate', 'active1', 'active2', 'basic']
 
 export const chest = (h: HeroState): Vec3 => ({ x: h.position.x, y: h.position.y + capsule(h).height * ENGINE.chest, z: h.position.z })
@@ -39,14 +39,14 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
   switch (d.kind) {
     case 'melee': {
       // reach runs from the caster's body, not its chest: surface to surface, the way players and the AI judge it
-      const inReach = enemies.filter((e) => gap(from, e) - capsule(caster).radius <= d.range + ENGINE.meleeSlack + reach && inArc(from, dir, e, d.arcDegrees ?? 90))
+      const inReach = enemies.filter((e) => gap(from, e) - capsule(caster).radius <= d.range + ENGINE.meleeSlack + reach && inArc(from, dir, e, geometryOf(d).arcDegrees))
       return { hit: nearest(from, inReach), at: add(from, scale(dir, d.range)) }
     }
     case 'cone':
-      return { hit: enemies.filter((e) => gap(from, e) <= d.range && inArc(from, dir, e, d.arcDegrees ?? 60)), at: add(from, scale(dir, d.range)) }
+      return { hit: enemies.filter((e) => gap(from, e) <= d.range && inArc(from, dir, e, geometryOf(d).arcDegrees)), at: add(from, scale(dir, d.range)) }
     case 'beam': {
       const end = add(from, scale(dir, d.range))
-      return { hit: enemies.filter((e) => segmentToCapsuleAxis(from, end, e.position, capsule(e).height) <= (d.width ?? 1) / 2 + capsule(e).radius), at: end }
+      return { hit: enemies.filter((e) => segmentToCapsuleAxis(from, end, e.position, capsule(e).height) <= geometryOf(d).width / 2 + capsule(e).radius), at: end }
     }
     case 'zone': {
       if (d.range > 0) {
@@ -72,28 +72,6 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
   }
 }
 
-/** Start a knockback or pull as an engine trajectory over a few ticks (KTD3). Walls stop it. */
-function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Template, distanceM: number) {
-  const pull = template.delivery.kind === 'grapple' || template.tags.some((t) => PULL_TAGS.includes(t))
-  const away = sub(target.position, caster.position)
-  const dir = normalize(pull ? scale(away, -1) : { x: away.x, y: away.y + Math.sqrt(away.x * away.x + away.z * away.z) * 0.25, z: away.z })
-  const metres = pull ? clamp(distance(target.position, caster.position) - 1.5, 0, distanceM) : distanceM
-  const n = ticks(ENGINE.knockbackTime)
-  if (metres <= 0 || n <= 0) return
-  // moveKnockbacks steps in this same tick's after(), so the last step lands on tick + n - 1: n steps in all
-  target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n - 1, grounded: !target.airborne }
-  ctx.events.push({ type: 'knockback', hero: target.id, phase: 'start' })
-}
-
-/** Apply every effect of a template to what it hit. */
-export function resolve(ctx: Ctx, caster: HeroState, template: Template, slot: BuildSlot, hit: HeroState[]) {
-  for (const e of template.effects as Effect[]) {
-    if (e.kind === 'displace') for (const u of hit) displace(ctx, caster, u, template, e.distance)
-    else applyEffect(ctx, caster, template, slot, e, hit)
-  }
-}
-
-passiveHooks.fire = (ctx, hero, template, target) => resolve(ctx, hero, template, 'passive', target ? [target] : [])
 
 function impact(ctx: Ctx, caster: HeroState, slot: BuildSlot, template: Template, at: Vec3) {
   const d = template.delivery
@@ -127,10 +105,10 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
   }
   if (template.delivery.kind === 'projectile') {
     const d = template.delivery
-    const speed = d.speed ?? 30
+    const { speed, projectileRadius } = geometryOf(d)
     const from = chest(caster)
     match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: scale(aim(caster), speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(d.range / speed)) })
-    ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: d.projectileRadius ?? 0.3, speed })
+    ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: projectileRadius, speed })
     return true
   }
   const { hit, at } = landing(ctx, caster, template)
@@ -153,7 +131,7 @@ function flyProjectiles(ctx: Ctx) {
   for (const p of match.projectiles) {
     const owner = match.heroes[p.owner]
     const template = setups[p.owner].kit[p.slot]
-    const size = template.delivery.projectileRadius ?? 0.3
+    const size = geometryOf(template.delivery).projectileRadius
     const end = add(p.position, p.step)
     const struck = enemiesOf(match, owner).filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
     if (struck.length) {

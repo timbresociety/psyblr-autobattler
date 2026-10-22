@@ -63,16 +63,34 @@ export interface HudState {
   healthShare: [number, number]
 }
 
-/** What the effects, physics and cameras need each frame; later units plug in here. */
+interface Listeners {
+  events: (events: MatchEvent[]) => void
+  frame: (dt: number, alpha: number) => void
+}
+
+/** What the effects, controls and cameras plug into each frame. */
 export interface FrameHooks {
-  events?: (events: MatchEvent[]) => void
-  frame?: (dt: number, alpha: number) => void
+  /** Add a listener; listeners run in the order they were added, and each call returns its own removal. */
+  on: <K extends keyof Listeners>(kind: K, listener: Listeners[K]) => () => void
   /** The controlled hero's command for this tick, or undefined to leave it to the AI. */
   human?: () => Command | undefined
   /** Animation time scale; the effects slow it to near zero for a hit-stop (render only). */
   timeScale?: () => number
-  /** The controlled hero died and control went back to watching (AE1). */
-  released?: () => void
+}
+
+export function createHooks(): FrameHooks & { emit: { events: Listeners['events']; frame: Listeners['frame'] } } {
+  const lists: { [K in keyof Listeners]: Listeners[K][] } = { events: [], frame: [] }
+  return {
+    on: (kind, listener) => {
+      const list = lists[kind] as Listeners[typeof kind][]
+      list.push(listener)
+      return () => void list.splice(list.indexOf(listener), 1)
+    },
+    emit: {
+      events: (events) => lists.events.forEach((l) => l(events)),
+      frame: (dt, alpha) => lists.frame.forEach((l) => l(dt, alpha)),
+    },
+  }
 }
 
 export interface ArenaController {
@@ -135,21 +153,147 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
   }
 }
 
-export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
+/** The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. */
+async function createStage(host: HTMLElement) {
   const canvas = document.createElement('canvas')
   canvas.style.cssText = 'width:100%;height:100%;display:block'
   host.append(canvas)
-  const { renderer, backend } = await createRenderer(canvas, { forceWebGL: forceWebGLFlag(window.location.search) })
-  const pixelRatio = Math.min(2, window.devicePixelRatio)
-  renderer.setPixelRatio(pixelRatio)
-  renderer.shadowMap.enabled = true
-  const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x10141c)
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
-  const map = buildMap()
-  scene.add(map.group)
-  const sun = lights(scene)
+  try {
+    const { renderer, backend } = await createRenderer(canvas, { forceWebGL: forceWebGLFlag(window.location.search) })
+    const pixelRatio = Math.min(2, window.devicePixelRatio)
+    renderer.setPixelRatio(pixelRatio)
+    renderer.shadowMap.enabled = true
+    const scene = new THREE.Scene()
+    scene.background = new THREE.Color(0x10141c)
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
+    const map = buildMap()
+    scene.add(map.group)
+    const sun = lights(scene)
+    const resize = () => {
+      const w = host.clientWidth
+      const h = host.clientHeight
+      renderer.setSize(w, h, false)
+      camera.aspect = w / Math.max(1, h)
+      camera.updateProjectionMatrix()
+    }
+    const dispose = () => {
+      window.removeEventListener('resize', resize)
+      renderer.dispose()
+      canvas.remove()
+    }
+    return { canvas, renderer, backend, pixelRatio, scene, camera, map, sun, resize, dispose }
+  } catch (e) {
+    canvas.remove()
+    throw e
+  }
+}
+type Stage = Awaited<ReturnType<typeof createStage>>
 
+/**
+ * The frame-rate guard wired to the stage (U18, R26): each step keeps the ones before it, shadows first and render
+ * resolution last.
+ */
+function qualityControl(stage: Stage) {
+  const guard = createGuard()
+  let current: QualityLevel = 'full'
+  return {
+    current: () => current,
+    level: (l: QualityLevel) => atLeast(current, l),
+    observe(frameMs: number) {
+      const next = observe(guard, frameMs)
+      if (next === current) return
+      current = next
+      stage.sun.castShadow = !atLeast(current, 'no-shadows')
+      stage.renderer.setPixelRatio(atLeast(current, 'low-resolution') ? Math.max(0.75, stage.pixelRatio * 0.6) : stage.pixelRatio)
+      stage.resize()
+    },
+  }
+}
+
+const yawQ = new THREE.Quaternion()
+const up = new THREE.Vector3(0, 1, 0)
+
+/**
+ * Pose every hero between the last two engine states. Physics only changes how a body looks: a tumble on top of the
+ * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
+ */
+function drawHeroes(
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera },
+  prev: Vec3[],
+  frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean },
+): Vec3[] {
+  const { arena, views, animators, physics, camera } = ctx
+  return arena.match.heroes.map((h, i) => {
+    const p = prev[i]
+    const c = h.position
+    const at = { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
+    const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
+    const view = views[i]
+    // under load, heroes far from the camera animate every other frame
+    const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
+    const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
+    const scaled = frame.dt * frame.timeScale
+    if (!far) view.pose(pose, frame.t + i, scaled)
+    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2)
+    const fallen = physics?.fallenPose(i)
+    if (fallen) {
+      view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
+      view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
+      return at
+    }
+    view.root.position.set(at.x, at.y, at.z)
+    yawQ.setFromAxisAngle(up, h.yaw)
+    const tumble = physics?.rotation(i)
+    if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
+    else view.root.quaternion.copy(yawQ)
+    return at
+  })
+}
+
+const place = new THREE.Object3D()
+
+function drawDebris(debris: THREE.InstancedMesh, physics: CosmeticPhysics | undefined) {
+  const pieces = physics?.debrisPoses() ?? []
+  debris.count = pieces.length
+  pieces.forEach((d, k) => {
+    place.position.set(d.position.x, d.position.y, d.position.z)
+    place.quaternion.set(d.rotation.x, d.rotation.y, d.rotation.z, d.rotation.w)
+    place.scale.setScalar(1)
+    place.updateMatrix()
+    debris.setMatrixAt(k, place.matrix)
+  })
+  debris.instanceMatrix.needsUpdate = true
+}
+
+/** Team-coloured markers over every living hero except the controlled one, whose shoulder the camera sits on (R38). */
+function drawMarkers(markers: THREE.InstancedMesh, arena: Arena, views: HeroView[], drawn: Vec3[]) {
+  place.quaternion.identity()
+  arena.match.heroes.forEach((h, i) => {
+    const at = drawn[i]
+    place.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
+    place.scale.setScalar(h.alive && arena.match.human !== i ? 1 : 0)
+    place.updateMatrix()
+    markers.setMatrixAt(i, place.matrix)
+  })
+  markers.instanceMatrix.needsUpdate = true
+}
+
+/** Load everything a match needs, reporting progress, then run it until `stop` (U13). */
+export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
+  const stage = await createStage(host)
+  let physics: CosmeticPhysics | undefined
+  try {
+    return await run(stage, setup, onProgress, (p) => (physics = p))
+  } catch (e) {
+    // a failed load must not leave a live renderer or a physics world behind
+    physics?.dispose()
+    stage.dispose()
+    throw e
+  }
+}
+
+async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
+  const { renderer, backend, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
   const builds = arena.setups.map((s) => s.build)
   let loaded = 0
@@ -159,7 +303,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   // physics is cosmetic: if Rapier fails to load, the match runs without it (KTD12)
   const physicsReady = CosmeticPhysics.create()
     .catch(() => undefined)
-    .then((p) => (onProgress(++loaded, total), p))
+    .then((p) => (keepPhysics(p), onProgress(++loaded, total), p))
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
   const views = await Promise.all(
     builds.map(async (build, i) => {
@@ -173,57 +317,41 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
   debris.count = 0
   scene.add(debris)
-  const tmp = new THREE.Object3D()
-  const yawQ = new THREE.Quaternion()
-  const up = new THREE.Vector3(0, 1, 0)
+  const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
+  arena.match.heroes.forEach((h, i) => markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
+  scene.add(markers)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const rules = matchRules(arena)
   const clock = createClock()
+  const quality = qualityControl(stage)
   const store = createStore<HudState>(hud(arena, views, false, backend, 'full'))
-  const hooks: FrameHooks = {}
-  let prev: Vec3[] = arena.match.heroes.map((h) => ({ ...h.position }))
-  let drawn: Vec3[] = prev.map((p) => ({ ...p }))
-  let last = performance.now()
-  let stopped = false
-  const publish = () => {
-    store.set(hud(arena, views, clock.paused, backend, quality))
-    store.flush()
-  }
-  const guard = createGuard()
-  let quality: QualityLevel = 'full'
-  let frameNo = 0
-  const level = (l: QualityLevel) => atLeast(quality, l)
-  // each step keeps the ones before it: shadows go first, render resolution last (R26)
-  const applyQuality = (next: QualityLevel) => {
-    quality = next
-    sun.castShadow = !level('no-shadows')
-    renderer.setPixelRatio(level('low-resolution') ? Math.max(0.75, pixelRatio * 0.6) : pixelRatio)
-    resize()
-  }
-
-  const resize = () => {
-    const w = host.clientWidth
-    const h = host.clientHeight
-    renderer.setSize(w, h, false)
-    camera.aspect = w / Math.max(1, h)
-    camera.updateProjectionMatrix()
-  }
-  resize()
-  window.addEventListener('resize', resize)
+  const hooks = createHooks()
   const cameras = new Cameras(camera)
   // the free camera starts behind the streamer's half, looking across the arena
   if (setup.side === 1) {
     cameras.free.set(0, 22, 34)
     cameras.yaw = Math.PI
   }
-  // team-coloured markers over every hero, and a brighter one over the controlled hero (R38)
-  const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
-  arena.match.heroes.forEach((h, i) => markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
-  scene.add(markers)
-  const mark = new THREE.Object3D()
+  stage.resize()
+  window.addEventListener('resize', stage.resize)
+
+  let prev: Vec3[] = arena.match.heroes.map((h) => ({ ...h.position }))
+  let drawn: Vec3[] = prev.map((p) => ({ ...p }))
+  let last = performance.now()
+  let stopped = false
+  let frameNo = 0
+  const publish = () => {
+    store.set(hud(arena, views, clock.paused, backend, quality.current()))
+    store.flush()
+  }
+  const setPaused = (paused: boolean) => {
+    clock.paused = arena.match.paused = paused
+    if (!paused) last = performance.now()
+    publish()
+  }
 
   const loop = () => {
     if (stopped) return
@@ -231,10 +359,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
     const dt = Math.min(0.25, (now - last) / 1000)
     last = now
     frameNo++
-    if (!clock.paused) {
-      const next = observe(guard, dt * 1000)
-      if (next !== quality) applyQuality(next)
-    }
+    if (!clock.paused) quality.observe(dt * 1000)
     const { ticks, alpha } = frame(clock, dt)
     for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
       prev = arena.match.heroes.map((h) => ({ ...h.position }))
@@ -242,63 +367,23 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       const human = arena.match.human
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)
-      if (releaseIfDead(arena.match)) hooks.released?.()
-      if (events.length) arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+      // the controlled hero died: control goes back to watching from the free camera (AE1)
+      if (releaseIfDead(arena.match)) cameras.set('free')
       physics?.events(events, arena.match)
-      if (events.length) hooks.events?.(events)
-    }
-    const t = now / 1000
-    physics?.step(dt)
-    drawn = arena.match.heroes.map((h, i) => {
-      const p = prev[i]
-      const c = h.position
-      const at = { x: p.x + (c.x - p.x) * alpha, y: p.y + (c.y - p.y) * alpha, z: p.z + (c.z - p.z) * alpha }
-      const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
-      const view = views[i]
-      // under load, heroes far from the camera animate every other frame
-      const far = level('slow-animation') && camera.position.distanceToSquared(view.root.position) > 900
-      const pose = settle(animators[i], h, moved, arena.match.tick, dt)
-      const scaled = dt * (hooks.timeScale?.() ?? 1)
-      if (!far) view.pose(pose, t + i, scaled)
-      else if ((frameNo + i) % 2 === 0) view.pose(pose, t + i, scaled * 2)
-      // physics only changes how a body looks: a tumble on top of the engine's position, or where a fallen body lies
-      const fallen = physics?.fallenPose(i)
-      if (fallen) {
-        view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
-        view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
-        return at
+      if (events.length) {
+        arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+        hooks.emit.events(events)
       }
-      view.root.position.set(at.x, at.y, at.z)
-      yawQ.setFromAxisAngle(up, h.yaw)
-      const tumble = physics?.rotation(i)
-      if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
-      else view.root.quaternion.copy(yawQ)
-      return at
-    })
-    const pieces = physics?.debrisPoses() ?? []
-    debris.count = pieces.length
-    pieces.forEach((d, k) => {
-      tmp.position.set(d.position.x, d.position.y, d.position.z)
-      tmp.quaternion.set(d.rotation.x, d.rotation.y, d.rotation.z, d.rotation.w)
-      tmp.updateMatrix()
-      debris.setMatrixAt(k, tmp.matrix)
-    })
-    debris.instanceMatrix.needsUpdate = true
-    arena.match.heroes.forEach((h, i) => {
-      const at = drawn[i]
-      const controlled = arena.match.human === i
-      mark.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
-      // the controlled hero needs no marker: the camera sits on its shoulder
-      mark.scale.setScalar(h.alive && !controlled ? 1 : 0)
-      mark.updateMatrix()
-      markers.setMatrixAt(i, mark.matrix)
-    })
-    markers.instanceMatrix.needsUpdate = true
+    }
+    physics?.step(dt)
+    drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
+    drawDebris(debris, physics)
+    drawMarkers(markers, arena, views, drawn)
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
-    hooks.frame?.(dt, alpha)
+    hooks.emit.frame(dt, alpha)
     renderer.render(scene, camera)
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
-    if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality))
+    if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality.current()))
     requestAnimationFrame(loop)
   }
   requestAnimationFrame(loop)
@@ -329,22 +414,13 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
       publish()
     },
     positions: () => drawn,
-    pause: () => {
-      clock.paused = arena.match.paused = true
-      publish()
-    },
-    resume: () => {
-      clock.paused = arena.match.paused = false
-      last = performance.now()
-      publish()
-    },
-    quality: () => quality,
+    pause: () => setPaused(true),
+    resume: () => setPaused(false),
+    quality: quality.current,
     stop: () => {
       stopped = true
       physics?.dispose()
-      window.removeEventListener('resize', resize)
-      renderer.dispose()
-      canvas.remove()
+      stage.dispose()
     },
   }
 }

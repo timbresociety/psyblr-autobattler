@@ -49,6 +49,20 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
   }
 }
 
+/** Longest a hero's model may take to load before it fights as a stand-in, so one slow file never holds up Start. */
+export const LOAD_TIMEOUT_MS = 20_000
+
+/** `promise`, or a rejection once `ms` pass. */
+export function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${what} took longer than ${ms / 1000} s`)), ms)
+    promise.then(
+      (v) => (clearTimeout(timer), resolve(v)),
+      (e: unknown) => (clearTimeout(timer), reject(e)),
+    )
+  })
+}
+
 let loader: Promise<{ load: (url: string) => Promise<{ scene: THREE.Object3D; animations: THREE.AnimationClip[] }> }> | undefined
 
 /** GLTF with KTX2 textures and meshopt geometry; the transcoder ships in public/decoders (KTD10). */
@@ -58,8 +72,12 @@ function gltf(renderer: unknown) {
     const ktx2 = new KTX2Loader().setTranscoderPath('/decoders/basis/')
     ;(ktx2 as unknown as { detectSupport: (r: unknown) => void }).detectSupport(renderer)
     const l = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder)
-    return { load: (url: string) => l.loadAsync(url) }
-  })()
+    return { load: (url: string) => withTimeout(l.loadAsync(url), LOAD_TIMEOUT_MS, url) }
+  })().catch((e: unknown) => {
+    // a failed import is not remembered: the next match tries again instead of using stand-ins until a reload
+    loader = undefined
+    throw e
+  })
   return loader
 }
 

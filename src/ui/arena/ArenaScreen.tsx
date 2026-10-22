@@ -56,14 +56,13 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
         // nothing ticks until the countdown ends (R39)
         c.pause()
         const effects = createEffects(c, setup.packages)
-        c.hooks.events = effects.events
+        c.hooks.on('events', effects.events)
         c.hooks.timeScale = effects.timeScale
         // shake rides on top of wherever the cameras put the view this frame
-        c.hooks.frame = (dt) => {
+        c.hooks.on('frame', (dt) => {
           effects.frame(dt)
           c.camera.position.add(effects.shake())
-        }
-        c.hooks.released = () => c.cameras.set('free')
+        })
         detach = attachControls(
           c,
           host.current!,

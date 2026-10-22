@@ -362,3 +362,37 @@ describe('forges stored before the arena (review #1, #5)', () => {
     expect(f.publishedHeroId).toBeTruthy()
   })
 })
+
+describe('arena hero and form stage (U11)', () => {
+  it('an arena pack over the triangle budget fails the motion stage and charges nothing', async () => {
+    const d = { ...deps(), packArena: async () => Promise.reject(new Error(`arena mesh has 12000 triangles, over the ${ARENA_BUDGET.maxTriangles} budget`)) }
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    for (const stage of ['concept', 'mesh'] as const) f = await runStage(d, f, stage)
+    const before = await balance(db, a)
+    f = await settle(d, await act(d, f, { type: 'start', stage: 'motion' }))
+    expect(f.stages.motion.status).toBe('failed')
+    expect(f.stages.motion.failure).toMatch(/triangles/)
+    expect(await balance(db, a)).toBe(before)
+  })
+
+  it('a hero whose ultimate transforms is offered the form stage, pays for it once, and publishes', async () => {
+    const d = deps()
+    const a = await account()
+    let f = await act(d, await specReady(d, a), { type: 'confirm', stage: 'spec' })
+    // the default tank's ultimate is Titan Form, which turns it colossal
+    const tank = defaultBuild('tank', f.build!.heroName)
+    expect(await saveForge(db, f.version, { ...f, build: tank })).toBeTruthy()
+    f = await loadForge(db, f.id, a)
+    for (const stage of ['concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate'] as const) f = await runStage(d, f, stage)
+    expect(f.current).toBe('form')
+    const before = await balance(db, a)
+    f = await runStage(d, f, 'form')
+    expect(before - (await balance(db, a))).toBe(STAGE_PRICES.form)
+    expect(f.stages.form.artifacts['form-mesh']).toBeTruthy()
+    f = await runStage(d, f, 'stats')
+    expect(f.current).toBe('published')
+    const { rows } = await db.query<{ ref: string }>("select ref from credit_ledger where kind = 'charge' and account_id = $1 and ref like $2", [a, `${f.id}:form:%`])
+    expect(rows).toHaveLength(1)
+  })
+})

@@ -9,6 +9,19 @@ export const GEOMETRY_DEFAULTS = { speed: 30, projectileRadius: 0.3, meleeArc: 9
 /** A cone's default arc spans its end radius at its range, rounded to whole degrees and stored as `arcDegrees`, so the engine reads a fixed number. */
 export const coneArc = (range: number, radius: number) => Math.round((2 * Math.atan(radius / Math.max(range, 0.1)) * 180) / Math.PI)
 
+/**
+ * A delivery's hit geometry with every default filled in: the one place the engine, the AI and the client read it.
+ * Catalogue templates always carry their fields (validateTemplate checks), so the fallbacks only cover hand-built ones.
+ */
+export function geometryOf(d: Delivery): { speed: number; projectileRadius: number; arcDegrees: number; width: number } {
+  return {
+    speed: d.speed ?? GEOMETRY_DEFAULTS.speed,
+    projectileRadius: d.projectileRadius ?? GEOMETRY_DEFAULTS.projectileRadius,
+    arcDegrees: d.arcDegrees ?? (d.kind === 'cone' ? coneArc(d.range, d.radius ?? 0) : GEOMETRY_DEFAULTS.meleeArc),
+    width: d.width ?? GEOMETRY_DEFAULTS.width,
+  }
+}
+
 /** The geometry fields this delivery's kind needs but does not have. */
 export function missingGeometry(d: Delivery): string[] {
   const need: (keyof Delivery)[] = d.kind === 'projectile' ? ['speed', 'projectileRadius'] : d.kind === 'melee' || d.kind === 'cone' ? ['arcDegrees'] : d.kind === 'beam' ? ['width'] : []

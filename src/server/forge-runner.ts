@@ -8,6 +8,7 @@ import type { BuildSlot, Delivery, SecondaryStat } from '../charter/types'
 import { buildSpec, runDirector } from '../forge/director/director'
 import { applyFloor, imageBreach } from '../forge/director/floor'
 import { ARENA_BUDGET, arenaAsset } from '../forge/arena-asset'
+import { ARENA_ARTIFACT, ARENA_STEP, arenaRetargetBatch, arenaRetargetStep } from '../forge/arena-steps'
 import { FLIGHT_SET, MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
 import { effectShape, numbered, pick } from '../forge/package'
 import { stagePrice } from '../forge/pricing'
@@ -308,7 +309,7 @@ export function planSteps(forge: Forge, stage: StageId): StepState[] {
     case 'motion': {
       // the archival rig, then the arena hero: a low-poly mesh, its own rig and motions, then packing (R35, KTD10)
       const batches = presetBatches(forge)
-      return [step('rig'), ...batches.map((_, i) => step(`retarget-${i}`)), step('arena-mesh'), step('arena-rig'), ...batches.map((_, i) => step(`arena-retarget-${i}`)), step('arena-pack')]
+      return [step('rig'), ...batches.map((_, i) => step(`retarget-${i}`)), step(ARENA_STEP.mesh), step(ARENA_STEP.rig), ...batches.map((_, i) => step(arenaRetargetStep(i))), step(ARENA_STEP.pack)]
     }
     case 'form':
       return [step('form-concept'), step('form-mesh')]
@@ -400,16 +401,16 @@ async function startStep(deps: RunnerDeps, forge: Forge, stage: StageId, name: s
   if (name === 'mesh') return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: true, faceLimit: 20_000 }))
   if (name === 'rig') return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: forge.stages.mesh.artifacts.mesh, skeleton: 'mixamo' }))
   const output = (stepName: string) => forge.stages[stage].steps.find((s) => s.name === stepName)?.outputs
-  if (name === 'arena-mesh') return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: false, faceLimit: ARENA_BUDGET.maxTriangles }))
-  if (name === 'arena-rig') return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: output('arena-mesh')!['arena-mesh'], skeleton: 'mixamo' }))
-  const arenaBatch = /^arena-retarget-(\d+)$/.exec(name)
-  if (arenaBatch) return route<RetargetProvider, StepValue>(r, 'retarget', (p) => p.start({ riggedUrl: output('arena-rig')!['arena-rig'], presets: presetBatches(forge)[Number(arenaBatch[1])] }))
-  if (name === 'arena-pack') {
+  if (name === ARENA_STEP.mesh) return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: false, faceLimit: ARENA_BUDGET.maxTriangles }))
+  if (name === ARENA_STEP.rig) return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: output(ARENA_STEP.mesh)![ARENA_STEP.mesh], skeleton: 'mixamo' }))
+  const arenaBatch = arenaRetargetBatch(name)
+  if (arenaBatch !== undefined) return route<RetargetProvider, StepValue>(r, 'retarget', (p) => p.start({ riggedUrl: output(ARENA_STEP.rig)![ARENA_STEP.rig], presets: presetBatches(forge)[arenaBatch] }))
+  if (name === ARENA_STEP.pack) {
     try {
-      const packed = await (deps.packArena ?? packArena)(output('arena-rig')!['arena-rig'])
-      return { ok: true, provider: 'arena-pack', value: { assets: { 'arena-focus': { url: packed.focus, format: 'glb' }, 'arena-other': { url: packed.other, format: 'glb' } } } }
+      const packed = await (deps.packArena ?? packArena)(output(ARENA_STEP.rig)![ARENA_STEP.rig])
+      return { ok: true, provider: ARENA_STEP.pack, value: { assets: { [ARENA_ARTIFACT.focus]: { url: packed.focus, format: 'glb' }, [ARENA_ARTIFACT.other]: { url: packed.other, format: 'glb' } } } }
     } catch (e) {
-      return { ok: false, kind: 'failed', reasons: [{ provider: 'arena-pack', kind: 'failed', reason: e instanceof Error ? e.message : String(e) }] }
+      return { ok: false, kind: 'failed', reasons: [{ provider: ARENA_STEP.pack, kind: 'failed', reason: e instanceof Error ? e.message : String(e) }] }
     }
   }
   if (name === 'form-concept') return image(formRequest(forge))

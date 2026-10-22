@@ -1,3 +1,4 @@
+import { geometryOf } from '../../charter/geometry'
 import type { BuildSlot, Template } from '../../charter/types'
 import { ENGINE } from '../engine/calibration'
 import { chest, isRanged } from '../engine/deliveries'
@@ -100,7 +101,7 @@ function incoming(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]) 
     const dist = length(to)
     if (along <= 0 || dist > AI.seeDistance || stepLen === 0) continue
     const t = along / stepLen
-    const size = setups[p.owner].kit[p.slot].delivery.projectileRadius ?? 0.3
+    const size = geometryOf(setups[p.owner].kit[p.slot].delivery).projectileRadius
     const closest = { x: p.position.x + p.step.x * t - me.x, y: p.position.y + p.step.y * t - me.y, z: p.position.z + p.step.z * t - me.z }
     if (length(closest) <= capsule(hero).radius + size + 0.6) return p
   }
@@ -158,7 +159,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   if (!target || !target.alive) return { moveX: 0, moveZ: 0, vertical: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
-  const shotSpeed = (castTemplate ?? setup.kit.basic).delivery.kind === 'projectile' ? ((castTemplate ?? setup.kit.basic).delivery.speed ?? 30) : undefined
+  const shotSpeed = (castTemplate ?? setup.kit.basic).delivery.kind === 'projectile' ? geometryOf((castTemplate ?? setup.kit.basic).delivery).speed : undefined
   let wanted = anglesTo(from, aimPoint(m, brain, from, target, shotSpeed))
   if (brain.cast?.escape) wanted = { yaw: wanted.yaw + PI, pitch: 0.15 }
   const swung = brain.seen?.target !== target.id

@@ -1,4 +1,5 @@
 import { composeRecipe, defaultRecipe, passiveRecipe } from '../arena/recipes/defaults'
+import { ARENA_ARTIFACT, ARENA_RETARGET_PREFIX } from './arena-steps'
 import type { EffectRecipe } from '../arena/recipes/schema'
 import { validateRecipe } from '../arena/recipes/validate'
 import { BUILD_SLOTS, type Build } from '../charter/build'
@@ -97,7 +98,7 @@ export function motionOptions(forge: Pick<Forge, 'build' | 'spec'>, slot: BuildS
 
 
 /** A motion stage approved before the arena hero existed: it has only the archival rig and motions. */
-export const isLegacyMotion = (forge: Forge) => !forge.stages.motion.artifacts['arena-focus']
+export const isLegacyMotion = (forge: Forge) => !forge.stages.motion.artifacts[ARENA_ARTIFACT.focus]
 
 /** Assemble the manifest from an approved forge. `presetBatches` are the retarget calls, in step order. */
 export function buildPackage(forge: Forge, build: Build, presetBatches: string[][]): HeroPackage {
@@ -122,7 +123,7 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
   const form = forge.stages.form
   const formMesh = form && !form.inputs.skipped ? form.artifacts['form-mesh'] : undefined
   const size = formSize(build)
-  const arenaMotions = numbered(motion, 'arena-retarget')
+  const arenaMotions = numbered(motion, ARENA_RETARGET_PREFIX)
   const rigged = { url: motion.rig, format: format(motion.rig ?? '', 'glb') }
   const archival = presetBatches.map((presets, i) => ({ url: motion[`retarget-${i}`], format: format(motion[`retarget-${i}`] ?? '', 'glb'), presets }))
   return {
@@ -142,8 +143,8 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
       arena: isLegacyMotion(forge)
         ? { focus: rigged, other: rigged, motions: archival }
         : {
-            focus: { url: motion['arena-focus'], format: 'glb' },
-            other: { url: motion['arena-other'], format: 'glb' },
+            focus: { url: motion[ARENA_ARTIFACT.focus], format: 'glb' },
+            other: { url: motion[ARENA_ARTIFACT.other], format: 'glb' },
             motions: presetBatches.map((presets, i) => ({ url: arenaMotions[i], format: 'glb' as const, presets })),
           },
     },

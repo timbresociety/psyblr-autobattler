@@ -67,15 +67,13 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   document.addEventListener('pointerlockchange', lockchange)
 
   c.hooks.human = () => commandFrom(input, c.cameras.yaw, c.cameras.pitch)
-  const prevFrame = c.hooks.frame
-  c.hooks.frame = (dt, alpha) => {
+  const offFrame = c.hooks.on('frame', (dt) => {
     // watching: the free camera flies with the same keys
     if (c.arena.match.human === undefined) {
       const h = (code: string) => (input.held.has(code) ? 1 : 0)
       c.cameras.fly(dt, h('KeyW') - h('KeyS'), h('KeyD') - h('KeyA'), h('Space') - h('KeyZ'))
     }
-    prevFrame?.(dt, alpha)
-  }
+  })
 
   return () => {
     window.removeEventListener('keydown', keydown)
@@ -84,6 +82,8 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
     canvasHost.removeEventListener('mousedown', mousedown)
     window.removeEventListener('mouseup', mouseup)
     document.removeEventListener('pointerlockchange', lockchange)
+    offFrame()
+    c.hooks.human = undefined
     if (locked()) document.exitPointerLock()
   }
 }

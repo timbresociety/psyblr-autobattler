@@ -44,4 +44,16 @@ describe('gate cache (U6, KTD6)', () => {
     expect(again.strongestSlot).toBe(first.strongestSlot)
     expect(again.alternatives?.length).toBeGreaterThanOrEqual(2)
   })
+
+  it('a database outage still gates the build instead of failing the save', async () => {
+    const down = { query: async () => Promise.reject(new Error('connection refused')) } as unknown as Db
+    const outcome = await cachedGate(down, defaultBuild('fighter'), quick)
+    expect(outcome.state).toBe('ready')
+  })
+
+  it('the key changes when the gate itself is run differently', () => {
+    const key = gateKey(defaultBuild('fighter'), quick)
+    expect(gateKey(defaultBuild('fighter'), quick)).toBe(key)
+    expect(gateKey(defaultBuild('fighter'), { ...quick, duelsPerMember: (quick.duelsPerMember ?? 30) + 1 })).not.toBe(key)
+  })
 })

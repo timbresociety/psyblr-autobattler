@@ -2,7 +2,7 @@ import { SIZES } from '../../charter/sizes'
 import type { BuildSlot, DamageType, Effect, Template } from '../../charter/types'
 import { DT, ENGINE, ticks } from './calibration'
 import type { MatchEvent } from './events'
-import { distance } from './maths'
+import { clamp, distance, normalize, scale, sub } from './maths'
 import { next } from './rng'
 import type { HeroSetup, HeroState, MatchState, Stat } from './state'
 
@@ -146,13 +146,35 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
 
 export type PassiveTrigger = 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill'
 
-/** Triggered passives land on the hero itself or the target it just hit; set by `deliveries.ts` to avoid a cycle. */
-export const passiveHooks: { fire?: (ctx: Ctx, hero: HeroState, template: Template, target: HeroState | undefined) => void } = {}
+const PULL_TAGS = ['pull', 'hook', 'gravity', 'vortex', 'black-hole', 'drag']
+
+/** Start a knockback or pull as an engine trajectory over a few ticks (KTD3). Walls stop it. */
+function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Template, distanceM: number) {
+  const pull = template.delivery.kind === 'grapple' || template.tags.some((t) => PULL_TAGS.includes(t))
+  const away = sub(target.position, caster.position)
+  const dir = normalize(pull ? scale(away, -1) : { x: away.x, y: away.y + Math.sqrt(away.x * away.x + away.z * away.z) * 0.25, z: away.z })
+  const metres = pull ? clamp(distance(target.position, caster.position) - 1.5, 0, distanceM) : distanceM
+  const n = ticks(ENGINE.knockbackTime)
+  if (metres <= 0 || n <= 0) return
+  // moveKnockbacks steps in this same tick's after(), so the last step lands on tick + n - 1: n steps in all
+  target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n - 1, grounded: !target.airborne }
+  ctx.events.push({ type: 'knockback', hero: target.id, phase: 'start' })
+}
+
+/** Apply every effect of a template to what it hit. */
+export function resolve(ctx: Ctx, caster: HeroState, template: Template, slot: BuildSlot, hit: HeroState[]) {
+  for (const e of template.effects as Effect[]) {
+    if (e.kind === 'displace') for (const u of hit) displace(ctx, caster, u, template, e.distance)
+    else applyEffect(ctx, caster, template, slot, e, hit)
+  }
+}
 
 export function firePassive(ctx: Ctx, hero: HeroState, trigger: PassiveTrigger, target: HeroState | undefined) {
   const passive = ctx.setups[hero.id].kit.passive
   if (!hero.alive || passive.trigger !== trigger) return
-  passiveHooks.fire?.(ctx, hero, passive, target && target.alive ? target : undefined)
+  // a triggered passive lands on the hero itself or the target it just hit
+  const hit = target && target.alive ? target : undefined
+  resolve(ctx, hero, passive, 'passive', hit ? [hit] : [])
 }
 
 /** Always-on passives and the ultimate's opening cooldown, set once when a hero enters a match. */

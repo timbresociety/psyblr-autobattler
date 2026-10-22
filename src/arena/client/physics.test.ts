@@ -64,4 +64,20 @@ describe('cosmetic physics (U15)', () => {
     const second = await play(true, 20)
     expect(second.physics!.broken).toBe(false)
   }, 120_000)
+
+  it('a Rapier failure turns physics off for the rest of the match instead of throwing', async () => {
+    const p = await CosmeticPhysics.create()
+    const arena = createMatch(armyModifiers(referenceArmy()), armyModifiers(referenceArmy()), 5)
+    p.events([{ type: 'death', hero: 1 }], arena.match)
+    ;(p as unknown as { world: { step: () => void } }).world.step = () => {
+      throw new Error('unreachable')
+    }
+    expect(() => p.step(1 / 60)).not.toThrow()
+    expect(p.broken).toBe(true)
+    expect(p.fallenPose(1)).toBeUndefined()
+    expect(p.rotation(1)).toBeUndefined()
+    expect(p.debrisPoses()).toEqual([])
+    expect(() => p.events([{ type: 'death', hero: 2 }], arena.match)).not.toThrow()
+    expect(() => p.step(1 / 60)).not.toThrow()
+  })
 })

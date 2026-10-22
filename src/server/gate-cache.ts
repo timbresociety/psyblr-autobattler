@@ -3,7 +3,8 @@ import { BUILD_SLOTS, swapAlternatives, type Build } from '../charter/build'
 import { CATALOG_VERSION } from '../charter/templates/catalog'
 import type { BuildSlot } from '../charter/types'
 import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from '../sim/calibration'
-import { gateStamp, runGate, type GateOptions, type GateOutcome } from '../sim/gate'
+import { MAX_RETUNE_STEPS } from '../charter/budget'
+import { GATE_CEILING, GATE_MARGIN, gateStamp, runGate, type GateOptions, type GateOutcome } from '../sim/gate'
 import type { Db } from './db'
 
 /**
@@ -27,6 +28,8 @@ export function gateKey(build: Build, options: GateOptions = {}): string {
     sizeClass: build.sizeClass ?? 'medium',
     options: { duelsPerMember: options.duelsPerMember ?? null, seed: options.seed ?? null, candidateScale: options.candidateScale ?? null, field: options.field ? options.field.map((b) => gateKey(b)) : null },
     versions: [CATALOG_VERSION, CALIBRATION_VERSION, AI_CALIBRATION_VERSION],
+    // the gate's own thresholds decide ready or blocked too, so changing them must miss the cache
+    gate: [GATE_CEILING, GATE_MARGIN, MAX_RETUNE_STEPS],
   }
   return createHash('sha256').update(JSON.stringify(numbers)).digest('hex')
 }
@@ -45,10 +48,14 @@ function replay(input: Build, cached: Cached): GateOutcome {
 /** Run the gate, or reuse the result for the same numbers. */
 export async function cachedGate(db: Db, build: Build, options: GateOptions = {}): Promise<GateOutcome> {
   const key = gateKey(build, options)
-  const { rows } = await db.query<{ outcome: Cached }>('select outcome from gate_cache where key = $1', [key])
-  if (rows.length) return replay(build, rows[0].outcome)
+  // the cache only saves time: if it cannot be read or written, the gate still runs and the save still succeeds
+  const hit = await db.query<{ outcome: Cached }>('select outcome from gate_cache where key = $1', [key]).then(
+    (r) => r.rows[0]?.outcome,
+    () => undefined,
+  )
+  if (hit) return replay(build, hit)
   const outcome = runGate(build, options)
   const cached: Cached = { state: outcome.state, winRate: outcome.winRate, retuneSteps: outcome.build.slots.basic.retuneSteps, ...(outcome.strongestSlot ? { strongestSlot: outcome.strongestSlot } : {}) }
-  await db.query('insert into gate_cache (key, outcome) values ($1, $2) on conflict (key) do nothing', [key, JSON.stringify(cached)])
+  await db.query('insert into gate_cache (key, outcome) values ($1, $2) on conflict (key) do nothing', [key, JSON.stringify(cached)]).catch(() => undefined)
   return outcome
 }
