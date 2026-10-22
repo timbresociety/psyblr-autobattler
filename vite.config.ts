@@ -1,0 +1,18 @@
+import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**'],
+    setupFiles: ['./vitest.setup.ts'],
+    passWithNoTests: true,
+    // balance tests run thousands of simulated fights
+    testTimeout: 60_000,
+  },
+  server: {
+    port: 3110,
+    host: true,
+  },
+})

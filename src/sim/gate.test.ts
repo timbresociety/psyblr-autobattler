@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest'
+import { GATE_CEILING, runGate } from './gate'
+import { handleGateMessage } from './gate-protocol'
+import { defaultBuild } from './fixtures'
+import { CATALOG_VERSION } from '../charter/templates/catalog'
+import { CALIBRATION_VERSION } from './calibration'
+import { hydrateBuild } from '../charter/build'
+import { renderTooltip } from '../charter/tooltip'
+import { getTemplate } from '../charter/templates/catalog'
+import { deriveSheet } from '../charter/stats'
+import { getRole } from '../charter/roles'
+
+const quick = { duelsPerMember: 6 }
+
+describe('balance gate (R15, KTD7)', () => {
+  it('a normal catalogue build passes without retuning', () => {
+    const result = runGate(defaultBuild('fighter'))
+    expect(result.state).toBe('ready')
+    expect(Object.values(result.build.slots).every((s) => s.retuneSteps === 0)).toBe(true)
+    expect(result.winRate).toBeLessThanOrEqual(GATE_CEILING)
+  })
+
+  it('an overtuned build is retuned under the ceiling, and its tooltips show lower numbers', () => {
+    const build = defaultBuild('marksman')
+    const result = runGate(build, { ...quick, candidateScale: 1.35 })
+    expect(result.state).toBe('ready')
+    expect(result.winRate).toBeLessThanOrEqual(GATE_CEILING)
+    const steps = result.build.slots.basic.retuneSteps
+    expect(steps).toBeGreaterThan(0)
+    const sheet = deriveSheet(getRole('marksman'), build.spread).sheet
+    const t = getTemplate(build.slots.basic.templateId)
+    const before = renderTooltip(t, { name: 'x', flavour: '' }, sheet, 0).lines[0]
+    const after = renderTooltip(t, { name: 'x', flavour: '' }, sheet, steps).lines[0]
+    expect(after).not.toBe(before)
+  })
+
+  it('a build still over the ceiling after the retune limit is blocked, with its strongest slot and alternatives (AE5)', () => {
+    const result = runGate(defaultBuild('assassin'), { ...quick, candidateScale: 4 })
+    expect(result.state).toBe('blocked')
+    expect(result.strongestSlot).toBeDefined()
+    expect(result.alternatives?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('stamps the result with the catalogue and calibration versions', () => {
+    const result = runGate(defaultBuild('tank'), quick)
+    expect(result.build.gate).toMatchObject({ catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, state: result.state })
+  })
+
+  it('a retuned build keeps its retune steps when stored, but hydrating untrusted input resets them', () => {
+    const result = runGate(defaultBuild('marksman'), { ...quick, candidateScale: 1.35 })
+    const stored = JSON.parse(JSON.stringify(result.build))
+    expect(stored.slots.basic.retuneSteps).toBe(result.build.slots.basic.retuneSteps)
+    const hydrated = hydrateBuild(stored)
+    expect(hydrated.ok && hydrated.build.slots.basic.retuneSteps).toBe(0)
+  })
+
+  it('the worker path and the Node path give identical results for the same seed', () => {
+    const build = defaultBuild('mage')
+    expect(handleGateMessage({ build, options: quick })).toEqual(runGate(build, quick))
+  })
+})
