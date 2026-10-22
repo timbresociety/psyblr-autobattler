@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 
 export interface ChatMessage {
   from: 'you' | 'engine'
@@ -14,10 +14,12 @@ interface Props {
   onName: (name: string) => void
   onPhoto: (file: File) => void
   onSend: (text: string) => void
+  /** Global loadout matches for the typed name. */
+  search?: ReactNode
 }
 
 /** Creation is conversational first (R13): name, photos, then describe the hero in plain words. */
-export function ChatPanel({ started, heroName, photos, messages, busy, onName, onPhoto, onSend }: Props) {
+export function ChatPanel({ started, heroName, photos, messages, busy, onName, onPhoto, onSend, search }: Props) {
   const [draft, setDraft] = useState('')
   const submit = (e: FormEvent) => {
     e.preventDefault()
@@ -32,6 +34,7 @@ export function ChatPanel({ started, heroName, photos, messages, busy, onName, o
         <span>Hero name</span>
         <input aria-label="Hero name" value={heroName} maxLength={60} placeholder="Jensen, Goku, Superintelligence Unit 7…" onChange={(e) => onName(e.target.value)} />
       </label>
+      {search}
       <label className="field photos">
         <span>Reference photos</span>
         <input aria-label="Reference photos" type="file" accept="image/jpeg,image/png,image/webp" disabled={photos.length >= 3} onChange={(e) => e.target.files?.[0] && onPhoto(e.target.files[0])} />

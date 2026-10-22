@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   BUILD_SLOTS,
   changeRole,
@@ -12,7 +12,9 @@ import {
   type SkillText,
 } from '../../charter/build'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
-import { liveDeps, type CreatorDeps } from '../api'
+import { liveDeps, type BuildRecord, type CreatorDeps, type HeroResult } from '../api'
+import { Loadout } from './Loadout'
+import { LoadoutSearch } from './LoadoutSearch'
 import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { RoleSwitcher } from './RoleSwitcher'
@@ -33,6 +35,55 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   const [notice, setNotice] = useState<string>()
   const [checking, setChecking] = useState(false)
   const [alternatives, setAlternatives] = useState<Template[]>()
+  const [buildId, setBuildId] = useState<string>()
+  const [loadout, setLoadout] = useState<BuildRecord[]>([])
+  const [saving, setSaving] = useState(false)
+
+  const refreshLoadout = useCallback(() => {
+    deps.listBuilds().then(setLoadout, () => setLoadout([]))
+  }, [deps])
+  useEffect(refreshLoadout, [refreshLoadout])
+  const search = useCallback((q: string) => deps.search(q), [deps])
+
+  function open(record: BuildRecord) {
+    setBuild(record.build)
+    setBuildId(record.id)
+    setHeroName(record.build.heroName)
+    setAlternatives(undefined)
+    setNotice(undefined)
+  }
+
+  async function addFromLoadout(hero: HeroResult) {
+    try {
+      const record = await deps.addHero(hero.id)
+      open(record)
+      if (hero.photo) setPhotos([hero.photo])
+      say(`Added ${hero.name} for free. The look is shared; this build is yours to tune.`)
+      refreshLoadout()
+    } catch {
+      say(`Couldn't add ${hero.name} right now. Try again in a moment.`)
+    }
+  }
+
+  async function save() {
+    if (!build) return
+    setSaving(true)
+    try {
+      if (buildId) {
+        const record = await deps.saveBuild(buildId, build)
+        setBuild(record.build)
+      } else {
+        const created = await deps.createHero(build, photoUrls)
+        setBuildId(created.buildId)
+      }
+      say('Saved to your loadout.')
+      refreshLoadout()
+    } catch {
+      say("Couldn't save right now. Your hero stays here; try again in a moment.")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const say = (text: string) => setMessages((m) => [...m, { from: 'engine', text }])
   const showLimits = (limits: LimitHit[]) => setNotice(limits.length ? [...new Set(limits.map(describeLimit))].join(' ') : undefined)
@@ -107,8 +158,22 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
 
   return (
     <main className="creator">
-      <ChatPanel started={!!build} heroName={heroName} photos={photos} messages={messages} busy={busy} onName={(n) => { setHeroName(n); if (build) setBuild({ ...build, heroName: n }) }} onPhoto={addPhoto} onSend={send} />
+      <ChatPanel
+        started={!!build}
+        heroName={heroName}
+        photos={photos}
+        messages={messages}
+        busy={busy}
+        onName={(n) => {
+          setHeroName(n)
+          if (build) setBuild({ ...build, heroName: n })
+        }}
+        onPhoto={addPhoto}
+        onSend={send}
+        search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} onBuildOwn={() => undefined} />}
+      />
       <div className="kit">
+        <Loadout builds={loadout} activeId={buildId} onOpen={open} />
         {offline && (
           <p className="offline" role="status">
             Offline mode: the engine is matching skills by keywords until the AI is back.
@@ -145,6 +210,11 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
               ))}
             </div>
             <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))} />
+            {build.gate.state === 'ready' && (
+              <button className="primary save" onClick={save} disabled={saving}>
+                {buildId ? 'Save changes' : 'Save to loadout'}
+              </button>
+            )}
           </>
         )}
       </div>

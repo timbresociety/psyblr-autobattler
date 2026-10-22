@@ -16,6 +16,11 @@ function deps(over: Partial<CreatorDeps> = {}): CreatorDeps {
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build): Promise<GateOutcome> => ({ state: 'ready', winRate: 0.5, build: { ...build, gate: { state: 'ready', winRate: 0.5 } } })),
     uploadPhoto: vi.fn(async () => undefined),
+    search: vi.fn(async () => []),
+    addHero: vi.fn(async () => { throw new Error('unused') }),
+    createHero: vi.fn(async () => ({ heroId: 'h1', buildId: 'b1' })),
+    saveBuild: vi.fn(async (id: string, build: Build) => ({ id, heroId: 'h1', build })),
+    listBuilds: vi.fn(async () => []),
     ...over,
   }
 }

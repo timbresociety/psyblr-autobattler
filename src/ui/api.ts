@@ -20,11 +20,32 @@ export interface ChatResponse extends ProposeResponse {
   understood: boolean
 }
 
+export interface HeroResult {
+  id: string
+  name: string
+  roleId: string
+  photo: string | null
+  useCount: number
+}
+
+export interface BuildRecord {
+  id: string
+  heroId: string
+  build: Build
+}
+
 export interface CreatorDeps {
   propose(hero: ProposalInput & { photoUrls?: string[] }): Promise<ProposeResponse>
   chat(build: Build, message: string): Promise<ChatResponse>
   runGate(build: Build): Promise<GateOutcome>
   uploadPhoto(file: File): Promise<string | undefined>
+  /** Global loadout search by name (R18). Throws when the API is unreachable. */
+  search(query: string): Promise<HeroResult[]>
+  /** Add a shared hero for free: a new build copied from the creator's original. */
+  addHero(heroId: string): Promise<BuildRecord>
+  createHero(build: Build, photoUrls: string[]): Promise<{ heroId: string; buildId: string }>
+  saveBuild(id: string, build: Build): Promise<BuildRecord>
+  listBuilds(): Promise<BuildRecord[]>
 }
 
 const DEVICE_KEY = 'psyblr.deviceId'
@@ -116,6 +137,26 @@ export const liveDeps: CreatorDeps = {
     }
   },
   runGate: localGate,
+  async search(query) {
+    const res = await fetch(`/api/heroes/search?q=${encodeURIComponent(query)}`)
+    if (!res.ok) throw new Error(`search ${res.status}`)
+    return ((await res.json()) as { heroes: HeroResult[] }).heroes
+  },
+  addHero: (heroId) => post<BuildRecord>('/api/heroes', { addHeroId: heroId }),
+  createHero: (build, photoUrls) => post<{ heroId: string; buildId: string }>('/api/heroes', { build, photoUrls }),
+  async saveBuild(id, build) {
+    const device = await deviceId()
+    const res = await fetch('/api/builds', { method: 'PUT', headers: { 'content-type': 'application/json', ...(device ? { 'x-device-id': device } : {}) }, body: JSON.stringify({ id, build }) })
+    if (!res.ok) throw new Error(`save ${res.status}`)
+    return (await res.json()) as BuildRecord
+  },
+  async listBuilds() {
+    const device = await deviceId()
+    if (!device) return []
+    const res = await fetch('/api/builds', { headers: { 'x-device-id': device } })
+    if (!res.ok) return []
+    return ((await res.json()) as { builds: BuildRecord[] }).builds
+  },
   async uploadPhoto(file) {
     const id = await deviceId()
     if (!id) return undefined
