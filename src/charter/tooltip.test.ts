@@ -68,3 +68,11 @@ describe('tooltips', () => {
     expect(renderTooltip(all, { name: 'Everything', flavour: '' }, sheet(40)).lines.length).toBeGreaterThan(6)
   })
 })
+
+describe('passive tooltips', () => {
+  it('an always-on passive buff reads as permanent', async () => {
+    const { getTemplate } = await import('./templates/catalog')
+    const tip = renderTooltip(getTemplate('tank-thick-hide'), { name: 'Thick Hide', flavour: '' }, sheet(40))
+    expect(tip.lines[0]).toMatch(/damage reduction$/)
+  })
+})

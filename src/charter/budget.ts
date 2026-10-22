@@ -10,7 +10,7 @@ import type { Delivery, Effect, SecondarySheet, SlotKind, Template, Validation, 
 export const SLOT_BUDGETS: Record<SlotKind, number> = {
   basic: 70,
   active: 22,
-  passive: 40,
+  passive: 20,
   ultimate: 14,
   movement: 12,
 }
@@ -28,7 +28,7 @@ export function retuneFactor(steps: number): number {
 /** The mid-game sheet every template is priced against. */
 export const REFERENCE_SHEET: Pick<SecondarySheet, 'weaponDamage' | 'spiritPower'> = { weaponDamage: 60, spiritPower: 50 }
 
-const PASSIVE_TRIGGER_WEIGHT = { always: 1, onHit: 1, everyThirdHit: 0.4, lowHealth: 0.5, onKill: 0.3 } as const
+const PASSIVE_TRIGGER_WEIGHT = { always: 1, onHit: 1, everyThirdHit: 0.4, lowHealth: 0.15, onKill: 0.15 } as const
 const BUFF_WEIGHT = { damage: 160, attackSpeed: 140, moveSpeed: 60, damageReduction: 190 } as const
 const TARGET_WEIGHT = { self: 1, ally: 1.1, allies: 1.6 } as const
 
