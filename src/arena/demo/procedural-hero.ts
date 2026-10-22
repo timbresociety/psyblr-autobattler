@@ -33,38 +33,62 @@ const SKELETON: Record<BoneName, [BoneName | null, number, number]> = {
   mixamorigRightLeg: ['mixamorigRightUpLeg', 0, -0.45],
 }
 
-/** Body parts: geometry, centre in the bind pose, and the bone that carries it. */
-function parts(): [THREE.BufferGeometry, number, number, BoneName][] {
+/** Which colour of the suit a body part wears. */
+type Paint = 'skin' | 'hair' | 'suit' | 'trim' | 'dark' | 'glove' | 'boot'
+
+/** Body parts: geometry, centre in the bind pose, the bone that carries it, and its paint. */
+function parts(): [THREE.BufferGeometry, number, number, BoneName, Paint][] {
   const cap = (r: number, h: number) => new THREE.CapsuleGeometry(r, h, 8, 22, 3)
   const limb = (r: number, h: number) => new THREE.CapsuleGeometry(r, h, 6, 16, 2)
-  const parts: [THREE.BufferGeometry, number, number, BoneName][] = [
-    [cap(0.17, 0.12), 0, 1.04, 'mixamorigHips'],
-    [cap(0.16, 0.14), 0, 1.3, 'mixamorigSpine'],
-    [cap(0.2, 0.16), 0, 1.52, 'mixamorigSpine2'],
-    [new THREE.CylinderGeometry(0.06, 0.07, 0.12, 16, 2), 0, 1.72, 'mixamorigNeck'],
-    [new THREE.SphereGeometry(0.12, 28, 20), 0, 1.88, 'mixamorigHead'],
+  const hair = new THREE.SphereGeometry(0.128, 18, 7, 0, Math.PI * 2, 0, Math.PI * 0.55)
+  const parts: [THREE.BufferGeometry, number, number, BoneName, Paint][] = [
+    [cap(0.17, 0.12), 0, 1.04, 'mixamorigHips', 'dark'],
+    [cap(0.16, 0.14), 0, 1.3, 'mixamorigSpine', 'trim'],
+    [cap(0.2, 0.16), 0, 1.52, 'mixamorigSpine2', 'suit'],
+    [new THREE.CylinderGeometry(0.06, 0.07, 0.12, 16, 2), 0, 1.72, 'mixamorigNeck', 'skin'],
+    [new THREE.SphereGeometry(0.12, 24, 16), 0, 1.88, 'mixamorigHead', 'skin'],
+    [hair, 0, 1.9, 'mixamorigHead', 'hair'],
   ]
   for (const side of [1, -1]) {
     const L = side === 1 ? 'Left' : 'Right'
     parts.push(
-      [limb(0.055, 0.2), 0.24 * side, 1.5, `mixamorig${L}Arm` as BoneName],
-      [limb(0.045, 0.2), 0.24 * side, 1.2, `mixamorig${L}ForeArm` as BoneName],
-      [new THREE.SphereGeometry(0.05, 14, 10), 0.24 * side, 1.04, `mixamorig${L}ForeArm` as BoneName],
-      [limb(0.08, 0.3), 0.12 * side, 0.72, `mixamorig${L}UpLeg` as BoneName],
-      [limb(0.06, 0.3), 0.12 * side, 0.3, `mixamorig${L}Leg` as BoneName],
-      [new THREE.BoxGeometry(0.1, 0.06, 0.22, 3, 2, 4), 0.12 * side, 0.04, `mixamorig${L}Leg` as BoneName],
+      [limb(0.055, 0.2), 0.24 * side, 1.5, `mixamorig${L}Arm` as BoneName, 'suit'],
+      [limb(0.045, 0.2), 0.24 * side, 1.2, `mixamorig${L}ForeArm` as BoneName, 'skin'],
+      [new THREE.SphereGeometry(0.05, 14, 10), 0.24 * side, 1.04, `mixamorig${L}ForeArm` as BoneName, 'glove'],
+      [limb(0.08, 0.3), 0.12 * side, 0.72, `mixamorig${L}UpLeg` as BoneName, 'dark'],
+      [limb(0.06, 0.3), 0.12 * side, 0.3, `mixamorig${L}Leg` as BoneName, 'dark'],
+      [new THREE.BoxGeometry(0.1, 0.06, 0.22, 3, 2, 4), 0.12 * side, 0.04, `mixamorig${L}Leg` as BoneName, 'boot'],
     )
   }
   return parts
 }
 
+/** A clean anime suit in the hero's hue: skin, dark hair, the suit with a lighter trim, darker legs, gloves and boots. */
+export function suitColors(hue: number): Record<Paint, THREE.Color> {
+  const hsl = (h: number, s: number, l: number) => new THREE.Color().setHSL(((h % 1) + 1) % 1, s, l, THREE.SRGBColorSpace)
+  return {
+    skin: hsl(0.07, 0.45, 0.72),
+    hair: hsl(hue + 0.55, 0.35, 0.16),
+    suit: hsl(hue, 0.7, 0.5),
+    trim: hsl(hue + 0.08, 0.75, 0.68),
+    dark: hsl(hue, 0.35, 0.2),
+    glove: hsl(0.13, 0.1, 0.92),
+    boot: hsl(hue + 0.02, 0.3, 0.14),
+  }
+}
+
 export const SIZE_SCALE: Record<SizeClass, number> = { tiny: 0.8, small: 0.9, medium: 1, large: 1.15, huge: 1.3, colossal: 1.6 }
 
-export function bodyGeometry(): THREE.BufferGeometry {
-  const pieces = parts().map(([geo, x, y, bone]) => {
+/** The skinned body; with `colors`, each part also carries its suit colour as a vertex colour. */
+export function bodyGeometry(colors?: Record<Paint, THREE.Color>): THREE.BufferGeometry {
+  const pieces = parts().map(([geo, x, y, bone, paint]) => {
     const g = (geo.index ? geo.toNonIndexed() : geo).translate(x, y, 0)
     g.deleteAttribute('normal')
     const count = g.getAttribute('position').count
+    if (colors) {
+      const c = colors[paint]
+      g.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(count * 3).map((_, i) => [c.r, c.g, c.b][i % 3]), 3))
+    }
     const index = BONE_NAMES.indexOf(bone)
     g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(new Uint16Array(count * 4).map((_, i) => (i % 4 === 0 ? index : 0)), 4))
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(new Float32Array(count * 4).map((_, i) => (i % 4 === 0 ? 1 : 0)), 4))
@@ -128,12 +152,18 @@ export interface BenchHero {
   animate: (t: number, flying: boolean) => void
 }
 
-export function benchHero(options: { hue: number; sizeClass: SizeClass; textureSize: number; seed: number; geometry?: THREE.BufferGeometry }): BenchHero {
+export function benchHero(options: { hue: number; sizeClass: SizeClass; textureSize: number; seed: number; geometry?: THREE.BufferGeometry; look?: 'bench' | 'suit' }): BenchHero {
   const { root, bones } = skeleton()
-  const { map, orm } = textures(options.hue, options.textureSize, options.seed)
-  const material = new THREE.MeshStandardMaterial({ map, roughnessMap: orm, aoMap: orm, metalnessMap: orm })
+  // the bench keeps its textured material so frame times stay comparable; the arena dresses demo heroes in a suit
+  const suit = options.look === 'suit'
+  const material = suit
+    ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 })
+    : (() => {
+        const { map, orm } = textures(options.hue, options.textureSize, options.seed)
+        return new THREE.MeshStandardMaterial({ map, roughnessMap: orm, aoMap: orm, metalnessMap: orm })
+      })()
   // each hero gets its own geometry unless the caller shares one, so the bench measures distinct heroes
-  const mesh = new THREE.SkinnedMesh(options.geometry ?? bodyGeometry(), material)
+  const mesh = new THREE.SkinnedMesh(options.geometry ?? bodyGeometry(suit ? suitColors(options.hue) : undefined), material)
   mesh.add(root)
   mesh.updateMatrixWorld(true)
   mesh.bind(new THREE.Skeleton(BONE_NAMES.map((n) => bones[n])))

@@ -35,7 +35,7 @@ const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run'
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const demo = DEMO_HEROES.find((h) => h.heroName === build.heroName)
   const hue = demo?.hue ?? (index * 0.137) % 1
-  const hero = benchHero({ hue: fallback ? 0 : hue, sizeClass: build.sizeClass ?? 'medium', textureSize: 512, seed: index + 1 })
+  const hero = benchHero({ hue: fallback ? 0 : hue, sizeClass: build.sizeClass ?? 'medium', textureSize: 512, seed: index + 1, look: 'suit' })
   if (fallback) (hero.mesh.material as THREE.MeshStandardMaterial).color.setRGB(0.55, 0.57, 0.62)
   const root = new THREE.Group()
   root.add(hero.mesh)

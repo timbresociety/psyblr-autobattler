@@ -28,7 +28,7 @@ export function MatchHud({ state, side, builds }: { state: HudState; side: 0 | 1
         {stats ? 'Hide stats' : 'Stats'}
       </button>
       {stats && <StatsPanel heroes={state.heroes} seconds={state.seconds} />}
-      <ol className="roster" aria-label="Your heroes">
+      <ol className={`roster side-${side}`} aria-label="Your heroes">
         {mine.map((h, i) => (
           <li key={h.id} className={`${h.alive ? '' : 'dead'} ${state.controlled === h.id ? 'controlled' : ''} ${h.fallback ? 'fallback' : ''}`} title={h.fallback ? 'This hero’s model failed to load; it fights as a stand-in.' : undefined}>
             <kbd>{(i + 1) % 10}</kbd>

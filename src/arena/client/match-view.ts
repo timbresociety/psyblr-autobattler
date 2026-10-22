@@ -7,7 +7,7 @@ import { ENGINE } from '../engine/calibration'
 import type { MatchEvent } from '../engine/events'
 import type { Vec3 } from '../engine/maths'
 import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match'
-import type { Command, Team } from '../engine/state'
+import { capsule, type Command, type Team } from '../engine/state'
 import { tick } from '../engine/tick'
 import { createAnimator, onEvents, settle, type Animator } from './animation'
 import { Cameras } from './camera'
@@ -15,7 +15,7 @@ import { TEAM_COLORS } from './map'
 import { handBack, releaseIfDead, take } from './takeover'
 import { loadHeroView, type HeroView } from './heroes'
 import { createClock, frame } from './loop'
-import { buildMap, lights, type ArenaMap } from './map'
+import { atmosphere, buildMap, lights, type ArenaMap } from './map'
 import { CosmeticPhysics, PHYSICS } from './physics'
 import { atLeast, createGuard, observe, type QualityLevel } from './quality'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
@@ -153,6 +153,22 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
   }
 }
 
+/**
+ * Bloom for the anime spectacle: only bright things glow (effects, the centre line, the barrier trim). Built through
+ * three's render pipeline, which works on both backends; if it cannot be built the match renders without it.
+ */
+async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>>['renderer'], scene: THREE.Scene, camera: THREE.Camera) {
+  try {
+    const [{ RenderPipeline }, { pass }, { bloom }] = await Promise.all([import('three/webgpu'), import('three/tsl'), import('three/addons/tsl/display/BloomNode.js')])
+    const scenePass = pass(scene, camera)
+    const color = scenePass.getTextureNode('output')
+    const pipeline = new RenderPipeline(renderer, color.add(bloom(color, 0.55, 0.35, 0.82)))
+    return { pipeline, enabled: true }
+  } catch {
+    return undefined
+  }
+}
+
 /** The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. */
 async function createStage(host: HTMLElement) {
   const canvas = document.createElement('canvas')
@@ -163,12 +179,16 @@ async function createStage(host: HTMLElement) {
     const pixelRatio = Math.min(2, window.devicePixelRatio)
     renderer.setPixelRatio(pixelRatio)
     renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.05
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x10141c)
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
+    atmosphere(scene)
     const map = buildMap()
     scene.add(map.group)
     const sun = lights(scene)
+    const glow = await bloomPipeline(renderer, scene, camera)
     const resize = () => {
       const w = host.clientWidth
       const h = host.clientHeight
@@ -181,7 +201,9 @@ async function createStage(host: HTMLElement) {
       renderer.dispose()
       canvas.remove()
     }
-    return { canvas, renderer, backend, pixelRatio, scene, camera, map, sun, resize, dispose }
+    // with bloom off (unsupported, or dropped by the frame-rate guard) the frame renders directly
+    const draw = () => (glow?.enabled ? glow.pipeline.render() : renderer.render(scene, camera))
+    return { canvas, renderer, backend, pixelRatio, scene, camera, map, sun, glow, draw, resize, dispose }
   } catch (e) {
     canvas.remove()
     throw e
@@ -204,6 +226,8 @@ function qualityControl(stage: Stage) {
       if (next === current) return
       current = next
       stage.sun.castShadow = !atLeast(current, 'no-shadows')
+      // bloom is the first post effect to go when particles are thinned
+      if (stage.glow) stage.glow.enabled = !atLeast(current, 'fewer-particles')
       stage.renderer.setPixelRatio(atLeast(current, 'low-resolution') ? Math.max(0.75, stage.pixelRatio * 0.6) : stage.pixelRatio)
       stage.resize()
     },
@@ -266,17 +290,25 @@ function drawDebris(debris: THREE.InstancedMesh, physics: CosmeticPhysics | unde
 }
 
 /** Team-coloured markers over every living hero except the controlled one, whose shoulder the camera sits on (R38). */
-function drawMarkers(markers: THREE.InstancedMesh, arena: Arena, views: HeroView[], drawn: Vec3[]) {
-  place.quaternion.identity()
+function drawMarkers(markers: THREE.InstancedMesh, rings: THREE.InstancedMesh, arena: Arena, views: HeroView[], drawn: Vec3[]) {
   arena.match.heroes.forEach((h, i) => {
     const at = drawn[i]
+    place.quaternion.identity()
     place.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
     place.scale.setScalar(h.alive && arena.match.human !== i ? 1 : 0)
     place.updateMatrix()
     markers.setMatrixAt(i, place.matrix)
+    // a team ring on the floor under every living hero, sized to its hitbox, so a crowd still reads at a glance
+    place.position.set(at.x, 0.03, at.z)
+    place.quaternion.setFromAxisAngle(right, -Math.PI / 2)
+    place.scale.setScalar(h.alive ? capsule(h).radius * 1.6 : 0)
+    place.updateMatrix()
+    rings.setMatrixAt(i, place.matrix)
   })
   markers.instanceMatrix.needsUpdate = true
+  rings.instanceMatrix.needsUpdate = true
 }
+const right = new THREE.Vector3(1, 0, 0)
 
 /** Load everything a match needs, reporting progress, then run it until `stop` (U13). */
 export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
@@ -318,8 +350,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   debris.count = 0
   scene.add(debris)
   const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
-  arena.match.heroes.forEach((h, i) => markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
-  scene.add(markers)
+  const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
+  arena.match.heroes.forEach((h, i) => {
+    markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team]))
+    rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team]))
+  })
+  scene.add(markers, rings)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
@@ -378,10 +414,10 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     physics?.step(dt)
     drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
     drawDebris(debris, physics)
-    drawMarkers(markers, arena, views, drawn)
+    drawMarkers(markers, rings, arena, views, drawn)
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
     hooks.emit.frame(dt, alpha)
-    renderer.render(scene, camera)
+    stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
     if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality.current()))
     requestAnimationFrame(loop)
