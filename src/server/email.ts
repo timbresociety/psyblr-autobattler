@@ -17,6 +17,8 @@ export function fakeEmailSender(): EmailSender & { outbox: { to: string; subject
     available: () => true,
     async send(to, subject, text) {
       outbox.push({ to, subject, text })
+      // development only (production never builds this sender): the link goes to the dev server log (KTD5)
+      if (!process.env.VITEST) console.info(`[dev email] to ${to}: ${text}`)
     },
   }
 }
