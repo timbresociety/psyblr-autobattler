@@ -46,6 +46,14 @@ describe('proposeBuild', () => {
   })
 })
 
+describe('inferRole', () => {
+  it('matches whole words only', async () => {
+    const { inferRole } = await import('./build')
+    // "skills" must not count as the assassin word "kill", nor "health" as the support word "heal"
+    expect(inferRole('Professor', { active1: { name: 'Lecture', flavour: 'many skills and good health' } })).not.toBe('assassin')
+  })
+})
+
 describe('allocate and setAttribute (AE4)', () => {
   it('dragging an attribute past its cap stops at the cap and names the limit', () => {
     const build = mage()

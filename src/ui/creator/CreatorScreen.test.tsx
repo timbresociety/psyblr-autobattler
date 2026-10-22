@@ -137,3 +137,35 @@ describe('creator (U11)', () => {
     await waitFor(() => expect(screen.getByText(/Ready for battle · wins 50%/)).toBeTruthy())
   })
 })
+
+describe('creator async safety', () => {
+  it('an edit made during the balance check is kept; the stale result is discarded', async () => {
+    let finish: (o: GateOutcome) => void = () => undefined
+    const runGate = vi.fn((build: Build) => new Promise<GateOutcome>((resolve) => { finish = resolve; void build }))
+    await forge(deps({ runGate }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ready' }))
+    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    const stale = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: {} }).build
+    await act(async () => finish({ state: 'ready', winRate: 0.5, build: { ...stale, gate: { state: 'ready', winRate: 0.5 } } }))
+    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('tank')
+    expect(await screen.findByText(/changed during the balance check/)).toBeTruthy()
+  })
+
+  it('a failing balance check says so instead of hanging', async () => {
+    const runGate = vi.fn(async () => { throw new Error('worker died') })
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    expect(await screen.findByText(/Couldn't run the balance check/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('a failed photo upload removes the preview and tells the player', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:preview')
+    URL.revokeObjectURL = vi.fn()
+    render(<CreatorScreen deps={deps({ uploadPhoto: vi.fn(async () => undefined) })} />)
+    const file = new File([new Uint8Array([1, 2, 3])], 'me.png', { type: 'image/png' })
+    await act(async () => fireEvent.change(screen.getByLabelText('Reference photos'), { target: { files: [file] } }))
+    expect(await screen.findByText(/Couldn't upload that photo/)).toBeTruthy()
+    expect(document.querySelectorAll('.thumbs img')).toHaveLength(0)
+  })
+})

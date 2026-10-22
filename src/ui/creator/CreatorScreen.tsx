@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BUILD_SLOTS,
   changeRole,
@@ -39,6 +39,12 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   const [buildId, setBuildId] = useState<string>()
   const [loadout, setLoadout] = useState<BuildRecord[]>([])
   const [saving, setSaving] = useState(false)
+  const [adding, setAdding] = useState(false)
+  // bumped on every change the player makes; an async result started before a change is discarded
+  const edits = useRef(0)
+  const changed = () => {
+    edits.current++
+  }
 
   const refreshLoadout = useCallback(() => {
     deps.listBuilds().then(setLoadout, () => setLoadout([]))
@@ -47,6 +53,9 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   const search = useCallback((q: string) => deps.search(q), [deps])
 
   function open(record: BuildRecord) {
+    changed()
+    setPhotos([])
+    setPhotoUrls([])
     setBuild(record.build)
     setBuildId(record.id)
     setHeroName(record.build.heroName)
@@ -55,6 +64,8 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   }
 
   async function addFromLoadout(hero: HeroResult) {
+    if (adding) return
+    setAdding(true)
     try {
       const record = await deps.addHero(hero.id)
       open(record)
@@ -63,6 +74,8 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
       refreshLoadout()
     } catch {
       say(`Couldn't add ${hero.name} right now. Try again in a moment.`)
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -91,6 +104,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
 
   const apply = (result: OpResult) => {
     if (result.ok) {
+      changed()
       setBuild(result.build)
       setAlternatives(undefined)
       showLimits(result.limits)
@@ -101,9 +115,13 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   async function send(text: string) {
     setMessages((m) => [...m, { from: 'you', text }])
     setBusy(true)
+    const started = edits.current
+    const stale = () => edits.current !== started
     try {
       if (!build) {
         const res = await deps.propose({ heroName: heroName.trim(), description: text, skills: {}, photoUrls })
+        if (stale()) return
+        changed()
         setBuild({ ...res.build, heroName: heroName.trim() })
         setOffline(res.offline)
         showLimits(res.limits)
@@ -111,32 +129,54 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
         return
       }
       const res = await deps.chat(build, text)
+      if (stale()) {
+        say('You changed the hero while I was thinking, so I left your edits as they are. Ask again if you still want that change.')
+        return
+      }
       setOffline(res.offline)
       if (!res.understood) {
         say(res.offline ? 'Offline: I can only read simple stat requests right now. Use the controls on the right.' : "I couldn't turn that into a change. Try naming a stat.")
         return
       }
+      changed()
       setBuild(res.build)
       showLimits(res.limits)
       say(res.limits.length ? `Done, within the limits: ${[...new Set(res.limits.map(describeLimit))].join(' ')}` : 'Done.')
+    } catch {
+      say('Something went wrong on my side. Your hero is unchanged; try again.')
     } finally {
       setBusy(false)
     }
   }
 
   async function addPhoto(file: File) {
-    setPhotos((p) => [...p, URL.createObjectURL(file)])
+    const preview = URL.createObjectURL(file)
+    setPhotos((p) => [...p, preview])
     const url = await deps.uploadPhoto(file)
-    if (url) setPhotoUrls((p) => [...p, url])
+    if (url) {
+      setPhotoUrls((p) => [...p, url])
+      return
+    }
+    // an upload that failed must not look attached
+    setPhotos((p) => p.filter((src) => src !== preview))
+    URL.revokeObjectURL(preview)
+    say("Couldn't upload that photo. Try again in a moment.")
   }
 
   async function ready() {
     if (!build) return
     setChecking(true)
+    const started = edits.current
     try {
       const outcome = await deps.runGate(build)
+      if (edits.current !== started) {
+        say('The hero changed during the balance check. Press Ready to check the new version.')
+        return
+      }
       setBuild(outcome.build)
       setAlternatives(outcome.alternatives)
+    } catch {
+      say("Couldn't run the balance check. Try again.")
     } finally {
       setChecking(false)
     }
@@ -167,11 +207,14 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
         busy={busy}
         onName={(n) => {
           setHeroName(n)
-          if (build) setBuild({ ...build, heroName: n })
+          if (build) {
+            changed()
+            setBuild({ ...build, heroName: n })
+          }
         }}
         onPhoto={addPhoto}
         onSend={send}
-        search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} onBuildOwn={() => undefined} />}
+        search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} adding={adding} />}
       />
       <div className="kit">
         <Loadout builds={loadout} activeId={buildId} onOpen={open} />

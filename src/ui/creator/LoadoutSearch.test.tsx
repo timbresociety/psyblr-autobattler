@@ -104,3 +104,18 @@ describe('global loadout (U12)', () => {
     expect(d.createHero).toHaveBeenCalled()
   })
 })
+
+describe('loadout add safety', () => {
+  it('"Add free" is disabled while an add is in flight, so one click adds once', async () => {
+    let finish: () => void = () => undefined
+    const addHero = vi.fn(() => new Promise<{ id: string; heroId: string; build: Build }>((resolve) => { finish = () => resolve({ id: 'b', heroId: jensen.id, build: structuredClone(original) }) }))
+    render(<CreatorScreen deps={deps({ addHero })} />)
+    typeName('Jen')
+    const add = await screen.findByRole('button', { name: 'Add free' })
+    await act(async () => fireEvent.click(add))
+    expect((add as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(add)
+    await act(async () => finish())
+    expect(addHero).toHaveBeenCalledTimes(1)
+  })
+})

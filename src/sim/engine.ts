@@ -3,7 +3,7 @@ import { retuneFactor, scaleMagnitudes } from '../charter/budget'
 import { getRole } from '../charter/roles'
 import { deriveSheet } from '../charter/stats'
 import { getTemplate } from '../charter/templates/catalog'
-import type { BuildSlot, DamageType, Effect, SecondarySheet, Template } from '../charter/types'
+import type { BuildSlot, DamageType, Effect, RoleId, SecondarySheet, Template } from '../charter/types'
 import { chooseCast, chooseTarget, preferredDistance } from './ai'
 import { CALIBRATION } from './calibration'
 import { createRng, type Rng } from './rng'
@@ -32,6 +32,7 @@ export interface Unit {
   id: number
   team: 0 | 1
   name: string
+  roleId: RoleId
   sheet: SecondarySheet
   kit: Record<BuildSlot, Template>
   maxHp: number
@@ -106,7 +107,7 @@ function createUnit(c: Combatant, id: number, team: 0 | 1, position: Vec): Unit 
   const { sheet, kit } = prepare(c.build, c.powerScale ?? 1)
   const cooldowns = { basic: 0, active1: 0, active2: 0, passive: 0, ultimate: CALIBRATION.ultimateStartCooldown, movement: 0 }
   const unit: Unit = {
-    id, team, name: c.build.heroName, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
+    id, team, name: c.build.heroName, roleId: c.build.roleId, sheet, kit, maxHp: sheet.maxHealth, hp: sheet.maxHealth, shield: 0, shieldUntil: 0, position,
     stunnedUntil: 0, invulnerableUntil: 0, slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, hitCount: 0,
     lowHealthFired: false, alive: true, damageDealt: 0, damageBonus: c.damageBonus ?? 0, passiveRegen: 0, recentHeals: [], casts: {},
   }

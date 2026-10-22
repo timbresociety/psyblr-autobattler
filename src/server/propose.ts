@@ -17,6 +17,8 @@ import {
 import { ROLES, ROLE_IDS, isRoleId } from '../charter/roles'
 import { ATTRIBUTES, SECONDARY_STATS } from '../charter/stats'
 import { CATALOG, poolFor } from '../charter/templates/catalog'
+import { matchTemplate } from '../charter/match'
+import { isOwnPhotoUrl } from './photo-url'
 import type { BuildSlot, LimitHit, SecondaryStat, Spread } from '../charter/types'
 import { RateLimiter } from './rate-limit'
 import { parseStatWishes } from '../charter/chat'
@@ -69,6 +71,17 @@ export const anthropicCall: ModelCall = async ({ system, content, schema }) => {
 }
 
 function checkInput(input: HeroRequest) {
+  if (!input || typeof input !== 'object') throw new InputError('hero is required')
+  if (typeof input.heroName !== 'string') throw new InputError('hero name is required')
+  if (input.skills === undefined) input.skills = {}
+  if (typeof input.skills !== 'object' || input.skills === null) throw new InputError('skills must be an object')
+  if (input.roleId !== undefined && !isRoleId(input.roleId)) throw new InputError('unknown role')
+  if (input.description !== undefined && typeof input.description !== 'string') throw new InputError('description must be text')
+  for (const skill of Object.values(input.skills)) {
+    if (!skill) continue
+    for (const field of [skill.name, skill.flavour, skill.visual]) if (field !== undefined && typeof field !== 'string') throw new InputError('skill text must be text')
+  }
+  if (input.photoUrls !== undefined && !Array.isArray(input.photoUrls)) throw new InputError('photoUrls must be a list')
   const tooLong = (value: string | undefined, max: number) => (value ?? '').length > max
   if (!input.heroName?.trim() || tooLong(input.heroName, TEXT_LIMITS.heroName)) throw new InputError('hero name is missing or too long')
   for (const skill of Object.values(input.skills ?? {})) {
@@ -79,7 +92,8 @@ function checkInput(input: HeroRequest) {
   }
   if (tooLong(input.description, MAX_CHAT)) throw new InputError('description too long')
   if ((input.photoUrls ?? []).length > MAX_PHOTOS) throw new InputError(`at most ${MAX_PHOTOS} photos`)
-  if ((input.photoUrls ?? []).some((url) => !/^https:\/\//.test(url))) throw new InputError('photos must be https URLs')
+  // only photos from this app's own upload endpoint are sent to the model
+  if ((input.photoUrls ?? []).some((url) => typeof url !== 'string' || !isOwnPhotoUrl(url))) throw new InputError('photos must be uploaded through the photo endpoint')
 }
 
 const CATALOG_TEXT = CATALOG.map((t) => `${t.id} | ${t.slot} | ${t.roles.join(',')} | ${t.name}: ${t.tags.join(', ')}`).join('\n')
@@ -175,6 +189,11 @@ export async function proposeHero(input: HeroRequest, deps: ProposeDeps = {}): P
     const inPool = id && poolFor(base.roleId, SLOT_KIND[slot]).some((t) => t.id === id)
     const clash = slot === 'active2' && id === slots.active1.templateId
     if (inPool && !clash) slots[slot] = { ...slots[slot], templateId: id }
+  }
+  // the model may give active1 the template the matcher put in active2; the two actives must differ (R1)
+  if (slots.active1.templateId === slots.active2.templateId) {
+    const text = `${slots.active2.name} ${slots.active2.flavour}`.trim() || input.description || ''
+    slots.active2 = { ...slots.active2, templateId: matchTemplate(base.roleId, 'active', text, [slots.active1.templateId]).template.id }
   }
   const build: Build = { ...base, slots }
   if (answer.spread) {

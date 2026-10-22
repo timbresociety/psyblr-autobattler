@@ -1,4 +1,4 @@
-import { matchTemplate, nearestAlternatives } from './match'
+import { matchTemplate, nearestAlternatives, tokenize } from './match'
 import { ROLE_IDS, getRole, isRoleId } from './roles'
 import { ATTRIBUTES, ATTRIBUTE_GAINS, POOL_SIZE, deriveSheet, spentPoints, validateSpread } from './stats'
 import { hasTemplate, poolFor } from './templates/catalog'
@@ -104,10 +104,11 @@ const ROLE_WORDS: Record<RoleId, string[]> = {
 
 /** Offline role assignment (R9): the role whose pools best fit all the descriptions. Claude does this online. */
 export function inferRole(heroName: string, skills: Partial<Record<BuildSlot, Pick<SkillSpec, 'name' | 'flavour'>>>): RoleId {
-  const text = [heroName, ...Object.values(skills).map((s) => (s ? describe(s) : ''))].join(' ').toLowerCase()
+  const words = new Set(tokenize([heroName, ...Object.values(skills).map((s) => (s ? describe(s) : ''))].join(' ')))
   let best: { role: RoleId; score: number } = { role: 'fighter', score: 0 }
   for (const role of ROLE_IDS) {
-    let score = ROLE_WORDS[role].filter((w) => text.includes(w)).length * 2
+    // whole words only: "skills" must not count as "kill", nor "health" as "heal"
+    let score = ROLE_WORDS[role].filter((w) => words.has(w)).length * 2
     for (const slot of BUILD_SLOTS) {
       const skill = skills[slot]
       if (skill) score += matchTemplate(role, SLOT_KIND[slot], describe(skill)).score

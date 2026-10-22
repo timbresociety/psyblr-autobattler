@@ -40,6 +40,8 @@ export interface CreatorDeps {
 }
 
 const DEVICE_KEY = 'psyblr.deviceId'
+/** A balance check that has not answered by then is treated as failed. */
+const GATE_TIMEOUT_MS = 60_000
 
 function stored(key: string): string | null {
   try {
@@ -59,7 +61,7 @@ function store(key: string, value: string) {
 
 let devicePromise: Promise<string | undefined> | undefined
 
-export function deviceId(): Promise<string | undefined> {
+export async function deviceId(): Promise<string | undefined> {
   devicePromise ??= (async () => {
     const existing = stored(DEVICE_KEY)
     if (existing) return existing
@@ -73,7 +75,10 @@ export function deviceId(): Promise<string | undefined> {
       return undefined
     }
   })()
-  return devicePromise
+  const id = await devicePromise
+  // only a success is remembered; after a failure the next call asks again
+  if (!id) devicePromise = undefined
+  return id
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -97,14 +102,19 @@ function localGate(build: Build): Promise<GateOutcome> {
       return
     }
     const worker = new Worker(new URL('../sim/gate.worker.ts', import.meta.url), { type: 'module' })
+    const fail = (message: string) => {
+      clearTimeout(timer)
+      worker.terminate()
+      reject(new Error(message))
+    }
+    const timer = setTimeout(() => fail('balance check timed out'), GATE_TIMEOUT_MS)
     worker.onmessage = (event: MessageEvent<GateOutcome>) => {
+      clearTimeout(timer)
+      worker.terminate()
       resolve(event.data)
-      worker.terminate()
     }
-    worker.onerror = (event) => {
-      reject(new Error(event.message))
-      worker.terminate()
-    }
+    worker.onerror = (event) => fail(event.message || 'balance check failed')
+    worker.onmessageerror = () => fail('balance check returned an unreadable result')
     worker.postMessage({ build } satisfies GateRequest)
   })
 }

@@ -7,11 +7,12 @@ interface Props {
   query: string
   search: (q: string) => Promise<HeroResult[]>
   onAdd: (hero: HeroResult) => void
-  onBuildOwn: () => void
+  /** True while an add is in flight; the buttons are disabled so one click adds once. */
+  adding?: boolean
 }
 
 /** While the player types a name, heroes already in the global loadout appear; adding one is free (R18, F2). */
-export function LoadoutSearch({ query, search, onAdd, onBuildOwn }: Props) {
+export function LoadoutSearch({ query, search, onAdd, adding = false }: Props) {
   const [results, setResults] = useState<HeroResult[]>([])
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -56,12 +57,14 @@ export function LoadoutSearch({ query, search, onAdd, onBuildOwn }: Props) {
                   {hero.roleId} · used {hero.useCount}×
                 </small>
               </span>
-              <button onClick={() => onAdd(hero)}>Add free</button>
+              <button onClick={() => onAdd(hero)} disabled={adding}>
+                Add free
+              </button>
             </li>
           ))}
         </ul>
       )}
-      <button className="ghost" onClick={() => { setDismissed(query); onBuildOwn() }}>
+      <button className="ghost" onClick={() => setDismissed(query)}>
         Build my own
       </button>
     </div>

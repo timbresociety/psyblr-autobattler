@@ -1,4 +1,5 @@
-import { NotFoundError, OwnershipError, StoreInputError } from './store'
+import type { Db } from './db'
+import { NotFoundError, OwnershipError, StoreInputError, isKnownDevice } from './store'
 import { PhotoError } from './blob'
 import { RateLimiter, requestKeys } from './rate-limit'
 
@@ -7,6 +8,12 @@ import { RateLimiter, requestKeys } from './rate-limit'
 export function deviceId(request: Request): string | undefined {
   const id = request.headers.get('x-device-id') ?? ''
   return /^[0-9a-f]{32}$/.test(id) ? id : undefined
+}
+
+/** The device ID, only when the server issued it. Write routes use this. */
+export async function knownDeviceId(request: Request, db: Db): Promise<string | undefined> {
+  const id = deviceId(request)
+  return id && (await isKnownDevice(db, id)) ? id : undefined
 }
 
 export async function readJson(request: Request, maxBytes = 50_000): Promise<Record<string, unknown>> {

@@ -11,7 +11,7 @@ const CAST_SLOTS: BuildSlot[] = BUILD_SLOTS.filter((s) => s !== 'basic' && s !==
 export function chooseTarget(battle: Battle, unit: Unit): Unit | undefined {
   const enemies = enemiesOf(battle, unit)
   if (!enemies.length) return undefined
-  const hunter = unit.kit.basic.roles.includes('assassin')
+  const hunter = unit.roleId === 'assassin'
   return enemies.reduce((best, e) => {
     const better = hunter ? hpFraction(e) < hpFraction(best) - 1e-9 : distance(unit, e) < distance(unit, best) - 1e-9
     return better ? e : best

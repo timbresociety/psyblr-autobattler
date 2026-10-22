@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/build'
-import { runGate, type GateOptions } from '../sim/gate'
+import { isGateStale, runGate, type GateOptions } from '../sim/gate'
+import { isOwnPhotoUrl } from './photo-url'
 import type { Db } from './db'
 
 /**
@@ -13,7 +14,6 @@ export class NotFoundError extends Error {}
 export class OwnershipError extends Error {}
 export class StoreInputError extends Error {}
 
-const BLOB_HOST = /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//
 
 export interface HeroSummary {
   id: string
@@ -27,6 +27,17 @@ export interface BuildRecord {
   id: string
   heroId: string
   build: Build
+}
+
+/** A gate result earned against older catalogue or calibration numbers goes back to draft, so it is checked again. */
+function fresh(build: Build): Build {
+  return isGateStale(build) ? { ...build, gate: { state: 'draft' } } : build
+}
+
+/** Only server-issued device IDs may write. */
+export async function isKnownDevice(db: Db, deviceId: string): Promise<boolean> {
+  const { rows } = await db.query('select 1 from devices where id = $1', [deviceId])
+  return rows.length > 0
 }
 
 export async function issueDeviceId(db: Db): Promise<string> {
@@ -47,7 +58,7 @@ function gated(build: Build, options?: GateOptions): Build {
 }
 
 export async function createHero(db: Db, deviceId: string, raw: unknown, photos: string[], gateOptions?: GateOptions): Promise<{ heroId: string; buildId: string }> {
-  if (photos.length > MAX_PHOTOS || photos.some((url) => !BLOB_HOST.test(url))) throw new StoreInputError('photos must be uploaded through the photo endpoint')
+  if (photos.length > MAX_PHOTOS || photos.some((url) => !isOwnPhotoUrl(url))) throw new StoreInputError('photos must be uploaded through the photo endpoint')
   const build = gated(validated(raw), gateOptions)
   if (build.gate.state === 'blocked') throw new StoreInputError('build is blocked by the balance gate')
   const name = build.heroName.trim()
@@ -85,7 +96,10 @@ export async function searchHeroes(db: Db, query: string, limit = 10): Promise<H
 export async function addHero(db: Db, deviceId: string, heroId: string): Promise<BuildRecord> {
   const { rows } = await db.query<{ original_build: Build }>('select original_build from heroes where id = $1 and not hidden', [heroId])
   if (!rows.length) throw new NotFoundError('hero not found')
-  const build = rows[0].original_build
+  // adding the same hero twice returns the existing copy, and each device counts once toward search rank
+  const existing = await db.query<{ id: string; build: Build }>('select id, build from builds where hero_id = $1 and device_id = $2 limit 1', [heroId, deviceId])
+  if (existing.rows.length) return { id: existing.rows[0].id, heroId, build: fresh(existing.rows[0].build) }
+  const build = fresh(rows[0].original_build)
   const id = await insertBuild(db, heroId, deviceId, build)
   await db.query('update heroes set use_count = use_count + 1 where id = $1', [heroId])
   return { id, heroId, build }
@@ -100,12 +114,12 @@ async function ownedBuild(db: Db, deviceId: string, buildId: string): Promise<{ 
 
 export async function getBuild(db: Db, deviceId: string, buildId: string): Promise<BuildRecord> {
   const row = await ownedBuild(db, deviceId, buildId)
-  return { id: buildId, heroId: row.hero_id, build: row.build }
+  return { id: buildId, heroId: row.hero_id, build: fresh(row.build) }
 }
 
 export async function listBuilds(db: Db, deviceId: string): Promise<BuildRecord[]> {
   const { rows } = await db.query<{ id: string; hero_id: string; build: Build }>('select id, hero_id, build from builds where device_id = $1 order by updated_at desc', [deviceId])
-  return rows.map((r) => ({ id: r.id, heroId: r.hero_id, build: r.build }))
+  return rows.map((r) => ({ id: r.id, heroId: r.hero_id, build: fresh(r.build) }))
 }
 
 /** Save a player's edit: owner only, re-validated and re-gated on the server. */
@@ -116,10 +130,15 @@ export async function saveBuild(db: Db, deviceId: string, buildId: string, raw: 
   return { id: buildId, heroId: row.hero_id, build }
 }
 
-/** Owner-only takedown: hide a hero from search and return its photo URLs for deletion. */
+/** Owner-only takedown, step 1: hide a hero from search and return its photo URLs. Safe to repeat. */
 export async function hideHero(db: Db, heroId: string): Promise<string[]> {
   const { rows } = await db.query<{ photos: string[] }>('select photos from heroes where id = $1', [heroId])
   if (!rows.length) throw new NotFoundError('hero not found')
-  await db.query(`update heroes set hidden = true, photos = '[]' where id = $1`, [heroId])
+  await db.query('update heroes set hidden = true where id = $1', [heroId])
   return rows[0].photos
+}
+
+/** Takedown, step 2: forget the photo URLs once the files are deleted, so a failed delete can be retried. */
+export async function clearHeroPhotos(db: Db, heroId: string): Promise<void> {
+  await db.query(`update heroes set photos = '[]' where id = $1`, [heroId])
 }

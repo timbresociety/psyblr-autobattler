@@ -16,8 +16,17 @@ export function getDb(): Promise<Db> {
     const url = process.env.DATABASE_URL
     if (!url) throw new Error('DATABASE_URL is not set')
     const pool = new Pool({ connectionString: url })
-    await pool.query(SCHEMA_SQL)
+    try {
+      await pool.query(SCHEMA_SQL)
+    } catch (error) {
+      await pool.end().catch(() => undefined)
+      throw error
+    }
     return pool as unknown as Db
-  })()
+  })().catch((error) => {
+    // a failed connect must not stay cached for the instance's lifetime
+    db = undefined
+    throw error
+  })
   return db
 }

@@ -81,6 +81,24 @@ describe('proposeHero', () => {
   })
 })
 
+describe('proposeHero input and actives', () => {
+  it("the model's active1 equal to the matcher's active2 never leaves two identical actives", async () => {
+    const base = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: input.skills }).build
+    const call: ModelCall = async () => ({ ...valid, templates: { ...valid.templates, active1: base.slots.active2.templateId, active2: 'not-a-template' } })
+    const result = await proposeHero(input, { callModel: call })
+    expect(result.build.slots.active1.templateId).not.toBe(result.build.slots.active2.templateId)
+  })
+
+  it('malformed requests are input errors, not crashes', async () => {
+    const call = vi.fn(async () => valid)
+    await expect(proposeHero(undefined as never, { callModel: call })).rejects.toBeInstanceOf(InputError)
+    await expect(proposeHero({ heroName: 'x', skills: 'nope' } as never, { callModel: call })).rejects.toBeInstanceOf(InputError)
+    await expect(proposeHero({ heroName: 'x', skills: {}, roleId: 'wizard' } as never, { callModel: call })).rejects.toBeInstanceOf(InputError)
+    await expect(proposeHero({ heroName: 'x', skills: {}, photoUrls: ['https://evil.example.com/a.png'] }, { callModel: call })).rejects.toBeInstanceOf(InputError)
+    expect(call).not.toHaveBeenCalled()
+  })
+})
+
 describe('chatEdit', () => {
   const base = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: {} }).build
 

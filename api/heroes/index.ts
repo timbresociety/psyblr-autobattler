@@ -1,5 +1,5 @@
 import { getDb } from '../../src/server/db'
-import { deviceId, errorResponse, needDevice, overLimit, readJson, tooMany } from '../../src/server/http'
+import { errorResponse, knownDeviceId, needDevice, overLimit, readJson, tooMany } from '../../src/server/http'
 import { addHero, createHero } from '../../src/server/store'
 
 /**
@@ -8,12 +8,12 @@ import { addHero, createHero } from '../../src/server/store'
  *   { addHeroId }        -> { id, heroId, build } add an existing hero from the global loadout
  */
 export async function POST(request: Request): Promise<Response> {
-  const device = deviceId(request)
-  if (!device) return needDevice()
   if (overLimit(request)) return tooMany()
   try {
-    const body = await readJson(request)
     const db = await getDb()
+    const device = await knownDeviceId(request, db)
+    if (!device) return needDevice()
+    const body = await readJson(request)
     if (typeof body.addHeroId === 'string') return Response.json(await addHero(db, device, body.addHeroId))
     const photos = Array.isArray(body.photoUrls) ? body.photoUrls.filter((u): u is string => typeof u === 'string') : []
     return Response.json(await createHero(db, device, body.build, photos))

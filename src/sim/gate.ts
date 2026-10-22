@@ -9,6 +9,13 @@ import { referenceField } from './field'
 /** The R15 ceiling: no build may beat the reference field more often than this. */
 export const GATE_CEILING = 0.55
 
+/**
+ * The gate samples a fixed set of seeds, so a measured rate carries sampling noise (about +-3 points at 180 fights).
+ * A build must measure at least this far under the ceiling to pass, so its true rate stays under it.
+ */
+export const GATE_MARGIN = 0.03
+const PASS_LINE = GATE_CEILING - GATE_MARGIN
+
 export interface GateOptions {
   /** Duels against each field member, alternating sides. */
   duelsPerMember?: number
@@ -81,13 +88,13 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   let steps = 0
   let build = withSteps(input, 0)
   let winRate = winRateVsField(build, options)
-  while (winRate > GATE_CEILING && steps < MAX_RETUNE_STEPS) {
+  while (winRate > PASS_LINE && steps < MAX_RETUNE_STEPS) {
     steps++
     build = withSteps(input, steps)
     winRate = winRateVsField(build, options)
   }
   const stamp = { catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 }
-  if (winRate <= GATE_CEILING) return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...stamp } } }
+  if (winRate <= PASS_LINE) return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...stamp } } }
   const slot = strongestSlot(build, winRate, options)
   return {
     state: 'blocked',

@@ -61,7 +61,8 @@ export function ChatPanel({ started, heroName, photos, messages, busy, onName, o
           placeholder={started ? 'Ask for changes: "more agile, less armor"' : 'Describe your hero: "a time-bending samurai who rewinds fights"'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) submit(e)
+            // Enter while an input method is composing confirms the candidate; it must not send
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e)
           }}
         />
         <button type="submit" className="primary" disabled={busy}>
