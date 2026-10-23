@@ -415,6 +415,13 @@ export class Trail {
     this.geo.getAttribute('color').needsUpdate = true
   }
 
+  /** Free its GPU buffers and material, for a trail that will not be reused. */
+  dispose() {
+    this.mesh.removeFromParent()
+    this.geo.dispose()
+    ;(this.mesh.material as THREE.Material).dispose()
+  }
+
   reset() {
     this.points.length = 0
   }

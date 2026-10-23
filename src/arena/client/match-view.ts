@@ -175,47 +175,140 @@ async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>
   }
 }
 
-/** The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. */
-async function createStage(host: HTMLElement) {
+type Renderer = Awaited<ReturnType<typeof createRenderer>>['renderer']
+
+/** A fresh canvas with a renderer set up the way the arena draws: soft shadows, filmic tone mapping. */
+async function newRenderer(host: HTMLElement, forceWebGL: boolean) {
   const canvas = document.createElement('canvas')
   canvas.style.cssText = 'width:100%;height:100%;display:block'
-  host.append(canvas)
+  host.prepend(canvas)
   try {
-    const { renderer, backend } = await createRenderer(canvas, { forceWebGL: forceWebGLFlag(window.location.search) })
-    const pixelRatio = Math.min(2, window.devicePixelRatio)
-    renderer.setPixelRatio(pixelRatio)
+    const { renderer, backend } = await createRenderer(canvas, { forceWebGL })
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.toneMappingExposure = 1.05
+    return { canvas, renderer, backend }
+  } catch (e) {
+    canvas.remove()
+    throw e
+  }
+}
+
+/** Most times a lost graphics device is rebuilt in one match before the stage gives up. */
+const MAX_RECOVERIES = 3
+
+/**
+ * The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. A loaded machine
+ * can lose its graphics device mid-match (three then quietly stops drawing while the HUD runs on), so on a loss the
+ * stage swaps in a new canvas and renderer, on WebGL2 for stability, and keeps drawing the same scene and match.
+ */
+async function createStage(host: HTMLElement) {
+  const first = await newRenderer(host, forceWebGLFlag(window.location.search))
+  try {
+    const pixelRatio = Math.min(2, window.devicePixelRatio)
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
     atmosphere(scene)
     const map = buildMap()
     scene.add(map.group)
     const sun = lights(scene)
-    const glow = await bloomPipeline(renderer, scene, camera)
-    const resize = () => {
-      const w = host.clientWidth
-      const h = host.clientHeight
-      renderer.setSize(w, h, false)
-      camera.aspect = w / Math.max(1, h)
-      camera.updateProjectionMatrix()
+    const stage = {
+      host,
+      canvas: first.canvas,
+      renderer: first.renderer as Renderer,
+      backend: first.backend,
+      pixelRatio,
+      scene,
+      camera,
+      map,
+      sun,
+      glow: await bloomPipeline(first.renderer, scene, camera),
+      recoveries: 0,
+      /** While a new renderer is being built nothing draws: the old device is gone. */
+      recovering: false,
+      resize: () => {
+        const w = host.clientWidth
+        const h = host.clientHeight
+        stage.renderer.setSize(w, h, false)
+        camera.aspect = w / Math.max(1, h)
+        camera.updateProjectionMatrix()
+      },
+      // with bloom off (unsupported, or dropped by the frame-rate guard) the frame renders directly
+      draw: () => {
+        if (stage.recovering) return
+        if (stage.glow?.enabled) stage.glow.pipeline.render()
+        else stage.renderer.render(scene, camera)
+      },
+      dispose: () => {
+        window.removeEventListener('resize', stage.resize)
+        stage.renderer.dispose()
+        stage.canvas.remove()
+      },
+      /** Rebuild the renderer on a new canvas after the graphics device was lost; false once out of attempts. */
+      recover: async (): Promise<boolean> => {
+        if (stage.recoveries >= MAX_RECOVERIES || stage.recovering) return false
+        stage.recoveries++
+        stage.recovering = true
+        try {
+          const pixel = stage.renderer.getPixelRatio()
+          const shadows = stage.sun.castShadow
+          const bloomOn = stage.glow?.enabled ?? false
+          const next = await newRenderer(host, true)
+          try {
+            stage.renderer.dispose()
+          } catch {
+            // a lost device may refuse to release; the canvas goes regardless
+          }
+          stage.canvas.remove()
+          stage.canvas = next.canvas
+          stage.renderer = next.renderer
+          stage.backend = next.backend
+          stage.renderer.setPixelRatio(pixel)
+          stage.sun.castShadow = shadows
+          stage.glow = await bloomPipeline(stage.renderer, scene, camera)
+          if (stage.glow) stage.glow.enabled = bloomOn
+          watchDevice(stage)
+          stage.resize()
+          return true
+        } catch {
+          return false
+        } finally {
+          stage.recovering = false
+        }
+      },
+      onRecovered: (_ok: boolean) => {},
     }
-    const dispose = () => {
-      window.removeEventListener('resize', resize)
-      renderer.dispose()
-      canvas.remove()
-    }
-    // with bloom off (unsupported, or dropped by the frame-rate guard) the frame renders directly
-    const draw = () => (glow?.enabled ? glow.pipeline.render() : renderer.render(scene, camera))
-    return { canvas, renderer, backend, pixelRatio, scene, camera, map, sun, glow, draw, resize, dispose }
+    watchDevice(stage)
+    return stage
   } catch (e) {
-    canvas.remove()
+    first.canvas.remove()
     throw e
   }
 }
 type Stage = Awaited<ReturnType<typeof createStage>>
+
+/** A short-lived notice over the arena, for things the player should know but that need no answer. */
+function notice(host: HTMLElement, text: string) {
+  const el = document.createElement('div')
+  el.className = 'arena-notice'
+  el.setAttribute('role', 'status')
+  el.textContent = text
+  host.append(el)
+  setTimeout(() => el.remove(), 6000)
+}
+
+/** Hand a lost device to the stage's recovery instead of three's default (log once, then draw nothing forever). */
+function watchDevice(stage: { renderer: Renderer; recover: () => Promise<boolean>; onRecovered: (ok: boolean) => void }) {
+  const r = stage.renderer as Renderer & { onDeviceLost: (info: { message?: string; reason?: string }) => void }
+  r.onDeviceLost = (info) => {
+    console.warn(`[arena] graphics device lost (${info.reason ?? info.message ?? 'unknown'}); rebuilding the renderer`)
+    void stage.recover().then(
+      (ok) => stage.onRecovered(ok),
+      () => stage.onRecovered(false),
+    )
+  }
+}
 
 /**
  * The frame-rate guard wired to the stage (U18, R26): each step keeps the ones before it, shadows first and render
@@ -326,7 +419,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 }
 
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
-  const { renderer, backend, scene, camera, map } = stage
+  const { renderer, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
   const builds = arena.setups.map((s) => s.build)
   let loaded = 0
@@ -367,7 +460,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const rules = matchRules(arena)
   const clock = createClock()
   const quality = qualityControl(stage)
-  const store = createStore<HudState>(hud(arena, views, false, backend, 'full'))
+  const store = createStore<HudState>(hud(arena, views, false, stage.backend, 'full'))
   const hooks = createHooks()
   const cameras = new Cameras(camera)
   // the free camera starts behind the streamer's half, looking across the arena
@@ -384,7 +477,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let stopped = false
   let frameNo = 0
   const publish = () => {
-    store.set(hud(arena, views, clock.paused, backend, quality.current()))
+    store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
     store.flush()
   }
   const setPaused = (paused: boolean) => {
@@ -393,8 +486,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     publish()
   }
 
-  const loop = () => {
-    if (stopped) return
+  const step = () => {
     const now = performance.now()
     const dt = Math.min(0.25, (now - last) / 1000)
     last = now
@@ -431,10 +523,25 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     hooks.emit.frame(dt, alpha)
     stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
-    if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality.current()))
+    if (store.due()) store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
+  }
+  // a thrown frame must never stop the match: the next frame is booked first, and each distinct error is reported once
+  const reported = new Set<string>()
+  const loop = () => {
+    if (stopped) return
     requestAnimationFrame(loop)
+    try {
+      step()
+    } catch (e) {
+      const key = String((e as Error)?.message ?? e)
+      if (!reported.has(key)) {
+        reported.add(key)
+        console.error('[arena] a frame failed; the match keeps running', e)
+      }
+    }
   }
   requestAnimationFrame(loop)
+  stage.onRecovered = (ok) => notice(stage.host, ok ? 'Graphics reset. Recovered in compatibility mode.' : 'The graphics device was lost. Reload the page to keep watching.')
 
   const controller: ArenaController = {
     arena,
@@ -443,7 +550,9 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     camera,
     map,
     views,
-    renderer,
+    get renderer() {
+      return stage.renderer
+    },
     hooks,
     cameras,
     side: setup.side,

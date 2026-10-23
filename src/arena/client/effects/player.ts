@@ -442,7 +442,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           spareHalos.push(fx.halo)
           fx.trail.mesh.visible = false
           if (spareTrails.length < BUDGET.trails) spareTrails.push(fx.trail)
-          else fx.trail.mesh.removeFromParent()
+          else fx.trail.dispose()
           projectiles.delete(id)
           continue
         }

@@ -16,13 +16,14 @@ const typing = (e: KeyboardEvent) => {
 
 export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLockChange: (locked: boolean) => void, extra: (code: string) => void = () => {}): () => void {
   const input: InputState = { held: new Set() }
-  const canvas = canvasHost.querySelector('canvas') ?? canvasHost
-  const locked = () => document.pointerLockElement === canvas
+  // looked up each time: after a lost graphics device the stage swaps in a new canvas
+  const canvas = () => canvasHost.querySelector('canvas') ?? canvasHost
+  const locked = () => document.pointerLockElement === canvas()
   // a number key pressed with the mouse free asks for the lock first; the hero is taken once it is granted
   let pending: number | undefined
 
   const requestLock = async () => {
-    const el = canvas as HTMLElement & { requestPointerLock: (o?: { unadjustedMovement?: boolean }) => Promise<void> | void }
+    const el = canvas() as HTMLElement & { requestPointerLock: (o?: { unadjustedMovement?: boolean }) => Promise<void> | void }
     try {
       // unadjusted movement turns off OS mouse acceleration where the browser supports it
       await el.requestPointerLock({ unadjustedMovement: true })
