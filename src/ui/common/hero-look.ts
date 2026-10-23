@@ -15,6 +15,8 @@ export const ROLE_RGB: Record<RoleId, [number, number, number]> = {
   mage: [255, 122, 217],
   marksman: [127, 227, 255],
   support: [134, 240, 168],
+  controller: [214, 240, 92],
+  summoner: [64, 224, 196],
 }
 
 /** The arena character's clips (public/heroes/*.glb). */

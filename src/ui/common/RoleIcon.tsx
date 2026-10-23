@@ -44,6 +44,21 @@ const ART: Record<RoleId, ReactNode> = {
       <path d="M10.6 4.4h1.6v6.2h-1.6z" fill="#fff" opacity=".4" />
     </>
   ),
+  controller: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <rect x="2.2" y="8.6" width="11.2" height="6.8" rx="3.4" transform="rotate(-35 7.8 12)" />
+      <rect x="10.6" y="8.6" width="11.2" height="6.8" rx="3.4" transform="rotate(-35 16.2 12)" />
+    </g>
+  ),
+  summoner: (
+    <>
+      <path d="M12 1.8l3.4 5.4L12 11.6 8.6 7.2z" />
+      <path d="M9.6 13h4.8l1.2 7H8.4z" />
+      <path d="M6 20.2h12v1.9H6z" />
+      <circle cx="4.6" cy="6.4" r="1.5" opacity=".7" />
+      <circle cx="19.4" cy="6.4" r="1.5" opacity=".7" />
+    </>
+  ),
 }
 
 export const RoleIcon = memo(function RoleIcon({ role }: { role: RoleId }) {

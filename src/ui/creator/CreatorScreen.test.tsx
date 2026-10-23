@@ -77,12 +77,15 @@ describe('creator (U11)', () => {
     expect(after).not.toBe(before)
   })
 
-  it('the swap menu offers 2 to 3 alternatives and swapping updates the tooltip live', async () => {
+  it('the swap menu offers the closest 2 to 3 first, then the whole library by family, and swapping updates the tooltip live', async () => {
     await forge(deps())
     const select = screen.getByLabelText('Ultimate mechanic') as HTMLSelectElement
-    expect(select.options.length - 1).toBeGreaterThanOrEqual(2)
-    expect(select.options.length - 1).toBeLessThanOrEqual(3)
-    const target = select.options[1]
+    const groups = [...select.querySelectorAll('optgroup')]
+    expect(groups[0].label).toBe('Closest to your words')
+    expect(groups[0].querySelectorAll('option').length).toBeGreaterThanOrEqual(2)
+    expect(groups[0].querySelectorAll('option').length).toBeLessThanOrEqual(3)
+    expect(select.options.length).toBeGreaterThanOrEqual(7)
+    const target = select.options[select.options.length - 1]
     await act(async () => fireEvent.change(select, { target: { value: target.value } }))
     expect(within(screen.getByLabelText('Ultimate tooltip')).getByText(target.textContent as string)).toBeTruthy()
   })

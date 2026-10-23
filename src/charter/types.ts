@@ -1,7 +1,12 @@
 import type { SizeClass } from './sizes'
 /** Shared Charter types. Framework-free: used by the creator, the simulation and serverless functions (KTD1). */
 
-export type RoleId = 'tank' | 'fighter' | 'assassin' | 'mage' | 'marksman' | 'support'
+/**
+ * Eight roles, one per thing a hero mainly gives its team (see docs/charter/skill-library.html): soak (tank), deny the
+ * enemy (controller), keep allies going (support), build presence on the field (summoner), and damage split by reach
+ * and tempo: close and sustained (fighter), close burst (assassin), far and sustained (marksman), far burst (mage).
+ */
+export type RoleId = 'tank' | 'fighter' | 'assassin' | 'mage' | 'marksman' | 'support' | 'controller' | 'summoner'
 
 export type Attribute = 'strength' | 'agility' | 'intellect'
 

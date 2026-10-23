@@ -60,6 +60,8 @@
 .role-mage { --role-rgb: 255, 122, 217; }
 .role-marksman { --role-rgb: 127, 227, 255; }
 .role-support { --role-rgb: 134, 240, 168; }
+.role-controller { --role-rgb: 214, 240, 92; }
+.role-summoner { --role-rgb: 64, 224, 196; }
 
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }

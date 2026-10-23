@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { swapAlternatives, type Build, type SkillText } from '../../charter/build'
+import { swapAlternatives, swapOptions, type Build, type SkillText } from '../../charter/build'
+import { FAMILIES, FAMILY_LABEL, primaryFamily } from '../../charter/families'
 import { getRole } from '../../charter/roles'
 import { deriveSheet } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
@@ -26,7 +27,10 @@ export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
   const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
   const tip = renderTooltip(template, spec, sheet, spec.retuneSteps)
   const numbers = headline(template, sheet, spec.retuneSteps)
-  const alternatives = swapAlternatives(build, slot)
+  // the closest swaps first, then the role's whole library for this slot, one group per effect family
+  const near = swapAlternatives(build, slot)
+  const library = swapOptions(build, slot).slice(near.length)
+  const groups = FAMILIES.map((family) => ({ family, items: library.filter((t) => primaryFamily(t) === family).sort((a, b) => a.name.localeCompare(b.name)) })).filter((g) => g.items.length)
   const [flavour, setFlavour] = useState(spec.flavour)
   const [pending, setPending] = useState<string | undefined>()
   const [lastSeen, setLastSeen] = useState(spec.flavour)
@@ -53,7 +57,9 @@ export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
       <header className="skill-head">
         <SkillIcon template={template} slot={slot} />
         <div className="skill-title">
-          <span className="skill-slot">{SLOT_LABEL[slot]}</span>
+          <span className="skill-slot">
+            {SLOT_LABEL[slot]} <em className="skill-family">{FAMILY_LABEL[primaryFamily(template)]}</em>
+          </span>
           <input className="skill-name" aria-label={`${SLOT_LABEL[slot]} name`} value={spec.name} placeholder={template.name} maxLength={40} onChange={(e) => onEdit(slot, { name: e.target.value })} onFocus={() => onPreview?.(slot)} />
         </div>
       </header>
@@ -82,13 +88,28 @@ export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
         </ul>
       </div>
       <label className="swap">
-        <span>Mechanic</span>
+        <span>
+          Mechanic <small>{near.length + library.length + 1} in the library</small>
+        </span>
         <select aria-label={`${SLOT_LABEL[slot]} mechanic`} value={spec.templateId} onChange={(e) => onSwap(slot, e.target.value)}>
           <option value={spec.templateId}>{template.name}</option>
-          {alternatives.map((alt) => (
-            <option key={alt.id} value={alt.id}>
-              {alt.name}
-            </option>
+          {near.length > 0 && (
+            <optgroup label="Closest to your words">
+              {near.map((alt) => (
+                <option key={alt.id} value={alt.id}>
+                  {alt.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {groups.map((g) => (
+            <optgroup key={g.family} label={FAMILY_LABEL[g.family]}>
+              {g.items.map((alt) => (
+                <option key={alt.id} value={alt.id}>
+                  {alt.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </label>

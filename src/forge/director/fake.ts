@@ -51,7 +51,7 @@ function sizeOf(text: string): SizeClass {
   return 'medium'
 }
 
-const RANGED: RoleId[] = ['mage', 'marksman', 'support']
+const RANGED: RoleId[] = ['mage', 'marksman', 'support', 'controller', 'summoner']
 
 let counter = 0
 const suggestion = (kind: Suggestion['kind'], text: string, reason: string): Suggestion => ({ id: `s${++counter}`, kind, text, reason, accepted: true })

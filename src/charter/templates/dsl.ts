@@ -72,7 +72,8 @@ export const at = {
   dash: (range: number): Delivery => ({ kind: 'dash', range }),
   blink: (range: number): Delivery => ({ kind: 'blink', range }),
   grapple: (range: number): Delivery => ({ kind: 'grapple', range }),
-  leap: (range: number): Delivery => ({ kind: 'leap', range }),
+  /** A jump along the aim; with a radius, what it carries lands on everyone near the landing spot. */
+  leap: (range: number, radius?: number): Delivery => ({ kind: 'leap', range, ...(radius ? { radius } : {}) }),
 }
 
 export const ai = (use: AiHint['use'], priority: number, extra: Omit<AiHint, 'use' | 'priority'> = {}): AiHint => ({ use, priority, ...extra })
