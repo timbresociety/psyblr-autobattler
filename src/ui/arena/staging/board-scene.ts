@@ -986,7 +986,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
         // badges follow the zoom: small over the whole arena, so one rank's badges leave the next rank's heroes in
         // sight; larger close up; never small while hovered or selected, when the name shows beside it
         const perMetre = (f.standee.foot.y - f.standee.top.y) / height
-        let k = Math.min(1.35, Math.max(0.78, perMetre / 7))
+        let k = Math.min(1.35, Math.max(0.86, perMetre / 7))
         if (hovered === f || f.halo.visible) k = Math.max(1, k)
         f.badge.style.transform = `translate3d(${f.standee.top.x.toFixed(1)}px, ${f.standee.top.y.toFixed(1)}px, 0) scale(${k.toFixed(3)})`
         f.badge.style.zIndex = String(Math.round(f.standee.foot.y) + (f.held ? 5000 : 0))
