@@ -33,10 +33,14 @@ async function forge(d: CreatorDeps) {
   await screen.findByRole('heading', { name: 'Dario' })
 }
 
+/** The role is a radio group of tiles (R10). */
+const roleNow = () => (screen.getByRole('radiogroup', { name: 'Role' }).querySelector('[aria-checked="true"]') as HTMLElement).dataset.roleId
+const pickRole = (name: string) => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Role' })).getByRole('radio', { name }))
+
 describe('creator (U11)', () => {
   it('name and first message produce a role, six skill cards and a stat split (F1)', async () => {
     await forge(deps())
-    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('mage')
+    expect(roleNow()).toBe('mage')
     expect(screen.getAllByRole('article')).toHaveLength(6)
     expect(screen.getByLabelText('Stat split')).toBeTruthy()
     expect(screen.getByText(/of 30 points free/)).toBeTruthy()
@@ -66,7 +70,7 @@ describe('creator (U11)', () => {
     await forge(deps())
     fireEvent.change(screen.getByLabelText('Active 1 name'), { target: { value: 'Rewind' } })
     const before = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
-    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    await act(async () => pickRole('Tank'))
     expect((screen.getByLabelText('Active 1 name') as HTMLInputElement).value).toBe('Rewind')
     expect(screen.getByText(/30 of 30 points free/)).toBeTruthy()
     const after = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
@@ -144,10 +148,10 @@ describe('creator async safety', () => {
     const runGate = vi.fn((build: Build) => new Promise<GateOutcome>((resolve) => { finish = resolve; void build }))
     await forge(deps({ runGate }))
     fireEvent.click(screen.getByRole('button', { name: 'Ready' }))
-    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    await act(async () => pickRole('Tank'))
     const stale = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: {} }).build
     await act(async () => finish({ state: 'ready', winRate: 0.5, build: { ...stale, gate: { state: 'ready', winRate: 0.5 } } }))
-    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('tank')
+    expect(roleNow()).toBe('tank')
     expect(await screen.findByText(/changed during the balance check/)).toBeTruthy()
   })
 
