@@ -32,7 +32,8 @@ export function onOwnHalf(side: Team, x: number, z: number): boolean {
 
 const ruinsHealth = initialCoverHealth(RUINS)
 /** True when a hero standing at (x, z) would be inside a piece of the ruins (R25). */
-export const inRuins = (x: number, z: number) => pushOut(RUINS, ruinsHealth, { x, y: 0, z }, ENGINE.capsule.radius + 0.2, ENGINE.capsule.height)
+// checked at the largest body any hero collides with, so the engine never has to move a staged hero
+export const inRuins = (x: number, z: number) => pushOut(RUINS, ruinsHealth, { x, y: 0, z }, ENGINE.bodyRadiusCap, ENGINE.capsule.height * 2)
 
 const crowded = (list: Placement[], x: number, z: number, ignore?: number) => list.some((p, i) => i !== ignore && (p.x - x) ** 2 + (p.z - z) ** 2 < SPACING ** 2)
 

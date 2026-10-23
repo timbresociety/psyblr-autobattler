@@ -124,10 +124,8 @@ function steer(m: MatchState, hero: HeroState, brain: BrainState, mx: number, mz
   const waist = { x: p.x, y: p.y + 0.9, z: p.z }
   const ahead = (x: number, z: number) => coverHit(m.cover!.pieces, m.cover!.health, waist, { x: p.x + (x / len) * AI.probe, y: p.y + 0.9, z: p.z + (z / len) * AI.probe }, bodyRadius(hero))
   const wall = ahead(mx, mz)
-  if (!wall) {
-    brain.detour = 0
-    return { x: mx, z: mz, hop: false }
-  }
+  // the side it last walked around a wall is kept, so it rounds corners instead of turning back at them
+  if (!wall) return { x: mx, z: mz, hop: false }
   if (m.cover.pieces[wall.index].top - p.y <= AI.hopHeight) return { x: mx, z: mz, hop: true }
   if (brain.detour === 0) brain.detour = brain.strafe
   // walk along the wall, leaning a little toward where it wants to go; switch sides if that way is blocked too

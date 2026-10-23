@@ -5,7 +5,7 @@ import { ENGINE, ticks } from './calibration'
 import { enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects'
 import { coverHit, coverInDisc } from './cover'
 import { keepOut } from './locomotion'
-import { PI, add, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
+import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 import type { TickRules } from './tick'
 
@@ -114,7 +114,7 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
       return { hit: enemies.filter((e) => flat(e) <= (d.radius ?? 0) && Math.abs(e.position.y - p.y) <= ENGINE.groundReach), at: { ...p }, cover: coverInBlast(m, p, d.radius ?? 0) }
     }
     case 'aura':
-      return { hit: enemies.filter((e) => gap(from, e) <= (d.radius ?? 0) && seen(e)), at: from }
+      return { hit: enemies.filter((e) => gap(from, e) <= (d.radius ?? 0)), at: from }
     case 'self':
       return { hit: [], at: from }
     case 'projectile':
@@ -155,8 +155,15 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
       let p = add(caster.position, scale(aim(caster), e.distance))
       // a dash stops at the wall in its way; a blink jumps past it
       if (template.delivery.kind !== 'blink') {
-        const wall = firstCover(match, caster.position, p, bodyRadius(caster))
-        if (wall) p = add(caster.position, scale(sub(p, caster.position), Math.max(0, wall.t - 0.02)))
+        // sweep the feet, the waist and the head, so a lintel overhead stops a dash as surely as a wall
+        const h = capsule(caster).height
+        const from = caster.position
+        let t = 1
+        for (const lift of [0.05, h / 2, h - 0.05]) {
+          const wall = firstCover(match, { ...from, y: from.y + lift }, { ...p, y: p.y + lift }, bodyRadius(caster))
+          if (wall && wall.t < t) t = wall.t
+        }
+        if (t < 1) p = add(from, scale(sub(p, from), Math.max(0, t - 0.02)))
       }
       caster.position = p
       if (p.y > 0) caster.airborne = true
@@ -197,12 +204,15 @@ function flyProjectiles(ctx: Ctx) {
     const struck = enemiesOf(match, owner).filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
     const first = struck.length ? struck.reduce((a, b) => (distance(p.position, chest(b)) < distance(p.position, chest(a)) ? b : a)) : undefined
     const wall = firstCover(match, p.position, end, size)
-    const stepLength = distance(p.position, end) || 1
-    // the shot meets whichever comes first along its path: a hero, or the cover in front of one
-    if (wall && (!first || wall.t < distance(p.position, chest(first)) / stepLength)) {
+    // the shot meets whichever comes first along its path: a hero (its chest projected onto the path), or the cover
+    const stepSq = dot(p.step, p.step) || 1
+    const heroT = first ? clamp(dot(sub(chest(first), p.position), p.step) / stepSq, 0, 1) : 2
+    if (wall && wall.t < heroT) {
       const area = template.delivery.radius
       impact(ctx, owner, p.slot, template, wall.at)
-      strikeCover(ctx, owner, template, area ? coverInBlast(match, wall.at, area) : [wall])
+      // the piece it struck always takes the hit, even when the blast is smaller than the shot
+      const blast = area ? coverInBlast(match, wall.at, area).filter((c) => c.index !== wall.index) : []
+      strikeCover(ctx, owner, template, [{ index: wall.index, at: wall.at }, ...blast])
       // a blast against a wall still catches heroes beside it
       if (area) resolve(ctx, owner, template, p.slot, enemiesOf(match, owner).filter((e) => gap(wall.at, e) <= area))
       continue

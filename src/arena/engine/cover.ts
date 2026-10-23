@@ -109,8 +109,47 @@ function clip(start: number, d: number, lo: number, hi: number, w: [number, numb
 }
 
 /**
+ * The fraction along a→b (direction d) where it, thickened by `radius`, enters piece `p`; negative when it starts
+ * already inside, undefined when it never touches it within the segment.
+ */
+function entry(p: CoverPiece, a: Vec3, dx: number, dy: number, dz: number, radius: number, w: [number, number]): number | undefined {
+  w[0] = -Infinity
+  w[1] = Infinity
+  if (!clip(a.y, dy, p.base - radius, p.top + radius, w)) return undefined
+  const s = p.shape
+  if (s.kind === 'block') {
+    if (!clip(a.x, dx, s.x - s.hx - radius, s.x + s.hx + radius, w)) return undefined
+    if (!clip(a.z, dz, s.z - s.hz - radius, s.z + s.hz + radius, w)) return undefined
+  } else {
+    // a circle in the ground plane: solve |a + t·d − c| = r for the entry and exit fractions
+    const r = s.r + radius
+    const fx = a.x - s.x
+    const fz = a.z - s.z
+    const qa = dx * dx + dz * dz
+    const qb = 2 * (fx * dx + fz * dz)
+    const qc = fx * fx + fz * fz - r * r
+    if (qa === 0) {
+      if (qc > 0) return undefined
+    } else {
+      const disc = qb * qb - 4 * qa * qc
+      if (disc < 0) return undefined
+      const root = Math.sqrt(disc)
+      const u = (-qb - root) / (2 * qa)
+      const v = (-qb + root) / (2 * qa)
+      if (u > w[0]) w[0] = u
+      if (v < w[1]) w[1] = v
+      if (w[0] > w[1]) return undefined
+    }
+  }
+  if (w[0] > 1 || w[1] < 0) return undefined
+  return w[0]
+}
+
+/**
  * Where segment a→b, thickened by `radius`, first enters a standing piece: the fraction along the segment and the
- * piece's index, or undefined when the path is clear.
+ * piece's index, or undefined when the path is clear. A segment that starts in a piece's thickened shell but outside
+ * the stone itself (a body pressed flat against a wall) is tested against the bare stone instead, so moving, dashing
+ * or shooting away from a wall stays free while shooting into it still stops at it.
  */
 export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHealth[], a: Vec3, b: Vec3, radius = 0): { t: number; index: number } | undefined {
   const bounds = boundsOf(pieces)
@@ -132,36 +171,14 @@ export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHe
     if (maxX < bounds.minX[i] || minX > bounds.maxX[i] || maxZ < bounds.minZ[i] || minZ > bounds.maxZ[i]) continue
     const p = pieces[i]
     if (maxY < p.base || minY > p.top) continue
-    w[0] = 0
-    w[1] = 1
-    if (!clip(a.y, dy, p.base - radius, p.top + radius, w)) continue
-    const s = p.shape
-    if (s.kind === 'block') {
-      if (!clip(a.x, dx, s.x - s.hx - radius, s.x + s.hx + radius, w)) continue
-      if (!clip(a.z, dz, s.z - s.hz - radius, s.z + s.hz + radius, w)) continue
-    } else {
-      // a circle in the ground plane: solve |a + t·d − c| = r for the entry and exit fractions
-      const r = s.r + radius
-      const fx = a.x - s.x
-      const fz = a.z - s.z
-      const qa = dx * dx + dz * dz
-      const qb = 2 * (fx * dx + fz * dz)
-      const qc = fx * fx + fz * fz - r * r
-      if (qa === 0) {
-        if (qc > 0) continue
-      } else {
-        const disc = qb * qb - 4 * qa * qc
-        if (disc < 0) continue
-        const root = Math.sqrt(disc)
-        const u = (-qb - root) / (2 * qa)
-        const v = (-qb + root) / (2 * qa)
-        if (u > w[0]) w[0] = u
-        if (v < w[1]) w[1] = v
-        if (w[0] > w[1]) continue
-      }
+    let t = entry(p, a, dx, dy, dz, radius, w)
+    if (t === undefined) continue
+    if (t <= 0 && radius > 0) {
+      t = entry(p, a, dx, dy, dz, 0, w)
+      if (t === undefined) continue
     }
-    if (w[0] <= 1 && w[1] >= 0 && w[0] < bestT) {
-      bestT = w[0]
+    if (t < bestT) {
+      bestT = t
       bestIndex = i
     }
   }

@@ -124,7 +124,7 @@ export interface BrainState {
   overshoot: number
   /** The target's last seen position, to lead moving targets. */
   seen?: { x: number; y: number; z: number; tick: number; target: number }
-  /** Which way it is walking around the wall in front of it (R25); 0 when the way is clear. */
+  /** Which way it walks around walls (R25): chosen at the first wall and kept, so corners do not turn it back; 0 before any. */
   detour: -1 | 0 | 1
   /** The spot behind cover it falls back to when retreating. */
   hide?: { x: number; z: number }

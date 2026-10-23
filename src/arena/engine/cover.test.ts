@@ -102,3 +102,15 @@ describe('the ruins in a match (R25)', () => {
     expect(run()).toBe(run())
   }, 60_000)
 })
+
+describe('bodies pressed against cover (review)', () => {
+  it('a thick sweep starting flat against a wall is free to move away, but still stops going into it', () => {
+    // a body of radius 0.4 pushed out to the wall's face at z = -0.9
+    const p = { x: 0, y: 1, z: -0.9 }
+    expect(coverHit(pieces, health, p, { x: 0, y: 1, z: -5 }, 0.4)).toBeUndefined()
+    expect(coverHit(pieces, health, p, { x: 3, y: 1, z: -0.9 }, 0.4)).toBeUndefined()
+    const into = coverHit(pieces, health, p, { x: 0, y: 1, z: 2 }, 0.4)
+    expect(into?.index).toBe(0)
+    expect(into?.t).toBeCloseTo(0.4 / 2.9)
+  })
+})
