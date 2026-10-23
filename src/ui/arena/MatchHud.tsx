@@ -63,8 +63,8 @@ export function MatchHud({ state, side, builds, heroes, controller }: { state: H
       </div>
       {stats && <StatsPanel heroes={state.heroes} seconds={state.seconds} info={info} />}
       {controller && <KillFeed controller={controller} heroes={info} />}
-      <EnemyRoster heroes={foes} info={info} team={(1 - side) as Team} onFollow={follow} />
-      <AllyRoster heroes={mine} info={info} controlled={state.controlled} side={side} onFollow={follow} />
+      <EnemyRoster heroes={foes} info={info} team={(1 - side) as Team} onFollow={follow} followed={follow && cameras?.follow} />
+      <AllyRoster heroes={mine} info={info} controlled={state.controlled} side={side} onFollow={follow} followed={follow && cameras?.follow} />
     </>
   )
 }

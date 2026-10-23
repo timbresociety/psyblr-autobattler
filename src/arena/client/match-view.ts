@@ -590,6 +590,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       stopped = true
       physics?.dispose()
       stage.dispose()
+      // a stopped match must not stay reachable as the dev handle (a Vite reload or a double mount left one behind)
+      if (import.meta.env.DEV && (window as unknown as { __arena?: ArenaController }).__arena === controller) (window as unknown as { __arena?: ArenaController }).__arena = undefined
     },
   }
   // a dev-only handle for checking art and UI from a script, like the cameras and the match (never in production)

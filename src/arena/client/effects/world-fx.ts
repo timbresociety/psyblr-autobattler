@@ -78,6 +78,7 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
   const fields = new Map<number, Field>()
   const tracers: { line: THREE.Line; t: number }[] = []
   const shimmer = new Map<number, THREE.Mesh>()
+  const cloaked = new Set<number>()
   const floorRing = ringTexture()
   const discGeo = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2)
   const ringGeo = new THREE.RingGeometry(0.94, 1, 64).rotateX(-Math.PI / 2)
@@ -287,13 +288,15 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
         const hiddenNow = h.alive && (h.stealthUntil ?? 0) > now
         let s = shimmer.get(i)
         if (!hiddenNow) {
-          if (s) {
-            s.visible = false
-            if (view) view.root.visible = true
-          }
+          // only a body this module hid is shown again
+          if (cloaked.delete(i) && view) view.root.visible = true
+          if (s) s.visible = false
           return
         }
-        if (view) view.root.visible = false
+        if (view) {
+          view.root.visible = false
+          cloaked.add(i)
+        }
         if (!s) {
           s = new THREE.Mesh(shellGeo, new THREE.MeshBasicMaterial({ color: TEAM[h.team].clone().multiplyScalar(0.8), transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, wireframe: true }))
           group.add(s)
