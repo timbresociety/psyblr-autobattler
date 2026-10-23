@@ -21,7 +21,7 @@ export interface LoadoutEntry {
   hue?: number
 }
 
-const ROLE_SYMBOL: Record<string, string> = { tank: '🛡', fighter: '⚔', assassin: '🗡', mage: '✦', marksman: '◎', support: '✚' }
+const ROLE_SYMBOL: Record<string, string> = { tank: '🛡', fighter: '⚔', assassin: '🗡', mage: '✦', marksman: '◎', support: '✚', controller: '⛓', summoner: '⚙' }
 export const roleSymbol = (role: string) => ROLE_SYMBOL[role] ?? '•'
 
 export const demoLoadout = (): LoadoutEntry[] => DEMO_HEROES.map((h) => {

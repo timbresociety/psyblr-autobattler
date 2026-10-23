@@ -20,8 +20,8 @@ export const MATCHUPS: readonly { id: MatchupId; label: string; needsFactions: b
 
 export const FACTION_NAME: Record<DemoFaction, string> = { mogul: 'Moguls', leader: 'World leaders' }
 
-/** Who stands nearest the middle: those built to take hits, then divers, then the back line. */
-const RANK: Record<RoleId, number> = { tank: 0, fighter: 1, assassin: 2, mage: 3, support: 4, marksman: 5 }
+/** Who stands nearest the middle: those built to take hits, then divers, controllers just behind them, then the back line. */
+const RANK: Record<RoleId, number> = { tank: 0, fighter: 1, assassin: 2, controller: 3, mage: 4, summoner: 5, support: 6, marksman: 7 }
 
 /** One faction's heroes as loadout indices, in roster order, up to `count`. */
 export function factionLineup(loadout: readonly LoadoutEntry[], faction: DemoFaction, count = MAX_PER_SIDE): number[] {
