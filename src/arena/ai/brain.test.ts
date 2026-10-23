@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { armyModifiers } from '../../charter/synergy'
 import { getTemplate } from '../../charter/templates/catalog'
+import { referenceArmy } from '../../sim/field'
 import { defaultBuild } from '../../sim/fixtures'
 import { chest } from '../engine/deliveries'
 import type { MatchEvent } from '../engine/events'
-import { createMatch, matchRules, play, type Arena } from '../engine/match'
+import { GATE_PROFILE, createMatch, matchRules, play, type Arena } from '../engine/match'
 import { hashState } from '../engine/snapshot'
 import { tick } from '../engine/tick'
 import { anglesTo, trackAim } from './aim'
@@ -142,5 +143,28 @@ describe('demo AI (U7)', () => {
     expect(used('ultimate')).toBeGreaterThanOrEqual(3)
     expect(play).toBeDefined()
     expect(Math.abs(wrapAngle(7))).toBeLessThan(Math.PI + 1e-9)
+  })
+
+  it('fights on the ground among the ruins instead of drifting up into the sky (R25)', () => {
+    const army = referenceArmy()
+    const arena = createMatch(armyModifiers(army), armyModifiers(army), 3)
+    const rules = matchRules(arena)
+    let airborne = 0
+    let samples = 0
+    for (let i = 0; i < 60 * 40 && arena.match.winner === undefined; i++) {
+      tick(arena.match, arena.setups, aiCommands(arena), rules)
+      for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && airborne++)
+    }
+    // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall
+    expect(airborne / samples).toBeLessThan(0.1)
+  })
+
+  it('a sword across low cover from its target goes round it rather than standing there swinging at stone', () => {
+    // a fighter and an assassin meet across the fallen column in the middle; when they stood still, every seed timed out
+    for (const seed of [1, 2, 3]) {
+      const arena = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('assassin') }], seed, { profile: GATE_PROFILE })
+      play(arena, aiCommands)
+      expect(arena.match.endReason).toBe('wipe')
+    }
   })
 })

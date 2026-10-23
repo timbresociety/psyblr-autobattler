@@ -23,11 +23,11 @@ export const SIZE_CLASSES: readonly SizeClass[] = ['tiny', 'small', 'medium', 'l
 export const ALL_SIZE_CLASSES: readonly SizeClass[] = [...SIZE_CLASSES, 'colossal']
 
 export const SIZES: Record<SizeClass, SizeProfile> = {
-  tiny: { label: 'Tiny', hitRadius: -0.6, reachBonus: -0.5, healthMul: 1.055, speedMul: 1.16 },
-  small: { label: 'Small', hitRadius: -0.3, reachBonus: -0.25, healthMul: 0.945, speedMul: 1.08 },
+  tiny: { label: 'Tiny', hitRadius: -0.6, reachBonus: -0.5, healthMul: 1.085, speedMul: 1.16 },
+  small: { label: 'Small', hitRadius: -0.3, reachBonus: -0.25, healthMul: 0.97, speedMul: 1.08 },
   medium: { label: 'Medium', hitRadius: 0, reachBonus: 0, healthMul: 1, speedMul: 1 },
-  large: { label: 'Large', hitRadius: 0.9, reachBonus: 0.4, healthMul: 1.085, speedMul: 0.88 },
-  huge: { label: 'Huge', hitRadius: 1.8, reachBonus: 0.75, healthMul: 1.11, speedMul: 0.78 },
+  large: { label: 'Large', hitRadius: 0.9, reachBonus: 0.4, healthMul: 1.06, speedMul: 0.88 },
+  huge: { label: 'Huge', hitRadius: 1.8, reachBonus: 0.75, healthMul: 1.095, speedMul: 0.78 },
   colossal: { label: 'Colossal', hitRadius: 2.4, reachBonus: 2, healthMul: 1.37, speedMul: 0.85 },
 }
 

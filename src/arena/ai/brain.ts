@@ -115,9 +115,10 @@ function hidingSpot(m: MatchState, hero: HeroState, threat: HeroState): { x: num
 
 /**
  * Steer a wanted ground direction around the ruins: look a few metres ahead and, if a wall is there, walk along it,
- * keeping the same side until the way clears; low cover is hopped instead (R25).
+ * keeping the same side until the way clears. Low cover is vaulted on the way to a distant target (R25); with the
+ * target just behind it, vaulting only lands the hero on top, swinging at stone, so it walks round like any wall.
  */
-function steer(m: MatchState, hero: HeroState, brain: BrainState, mx: number, mz: number): { x: number; z: number; hop: boolean } {
+function steer(m: MatchState, hero: HeroState, brain: BrainState, mx: number, mz: number, vault: boolean): { x: number; z: number; hop: boolean } {
   const len = Math.sqrt(mx * mx + mz * mz)
   if (!m.cover || len < 1e-6) return { x: mx, z: mz, hop: false }
   const p = hero.position
@@ -126,7 +127,7 @@ function steer(m: MatchState, hero: HeroState, brain: BrainState, mx: number, mz
   const wall = ahead(mx, mz)
   // the side it last walked around a wall is kept, so it rounds corners instead of turning back at them
   if (!wall) return { x: mx, z: mz, hop: false }
-  if (m.cover.pieces[wall.index].top - p.y <= AI.hopHeight) return { x: mx, z: mz, hop: true }
+  if (vault && m.cover.pieces[wall.index].top - p.y <= AI.hopHeight) return { x: mx, z: mz, hop: true }
   if (brain.detour === 0) brain.detour = brain.strafe
   // walk along the wall, leaning a little toward where it wants to go; switch sides if that way is blocked too
   const first: 1 | -1 = brain.detour === -1 ? -1 : 1
@@ -195,8 +196,9 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
       brain.action = 'retreat'
       brain.hide = hidingSpot(m, hero, target)
     } else {
-      // a ranged hero with no line on its target moves until it has one, rather than shooting the wall
-      const blind = isRanged(setup) && !canSee(m, chest(hero), chest(target))
+      // with no line on its target a hero moves until it has one, rather than shooting the wall; a sword in reach
+      // across low cover would otherwise stand there swinging at stone, so it hops or rounds it too
+      const blind = !canSee(m, chest(hero), chest(target))
       brain.action = gap > preferredDistance(setup) + 0.5 || blind ? 'approach' : 'hold'
     }
     if (next(m.ai) < AI.strafeFlip) brain.strafe = brain.strafe === 1 ? -1 : 1
@@ -249,10 +251,11 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   // melee in contact stays on the target instead of circling off it
   else if (closing) [moveX, moveZ] = [dx / flat, dz / flat]
   // walk around walls, or hop low cover
-  const steered = steer(m, hero, brain, moveX, moveZ)
+  const steered = steer(m, hero, brain, moveX, moveZ, gapTo(hero, target) > AI.vaultReach)
   ;[moveX, moveZ] = [steered.x, steered.z]
-  // follow a target into the air, and come back down when it lands
-  if (m.tick >= brain.dodgeUntil && Math.abs(dy) > 1) vertical = dy > 0 ? 1 : -1
+  // the fight belongs on the ground among the ruins: a sword follows a flying target up (a shot can reach it from
+  // below), and everyone else who is airborne comes back down once the dodge is over
+  if (m.tick >= brain.dodgeUntil) vertical = !isRanged(setup) && dy > AI.chaseUp ? 1 : hero.airborne ? -1 : 0
   if (steered.hop) vertical = 1
 
   // buttons: a decided skill fires once the aim settles (self and auras need no aim); the basic attack when in reach

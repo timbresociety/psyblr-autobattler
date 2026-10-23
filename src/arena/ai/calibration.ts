@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 3
+export const AI_CALIBRATION_VERSION = 4
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */
@@ -36,12 +36,16 @@ export const AI = {
   retreatBelow: 0.2,
   /** Focus fire looks this far past its own range for a weaker target, metres. */
   focusReach: 8,
-  /** Ranged heroes hold this fraction of their range. */
   /** Metres ahead the AI looks for a wall in its way. */
   probe: 2.5,
   /** Cover at or under this height is hopped over rather than walked around. */
   hopHeight: 1.6,
+  /** Low cover is vaulted only on the way to a target further off than this, metres; nearer, it is walked round. */
+  vaultReach: 4,
   /** Furthest cover it will run to when falling back. */
   hideReach: 16,
+  /** A melee hero takes off after a target flying more than this many metres above it. */
+  chaseUp: 1.5,
+  /** Ranged heroes hold this fraction of their range. */
   rangedHold: 0.8,
 } as const
