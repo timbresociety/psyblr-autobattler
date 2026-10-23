@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Build } from '../../charter/build'
+import { RETUNE_STEP } from '../../charter/budget'
 import type { BuildSlot, Template } from '../../charter/types'
 import { SLOT_LABEL } from './labels'
 
@@ -36,7 +37,10 @@ function Mark({ state }: { state: 'draft' | 'checking' | 'ready' | 'blocked' }) 
 export function GateStatus({ build, checking, alternatives, onReady, onSwap, children }: Props) {
   const { gate } = build
   const pct = gate.winRate !== undefined ? `${Math.round(gate.winRate * 100)}%` : ''
-  const retuned = Object.entries(build.slots).filter(([, s]) => s.retuneSteps > 0)
+  // the gate moves every slot by the same step: down to stay under the ceiling, or up to hold its own
+  const steps = Object.values(build.slots)[0]?.retuneSteps ?? 0
+  const shift = Math.round(Math.abs(steps) * RETUNE_STEP * 100)
+  const weak = gate.blockedFor === 'weak'
   const state = checking ? 'checking' : gate.state === 'checking' ? 'draft' : gate.state
   return (
     <section className={`gate gate-${state}`} aria-label="Balance check">
@@ -51,13 +55,16 @@ export function GateStatus({ build, checking, alternatives, onReady, onSwap, chi
         {!checking && gate.state === 'ready' && (
           <p role="status" className="ok">
             Ready for battle · wins {pct} against the field
-            {retuned.length > 0 && ` · numbers retuned ${retuned[0][1].retuneSteps} step${retuned[0][1].retuneSteps > 1 ? 's' : ''} to stay fair`}
+            {steps > 0 && ` · numbers down ${shift}% to stay fair`}
+            {steps < 0 && ` · numbers up ${shift}% so its kit can hold its own`}
           </p>
         )}
         {!checking && gate.state === 'blocked' && gate.strongestSlot && (
           <div role="alert" className="blocked">
             <p>
-              Too strong to battle ({pct} against the field). {SLOT_LABEL[gate.strongestSlot]} is carrying it. Pick another mechanic:
+              {weak
+                ? `Too weak to hold its own (${pct} against the field, even with every number lifted). ${SLOT_LABEL[gate.strongestSlot]} is holding it back. Pick another mechanic:`
+                : `Too strong to battle (${pct} against the field). ${SLOT_LABEL[gate.strongestSlot]} is carrying it. Pick another mechanic:`}
             </p>
             <div className="alts">
               {(alternatives ?? []).map((alt) => (

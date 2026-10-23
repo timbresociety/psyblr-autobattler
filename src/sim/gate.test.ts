@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GATE_CEILING, runGate } from './gate'
+import { GATE_CEILING, GATE_FLOOR, GATE_HOPELESS, runGate } from './gate'
 import { handleGateMessage } from './gate-protocol'
 import { defaultBuild } from './fixtures'
 import { CATALOG_VERSION } from '../charter/templates/catalog'
@@ -40,6 +40,22 @@ describe('balance gate (R15, KTD7)', () => {
     expect(result.state).toBe('blocked')
     expect(result.strongestSlot).toBeDefined()
     expect(result.alternatives?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('a build far under the field is lifted toward the floor rather than sent in hopeless', () => {
+    const result = runGate(defaultBuild('fighter'), { ...quick, candidateScale: 0.7 })
+    expect(result.state).toBe('ready')
+    expect(result.build.slots.basic.retuneSteps).toBeLessThan(0)
+    expect(result.winRate).toBeGreaterThanOrEqual(GATE_FLOOR - 0.12)
+    expect(result.winRate).toBeLessThanOrEqual(GATE_CEILING)
+  })
+
+  it('a kit still hopeless at the full lift is blocked as too weak, naming a slot to change', () => {
+    const result = runGate(defaultBuild('assassin'), { ...quick, candidateScale: 0.15 })
+    expect(result.state).toBe('blocked')
+    expect(result.build.gate.blockedFor).toBe('weak')
+    expect(result.strongestSlot).toBeDefined()
+    expect(result.winRate).toBeLessThan(GATE_HOPELESS)
   })
 
   it('stamps the result with the catalogue and calibration versions', () => {

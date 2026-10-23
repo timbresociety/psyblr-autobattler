@@ -2,7 +2,7 @@ import { geometryOf } from '../../charter/geometry'
 import type { BuildSlot, Template } from '../../charter/types'
 import { ENGINE } from '../engine/calibration'
 import { coverHit } from '../engine/cover'
-import { canSee, chest, isRanged } from '../engine/deliveries'
+import { canSee, chest, isRanged as rangedBasic } from '../engine/deliveries'
 import { alliesOf, enemiesOf, hpFraction } from '../engine/effects'
 import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths'
 import type { Arena } from '../engine/match'
@@ -18,6 +18,12 @@ import { AI } from './calibration'
  */
 
 const CAST_SLOTS: NonNullable<BrainState['cast']>['slot'][] = ['movement', 'ultimate', 'active1', 'active2']
+
+/**
+ * Whether the AI fights this hero from range: a ranged basic attack, except on an assassin, which dives whatever it
+ * throws (a ninja with shadow bolts once held at 10 m all fight and never used its backstab).
+ */
+const isRanged = (setup: HeroSetup) => rangedBasic(setup) && setup.build.roleId !== 'assassin'
 
 const gapTo = (from: HeroState, to: HeroState) => Math.max(0, distance(from.position, to.position) - capsule(from).radius - capsule(to).radius)
 const nearestGap = (m: MatchState, h: HeroState) => enemiesOf(m, h).reduce((d, e) => Math.min(d, gapTo(h, e)), Infinity)

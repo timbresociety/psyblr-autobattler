@@ -105,6 +105,22 @@ describe('creator (U11)', () => {
     expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
+  it('a kit too weak to hold its own is blocked with the slot holding it back, not sent in hopeless', async () => {
+    const runGate = vi.fn(async (build: Build): Promise<GateOutcome> => ({
+      state: 'blocked',
+      winRate: 0.04,
+      strongestSlot: 'basic',
+      alternatives: swapAlternatives(build, 'basic'),
+      build: { ...build, gate: { state: 'blocked', winRate: 0.04, strongestSlot: 'basic', blockedFor: 'weak' } },
+    }))
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/Too weak to hold its own/)
+    expect(alert.textContent).toMatch(/Basic attack is holding it back|holding it back/)
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('with the API offline, the creator still proposes a kit and shows an offline notice', async () => {
     const propose = vi.fn(async (hero: Parameters<CreatorDeps['propose']>[0]) => ({ build: proposeBuild(hero).build, offline: true, limits: [] }))
     await forge(deps({ propose }))

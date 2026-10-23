@@ -61,7 +61,10 @@ export interface GateResult {
   catalogVersion?: number
   calibrationVersion?: number
   aiCalibrationVersion?: number
+  /** For a blocked build: the slot carrying it (too strong) or holding it back (too weak). */
   strongestSlot?: BuildSlot
+  /** Why a build was blocked: over the ceiling, or still hopeless after the gate's full lift. */
+  blockedFor?: 'strong' | 'weak'
 }
 
 export interface Build {

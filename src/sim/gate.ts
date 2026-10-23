@@ -16,6 +16,17 @@ export const GATE_CEILING = 0.55
 export const GATE_MARGIN = 0.03
 const PASS_LINE = GATE_CEILING - GATE_MARGIN
 
+/**
+ * The floor: a build measuring under this against the field is lifted, one budget step at a time (never past the pass
+ * line), so a player's hero is never sent in hopeless. A kit whose skills scale off stats its role lacks (a Ki Blast
+ * fighter, a ninja with shadow bolts) used to win one duel in five or fewer.
+ */
+export const GATE_FLOOR = 0.42
+/** Most a weak build is lifted: twelve steps, every number up 72%. */
+export const MAX_LIFT_STEPS = 12
+/** Still under this at the full lift, a kit cannot hold its own: it is blocked and its weakest skill named. */
+export const GATE_HOPELESS = 0.3
+
 export interface GateOptions {
   /** Duels against each field member, alternating sides. */
   duelsPerMember?: number
@@ -82,15 +93,65 @@ function strongestSlot(build: Build, base: number, options: GateOptions): BuildS
 
 /**
  * The balance gate (KTD7): measure the build, retune every slot down one budget step at a time until it sits at or
- * under the ceiling, and block it if the retune limit is reached first.
+ * under the ceiling, and block it if the retune limit is reached first. A build far under the field is lifted the same
+ * way in reverse, up to the floor.
  */
 /** The versions a gate result was earned against, plus its rounded win rate; `isGateStale` checks the same three. */
 export const gateStamp = (winRate: number) => ({ catalogVersion: CATALOG_VERSION, calibrationVersion: CALIBRATION_VERSION, aiCalibrationVersion: AI_CALIBRATION_VERSION, winRate: Math.round(winRate * 1000) / 1000 })
+
+/**
+ * Lift a weak build toward the floor, one budget step at a time. Fights can turn on a few points of damage, so a whole
+ * step that overshoots the pass line is split: the largest part of it that keeps the build fair is taken.
+ */
+function lift(input: Build, start: number, options: GateOptions): { steps: number; build: Build; winRate: number } {
+  let lo = 0
+  let loRate = start
+  let hi: number | undefined
+  for (let s = 1; s <= MAX_LIFT_STEPS && loRate < GATE_FLOOR; s++) {
+    const rate = winRateVsField(withSteps(input, -s), options)
+    if (rate > PASS_LINE) {
+      hi = s
+      break
+    }
+    ;[lo, loRate] = [s, rate]
+  }
+  for (let i = 0; hi !== undefined && i < 3 && loRate < GATE_FLOOR; i++) {
+    const mid = (lo + hi) / 2
+    const rate = winRateVsField(withSteps(input, -mid), options)
+    if (rate > PASS_LINE) hi = mid
+    else [lo, loRate] = [mid, rate]
+  }
+  return { steps: -lo, build: withSteps(input, -lo), winRate: loRate }
+}
+
+/** The slot holding a weak build back: swapping it to the role default raises the win rate the most. */
+function weakestSlot(build: Build, base: number, options: GateOptions): BuildSlot {
+  let best: { slot: BuildSlot; gain: number } = { slot: 'basic', gain: -Infinity }
+  for (const slot of BUILD_SLOTS) {
+    const fallback = defaultTemplate(build.roleId, SLOT_KIND[slot]).id
+    if (build.slots[slot].templateId === fallback) continue
+    const swapped = { ...build, slots: { ...build.slots, [slot]: { ...build.slots[slot], templateId: fallback } } }
+    const gain = winRateVsField(swapped, options) - base
+    if (gain > best.gain) best = { slot, gain }
+  }
+  return best.slot
+}
 
 export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   let steps = 0
   let build = withSteps(input, 0)
   let winRate = winRateVsField(build, options)
+  if (winRate < GATE_FLOOR) ({ steps, build, winRate } = lift(input, winRate, options))
+  if (winRate < GATE_HOPELESS) {
+    const slot = weakestSlot(build, winRate, options)
+    return {
+      state: 'blocked',
+      winRate,
+      build: { ...build, gate: { state: 'blocked', strongestSlot: slot, blockedFor: 'weak', ...gateStamp(winRate) } },
+      strongestSlot: slot,
+      alternatives: swapAlternatives(input, slot),
+    }
+  }
   while (winRate > PASS_LINE && steps < MAX_RETUNE_STEPS) {
     steps++
     build = withSteps(input, steps)
@@ -102,7 +163,7 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   return {
     state: 'blocked',
     winRate,
-    build: { ...build, gate: { state: 'blocked', strongestSlot: slot, ...stamp } },
+    build: { ...build, gate: { state: 'blocked', strongestSlot: slot, blockedFor: 'strong', ...stamp } },
     strongestSlot: slot,
     alternatives: swapAlternatives(input, slot),
   }
