@@ -90,6 +90,10 @@ const TEAM_RGB = TEAM_COLORS.map((c) => [(c >> 16) & 255, (c >> 8) & 255, c & 25
 const PPM = 16
 /** How high a hero in the hand floats over the floor, metres. */
 const LIFT = 0.9
+/** How much bigger a hero in the hand is drawn: picked up, it reads at a glance even from the whole-arena view. */
+const HELD_SCALE = 1.5
+/** Team rings and the landing marker are drawn wider than the match's, metres of radius at medium size. */
+const RING_RADIUS = 1.25
 const VERDICT_COLOR = { ok: new THREE.Color(0x63ff9a), bad: new THREE.Color(0xff4d3d), remove: new THREE.Color(0xd9d0e6) }
 const GOLD = new THREE.Color(0xffcf5a)
 const WHITE = new THREE.Color(0xffffff)
@@ -118,6 +122,8 @@ interface Figure {
   standee: Standee
   lift: number
   liftTo: number
+  /** Drawn size relative to its own: HELD_SCALE in the hand, 1 on the floor. */
+  grow: number
   /** When its drop-in starts (ms), or 0 once landed. */
   dropAt: number
   anim: AnimState
@@ -223,10 +229,10 @@ function zoneTexture(side: Team, yours: Team): THREE.CanvasTexture {
   g.save()
   g.translate(W * PPM, Z(side === 0 ? -L + 4.2 : L - 4.2))
   if (yours === 0) g.rotate(Math.PI)
-  g.font = `italic 800 ${4.4 * PPM}px 'Barlow Condensed', 'Arial Narrow', sans-serif`
+  g.font = `italic 800 ${4.8 * PPM}px 'Barlow Condensed', 'Arial Narrow', sans-serif`
   g.textAlign = 'center'
   g.textBaseline = 'middle'
-  g.fillStyle = tint(0.42)
+  g.fillStyle = tint(0.62)
   g.fillText(side === yours ? 'YOUR SIDE' : 'ENEMY SIDE', 0, 0)
   g.restore()
   return canvasTexture(canvas)
@@ -334,7 +340,8 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   }
   renderer.setPixelRatio(Math.min(1.5, window.devicePixelRatio || 1))
   renderer.shadowMap.enabled = true
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap
+  // the match asks for PCFSoftShadowMap, which three now draws as PCFShadowMap (and warns); ask for that directly
+  renderer.shadowMap.type = THREE.PCFShadowMap
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.05
 
@@ -395,11 +402,12 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   const discGeo = flat(new THREE.CircleGeometry(0.8, 40))
   const haloGeo = flat(new THREE.RingGeometry(1.14, 1.32, 48))
   const marker = new THREE.Group()
-  const markerRing = new THREE.Mesh(ringGeo, overlayMaterial(VERDICT_COLOR.ok, 0.95))
-  const markerDisc = new THREE.Mesh(discGeo, overlayMaterial(VERDICT_COLOR.ok, 0.32))
+  // a bold ring and fill, so the verdict reads even where the hero is a few pixels tall
+  const markerRing = new THREE.Mesh(flat(new THREE.RingGeometry(0.62, 1, 48)), overlayMaterial(VERDICT_COLOR.ok, 1))
+  const markerDisc = new THREE.Mesh(flat(new THREE.CircleGeometry(0.62, 40)), overlayMaterial(VERDICT_COLOR.ok, 0.42))
   const beam = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.85, 0.85, 4.5, 32, 1, true).translate(0, 2.25, 0),
-    overlayMaterial(VERDICT_COLOR.ok, 0.55, { map: beamTexture(), blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
+    new THREE.CylinderGeometry(0.85, 0.85, 6, 32, 1, true).translate(0, 3, 0),
+    overlayMaterial(VERDICT_COLOR.ok, 0.85, { map: beamTexture(), blending: THREE.AdditiveBlending, side: THREE.DoubleSide }),
   )
   marker.add(markerDisc, markerRing, beam)
   marker.visible = false
@@ -413,7 +421,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     const c = VERDICT_COLOR[verdict.kind]
     marker.visible = true
     marker.position.set(at.x, 0.07, at.z)
-    marker.scale.setScalar(Math.max(1, scale) * 1.1)
+    marker.scale.setScalar(Math.max(1, scale) * RING_RADIUS * 1.2)
     markerRing.material.color.copy(c)
     markerDisc.material.color.copy(c)
     beam.material.color.copy(c)
@@ -478,7 +486,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     halo.visible = false
     disc.renderOrder = ring.renderOrder = halo.renderOrder = 2
     mark.add(disc, ring, halo)
-    mark.scale.setScalar(Math.max(1, scale) * 1.05)
+    mark.scale.setScalar(Math.max(1, scale) * RING_RADIUS)
     body.visible = mark.visible = false
     scene.add(body, mark)
     const badge = document.createElement('div')
@@ -505,6 +513,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       standee: { foot: screenPoint(), top: screenPoint() },
       lift: 0,
       liftTo: 0,
+      grow: 1,
       dropAt: 0,
       anim: { kind: 'idle' },
       animUntil: 0,
@@ -538,6 +547,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     f.hero = hero
     f.held = false
     f.lift = f.liftTo = 0
+    f.grow = 1
     f.dropAt = 0
     // one put away mid-hover settles back into its idle
     f.anim = { kind: 'idle' }
@@ -938,6 +948,11 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       f.lift += (f.liftTo - f.lift) * (reduced ? 1 : 1 - Math.exp(-dt * 16))
       busy = true
     } else f.lift = f.liftTo
+    const grow = f.held ? HELD_SCALE : 1
+    if (Math.abs(grow - f.grow) > 0.003) {
+      f.grow += (grow - f.grow) * (reduced ? 1 : 1 - Math.exp(-dt * 16))
+      busy = true
+    } else f.grow = grow
     let drop = 0
     let pop = 1
     if (f.dropAt) {
@@ -948,8 +963,9 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       busy = true
     }
     f.body.position.set(f.at.x, f.lift + drop, f.at.z)
+    f.body.scale.setScalar(f.grow)
     f.mark.position.set(f.held ? f.x : f.at.x, 0.05, f.held ? f.z : f.at.z)
-    f.mark.scale.setScalar(Math.max(1, f.scale) * 1.05 * pop * (hovered === f ? 1.12 : 1))
+    f.mark.scale.setScalar(Math.max(1, f.scale) * RING_RADIUS * pop * (hovered === f ? 1.12 : 1))
     if (f.view && now < f.animUntil) {
       f.view.pose(f.anim, now / 1000, dt, false)
       busy = true
@@ -961,13 +977,18 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     const h = canvas.clientHeight
     for (const list of placed)
       for (const f of list) {
-        const height = ENGINE.capsule.height * f.scale + 0.55
+        const height = ENGINE.capsule.height * f.scale * f.grow + 0.3
         toScreen(camera, f.at.x, 0, f.at.z, w, h, f.standee.foot)
         toScreen(camera, f.at.x, f.lift + height, f.at.z, w, h, f.standee.top)
         const show = f.body.visible && f.standee.top.visible
         if (f.badge.hidden === show) f.badge.hidden = !show
         if (!show) continue
-        f.badge.style.transform = `translate3d(${f.standee.top.x.toFixed(1)}px, ${f.standee.top.y.toFixed(1)}px, 0)`
+        // badges follow the zoom: small over the whole arena, so one rank's badges leave the next rank's heroes in
+        // sight; larger close up; never small while hovered or selected, when the name shows beside it
+        const perMetre = (f.standee.foot.y - f.standee.top.y) / height
+        let k = Math.min(1.35, Math.max(0.78, perMetre / 7))
+        if (hovered === f || f.halo.visible) k = Math.max(1, k)
+        f.badge.style.transform = `translate3d(${f.standee.top.x.toFixed(1)}px, ${f.standee.top.y.toFixed(1)}px, 0) scale(${k.toFixed(3)})`
         f.badge.style.zIndex = String(Math.round(f.standee.foot.y) + (f.held ? 5000 : 0))
       }
   }
@@ -1051,6 +1072,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       },
       view: () => ({ ...goal, home: atHome }),
       frames: () => frames,
+      placed: () => placed.map((list) => list.map((f) => ({ name: f.name, x: f.x, z: f.z, loaded: !!f.view }))),
     }
 
   let disposing: Promise<void> | undefined

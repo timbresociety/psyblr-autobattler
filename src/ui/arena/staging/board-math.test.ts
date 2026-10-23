@@ -1,7 +1,7 @@
 import { PerspectiveCamera } from 'three'
 import { describe, expect, it } from 'vitest'
 import { ENGINE } from '../../../arena/engine/calibration'
-import { BOARD_FOV, applyView, clampView, fitDistance, floorPoint, homeView, judge, limitsFor, matchSlots, orbit, pan, pick, reasonText, toNdc, toScreen, wrapAngle, zoom, type Standee, type View } from './board-math'
+import { BOARD_FOV, ZOOM_LEAN, applyView, clampView, elevation, fitDistance, floorPoint, homeView, judge, limitsFor, matchSlots, orbit, pan, pick, reasonText, toNdc, toScreen, wrapAngle, zoom, type Standee, type View } from './board-math'
 import { MAX_PER_SIDE, deployHeroes, emptyFormation, place } from './formation'
 
 const { halfWidth: W, halfLength: L } = ENGINE.arena
@@ -76,6 +76,21 @@ describe('the staging camera', () => {
     expect(v.target).toEqual(home.target)
   })
 
+  it('leans toward the horizon as it closes in, and straightens again at the home framing', () => {
+    const home = homeView(0, 1.4)
+    const lim = limitsFor(home)
+    const close = clampView({ ...home, distance: lim.minDistance }, lim)
+    expect(close.lean).toBeCloseTo(ZOOM_LEAN, 6)
+    expect(elevation(close)).toBeLessThan(elevation(home))
+    expect(clampView(home, lim).lean).toBe(0)
+    // the floor under the pointer still maps back to the same pixel with the lean on
+    const camera = cameraFor(close)
+    const s = toScreen(camera, 3, 0, -10, 1400, 1000)
+    const hit = floorPoint(camera, (s.x / 1400) * 2 - 1, 1 - (s.y / 1000) * 2)!
+    expect(hit.x).toBeCloseTo(3, 4)
+    expect(hit.z).toBeCloseTo(-10, 4)
+  })
+
   it('pans only while zoomed in, and never off the arena', () => {
     const home = homeView(0, 1.4)
     const lim = limitsFor(home)
@@ -105,8 +120,13 @@ describe('pointer and floor', () => {
   })
 
   it('finds no floor where the pointer is on the sky', () => {
-    const camera = cameraFor({ yaw: 0, pitch: 0.2, distance: 60, target: { x: 0, z: 0 } })
-    expect(floorPoint(camera, 0, 0.99)).toBeUndefined()
+    // a level camera: the top half of its frame is sky
+    const camera = new PerspectiveCamera(BOARD_FOV, 1.4, 0.5, 1200)
+    camera.position.set(0, 10, -60)
+    camera.lookAt(0, 10, 0)
+    camera.updateMatrixWorld()
+    expect(floorPoint(camera, 0, 0.5)).toBeUndefined()
+    expect(floorPoint(camera, 0, -0.5)).toBeDefined()
   })
 
   it('picks the hero under the pointer, by its feet, its body or its badge', () => {

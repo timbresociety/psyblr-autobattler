@@ -15,6 +15,10 @@ const { halfWidth: W, halfLength: L } = ENGINE.arena
 export const BOARD_FOV = 32
 /** The home view looks down at about 52 degrees. */
 export const HOME_PITCH = 0.9
+/** How far the camera leans toward the horizon when fully zoomed in, radians: close up, the heroes are seen from the side. */
+export const ZOOM_LEAN = 0.25
+/** The lowest the camera's line of sight goes, leaning included, radians above the floor. */
+const MIN_ELEVATION = 0.4
 
 export interface FloorPoint {
   x: number
@@ -30,6 +34,8 @@ export interface View {
   distance: number
   /** The spot on the floor the camera looks at. */
   target: FloorPoint
+  /** Extra tilt toward the horizon as the camera closes in, radians; clampView sets it from the distance. */
+  lean?: number
 }
 
 export interface Limits {
@@ -48,9 +54,13 @@ export const wrapAngle = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Ma
 /** Each side's camera sits behind its own half, facing the enemy, the way the match's free camera starts. */
 export const homeYaw = (side: Team) => (side === 0 ? 0 : Math.PI)
 
+/** The angle the camera actually looks down at: its pitch, less the lean it takes when zoomed in. */
+export const elevation = (view: View) => Math.max(MIN_ELEVATION, view.pitch - (view.lean ?? 0))
+
 export function cameraPosition(view: View, out = new Vector3()): Vector3 {
-  const flat = Math.cos(view.pitch) * view.distance
-  return out.set(view.target.x - Math.sin(view.yaw) * flat, Math.sin(view.pitch) * view.distance, view.target.z - Math.cos(view.yaw) * flat)
+  const pitch = elevation(view)
+  const flat = Math.cos(pitch) * view.distance
+  return out.set(view.target.x - Math.sin(view.yaw) * flat, Math.sin(pitch) * view.distance, view.target.z - Math.cos(view.yaw) * flat)
 }
 
 /** Put a camera where the view says and refresh its matrices, so projecting and unprojecting are right at once. */
@@ -133,8 +143,8 @@ export function homeView(side: Team, aspect: number, fov = BOARD_FOV, pitch = HO
 export const limitsFor = (home: View): Limits => ({ home, minDistance: Math.min(20, home.distance * 0.5), maxDistance: home.distance * 1.18, yawRange: 0.8, pitch: [0.6, 1.45] })
 
 /**
- * Keep a view inside its limits. Zoomed in, the target may wander toward the arena's edges; at the home framing and
- * beyond it comes back to the home target, so the whole arena stays in view.
+ * Keep a view inside its limits. Zoomed in, the target may wander toward the arena's edges and the camera leans toward
+ * the horizon; at the home framing and beyond it comes back to the home target and angle, so the whole arena shows.
  */
 export function clampView(view: View, lim: Limits): View {
   const distance = clamp(view.distance, lim.minDistance, lim.maxDistance)
@@ -143,7 +153,7 @@ export function clampView(view: View, lim: Limits): View {
   const freedom = clamp((lim.home.distance - distance) / Math.max(1e-6, lim.home.distance - lim.minDistance), 0, 1)
   const h = lim.home.target
   const target = { x: h.x + clamp(view.target.x - h.x, -W * freedom, W * freedom), z: h.z + clamp(view.target.z - h.z, -L * freedom, L * freedom) }
-  return { yaw, pitch, distance, target }
+  return { yaw, pitch, distance, target, lean: ZOOM_LEAN * freedom }
 }
 
 /** Turn and tilt by a pointer drag in pixels: the arena follows the hand sideways, and dragging down looks more from above. */
@@ -154,7 +164,7 @@ export const orbit = (view: View, dx: number, dy: number, lim: Limits): View => 
  * zoom, rather than on the middle of the frame.
  */
 export function zoom(view: View, deltaY: number, focus: FloorPoint | undefined, lim: Limits): View {
-  const distance = clamp(view.distance * Math.exp(clamp(deltaY, -300, 300) * 0.0016), lim.minDistance, lim.maxDistance)
+  const distance = clamp(view.distance * Math.exp(clamp(deltaY, -300, 300) * 0.0012), lim.minDistance, lim.maxDistance)
   const k = 1 - distance / view.distance
   const target = focus ? { x: view.target.x + (focus.x - view.target.x) * k, z: view.target.z + (focus.z - view.target.z) * k } : view.target
   return clampView({ ...view, distance, target }, lim)
@@ -171,6 +181,7 @@ export function approach(from: View, to: View, k: number): View {
     pitch: mix(from.pitch, to.pitch),
     distance: mix(from.distance, to.distance),
     target: { x: mix(from.target.x, to.target.x), z: mix(from.target.z, to.target.z) },
+    lean: mix(from.lean ?? 0, to.lean ?? 0),
   }
 }
 

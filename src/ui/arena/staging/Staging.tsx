@@ -342,7 +342,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
                 <li>
                   <i className="key-block keep-out" /> No standing
                 </li>
-                <li className="key-controls">Right-drag or Shift-drag turns · Scroll zooms</li>
+                <li className="key-controls">Right-drag turns · Scroll zooms</li>
               </>
             )}
           </ul>
