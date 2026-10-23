@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hydrateBuild } from '../../charter/build'
+import { GATE_CEILING, winRateVsField } from '../../sim/gate'
 import { DEMO_HEROES, demoRoster } from './roster'
 
 describe('demo roster (U1)', () => {
@@ -16,4 +17,13 @@ describe('demo roster (U1)', () => {
       expect(result.build.sizeClass ?? 'medium').toBe(build.sizeClass ?? 'medium')
     }
   })
+
+  it('every hero fights under the R15 ceiling at its own size, as any forged build must', () => {
+    // demo heroes skip the forge's gate, so the roster itself has to stay fair: a 78% huge fighter once shipped here
+    const over = demoRoster()
+      .map((b) => ({ name: b.heroName, rate: winRateVsField(b) }))
+      .filter((r) => r.rate > GATE_CEILING)
+    expect(over).toEqual([])
+    // the gate's own measurement (30 duels a member, 20 heroes): slow, but a cheaper sample would judge different fights
+  }, 240_000)
 })

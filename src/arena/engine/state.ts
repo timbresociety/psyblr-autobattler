@@ -95,7 +95,7 @@ export interface MatchState {
   ai: RngState
   winner?: Team | 'draw'
   endReason?: 'wipe' | 'time'
-  /** Gate profile only: from this tick, damage ramps up by `perSecond` each second so duels end (KTD5). */
+  /** From this tick, damage ramps up by `perSecond` each second: steeply so gate duels end (KTD5), gently as live overtime. */
   damageRamp?: { fromTick: number; perSecond: number }
   /** Who is driving each hero; the AI skips human-controlled ones (KTD4). */
   human?: number
@@ -166,8 +166,8 @@ export function emptyMatch(seed: number): MatchState {
 /** The body that bumps into walls: the hit capsule's radius, capped so big heroes still fit through gaps. */
 export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, capsule(hero).radius)
 
+/** The hit capsule: the medium one scaled by the size class's body, so it matches the model the audience sees (R23). */
 export function capsule(hero: HeroState): { radius: number; height: number } {
-  const profile = SIZES[hero.size]
-  const grow = 1 + Math.max(0, profile.hitRadius) / 3
-  return { radius: Math.max(0.15, ENGINE.capsule.radius + profile.hitRadius), height: ENGINE.capsule.height * grow }
+  const scale = SIZES[hero.size].scale
+  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale }
 }

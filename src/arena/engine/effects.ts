@@ -1,4 +1,4 @@
-import { SIZES } from '../../charter/sizes'
+import { sizeHealth } from '../../charter/sizes'
 import type { BuildSlot, DamageType, Effect, Template } from '../../charter/types'
 import { DT, ENGINE, ticks } from './calibration'
 import type { MatchEvent } from './events'
@@ -75,7 +75,8 @@ export function friendlyTargets(ctx: Ctx, caster: HeroState, template: Template,
 
 function setSize(ctx: Ctx, hero: HeroState, size: HeroState['size']) {
   // a transformation changes the body, so health scales with it and keeps its fraction
-  const ratio = SIZES[size].healthMul / SIZES[hero.size].healthMul
+  const role = ctx.setups[hero.id].build.roleId
+  const ratio = sizeHealth(role, size) / sizeHealth(role, hero.size)
   hero.maxHp *= ratio
   hero.hp *= ratio
   hero.size = size

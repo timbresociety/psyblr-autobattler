@@ -62,6 +62,8 @@ export interface HudState {
   backend?: Backend
   quality: QualityLevel
   healthShare: [number, number]
+  /** Overtime: the share of extra damage everyone deals now, 0 before it starts. */
+  overtime?: number
 }
 
 interface Listeners {
@@ -139,6 +141,7 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
     backend,
     quality,
     healthShare: [healthShare(match, 0), healthShare(match, 1)],
+    overtime: match.damageRamp && match.tick > match.damageRamp.fromTick ? ((match.tick - match.damageRamp.fromTick) / ENGINE.tickHz) * match.damageRamp.perSecond : 0,
     heroes: match.heroes.map((h) => ({
       id: h.id,
       name: setups[h.id].build.heroName,

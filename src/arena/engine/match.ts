@@ -10,8 +10,8 @@ import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type
 import { tick, type TickRules } from './tick'
 
 /**
- * Match setup and rules (U5, KTD5). Two profiles share every rule: the live match runs a long timer, and the
- * balance gate's duels run a short one with a damage ramp so each ends quickly.
+ * Match setup and rules (U5, KTD5). The profiles share every rule: the live match runs a long timer with an overtime
+ * ramp in its second half, and the balance gate's duels run a short one with a steep ramp so each ends quickly.
  */
 
 export interface Profile {
@@ -19,7 +19,8 @@ export interface Profile {
   damageRamp?: { fromSeconds: number; perSecond: number }
 }
 
-export const LIVE_PROFILE: Profile = { timerSeconds: 300 }
+/** Overtime from 2:30 in: damage grows 2% a second, so a stalled 4v4 is decided by a fight rather than the clock. */
+export const LIVE_PROFILE: Profile = { timerSeconds: 300, damageRamp: { fromSeconds: 150, perSecond: 0.02 } }
 export const GATE_PROFILE: Profile = { timerSeconds: 60, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
 /** Team fights in the balance report need longer to play out than duels. */
 export const GATE_TEAM_PROFILE: Profile = { timerSeconds: 120, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }

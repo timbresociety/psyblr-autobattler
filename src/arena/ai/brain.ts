@@ -75,12 +75,18 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
   }
 }
 
-/** Team focus: assassins hunt the weakest anywhere; others take the weakest in easy reach, else the nearest. */
+/**
+ * Team focus: assassins hunt the weakest within their hunting reach (diving through a whole team for a far target was
+ * suicide); others take the weakest in easy reach, else the nearest.
+ */
 function chooseTarget(m: MatchState, hero: HeroState, setup: HeroSetup): HeroState | undefined {
   const enemies = enemiesOf(m, hero)
   if (!enemies.length) return undefined
   const effective = (e: HeroState) => e.hp + e.shield
-  if (setup.build.roleId === 'assassin') return enemies.reduce((a, b) => (hpFraction(b) < hpFraction(a) - 1e-9 ? b : a))
+  if (setup.build.roleId === 'assassin') {
+    const prey = enemies.filter((e) => gapTo(hero, e) <= AI.huntReach)
+    if (prey.length) return prey.reduce((a, b) => (hpFraction(b) < hpFraction(a) - 1e-9 ? b : a))
+  }
   const scan = preferredDistance(setup) + AI.focusReach
   const inReach = enemies.filter((e) => gapTo(hero, e) <= scan)
   // a target it can actually shoot beats one hiding behind the ruins (R25)
@@ -88,6 +94,23 @@ function chooseTarget(m: MatchState, hero: HeroState, setup: HeroSetup): HeroSta
   const pool = visible.length ? visible : inReach
   if (pool.length) return pool.reduce((a, b) => (effective(b) < effective(a) - 1e-9 ? b : a))
   return enemies.reduce((a, b) => (gapTo(hero, b) < gapTo(hero, a) - 1e-9 ? b : a))
+}
+
+/** How far a hero has pushed toward the enemy: blue (side 0) advances along +z, red along -z. */
+const progressOf = (h: HeroState) => (h.team === 0 ? h.position.z : -h.position.z)
+
+/**
+ * The team's front line: its most advanced living tank or, with no tank left, fighter, other than this hero, and
+ * whether it has met the enemy yet. Undefined for a hero fighting alone or leading itself, so a duel is never held.
+ */
+function frontOf(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): { progress: number; clashing: boolean } | undefined {
+  for (const role of ['tank', 'fighter'] as const) {
+    let best: HeroState | undefined
+    for (const a of m.heroes)
+      if (a.alive && a.team === hero.team && a.id !== hero.id && setups[a.id].build.roleId === role && (!best || progressOf(a) > progressOf(best))) best = a
+    if (best) return { progress: progressOf(best), clashing: nearestGap(m, best) <= AI.clashGap }
+  }
+  return undefined
 }
 
 function newBrain(hero: HeroState): BrainState {
@@ -210,7 +233,7 @@ const steps = (angle: number) => {
   return Math.round(((a < 0 ? a + TAU : a) / TAU) * AIM_STEPS) % AIM_STEPS
 }
 
-function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState): Command {
+function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState, setups: readonly HeroSetup[]): Command {
   if (brain.pending && m.tick >= brain.pending.at) {
     brain.target = brain.pending.target
     brain.pending = undefined
@@ -250,6 +273,26 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   else if (isRanged(setup)) [moveX, moveZ] = [(-dz / flat) * brain.strafe * 0.6, (dx / flat) * brain.strafe * 0.6]
   // melee in contact stays on the target instead of circling off it
   else if (closing) [moveX, moveZ] = [dx / flat, dz / flat]
+  // an assassin closing on a far target swings wide round the enemy's front instead of walking through it
+  const role = setup.build.roleId
+  if (role === 'assassin' && brain.action === 'approach' && gapTo(hero, target) > AI.flankGap) {
+    // the sideways direction that points out toward the assassin's own flank
+    const side = hero.position.x >= target.position.x ? 1 : -1
+    let [px, pz] = [-dz / flat, dx / flat]
+    if (px * side < 0) [px, pz] = [-px, -pz]
+    moveX += px * AI.flankBend
+    moveZ += pz * AI.flankBend
+  }
+  // the team moves as one (R31): tanks lead; fighters stride with the front and assassins and ranged heroes keep behind
+  // it, so the first hero to arrive is not the one the whole enemy team burns down. Blades are let loose at the clash.
+  const lead = AI.behindFront[role as keyof typeof AI.behindFront]
+  if (lead !== undefined) {
+    const front = frontOf(m, hero, setups)
+    // an assassin waits for prey that is already busy with a teammate, or already hurt, before it commits
+    const prey = role !== 'assassin' || hpFraction(target) < AI.preyBelow || alliesOf(m, hero).some((a) => a.id !== hero.id && gapTo(a, target) <= AI.busyGap)
+    const loose = front?.clashing && (role === 'fighter' || role === 'assassin') && prey
+    if (front && !loose && progressOf(hero) >= front.progress - lead && (hero.team === 0 ? moveZ : -moveZ) > 0) moveZ = 0
+  }
   // walk around walls, or hop low cover
   const steered = steer(m, hero, brain, moveX, moveZ, gapTo(hero, target) > AI.vaultReach)
   ;[moveX, moveZ] = [steered.x, steered.z]
@@ -286,6 +329,6 @@ export function aiCommands(arena: Arena): (Command | undefined)[] {
     if (!hero.alive || m.human === i) return undefined
     const brain = m.brains![i]
     if (m.tick >= brain.nextDecision) decide(m, hero, arena.setups[i], brain, arena.setups)
-    return command(m, hero, arena.setups[i], brain)
+    return command(m, hero, arena.setups[i], brain, arena.setups)
   })
 }

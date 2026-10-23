@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { SizeClass } from '../../charter/sizes'
+import { ALL_SIZE_CLASSES, SIZES, type SizeClass } from '../../charter/sizes'
 
 /**
  * A procedural skinned humanoid for the performance bench (U1): about 7,500 triangles on a Mixamo-named skeleton,
@@ -82,7 +82,8 @@ export function suitColors(hue: number): Record<Paint, THREE.Color> {
   }
 }
 
-export const SIZE_SCALE: Record<SizeClass, number> = { tiny: 0.8, small: 0.9, medium: 1, large: 1.15, huge: 1.3, colossal: 1.6 }
+/** How big each class is drawn: the Charter's body scale, the same one the hit capsule uses. */
+export const SIZE_SCALE = Object.fromEntries(ALL_SIZE_CLASSES.map((s) => [s, SIZES[s].scale])) as Record<SizeClass, number>
 
 /** The skinned body; with `colors`, each part also carries its suit colour as a vertex colour. */
 export function bodyGeometry(colors?: Record<Paint, THREE.Color>): THREE.BufferGeometry {

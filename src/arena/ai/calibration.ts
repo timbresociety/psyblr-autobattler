@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 4
+export const AI_CALIBRATION_VERSION = 5
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */
@@ -46,6 +46,18 @@ export const AI = {
   hideReach: 16,
   /** A melee hero takes off after a target flying more than this many metres above it. */
   chaseUp: 1.5,
+  /** Metres each role keeps behind its team's front line (its lead tank, else fighter); tanks lead and are not held. */
+  behindFront: { fighter: -1, assassin: 2, mage: 3, marksman: 3.5, support: 3 },
+  /** The front has met the enemy once its leader is this close to one, metres; fighters and assassins then go in. */
+  clashGap: 4,
+  /** An assassin hunts the weakest enemy within this many metres, else takes the nearest. */
+  huntReach: 22,
+  /** It dives only on prey a teammate is within this many metres of, or that is under this health fraction. */
+  busyGap: 5,
+  preyBelow: 0.5,
+  /** Past this gap an assassin bends its approach sideways by this much, to come at its target from the flank. */
+  flankGap: 8,
+  flankBend: 0.7,
   /** Ranged heroes hold this fraction of their range. */
   rangedHold: 0.8,
 } as const

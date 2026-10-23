@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BUILD_SLOTS } from '../../charter/build'
+import { GEOMETRY_DEFAULTS } from '../../charter/geometry'
 import { SIZES, type SizeClass } from '../../charter/sizes'
 import { CATALOG } from '../../charter/templates/catalog'
 import { ai, at, phys, push, resize, active, ultimate } from '../../charter/templates/dsl'
@@ -64,13 +65,15 @@ describe('3D deliveries (U4)', () => {
     expect(a.hits()).toEqual([1])
   })
 
-  it('a shot 2 m wide misses a medium hero and hits a huge one', () => {
-    const miss = arena(skill(at.proj(30)), [{ x: 2.2, z: 15 }])
+  it('a shot that passes a medium hero by a hair hits a huge one', () => {
+    // off to the side by the shot's radius plus a hitbox between the medium one and the huge one
+    const x = GEOMETRY_DEFAULTS.projectileRadius + ENGINE.capsule.radius + SIZES.huge.hitRadius / 2
+    const miss = arena(skill(at.proj(30)), [{ x, z: 15 }])
     miss.m.heroes[0].yaw = 0
     miss.fire()
     miss.run(60)
     expect(miss.hits()).toEqual([])
-    const hit = arena(skill(at.proj(30)), [{ x: 2.2, z: 15, size: 'huge' }])
+    const hit = arena(skill(at.proj(30)), [{ x, z: 15, size: 'huge' }])
     hit.m.heroes[0].yaw = 0
     hit.fire()
     hit.run(60)
