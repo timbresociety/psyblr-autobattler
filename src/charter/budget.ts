@@ -38,7 +38,12 @@ const CONTROL_WEIGHT: Record<ControlType, number> = { root: 75, silence: 70, dis
 const DEBUFF_WEIGHT: Record<DebuffType, number> = { armorShred: 1.5, spiritShred: 1.5, vulnerable: 2, wound: 0.6, mark: 1.6 }
 /** Per second of the state on one hero; cleanse is a flat price. */
 const STATE_WEIGHT: Record<StateType, number> = { unstoppable: 80, stealth: 45, invulnerable: 130, cleanse: 45 }
-const TARGET_WEIGHT = { self: 1, ally: 1.1, allies: 1.6 } as const
+/**
+ * What reaching more than one hero is worth. An area heal, shield or buff gives each of up to three allies its full
+ * amount (ENGINE.alliesShare), so with the team close it lands two to three times over; 1.6 left team heals so cheap
+ * that a support built on them won 63% of skirmishes while one without won 25%.
+ */
+const TARGET_WEIGHT = { self: 1, ally: 1.1, allies: 2.4 } as const
 
 const AREA_KINDS: Delivery['kind'][] = ['zone', 'cone', 'aura']
 
@@ -75,7 +80,7 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
     case 'mobility':
       return effect.distance * 9 + (effect.invulnerable ?? 0) * 90
     case 'buff':
-      return (effect.pct / 100) * effect.duration * BUFF_WEIGHT[effect.stat] * (effect.target === 'allies' ? 1.8 : 1)
+      return (effect.pct / 100) * effect.duration * BUFF_WEIGHT[effect.stat] * (effect.target === 'allies' ? TARGET_WEIGHT.allies : 1)
     case 'execute':
       return (effect.thresholdPct / 100) * (effect.bonusPct / 100) * 500
     case 'resize': {

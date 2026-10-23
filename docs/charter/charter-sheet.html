@@ -58,7 +58,7 @@
   </div>
 
   <h2>A filled-in sheet</h2>
-  <p>Here's a demo hero exactly as the Charter stores it. It's built the same way a forged hero is, minus the 3D body.</p>
+  <p>Here's a demo hero exactly as the Charter stores it. Its kit was picked to fit the persona, and it's built the same way a forged hero is, minus the 3D body.</p>
 
   <div class="card">
     <div class="sheet-head"><h3>Elon "Starship" Musk</h3><span class="tag mix">Mage &middot; Large</span></div>
@@ -72,18 +72,18 @@
     <h3>Kit</h3>
     <div class="scroll"><table>
       <tr><th>Slot</th><th>Player's name</th><th>Engine mechanic</th><th>Delivery</th><th>Cooldown</th></tr>
-      <tr><td>Basic</td><td>(none given)</td><td>Arcane Bolt</td><td>Projectile, 20 m, 30 m/s, 0.3 m shot</td><td class="num">0 s</td></tr>
-      <tr><td>Active 1</td><td>(none given)</td><td>Fireball</td><td>Projectile, 22 m, 2.5 m blast</td><td class="num">8 s</td></tr>
-      <tr><td>Active 2</td><td>(none given)</td><td>Frost Nova</td><td>Aura, 4 m</td><td class="num">10 s</td></tr>
-      <tr><td>Passive</td><td>(none given)</td><td>Overcharge, every third hit</td><td>Projectile, 20 m</td><td class="num">0 s</td></tr>
-      <tr><td>Ultimate</td><td>Full Stack Launch</td><td>Meteor Storm</td><td>Zone, 25 m out, 6 m radius</td><td class="num">70 s</td></tr>
+      <tr><td>Basic</td><td>(none given)</td><td>Void Orb</td><td>Projectile, 16 m, 20 m/s, 1.5 m splash</td><td class="num">0 s</td></tr>
+      <tr><td>Active 1</td><td>(none given)</td><td>Comet</td><td>Zone, up to 18 m out, 2.5 m radius</td><td class="num">12 s</td></tr>
+      <tr><td>Active 2</td><td>(none given)</td><td>Flame Pillar</td><td>Zone, up to 14 m out, 2.5 m radius, burns 3 s</td><td class="num">9 s</td></tr>
+      <tr><td>Passive</td><td>(none given)</td><td>Flux, on a kill</td><td>Self</td><td class="num">0 s</td></tr>
+      <tr><td>Ultimate</td><td>Full Stack Launch</td><td>Meteor Storm</td><td>Zone, up to 25 m out, 6 m radius</td><td class="num">70 s</td></tr>
       <tr><td>Movement</td><td>(none given)</td><td>Teleport</td><td>Blink, 10 m</td><td class="num">10 s</td></tr>
     </table></div>
     <h3>Stat sheet <span class="tag fix">Engine</span></h3>
     <p style="color:var(--muted)">Derived from the role, the spread and the size. Nobody types these.</p>
     <div class="scroll"><table class="num">
       <tr><th>Health</th><th>Armor</th><th>Magic resist</th><th>Move speed</th><th>Weapon dmg</th><th>Spirit power</th><th>Cooldown cut</th><th>Regen</th></tr>
-      <tr><td>2,297</td><td>17.0</td><td>43.7</td><td>5.5 m/s</td><td>68.7</td><td>121.0</td><td>30.7%</td><td>7.2/s</td></tr>
+      <tr><td>2,403</td><td>17.0</td><td>43.7</td><td>5.5 m/s</td><td>71.3</td><td>123.4</td><td>30.7%</td><td>7.2/s</td></tr>
     </table></div>
   </div>
 
@@ -141,7 +141,8 @@
   <div class="two">
     <div class="card">
       <h3 style="margin-top:0">The balance gate</h3>
-      <p>Every saved hero fights the eight default heroes 30 times each on the real 60 Hz engine. A hero that wins more than 52% of those fights gets quietly retuned, up to six steps of 6% each, and if it still sits above the 55% ceiling after that, it's blocked, with the gate naming the slot that's doing it and the swaps that would fix it.</p>
+      <p>Every saved hero plays 200 three-a-side skirmishes on the real 60 Hz engine, beside two of the eight default heroes and against three others, turn by turn through all of them. A hero that wins more than 52% gets quietly retuned, up to six steps of 6% each, and if it still sits above the 55% ceiling after that, it's blocked, with the gate naming the slot that's doing it and the swaps that would fix it. A hero under 42% is lifted the same way, and one still under 30% at the full lift is blocked as too weak.</p>
+      <p>The gate used to be one-on-one duels. Duels can't see a taunt, a wall or a heal for someone else, so they scored a taunt-and-root tank at 0% and a stun-and-sleep controller at 6% while both pulled their weight in team fights. In skirmishes the same kits land between 22% and 70%, which the tuning then evens out.</p>
     </div>
     <div class="card">
       <h3 style="margin-top:0">Army rules</h3>
@@ -153,25 +154,25 @@
   <p>Base sheets before any points are spent. These are the dials the balance pass turns.</p>
   <div class="scroll"><table class="num">
     <tr><th>Role</th><th>How it fights</th><th>Health</th><th>Weapon dmg</th><th>Spirit</th><th>Speed</th><th>Default spread (S/A/I)</th></tr>
-    <tr><td>Tank</td><td>Holds the front and soaks the damage meant for the team</td><td>3,500</td><td>20.1</td><td>8.0</td><td>5.6</td><td>16 / 6 / 8</td></tr>
-    <tr><td>Fighter</td><td>Wins long close-range brawls</td><td>2,000</td><td>16.3</td><td>6.2</td><td>6.2</td><td>12 / 12 / 6</td></tr>
-    <tr><td>Assassin</td><td>Bursts down isolated or hurt targets, then gets out</td><td>1,700</td><td>49.3</td><td>13.4</td><td>6.8</td><td>6 / 16 / 8</td></tr>
-    <tr><td>Mage</td><td>Burst and area spell damage from mid range</td><td>1,900</td><td>59.3</td><td>55.5</td><td>6.0</td><td>6 / 6 / 18</td></tr>
-    <tr><td>Marksman</td><td>Steady weapon damage from long range</td><td>1,700</td><td>61.1</td><td>13.8</td><td>6.2</td><td>6 / 18 / 6</td></tr>
-    <tr><td>Support</td><td>Heals, shields, buffs and cleanses</td><td>2,000</td><td>56.9</td><td>42.4</td><td>6.1</td><td>10 / 4 / 16</td></tr>
-    <tr><td>Controller</td><td>Takes enemies out of the fight</td><td>1,900</td><td>80.7</td><td>72.6</td><td>6.0</td><td>8 / 4 / 18</td></tr>
-    <tr><td>Summoner</td><td>Fights through turrets, traps, totems and walls</td><td>1,800</td><td>37.2</td><td>33.6</td><td>6.0</td><td>6 / 8 / 16</td></tr>
+    <tr><td>Tank</td><td>Holds the front and soaks the damage meant for the team</td><td>3,800</td><td>49.8</td><td>19.8</td><td>5.6</td><td>16 / 6 / 8</td></tr>
+    <tr><td>Fighter</td><td>Wins long close-range brawls</td><td>2,000</td><td>28.6</td><td>10.9</td><td>6.2</td><td>12 / 12 / 6</td></tr>
+    <tr><td>Assassin</td><td>Bursts down isolated or hurt targets, then gets out</td><td>1,700</td><td>82.9</td><td>22.5</td><td>6.8</td><td>6 / 16 / 8</td></tr>
+    <tr><td>Mage</td><td>Burst and area spell damage from mid range</td><td>1,900</td><td>61.9</td><td>57.9</td><td>6.0</td><td>6 / 6 / 18</td></tr>
+    <tr><td>Marksman</td><td>Steady weapon damage from long range</td><td>1,700</td><td>58.7</td><td>13.3</td><td>6.2</td><td>6 / 18 / 6</td></tr>
+    <tr><td>Support</td><td>Heals, shields, buffs and cleanses</td><td>2,000</td><td>64.6</td><td>45.7</td><td>6.1</td><td>10 / 4 / 16</td></tr>
+    <tr><td>Controller</td><td>Takes enemies out of the fight</td><td>1,900</td><td>57.1</td><td>51.3</td><td>6.0</td><td>8 / 4 / 18</td></tr>
+    <tr><td>Summoner</td><td>Fights through turrets, traps, totems and walls</td><td>1,800</td><td>62.6</td><td>56.5</td><td>6.0</td><td>6 / 8 / 16</td></tr>
   </table></div>
 
   <h2>Sizes</h2>
-  <p>A hero is drawn at its size's scale and its hitbox matches the body you see. Health is priced per role, because reach decides blade fights while a small body slips shots, so the same size is worth different amounts to a fighter and a marksman.</p>
+  <p>A hero is drawn at its size's scale and its hitbox matches the body you see. Health is priced per role so every size of a role does as well as its medium version, because reach decides blade fights while a small body slips shots. A tiny tank needs about twice the health to keep up, and a huge one gives about a third back.</p>
   <div class="scroll"><table class="num">
     <tr><th>Size</th><th>Body scale</th><th>Hitbox</th><th>Extra reach</th><th>Health (by role)</th><th>Speed</th></tr>
-    <tr><td>Tiny</td><td>&times;0.8</td><td>&minus;0.08 m</td><td>&minus;0.5 m</td><td>&times;0.96 to 1.37</td><td>&times;1.16</td></tr>
-    <tr><td>Small</td><td>&times;0.9</td><td>&minus;0.04 m</td><td>&minus;0.25 m</td><td>&times;0.99 to 1.05</td><td>&times;1.08</td></tr>
+    <tr><td>Tiny</td><td>&times;0.8</td><td>&minus;0.08 m</td><td>&minus;0.5 m</td><td>&times;0.93 to 2.12</td><td>&times;1.16</td></tr>
+    <tr><td>Small</td><td>&times;0.9</td><td>&minus;0.04 m</td><td>&minus;0.25 m</td><td>&times;0.94 to 1.15</td><td>&times;1.08</td></tr>
     <tr><td>Medium</td><td>&times;1.0</td><td>0</td><td>0</td><td>&times;1.0</td><td>&times;1.0</td></tr>
-    <tr><td>Large</td><td>&times;1.15</td><td>+0.06 m</td><td>+0.4 m</td><td>&times;0.99 to 1.10</td><td>&times;0.88</td></tr>
-    <tr><td>Huge</td><td>&times;1.3</td><td>+0.12 m</td><td>+0.75 m</td><td>&times;1.01 to 1.09</td><td>&times;0.78</td></tr>
+    <tr><td>Large</td><td>&times;1.15</td><td>+0.06 m</td><td>+0.4 m</td><td>&times;0.72 to 1.11</td><td>&times;0.88</td></tr>
+    <tr><td>Huge</td><td>&times;1.3</td><td>+0.12 m</td><td>+0.75 m</td><td>&times;0.68 to 1.27</td><td>&times;0.78</td></tr>
     <tr><td>Colossal (transform only)</td><td>&times;1.6</td><td>+0.24 m</td><td>+2 m</td><td>&times;1.37</td><td>&times;0.85</td></tr>
   </table></div>
 

@@ -143,7 +143,9 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
   const executeBonus = (u: HeroState) => template.effects.reduce((b, x) => (x.kind === 'execute' && hpFraction(u) * 100 < x.thresholdPct ? b + x.bonusPct / 100 : b), 0)
   switch (e.kind) {
     case 'damage': {
-      const amount = magnitude(e, sheet[e.scaling])
+      // an area hit lands in full on up to three heroes and spreads beyond that, the way area heals share (alliesShare):
+      // otherwise one blast into a ten-hero crowd outweighs a whole kit
+      const amount = magnitude(e, sheet[e.scaling]) * Math.min(1, ENGINE.areaShare / Math.max(1, hit.length))
       for (const u of hit) {
         if (e.overTime) u.dots.push({ perSecond: amount / e.overTime, type: e.type, until: now + ticks(e.overTime), source: caster.id })
         else dealDamage(ctx, caster, u, amount, e.type, slot, executeBonus(u))

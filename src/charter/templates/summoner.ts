@@ -2,14 +2,14 @@ import { active, ai, at, basic, buff, field, ground, heal, knockup, mark, moveme
 
 /** Summoner: fights through what it leaves on the field. Turrets, traps, totems that pulse, walls. */
 export const SUMMONER = [
-  basic({ id: 'summoner-drone-zap', name: 'Drone Zap', roles: ['summoner'], tags: ['drone', 'zap', 'laser', 'beam', 'robot', 'tech'], delivery: at.beam(12), effects: [spirit(5, 0.6)], ai: ai('always', 1) }),
+  basic({ id: 'summoner-drone-zap', name: 'Drone Zap', roles: ['summoner'], tags: ['drone', 'zap', 'laser', 'beam', 'robot', 'tech'], delivery: at.beam(12), effects: [spirit(5, 0.6)], ai: ai('always', 1), override: { budget: 56, reason: 'a hitscan beam at a summoner\'s spirit power out-traded every other summoner basic in skirmishes (64% against 30-47%)' } }),
   basic({ id: 'summoner-nail-gun', name: 'Nail Gun', roles: ['summoner'], tags: ['nail-gun', 'rivet', 'tool', 'engineer', 'shred'], delivery: at.proj(18), effects: [phys(4, 0.8), shred(2, 2)], ai: ai('always', 1) }),
   basic({ id: 'summoner-wrench', name: 'Wrench', roles: ['summoner'], tags: ['wrench', 'tool', 'melee', 'engineer', 'mechanic', 'hammer'], delivery: at.melee(2.6), effects: [phys(8, 1)], ai: ai('always', 1) }),
   basic({ id: 'summoner-spore-shot', name: 'Spore Shot', roles: ['summoner'], tags: ['spore', 'fungus', 'plant', 'seed', 'wound', 'nature'], delivery: at.proj(15, 1.2), effects: [spirit(4, 0.6), wound(20, 1.5)], ai: ai('always', 1) }),
 
   active({ id: 'summoner-sentry-turret', name: 'Sentry Turret', roles: ['summoner'], tags: ['turret', 'sentry', 'gun', 'deploy', 'engineer', 'auto-gun'], delivery: at.zone(6, 0.5), effects: [turret(8, 0.8, 14, 8, 0.25, 'weaponDamage')], cooldown: 14, ai: ai('engage', 7) }),
-  active({ id: 'summoner-tesla-coil', name: 'Tesla Coil', roles: ['summoner'], tags: ['tesla', 'coil', 'lightning', 'pylon', 'electric', 'tower'], delivery: at.zone(8, 0.5), effects: [turret(6, 1.2, 10, 12, 0.35)], cooldown: 13, ai: ai('engage', 7) }),
   active({ id: 'summoner-frost-totem', name: 'Frost Totem', roles: ['summoner'], tags: ['totem', 'frost', 'ice', 'slow', 'cold', 'idol'], delivery: at.zone(10, 4), effects: [field(6, 1), slow(30, 1), spirit(6, 0.08)], cooldown: 14, ai: ai('engage', 6, { minTargets: 1 }) }),
+  active({ id: 'summoner-tesla-coil', name: 'Tesla Coil', roles: ['summoner'], tags: ['tesla', 'coil', 'lightning', 'pylon', 'electric', 'tower'], delivery: at.zone(8, 0.5), effects: [turret(6, 1.2, 10, 12, 0.35)], cooldown: 13, ai: ai('engage', 7) }),
   active({ id: 'summoner-proximity-mine', name: 'Proximity Mine', roles: ['summoner'], tags: ['mine', 'landmine', 'explosive', 'trap', 'bomb', 'claymore'], delivery: at.zone(10, 2.5), effects: [trap(12, 1), push(3), phys(60, 0.7)], cooldown: 11, ai: ai('engage', 5) }),
   active({ id: 'summoner-scrap-wall', name: 'Scrap Wall', roles: ['summoner'], tags: ['wall', 'scrap', 'barricade', 'build', 'fortify', 'cover'], delivery: at.zone(8, 1.5), effects: [wall(10, 6, 800), phys(20, 0.3)], cooldown: 15, ai: ai('peel', 6) }),
   active({ id: 'summoner-drone-swarm', name: 'Drone Swarm', roles: ['summoner'], tags: ['drones', 'swarm', 'bees', 'nanites', 'bugs', 'cloud'], delivery: at.aura(5), effects: [field(4, 0.5), spirit(10, 0.1)], cooldown: 13, ai: ai('engage', 6, { minTargets: 1 }) }),

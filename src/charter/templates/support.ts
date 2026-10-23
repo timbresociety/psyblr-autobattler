@@ -3,7 +3,7 @@ import { active, ai, at, basic, buff, cleanse, cripple, disarm, field, heal, inv
 /** Support: keeps allies alive and stronger. Heals, shields, buffs, cleanses, and sleep or hex to stop a dive. */
 export const SUPPORT = [
   basic({ id: 'support-mending-shot', name: 'Mending Shot', roles: ['support'], tags: ['projectile', 'light', 'holy', 'orb', 'heal'], delivery: at.proj(16), effects: [spirit(6, 0.6), heal(4, 0.1, 'ally')], ai: ai('always', 1) }),
-  basic({ id: 'support-staff-strike', name: 'Staff Strike', roles: ['support'], tags: ['staff', 'melee', 'strike', 'bonk', 'cane'], delivery: at.melee(3), effects: [spirit(10, 0.8)], ai: ai('always', 1) }),
+  basic({ id: 'support-staff-strike', name: 'Staff Strike', roles: ['support'], tags: ['staff', 'melee', 'strike', 'bonk', 'cane'], delivery: at.melee(3), effects: [spirit(10, 0.8)], ai: ai('always', 1), override: { budget: 50, reason: 'a melee swing at a support\'s spirit power won 76% of skirmishes, against 50-66% for every other support basic' } }),
   basic({ id: 'support-light-ray', name: 'Light Ray', roles: ['support'], tags: ['light', 'ray', 'beam', 'holy', 'sun', 'radiant'], delivery: at.beam(14), effects: [spirit(5, 0.6), heal(3, 0.08, 'ally')], ai: ai('always', 1) }),
   basic({ id: 'support-siphon-beam', name: 'Siphon Beam', roles: ['support'], tags: ['siphon', 'drain', 'beam', 'leech', 'life-drain'], delivery: at.beam(12), effects: [spirit(6, 0.6), heal(3, 0.08)], ai: ai('always', 1) }),
   basic({ id: 'support-chime-orb', name: 'Chime Orb', roles: ['support'], tags: ['chime', 'bell', 'sound', 'orb', 'song', 'music'], delivery: at.proj(16, 1.2, 24), effects: [spirit(5, 0.6)], ai: ai('always', 1) }),

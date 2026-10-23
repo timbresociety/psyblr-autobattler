@@ -14,7 +14,7 @@ const quick = { duelsPerMember: 6 }
 
 describe('balance gate (R15, KTD7)', () => {
   it('a normal catalogue build passes without retuning', () => {
-    // the default mage sits at an even 50% against the field on the ruins
+    // the default mage sits inside the fair band against the field, between the floor and the pass line
     const result = runGate(defaultBuild('mage'))
     expect(result.state).toBe('ready')
     expect(Object.values(result.build.slots).every((s) => s.retuneSteps === 0)).toBe(true)

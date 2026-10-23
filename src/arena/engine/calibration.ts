@@ -2,7 +2,7 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 7
+export const ENGINE_CALIBRATION_VERSION = 8
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
@@ -25,6 +25,8 @@ export const ENGINE = {
   variance: 0.12,
   /** An area heal, shield or buff delivers at most this many allies' worth in total, shared across everyone it hits. */
   alliesShare: 3,
+  /** An area hit lands in full on up to this many enemies; more share it. */
+  areaShare: 3,
   /** Burst heals landing on one hero inside this window weaken each other (stacked healers), seconds. */
   healWindow: 3,
   /** Each recent burst heal cuts the next one by this fraction. */

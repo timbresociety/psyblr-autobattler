@@ -61,6 +61,13 @@ function lockedDown(h: HeroState, now: number): boolean {
   return (['root', 'silence', 'disarm', 'sleep', 'blind', 'grounded', 'fear', 'taunt'] as const).some((c) => h.cc[c] > now)
 }
 
+/**
+ * A target deep in its own crowd: this many other enemies around it. Only a big fight has crowds like that (a 3v3 never
+ * does), and a diver that dashes into one dies in seconds, so divers wait for the target to come out of it.
+ */
+const crowded = (m: MatchState, hero: HeroState, target: HeroState) =>
+  enemiesOf(m, hero).filter((e) => e !== target && distance(e.position, target.position) <= AI.crowdRadius).length >= AI.crowdSize
+
 /** An enemy in stealth is out of sight unless it is marked away or close enough to give itself away. */
 const hidden = (m: MatchState, hero: HeroState, e: HeroState) => e.stealthUntil > m.tick && gapTo(hero, e) > ENGINE.revealRange
 
@@ -82,6 +89,8 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
     const freed = frees.target === 'self' ? [hero] : alliesOf(m, hero).filter((a) => distance(hero.position, a.position) <= reachAllies)
     if (freed.some((a) => lockedDown(a, m.tick))) return { ok: true }
   }
+  // no diving into a crowd: a movement skill that closes on the target waits until the target is out of it
+  if (t.slot === 'movement' && hint.use === 'engage' && crowded(m, hero, target)) return { ok: false }
   switch (hint.use) {
     case 'always':
       return { ok: false }
@@ -321,7 +330,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     const front = frontOf(m, hero, setups)
     // an assassin waits for prey that is already busy with a teammate, or already hurt, before it commits
     const prey = role !== 'assassin' || hpFraction(target) < AI.preyBelow || alliesOf(m, hero).some((a) => a.id !== hero.id && gapTo(a, target) <= AI.busyGap)
-    const loose = front?.clashing && (role === 'fighter' || role === 'assassin') && prey
+    const loose = front?.clashing && (role === 'fighter' || role === 'assassin') && prey && !crowded(m, hero, target)
     if (front && !loose && progressOf(hero) >= front.progress - lead && (hero.team === 0 ? moveZ : -moveZ) > 0) moveZ = 0
   }
   // walk around walls, or hop low cover

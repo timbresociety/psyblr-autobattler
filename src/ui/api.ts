@@ -2,7 +2,7 @@ import { proposeBuild, requestStats, type Build, type ProposalInput } from '../c
 import { parseStatWishes } from '../charter/chat'
 import type { LimitHit } from '../charter/types'
 import type { GateOutcome } from '../sim/gate'
-import type { GateRequest } from '../sim/gate-protocol'
+import type { SliceRequest, SliceResult } from '../sim/gate-protocol'
 
 /**
  * Creator I/O. Every call has an offline path, so the creator keeps working without the API (R13):
@@ -41,7 +41,7 @@ export interface CreatorDeps {
 
 const DEVICE_KEY = 'psyblr.deviceId'
 /** A balance check that has not answered by then is treated as failed. */
-const GATE_TIMEOUT_MS = 60_000
+const GATE_TIMEOUT_MS = 120_000
 
 function stored(key: string): string | null {
   try {
@@ -95,28 +95,50 @@ export function offlineChat(build: Build, message: string): ChatResponse {
   return result.ok ? { build: result.build, offline: true, understood: true, limits: result.limits } : { build, offline: true, understood: false, limits: [] }
 }
 
-function localGate(build: Build): Promise<GateOutcome> {
-  return new Promise((resolve, reject) => {
-    if (typeof Worker === 'undefined') {
-      import('../sim/gate-protocol').then(({ handleGateMessage }) => setTimeout(() => resolve(handleGateMessage({ build })), 0), reject)
-      return
-    }
-    const worker = new Worker(new URL('../sim/gate.worker.ts', import.meta.url), { type: 'module' })
-    const fail = (message: string) => {
-      clearTimeout(timer)
-      worker.terminate()
-      reject(new Error(message))
-    }
-    const timer = setTimeout(() => fail('balance check timed out'), GATE_TIMEOUT_MS)
-    worker.onmessage = (event: MessageEvent<GateOutcome>) => {
-      clearTimeout(timer)
-      worker.terminate()
-      resolve(event.data)
-    }
-    worker.onerror = (event) => fail(event.message || 'balance check failed')
-    worker.onmessageerror = () => fail('balance check returned an unreadable result')
-    worker.postMessage({ build } satisfies GateRequest)
-  })
+/**
+ * The balance gate in the browser: its decisions run here, and every measurement is spread over a pool of workers,
+ * each playing some turns of the field. Skirmishes cost about three duels each, so one worker alone would be too slow.
+ */
+async function localGate(build: Build): Promise<GateOutcome> {
+  if (typeof Worker === 'undefined') {
+    const { handleGateMessage } = await import('../sim/gate-protocol')
+    return new Promise((resolve) => setTimeout(() => resolve(handleGateMessage({ build })), 0))
+  }
+  const [{ runGateAsync }, { ROLE_IDS }] = await Promise.all([import('../sim/gate'), import('../charter/roles')])
+  const size = Math.max(1, Math.min(6, (navigator.hardwareConcurrency || 4) - 1))
+  const workers = Array.from({ length: size }, () => new Worker(new URL('../sim/gate.worker.ts', import.meta.url), { type: 'module' }))
+  let failed: ((e: Error) => void) | undefined
+  const failure = new Promise<never>((_, reject) => (failed = reject))
+  const timer = setTimeout(() => failed?.(new Error('balance check timed out')), GATE_TIMEOUT_MS)
+  // one job per build and turn of the field; idle workers take the next job
+  const measure = (builds: Build[]): Promise<number[]> =>
+    new Promise((resolve, reject) => {
+      const jobs: SliceRequest[] = builds.flatMap((b, i) => ROLE_IDS.map((_, turn) => ({ slice: i, build: b, turns: [turn] })))
+      const totals = builds.map(() => ({ score: 0, fights: 0 }))
+      let next = 0
+      let done = 0
+      const feed = (w: Worker) => {
+        if (next < jobs.length) w.postMessage(jobs[next++])
+      }
+      for (const w of workers) {
+        w.onmessage = (event: MessageEvent<SliceResult>) => {
+          const r = event.data
+          totals[r.slice].score += r.score
+          totals[r.slice].fights += r.fights
+          if (++done === jobs.length) resolve(totals.map((t) => t.score / Math.max(1, t.fights)))
+          else feed(w)
+        }
+        w.onerror = (event) => reject(new Error(event.message || 'balance check failed'))
+        w.onmessageerror = () => reject(new Error('balance check returned an unreadable result'))
+        feed(w)
+      }
+    })
+  try {
+    return await Promise.race([runGateAsync(build, measure), failure])
+  } finally {
+    clearTimeout(timer)
+    for (const w of workers) w.terminate()
+  }
 }
 
 export const liveDeps: CreatorDeps = {

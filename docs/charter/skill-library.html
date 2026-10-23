@@ -145,7 +145,7 @@
     <table>
       <thead><tr><th>Role</th><th>Gives the team</th><th class="num">Health</th><th>Signature families</th></tr></thead>
       <tbody>
-        <tr><td>Tank</td><td>Soaks the damage meant for others and holds space.</td><td class="num">3,500</td><td>protection, taunt, walls, knock-ups</td></tr>
+        <tr><td>Tank</td><td>Soaks the damage meant for others and holds space.</td><td class="num">3,800</td><td>protection, taunt, walls, knock-ups</td></tr>
         <tr><td>Support</td><td>Keeps allies alive and stronger.</td><td class="num">2,000</td><td>healing, shields, buffs, cleanse</td></tr>
         <tr><td>Controller <span class="tag mix">new</span></td><td>Takes enemies out of the fight.</td><td class="num">1,900</td><td>every kind of crowd control, walls</td></tr>
         <tr><td>Summoner <span class="tag mix">new</span></td><td>Builds presence on the field that keeps working.</td><td class="num">1,800</td><td>turrets, traps, pulsing totems, walls</td></tr>
@@ -154,6 +154,14 @@
   </div>
   <p>This isn't a new idea. League of Legends' own class system has a Controller class (its Catchers specialize in locking enemies down, its Enchanters in empowering allies) and a separate Specialist class for champions that don't fit the usual molds. Our Support is their Enchanter, our Controller is their Catcher, and our Summoner covers the construct-heavy corner of their Specialists.</p>
   <p>The catalogue enforces the split. Controllers own at least 20 skills with crowd control and summoners at least 15 with constructs, and the tests fail if either drifts.</p>
+
+  <h2>How it's balanced: three-a-side, not one-on-one</h2>
+  <p>Every skill is priced before it ever fights. Each slot has a power budget, control and durations are set by hand, and damage, healing and buff strength scale to fill whatever's left. That gets a skill into the right neighbourhood. The fights decide the rest.</p>
+  <p>The balance gate used to settle it with one-on-one duels, and duels turned out to be the wrong test for half this library. A duel can't see a taunt, a wall or a heal for a teammate. It scored a taunt-and-root tank kit at 0% and a stun-and-sleep controller at 6%, even though both pulled their weight in real team fights. Tuning roles to win duels then gave controllers double damage, and in 10v10 matches they out-damaged everyone, CC included.</p>
+  <p>So the gate now plays three-a-side skirmishes. Your hero fights beside two of the default heroes against three others, turn by turn through all eight, 200 fights in all. In skirmishes the same tank kits land between 22% and 43% and the controller kits between 34% and 70%, a spread the role tuning can even out. Each role's damage is tuned on the middle of a sample of its kits, not on one default, so no single kit sets the bar for the whole role. In the browser the fights are shared across several workers, so the check still answers in seconds.</p>
+  <p>The skirmishes also caught a pricing mistake that duels could never see. An area heal, shield or buff gives each of up to three allies its full amount, but the budget charged as if it reached 1.6 of them. A support built on team heals won 63% of skirmishes and one without them won 25%. Team effects now cost 2.4 times a single target, and the two basic attacks that stood far above the rest of their role (Drone Zap at 64% and Staff Strike at 76%) carry a recorded price cut.</p>
+  <p>Big fights needed two rules of their own, because a ten-hero crowd isn't a bigger 3v3. One blast could hit six heroes, so area damage now lands in full on three targets and spreads beyond that, the same way area heals already did. And the AI's fighters and assassins used to dash straight into a crowd and die inside a third of the match, so now they wait for their target to step out of it. Neither rule can fire in a 3v3, so the gate's measurements stay put. In the default matchup the moguls went from winning 19 of 24 against the world leaders to 15 of 24.</p>
+  <p>Two fixes came out of the same digging. Ground skills used to land at the far end of their range, so a 12 m zone missed anyone standing nearer. Now they land on the enemy you aim at, or where your aim meets the floor. And the AI held its crowd skills until three enemies stood together, which never happens in a small fight, so it now settles for however many are left.</p>
 
   <h2>Flight costs something now</h2>
   <p>If flying is faster than running, nobody fights on the ground. Deadlock doesn't give flight away either. It's one hero's ability with a duration and a long cooldown, 8 seconds of flight on a 40 second cooldown in early builds, and that hero can't dash while it's up. We let everyone fly, so the cost has to live somewhere else.</p>

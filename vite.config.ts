@@ -6,7 +6,7 @@ import { devApi } from './scripts/dev-api'
 export default defineConfig({
   plugins: [react(), devApi()],
   test: {
-    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**'],
+    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**'],
     setupFiles: ['./vitest.setup.ts'],
     passWithNoTests: true,
     // balance tests run thousands of simulated fights

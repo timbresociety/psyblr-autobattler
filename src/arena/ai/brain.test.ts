@@ -153,7 +153,8 @@ describe('demo AI (U7)', () => {
     let samples = 0
     for (let i = 0; i < 60 * 40 && arena.match.winner === undefined; i++) {
       tick(arena.match, arena.setups, aiCommands(arena), rules)
-      for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && airborne++)
+      // a hero thrown up by a knock-up is not flying, it is falling
+      for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && !h.launch && airborne++)
     }
     // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall
     expect(airborne / samples).toBeLessThan(0.1)

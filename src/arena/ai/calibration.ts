@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 7
+export const AI_CALIBRATION_VERSION = 8
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */
@@ -58,6 +58,9 @@ export const AI = {
   /** Past this gap an assassin bends its approach sideways by this much, to come at its target from the flank. */
   flankGap: 8,
   flankBend: 0.7,
+  /** A target with this many other enemies within this many metres is in a crowd, and divers wait for it to come out. */
+  crowdSize: 3,
+  crowdRadius: 6,
   /** Ranged heroes hold this fraction of their range. */
   rangedHold: 0.8,
 } as const
