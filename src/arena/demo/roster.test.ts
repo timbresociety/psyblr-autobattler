@@ -24,6 +24,6 @@ describe('demo roster (U1)', () => {
       .map((b) => ({ name: b.heroName, rate: winRateVsField(b) }))
       .filter((r) => r.rate > GATE_CEILING)
     expect(over).toEqual([])
-    // the gate's own measurement (30 duels a member, 20 heroes): slow, but a cheaper sample would judge different fights
-  }, 240_000)
+    // the gate's own measurement (200 skirmishes a hero, 20 heroes): slow, but a cheaper sample would judge different fights
+  }, 900_000)
 })
