@@ -152,12 +152,62 @@
 .deploy-count { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-dim); }
 .deploy-count select { width: auto; padding: 5px 26px 5px 10px; font-size: 13px; background-position: right 8px center; }
 
+/* ── the 3D board: the arena itself, seen from above at an angle ─────────────── */
+.board3d { position: relative; width: 100%; height: 100%; overflow: hidden; isolation: isolate; border-radius: 10px; background: radial-gradient(70% 70% at 50% 45%, #3a2b52, #160e24 80%); box-shadow: 0 18px 44px rgba(6, 3, 12, 0.55); touch-action: none; user-select: none; -webkit-user-select: none; }
+.board3d::after { content: ''; position: absolute; inset: 0; z-index: 2; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--glass-line), inset 0 0 48px rgba(8, 4, 16, 0.4); pointer-events: none; }
+.board3d-stage { position: absolute; inset: 0; }
+.board3d-canvas { display: block; width: 100%; height: 100%; opacity: 0; transition: opacity 0.6s ease-out; }
+.board3d.is-ready .board3d-canvas { opacity: 1; }
+.board3d-overlay { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+.board3d-veil { position: absolute; inset: 0; z-index: 3; display: grid; place-items: center; color: var(--ink-dim); font: 700 italic 18px/1 var(--display); letter-spacing: 0.12em; text-transform: uppercase; }
+.board3d-veil span { animation: glow-pulse 1.2s ease-in-out infinite; }
+.board3d-reset { position: absolute; top: 12px; right: 12px; z-index: 4; display: inline-flex; align-items: center; gap: 7px; min-height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: rgba(14, 8, 24, 0.8); box-shadow: inset 0 0 0 1px var(--glass-line); color: var(--ink); font: 700 italic 14px/1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; transition: opacity 0.2s, box-shadow 0.15s; }
+.board3d-reset svg { width: 14px; height: 14px; }
+.board3d-reset:hover:not(:disabled) { box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), 0.65); color: var(--gold); }
+.board3d-reset:disabled { opacity: 0.38; cursor: default; }
+
+/* each placed hero's key badge, pinned over its head; its name shows on hover and when selected */
+.board-badge { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
+.board-badge[hidden] { display: none; }
+.board-badge b { position: absolute; left: -10px; bottom: 0; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--team); color: #fff; font: 800 italic 13px/1 var(--display); text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45); box-shadow: 0 0 0 2px rgba(14, 8, 24, 0.85), 0 3px 8px rgba(0, 0, 0, 0.5); }
+.board-badge:not(.mine) b { background: color-mix(in srgb, var(--team) 78%, #1a1024); }
+.board-badge span { position: absolute; left: 14px; bottom: 1px; padding: 3px 7px 3px 8px; border-radius: 4px; background: rgba(14, 8, 24, 0.9); box-shadow: inset 0 0 0 1px rgba(var(--team-rgb), 0.55); color: var(--ink); font: 700 italic 13px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; opacity: 0; translate: -4px 0; transition: opacity 0.12s, translate 0.12s; }
+.board-badge.hover span, .board-badge.selected span { opacity: 1; translate: 0 0; }
+.board-badge.hover b { box-shadow: 0 0 0 2px #fff, 0 3px 10px rgba(0, 0, 0, 0.5); }
+.board-badge.selected b { box-shadow: 0 0 0 2px var(--gold), 0 0 12px rgba(var(--gold-rgb), 0.7); }
+.board-badge.selected span { box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), 0.8); }
+
+/* what letting go here would do, beside the pointer */
+.board3d-label { position: fixed; left: 0; top: 0; z-index: 60; padding: 6px 10px; border-radius: 6px; background: rgba(12, 7, 20, 0.92); box-shadow: inset 0 0 0 1px currentColor, 0 8px 20px rgba(0, 0, 0, 0.45); font: 700 italic 15px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; pointer-events: none; }
+.board3d-label[hidden] { display: none; }
+.board3d-label.ok { color: #8dffb0; }
+.board3d-label.bad { color: #ff7d68; }
+.board3d-label.remove { color: #ece4f6; }
+
+.staging.arena3d .board-empty { top: auto; bottom: 16px; translate: -50% 0; z-index: 3; }
+.key-block.keep-out { background: repeating-linear-gradient(45deg, rgba(255, 96, 72, 0.75) 0 2px, rgba(255, 70, 50, 0.18) 2px 4px); box-shadow: inset 0 0 0 1px rgba(255, 120, 90, 0.85); }
+.key-controls { color: var(--ink-faint); }
+
+/* a hero carried from the row: a chip under the pointer until it is over the arena, where the hero itself shows */
+.carry-chip { position: fixed; left: 0; top: 0; z-index: 60; display: grid; justify-items: center; gap: 3px; width: 68px; margin: -46px 0 0 -34px; padding: 4px 4px 5px; border-radius: 8px; background: rgba(20, 13, 34, 0.94); box-shadow: inset 0 0 0 2px var(--gold), 0 14px 30px rgba(0, 0, 0, 0.5); pointer-events: none; transition: opacity 0.12s, scale 0.12s; }
+.carry-chip.over-board { opacity: 0; scale: 0.6; }
+.carry-face { display: grid; place-items: center; width: 58px; height: 58px; overflow: hidden; border-radius: 6px; background: radial-gradient(circle at 50% 30%, rgba(var(--gold-rgb), 0.3), rgba(16, 10, 28, 0.96) 76%); }
+.carry-face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; transform: scale(1.08); }
+.carry-face .initials { font: 800 italic 20px/1 var(--display); }
+.carry-name { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 13px/1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
+.staging.carrying { cursor: grabbing; }
+.staging.carrying .bust { cursor: grabbing; }
+
 /* ── the row of heroes ────────────────────────────────────────────────────── */
 .bust-row { grid-area: row; display: flex; align-items: stretch; gap: 6px; overflow-x: auto; padding: 4px 2px 6px; }
 .bust-group { flex: none; display: grid; place-items: center; writing-mode: vertical-rl; transform: rotate(180deg); padding: 0 2px; font: 700 italic 12px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); border-left: 1px solid var(--glass-line); margin-left: 6px; }
 .bust-group:first-child { margin-left: 0; }
 .bust { flex: 0 0 auto; position: relative; display: grid; justify-items: center; gap: 4px; width: 82px; padding: 5px 4px 6px; border: 0; border-radius: 8px; background: linear-gradient(180deg, rgba(var(--role-rgb), 0.16), rgba(20, 13, 34, 0.85) 60%); box-shadow: inset 0 0 0 1px var(--glass-line); color: var(--ink); cursor: grab; transition: box-shadow 0.15s, transform 0.15s; }
 .bust:hover { transform: translateY(-2px); box-shadow: inset 0 0 0 1px rgba(var(--role-rgb), 0.6); }
+.arena3d .bust { user-select: none; -webkit-user-select: none; touch-action: pan-x; }
+.bust.lifted { opacity: 0.5; }
+.bust-row.drop-off { border-radius: 10px; background: rgba(var(--gold-rgb), 0.06); box-shadow: inset 0 0 0 2px rgba(var(--gold-rgb), 0.7); }
+.drop-off-label { position: sticky; left: 0; z-index: 1; flex: none; display: grid; place-items: center; max-width: 150px; padding: 0 14px; border-radius: 8px; background: rgba(24, 14, 8, 0.94); box-shadow: inset 0 0 0 1px rgba(var(--gold-rgb), 0.6); color: var(--gold); font: 700 italic 15px/1.1 var(--display); letter-spacing: 0.05em; text-align: center; text-transform: uppercase; }
 .bust.viewing { box-shadow: inset 0 0 0 1px rgba(255, 236, 214, 0.5); }
 .bust.on { box-shadow: inset 0 0 0 2px var(--gold), 0 0 16px rgba(255, 170, 60, 0.35); }
 .bust:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
@@ -187,5 +237,6 @@
   .staging-bar { flex-wrap: wrap; }
   .board-frame { flex: none; }
   .board { width: 100%; height: auto; }
+  .staging.arena3d .board-frame { height: min(70vh, 620px); }
   .side-cards { grid-template-columns: 1fr; }
 }

@@ -89,7 +89,7 @@ export function ArmyPanel({ builds, title }: { builds: Build[]; title: string })
 }
 
 /** The right panel (R5): the selected hero, its numbers and its kit with real numbers. */
-export function DetailsPanel({ build, entry, portrait }: { build?: Build; entry?: LoadoutEntry; portrait?: string }) {
+export function DetailsPanel({ build, entry, portrait, view3d = false }: { build?: Build; entry?: LoadoutEntry; portrait?: string; view3d?: boolean }) {
   if (!build)
     return (
       <section className="stage-card details is-empty" aria-label="Hero details">
@@ -102,6 +102,11 @@ export function DetailsPanel({ build, entry, portrait }: { build?: Build; entry?
           <li>
             <b>Move</b> Drag a hero on the board. Drag it off the board to send it back.
           </li>
+          {view3d && (
+            <li>
+              <b>View</b> Right-drag or Shift-drag turns the arena. Scroll zooms in where you point.
+            </li>
+          )}
           <li>
             <b>Remove</b> Select it on the board and press Delete.
           </li>

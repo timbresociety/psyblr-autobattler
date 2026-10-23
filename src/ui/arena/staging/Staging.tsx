@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ENGINE } from '../../../arena/engine/calibration'
-import { RUINS } from '../../../arena/engine/cover'
 import type { Team } from '../../../arena/engine/state'
 import { shortName } from '../hud/format'
 import { RoleIcon } from '../../common/RoleIcon'
 import { ArmyPanel, DetailsPanel } from './Panels'
-import { MAX_PER_SIDE, deployHeroes, emptyFormation, inRuins, move, onOwnHalf, place, remove, SPACING, type Formation } from './formation'
+import { Board2D, initialsOf } from './Board2D'
+import { Board3D, canDraw3D, type Board3DHandle } from './Board3D'
+import { refine, type Reason } from './board-math'
+import type { BoardState } from './board-scene'
+import { MAX_PER_SIDE, deployHeroes, emptyFormation, move, place, remove, type Formation } from './formation'
 import { bust, demoLoadout, liveLoadout, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
 import { FACTION_NAME, MATCHUPS, defaultLineup, hasFactions, lineupName, matchup, type MatchupId } from './presets'
 import './staging.css'
 
 /**
  * Staging (U16, F1): pick a side, set up both halves (a matchup in one click, auto-deploy, or by hand: drag heroes
- * from the row onto the board), then start. The board is a top-down map of the arena and its ruins.
+ * from the row onto the arena), then start. The board is the arena itself in 3D, seen from above at an angle, with the
+ * heroes standing as their arena characters; where the browser cannot draw it, a flat map of the arena stands in.
  */
 
 export interface StagingResult {
@@ -21,45 +24,26 @@ export interface StagingResult {
   loadout: LoadoutEntry[]
 }
 
-const { halfWidth: W, halfLength: L } = ENGINE.arena
 const TEAM = ['Blue', 'Red'] as const
-const TOKEN_R = 1.55
 
 type Selected = { kind: 'loadout'; index: number } | { kind: 'placed'; side: Team; index: number }
-
-/** One placed hero on the board: its bust in a team ring, numbered by the key that takes it over (R38). */
-function Token({ x, z, side, n, img, initials, selected, ghost, onPointerDown, testId }: { x: number; z: number; side: Team; n: number; img?: string; initials: string; selected?: boolean; ghost?: 'ok' | 'bad'; onPointerDown?: (e: ReactPointerEvent) => void; testId?: string }) {
-  return (
-    <g transform={`translate(${x} ${-z})`} onPointerDown={onPointerDown} className={`token team-${side}${selected ? ' selected' : ''}${ghost ? ` ghost ${ghost}` : ''}`} data-testid={testId}>
-      <circle className="token-shadow" r={TOKEN_R + 0.15} cx={0.25} cy={0.35} />
-      {selected && <circle className="token-halo" r={TOKEN_R + 0.55} />}
-      <circle className="token-base" r={TOKEN_R} />
-      {img ? <image href={img} x={-TOKEN_R} y={-TOKEN_R} width={TOKEN_R * 2} height={TOKEN_R * 2} clipPath="url(#token-clip)" preserveAspectRatio="xMidYMid slice" /> : <text className="token-initials" y={0.5} textAnchor="middle">{initials}</text>}
-      <circle className="token-ring" r={TOKEN_R} />
-      {n > 0 && (
-        <g transform={`translate(${TOKEN_R * 0.78} ${TOKEN_R * 0.78})`} className="token-key">
-          <circle r={0.62} />
-          <text y={0.27} textAnchor="middle">
-            {n % 10}
-          </text>
-        </g>
-      )}
-    </g>
-  )
-}
 
 type Group = 'Your heroes' | 'Forged' | 'Moguls' | 'World leaders'
 const groupOf = (entry: LoadoutEntry): Group => (entry.faction ? (FACTION_NAME[entry.faction] as Group) : entry.pkg ? 'Forged' : 'Your heroes')
 const GROUP_RANK: Record<Group, number> = { 'Your heroes': 0, Forged: 1, Moguls: 2, 'World leaders': 3 }
 
-const initialsOf = (name: string) =>
-  name
-    .replace(/["“”].*?["“”]/g, '')
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
+/** Why a spot was refused, as the notice under the board says it. */
+const NOTICE: Record<Reason, string> = {
+  'wrong-half': 'That spot is on the other half.',
+  full: `A side holds at most ${MAX_PER_SIDE} heroes.`,
+  'in-ruins': 'That spot is inside the ruins.',
+  crowded: 'Too close to another hero.',
+  edge: 'That spot is too close to the wall.',
+  'off-arena': 'That spot is off the arena.',
+}
+
+/** Pixels a press on a hero in the row must travel before it becomes a drag (less is a click). */
+const CARRY_SLOP = 6
 
 export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: { onStart: (r: StagingResult) => void; deps?: LoadoutDeps; demo?: boolean; initial?: StagingResult }) {
   const [side, setSide] = useState<Team | undefined>(initial?.side)
@@ -72,8 +56,18 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const [count, setCount] = useState(10)
   const [notice, setNotice] = useState<string>()
   const [preset, setPreset] = useState<MatchupId>()
-  // the hero being dragged across the board, drawn under the pointer
-  const [dragAt, setDragAt] = useState<{ x: number; z: number }>()
+  // the 3D arena where the browser can draw it; the flat map where it cannot, or once the 3D board fails to start
+  const [flat, setFlat] = useState(() => !canDraw3D())
+  const board3d = useRef<Board3DHandle>(null)
+  // a placed hero is in the hand: the row lights up as somewhere to drop it
+  const [dragging, setDragging] = useState(false)
+  // a hero being carried from the row to the 3D board, drawn as a chip under the pointer until it is over the arena
+  const [carrying, setCarrying] = useState<number>()
+  const chip = useRef<HTMLDivElement | null>(null)
+  const carryAt = useRef({ x: 0, y: 0, over: false })
+  const endCarry = useRef<(() => void) | undefined>(undefined)
+  const swallowClickUntil = useRef(0)
+  const starting = useRef(false)
   // the busts are drawn from the arena's own characters; until their files load, a stand-in figure shows
   const [, setCharactersLoaded] = useState(false)
   useEffect(() => {
@@ -83,9 +77,6 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
       live = false
     }
   }, [])
-  const board = useRef<SVGSVGElement>(null)
-  const ghost = useRef<SVGGElement>(null)
-  const drag = useRef<{ side: Team; index: number } | undefined>(undefined)
 
   // the player's own heroes (made in the Creator or forged) join the demo roster (R2); appended, so a formation
   // already on the board keeps pointing at the same heroes, and shown first in the row
@@ -115,78 +106,106 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected])
 
-  // the board keeps the arena's proportions; where its box is a different shape, the map is centred inside it
-  const frame = () => {
-    const r = board.current!.getBoundingClientRect()
-    const scale = Math.min(r.width / (2 * W), r.height / (2 * L)) || 1
-    return { r, scale, left: r.left + (r.width - 2 * W * scale) / 2, top: r.top + (r.height - 2 * L * scale) / 2 }
-  }
-  const world = (clientX: number, clientY: number) => {
-    const { scale, left, top } = frame()
-    return { x: (clientX - left) / scale - W, z: -((clientY - top) / scale - L) }
-  }
-  const offBoard = (clientX: number, clientY: number) => {
-    const { r } = frame()
-    return clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom
-  }
-  const say = (reason: string) =>
-    setNotice(reason === 'wrong-half' ? 'That spot is on the other half.' : reason === 'full' ? `A side holds at most ${MAX_PER_SIDE} heroes.` : reason === 'in-ruins' ? 'That spot is inside the ruins.' : 'Too close to another hero.')
+  // a carry in progress ends with the screen
+  useEffect(() => () => endCarry.current?.(), [])
 
   const changed = () => {
     setPreset(undefined)
     setNotice(undefined)
   }
-  const drop = (hero: number, clientX: number, clientY: number) => {
-    const { x, z } = world(clientX, clientY)
+  const say = (reason: Parameters<typeof refine>[0], x: number, z: number) => setNotice(NOTICE[refine(reason, { x, z })])
+
+  // what either board asks for; the formation's rules decide, and a refused spot says why
+  const placeHero = (hero: number, x: number, z: number) => {
     const r = place(formation, editing, hero, x, z)
     if (r.ok) {
       setFormation(r.formation)
       changed()
-    } else say(r.reason)
+    } else say(r.reason, x, z)
   }
-
-  const onTokenDown = (e: ReactPointerEvent, s: Team, index: number) => {
-    e.stopPropagation()
-    try {
-      ;(e.target as Element).setPointerCapture?.(e.pointerId)
-    } catch {
-      // a synthetic pointer has no capture to take; the board still sees the release
-    }
-    drag.current = { side: s, index }
-    setSelected({ kind: 'placed', side: s, index })
-  }
-  const onBoardMove = (e: ReactPointerEvent) => {
-    if (drag.current) return setDragAt(world(e.clientX, e.clientY))
-    // with a hero in hand, a ghost follows the pointer and shows whether it can stand there
-    const g = ghost.current
-    if (!g || brush === undefined) return
-    const { x, z } = world(e.clientX, e.clientY)
-    const free = onOwnHalf(editing, x, z) && !inRuins(x, z) && !formation[editing].some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < SPACING ** 2) && formation[editing].length < MAX_PER_SIDE
-    g.setAttribute('transform', `translate(${x} ${-z})`)
-    g.setAttribute('class', `token team-${editing} ghost ${free ? 'ok' : 'bad'}`)
-    g.style.display = ''
-  }
-  const onBoardLeave = () => {
-    if (ghost.current) ghost.current.style.display = 'none'
-  }
-  const onBoardUp = (e: ReactPointerEvent) => {
-    const d = drag.current
-    drag.current = undefined
-    setDragAt(undefined)
-    if (!d) return
-    // dragging a placed hero off the field sends it back to the row (R37)
-    if (offBoard(e.clientX, e.clientY)) {
-      setFormation((f) => remove(f, d.side, d.index))
-      setSelected(undefined)
-      changed()
-      return
-    }
-    const { x, z } = world(e.clientX, e.clientY)
-    const r = move(formation, d.side, d.index, x, z)
+  const moveHero = (s: Team, index: number, x: number, z: number) => {
+    const r = move(formation, s, index, x, z)
     if (r.ok) {
       setFormation(r.formation)
       changed()
-    } else say(r.reason)
+    } else say(r.reason, x, z)
+  }
+  // dragging a placed hero off the field sends it back to the row (R37)
+  const removeHero = (s: Team, index: number) => {
+    setFormation((f) => remove(f, s, index))
+    setSelected(undefined)
+    changed()
+  }
+  // selecting a placed hero shows it in the details panel, and sets up its side
+  const selectPlaced = (p: { side: Team; index: number } | undefined) => {
+    if (!p) return setSelected(undefined)
+    setSelected({ kind: 'placed', ...p })
+    setEditing(p.side)
+  }
+  const placeRef = useRef(placeHero)
+  placeRef.current = placeHero
+
+  const boardState = useMemo<BoardState>(
+    () => ({ formation, loadout, side: side ?? 0, editing, brush, selected: selected?.kind === 'placed' ? { side: selected.side, index: selected.index } : undefined }),
+    [formation, loadout, side, editing, brush, selected],
+  )
+
+  /** The chip under the pointer while a hero is carried from the row; hidden over the arena, where the hero itself shows. */
+  const placeChip = () => {
+    const el = chip.current
+    if (!el) return
+    el.style.transform = `translate3d(${carryAt.current.x}px, ${carryAt.current.y}px, 0)`
+    el.classList.toggle('over-board', carryAt.current.over)
+  }
+  /** Press on a hero in the row: a click picks it (to place with clicks); a drag carries it onto the 3D arena. */
+  const onBustDown = (e: ReactPointerEvent<HTMLButtonElement>, hero: number) => {
+    if (flat || e.button !== 0 || e.isPrimary === false) return
+    endCarry.current?.()
+    const id = e.pointerId
+    const x0 = e.clientX
+    const y0 = e.clientY
+    let live = false
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return
+      if (!live) {
+        if (Math.hypot(ev.clientX - x0, ev.clientY - y0) < CARRY_SLOP) return
+        live = true
+        setCarrying(hero)
+        setSelected({ kind: 'loadout', index: hero })
+      }
+      ev.preventDefault()
+      const over = board3d.current?.carry(hero, ev.clientX, ev.clientY) ?? false
+      carryAt.current = { x: ev.clientX, y: ev.clientY, over }
+      placeChip()
+    }
+    const finish = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKey)
+      endCarry.current = undefined
+      setCarrying(undefined)
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return
+      finish()
+      if (!live) return
+      // the click that may follow a drag is not a pick
+      swallowClickUntil.current = performance.now() + 400
+      const spot = board3d.current?.drop(ev.clientX, ev.clientY)
+      if (spot) placeRef.current(hero, spot.x, spot.z)
+    }
+    const abandon = () => {
+      board3d.current?.cancelCarry()
+      finish()
+    }
+    const onCancel = (ev: PointerEvent) => ev.pointerId === id && abandon()
+    const onKey = (ev: KeyboardEvent) => ev.key === 'Escape' && live && abandon()
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKey)
+    endCarry.current = abandon
   }
 
   const details = selected?.kind === 'loadout' ? selected.index : selected?.kind === 'placed' ? formation[selected.side][selected.index]?.hero : undefined
@@ -240,9 +259,23 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
       </button>
     )
   }
+  const start = () => {
+    if (starting.current) return
+    const result = { side, formation, loadout }
+    const board = board3d.current
+    if (!board) return onStart(result)
+    // the board gives its renderer back before the match makes its own
+    starting.current = true
+    void board
+      .release()
+      .catch(() => undefined)
+      .then(() => onStart(result))
+  }
+  const carried = carrying !== undefined ? loadout[carrying] : undefined
+  const carriedImg = carried && carrying !== undefined ? bust(carried, carrying) : undefined
 
   return (
-    <div className="staging">
+    <div className={`staging${flat ? ' flat' : ' arena3d'}${carried ? ' carrying' : ''}`}>
       <header className="staging-bar">
         <div className="matchup" role="radiogroup" aria-label="Side to set up">
           {plate(side)}
@@ -269,7 +302,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             </button>
           ))}
         </div>
-        <button className="btn primary big start" disabled={!ready} onClick={() => onStart({ side, formation, loadout })}>
+        <button className="btn primary big start" disabled={!ready} onClick={start}>
           {searching ? 'Loading heroes…' : 'Start'}
         </button>
       </header>
@@ -278,104 +311,13 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
 
       <div className="staging-board">
         <div className="board-frame">
-          <svg
-            ref={board}
-            viewBox={`${-W} ${-L} ${2 * W} ${2 * L}`}
-            className={`board editing-${editing}${brush !== undefined ? ' has-brush' : ''}`}
-            role="application"
-            aria-label="Arena board"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault()
-              const hero = Number(e.dataTransfer.getData('text/hero'))
-              if (Number.isInteger(hero)) drop(hero, e.clientX, e.clientY)
-            }}
-            onClick={(e) => brush !== undefined && drop(brush, e.clientX, e.clientY)}
-            onPointerMove={onBoardMove}
-            onPointerLeave={onBoardLeave}
-            onPointerUp={onBoardUp}
-          >
-            <defs>
-              <clipPath id="token-clip">
-                <circle r={TOKEN_R} />
-              </clipPath>
-              <linearGradient id="half-blue" x1="0" y1="1" x2="0" y2="0">
-                <stop offset="0" stopColor="#1d3550" />
-                <stop offset="1" stopColor="#24304a" />
-              </linearGradient>
-              <linearGradient id="half-red" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#4a2630" />
-                <stop offset="1" stopColor="#3a2a38" />
-              </linearGradient>
-              <pattern id="board-grid" width="5" height="5" patternUnits="userSpaceOnUse">
-                <path d="M5 0H0V5" fill="none" stroke="rgba(255,236,214,0.07)" strokeWidth="0.08" />
-              </pattern>
-              <pattern id="timber" width="1" height="1" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="1" height="1" fill="#9b6a37" />
-                <rect width="0.45" height="1" fill="#b98049" />
-              </pattern>
-              <radialGradient id="stone" cx="0.38" cy="0.32" r="0.8">
-                <stop offset="0" stopColor="#e8dcc4" />
-                <stop offset="1" stopColor="#a99a80" />
-              </radialGradient>
-            </defs>
-            <rect className={`half half-1${editing === 1 ? ' on' : ''}`} x={-W} y={-L} width={2 * W} height={L} fill="url(#half-red)" />
-            <rect className={`half half-0${editing === 0 ? ' on' : ''}`} x={-W} y={0} width={2 * W} height={L} fill="url(#half-blue)" />
-            <rect x={-W} y={-L} width={2 * W} height={2 * L} fill="url(#board-grid)" pointerEvents="none" />
-            <text className="half-label team-1" x={0} y={-L / 2 + 3} textAnchor="middle" aria-hidden="true">
-              {side === 1 ? 'Your side' : 'Enemy side'}
-            </text>
-            <text className="half-label team-0" x={0} y={L / 2 + 3} textAnchor="middle" aria-hidden="true">
-              {side === 0 ? 'Your side' : 'Enemy side'}
-            </text>
-            <line className="midline" x1={-W} x2={W} y1={0} y2={0} />
-            {/* the ruins, seen from above: grey stone is cover that never breaks, striped timber is a barricade that does */}
-            <g aria-hidden="true" className="ruins">
-              {RUINS.filter((p) => p.base <= 0).map((p, i) =>
-                p.shape.kind === 'column' ? (
-                  <g key={i}>
-                    <circle cx={p.shape.x + 0.3} cy={-p.shape.z + 0.4} r={p.shape.r} className="ruin-shadow" />
-                    <circle cx={p.shape.x} cy={-p.shape.z} r={p.shape.r} fill="url(#stone)" className="ruin stone" />
-                  </g>
-                ) : (
-                  <g key={i}>
-                    <rect x={p.shape.x - p.shape.hx + 0.3} y={-p.shape.z - p.shape.hz + 0.4} width={p.shape.hx * 2} height={p.shape.hz * 2} rx={0.2} className="ruin-shadow" />
-                    <rect x={p.shape.x - p.shape.hx} y={-p.shape.z - p.shape.hz} width={p.shape.hx * 2} height={p.shape.hz * 2} rx={0.2} fill={p.health ? 'url(#timber)' : 'url(#stone)'} className={`ruin ${p.health ? 'timber' : 'stone'}`} />
-                  </g>
-                ),
-              )}
-            </g>
-            {([0, 1] as const).map((s) =>
-              formation[s].map((p, i) => {
-                const entry = loadout[p.hero]
-                const moving = dragAt && drag.current?.side === s && drag.current.index === i
-                const at = moving ? dragAt : p
-                return (
-                  <Token
-                    key={`${s}-${i}`}
-                    x={at.x}
-                    z={at.z}
-                    side={s}
-                    n={i + 1}
-                    img={entry ? bust(entry, p.hero) : undefined}
-                    initials={entry ? initialsOf(entry.build.heroName) : '?'}
-                    selected={selected?.kind === 'placed' && selected.side === s && selected.index === i}
-                    onPointerDown={(e) => onTokenDown(e, s, i)}
-                    testId={`token-${s}-${i}`}
-                  />
-                )
-              }),
-            )}
-            {brush !== undefined && loadout[brush] && (
-              <g ref={ghost} className={`token team-${editing} ghost ok`} style={{ display: 'none' }} pointerEvents="none">
-                <circle className="token-base" r={TOKEN_R} />
-                {bust(loadout[brush], brush) && <image href={bust(loadout[brush], brush)} x={-TOKEN_R} y={-TOKEN_R} width={TOKEN_R * 2} height={TOKEN_R * 2} clipPath="url(#token-clip)" preserveAspectRatio="xMidYMid slice" />}
-                <circle className="token-ring" r={TOKEN_R} />
-              </g>
-            )}
-          </svg>
+          {flat ? (
+            <Board2D formation={formation} loadout={loadout} side={side} editing={editing} selected={boardState.selected} brush={brush} onPlace={placeHero} onMove={moveHero} onRemove={removeHero} onSelect={selectPlaced} />
+          ) : (
+            <Board3D ref={board3d} state={boardState} handlers={{ place: placeHero, move: moveHero, remove: removeHero, select: selectPlaced, dragging: setDragging }} onUnavailable={() => setFlat(true)} />
+          )}
           {formation[0].length + formation[1].length === 0 && (
-            <p className="board-empty">Pick a quick matchup above, auto-deploy a side, or choose a hero below and click its spot.</p>
+            <p className="board-empty">{flat ? 'Pick a quick matchup above, auto-deploy a side, or choose a hero below and click its spot.' : 'Pick a quick matchup above, auto-deploy a side, or drag a hero from the row onto your half.'}</p>
           )}
         </div>
         <div className="board-tools">
@@ -386,12 +328,23 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             <li>
               <i className="key-dot team-1" /> Red
             </li>
-            <li>
-              <i className="key-block stone" /> Stone cover
-            </li>
-            <li>
-              <i className="key-block timber" /> Barricade, breaks
-            </li>
+            {flat ? (
+              <>
+                <li>
+                  <i className="key-block stone" /> Stone cover
+                </li>
+                <li>
+                  <i className="key-block timber" /> Barricade, breaks
+                </li>
+              </>
+            ) : (
+              <>
+                <li>
+                  <i className="key-block keep-out" /> No standing
+                </li>
+                <li className="key-controls">Right-drag or Shift-drag turns · Scroll zooms</li>
+              </>
+            )}
           </ul>
           {notice ? (
             <p className="inline-error board-notice" role="status">
@@ -440,9 +393,14 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         </div>
       </div>
 
-      <DetailsPanel build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} />
+      <DetailsPanel view3d={!flat} build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} />
 
-      <div className="bust-row" role="list" aria-label="Loadout">
+      <div className={`bust-row${dragging ? ' drop-off' : ''}`} role="list" aria-label="Loadout">
+        {dragging && (
+          <span className="drop-off-label" aria-hidden="true">
+            Drop here to send the hero back
+          </span>
+        )}
         {loadout.length === 0 && (
           <p className="muted">
             No heroes yet. <a href="?">Make one in the Creator</a> or{' '}
@@ -466,10 +424,15 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             <button
               key={entry.key}
               role="listitem"
-              draggable
-              className={`bust role-${entry.build.roleId}${brush === i ? ' on' : ''}${details === i ? ' viewing' : ''}`}
-              onDragStart={(e) => (e.dataTransfer.setData('text/hero', String(i)), setSelected({ kind: 'loadout', index: i }))}
-              onClick={() => (setBrush(brush === i ? undefined : i), setSelected({ kind: 'loadout', index: i }))}
+              draggable={flat}
+              className={`bust role-${entry.build.roleId}${brush === i ? ' on' : ''}${details === i ? ' viewing' : ''}${carrying === i ? ' lifted' : ''}`}
+              onDragStart={flat ? (e) => (e.dataTransfer.setData('text/hero', String(i)), setSelected({ kind: 'loadout', index: i })) : undefined}
+              onPointerDown={flat ? undefined : (e) => onBustDown(e, i)}
+              onClick={() => {
+                if (performance.now() < swallowClickUntil.current) return
+                setBrush(brush === i ? undefined : i)
+                setSelected({ kind: 'loadout', index: i })
+              }}
               aria-label={`${entry.build.heroName}, ${entry.build.roleId}`}
               title={entry.build.heroName}
             >
@@ -485,6 +448,20 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
           ]
         })}
       </div>
+
+      {carried && (
+        <div
+          className="carry-chip"
+          aria-hidden="true"
+          ref={(el) => {
+            chip.current = el
+            placeChip()
+          }}
+        >
+          <span className="carry-face">{carriedImg ? <img src={carriedImg} alt="" draggable={false} /> : <span className="initials">{initialsOf(carried.build.heroName)}</span>}</span>
+          <span className="carry-name">{shortName(carried.build.heroName)}</span>
+        </div>
+      )}
     </div>
   )
 }
