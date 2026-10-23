@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { getTemplate } from '../../charter/templates/catalog'
 import { defaultBuild } from '../../sim/fixtures'
-import { characterLook, paintGeometry } from './character-look'
+import { DEMO_HEROES, demoBuild } from '../demo/roster'
+import { characterLook, HERO_MODELS, modelFor, paintGeometry } from './character-look'
 import { castClip } from './characters'
 
 describe('a hero’s look', () => {
@@ -20,6 +21,14 @@ describe('a hero’s look', () => {
     const marksman = characterLook(defaultBuild('marksman', 'M'), 0)
     expect(marksman).toMatchObject({ build: 'lean', armour: false, cape: false })
     expect(marksman.hair).not.toBe('helmet')
+  })
+})
+
+describe('the demo roster’s own models', () => {
+  it('gives every demo hero its own model, and anyone else a generic body for the role', () => {
+    for (const hero of DEMO_HEROES) expect(characterLook(demoBuild(hero), hero.hue).build).toBe(modelFor(hero.heroName))
+    expect(new Set(Object.values(HERO_MODELS)).size).toBe(DEMO_HEROES.length)
+    expect(characterLook(defaultBuild('marksman', 'Ada'), 0.2).build).toBe('lean')
   })
 })
 
@@ -66,5 +75,30 @@ describe('which clip a cast plays', () => {
     if (kindOf(marksman, 'basic') === 'projectile') expect(castClip(marksman, 'basic')).toBe('shoot')
     if (kindOf(fighter, 'basic') === 'melee') expect(castClip(fighter, 'basic')).toBe('slash')
     expect(['slash', 'shoot', 'cast']).toContain(castClip(fighter, 'active1'))
+  })
+})
+
+describe('painting a textured model', () => {
+  // the atlas rides the first UV set; regions and parts ride the second
+  const source = () => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Array(18).fill(0), 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(12).fill(0.25), 2))
+    // a baked triangle (region 12) and an accent triangle in the hero's suit colour (region 1)
+    const meta = [12.5, 0.5, 12.5, 0.5, 12.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5]
+    g.setAttribute('uv1', new THREE.Float32BufferAttribute(meta, 2))
+    g.setIndex([0, 1, 2, 3, 4, 5])
+    return g
+  }
+
+  it('keeps the texture’s own colour on baked regions and tints the accents', () => {
+    const look = characterLook(defaultBuild('fighter', 'F'), 0.4)
+    const g = paintGeometry(source(), look)
+    const color = g.getAttribute('color')
+    expect([color.getX(0), color.getY(0), color.getZ(0)]).toEqual([1, 1, 1])
+    expect(new THREE.Color(color.getX(3), color.getY(3), color.getZ(3)).getHex()).toBe(look.colors.suit.getHex())
+    expect(g.getIndex()!.count).toBe(6)
+    // the atlas UVs pass through untouched
+    expect(g.getAttribute('uv').getX(0)).toBeCloseTo(0.25)
   })
 })

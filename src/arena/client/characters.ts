@@ -5,29 +5,35 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import type { Build } from '../../charter/build'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { AnimState } from './animation'
-import { paintGeometry, type CharacterLook, type Gltf } from './character-look'
+import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look'
 
 export { characterLook, heroHue, loadBuild } from './character-look'
 
 /**
- * The arena's own characters (R24): four rigged, animated builds made in Blender (tools/blender/hero.py), each one
- * mesh with its body regions and switchable parts carried per vertex. A hero is a clone of one build, repainted in its
- * own colours, wearing the parts its role calls for, lit with a rim in its team colour. One draw call per hero.
+ * The arena's own characters (R24): rigged, animated MakeHuman-based models made in Blender (tools/blender/human.py),
+ * each one textured mesh with its body regions and switchable parts carried per vertex. A demo hero wears its own
+ * model; anyone else a clone of one of four generic bodies, repainted in its own colours, wearing the parts its role
+ * calls for. All are lit with a rim in the team colour. One draw call per hero.
  */
 
 /**
- * The hero's material: vertex colours, bronze regions metallic and glossy, everything else soft, and a rim light in the
- * team's colour so a crowd of twenty reads by side at a glance (R38).
+ * The hero's material: the file's atlas (face, outfit, hair) times the per-vertex region colours, metal regions
+ * metallic, leather and silk glossy, everything else soft, and a rim light in the team's colour so a crowd of twenty
+ * reads by side at a glance (R38). `meta` is the UV set carrying regions (the second one on textured files).
  */
-export function characterMaterial(team: THREE.Color): MeshStandardNodeMaterial {
+export function characterMaterial(team: THREE.Color, map: THREE.Texture | null = null, meta: 'uv' | 'uv1' = 'uv'): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({ vertexColors: true })
-  const region = uv().x
-  const metal = step(7, region).mul(step(region, 8))
+  if (map) m.map = map
+  const region = uv(meta === 'uv1' ? 1 : 0).x
+  const inRegion = (index: number) => step(index, region).mul(step(region, index + 1))
+  const metal = inRegion(REGION_INDEX.metal).add(inRegion(REGION_INDEX.bakedMetal))
+  const gloss = inRegion(REGION_INDEX.bakedGloss)
   m.metalnessNode = metal.mul(0.85)
-  m.roughnessNode = mix(float(0.58), float(0.42), metal)
-  const rim = float(1).sub(normalView.dot(positionViewDirection).abs()).pow(2.5)
+  m.roughnessNode = mix(mix(float(0.6), float(0.34), gloss), float(0.4), metal)
+  // a painted face reads best with the rim kept to the silhouette, so textured characters get a tighter, softer one
+  const rim = float(1).sub(normalView.dot(positionViewDirection).abs()).pow(map ? 3.2 : 2.5)
   const rimColor = uniform(team)
-  m.emissiveNode = rimColor.mul(rim).mul(0.6)
+  m.emissiveNode = rimColor.mul(rim).mul(map ? 0.5 : 0.6)
   return m
 }
 
@@ -52,14 +58,14 @@ export interface CharacterView {
 export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
-  const material = characterMaterial(team)
+  let meta: 'uv' | 'uv1' = 'uv'
   scene.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh
-    if (!mesh.isSkinnedMesh) return
-    mesh.geometry = paintGeometry(mesh.geometry, look)
-    mesh.material = material
-    mesh.castShadow = true
-    mesh.frustumCulled = false
+    if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
+  })
+  paintModel(scene, look, (map) => characterMaterial(team, map, meta))
+  scene.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })
   root.add(scene)
   const mixer = new THREE.AnimationMixer(scene)

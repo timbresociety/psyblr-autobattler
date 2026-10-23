@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, paintGeometry, type CharacterLook, type Gltf } from '../../arena/client/character-look'
+import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
 import type { Build } from '../../charter/build'
 import { SIZES, type SizeClass } from '../../charter/sizes'
@@ -66,7 +66,7 @@ function radialTexture(stops: [number, string][]): THREE.CanvasTexture {
 
 const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2).translate(0, y, 0)
 
-/** A neutral figure for the empty stage: one build, no cape or armour, short hair. */
+/** A neutral figure for the empty stage: a generic body, no cape or armour, short hair. */
 function standInLook(): CharacterLook {
   return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'athletic', hair: 'crop', armour: false, cape: false }
 }
@@ -273,16 +273,9 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
       (file: Gltf) => {
         if (cancelled || live.current !== state) return
         const model = cloneSkinned(file.scene)
-        const material = look
-          ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.06 })
-          : new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-        model.traverse((o) => {
-          const mesh = o as THREE.SkinnedMesh
-          if (!mesh.isSkinnedMesh) return
-          mesh.geometry = paintGeometry(mesh.geometry, painted)
-          mesh.material = material
-          mesh.frustumCulled = false
-        })
+        // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
+        const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
+        paintModel(model, painted, (map) => (look ? classicCharacterMaterial(map) : empty))
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

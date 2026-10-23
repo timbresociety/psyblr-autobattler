@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, paintGeometry } from '../../arena/client/character-look'
+import { characterLook, classicCharacterMaterial, paintModel } from '../../arena/client/character-look'
 import type { Build } from '../../charter/build'
 import type { Delivery } from '../../charter/types'
 import type { Preset } from '../../forge/motion/library'
@@ -137,14 +137,8 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, bui
         .then((file) => {
           if (disposed) return
           const model = cloneSkinned(file.scene)
-          const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.06 })
-          model.traverse((o) => {
-            const mesh = o as THREE.SkinnedMesh
-            if (!mesh.isSkinnedMesh) return
-            mesh.geometry = paintGeometry(mesh.geometry, look)
-            mesh.material = material
-            mesh.frustumCulled = false
-          })
+          // its own handle on the shared atlas: the cleanup below disposes maps, and must not free the arena's copy
+          paintModel(model, look, (map) => classicCharacterMaterial(map ? map.clone() : null))
           stage.add(model)
           mixer = new THREE.AnimationMixer(model)
           const names = file.animations.map((c) => c.name)

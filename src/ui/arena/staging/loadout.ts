@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, heroHue, loadBuild, paintGeometry, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
+import { BASE_BUILDS, characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
 import type { Build } from '../../../charter/build'
 import type { RoleId } from '../../../charter/types'
 import type { HeroPackage } from '../../../forge/package'
@@ -71,7 +71,8 @@ const standIns = new Map<string, string>()
 let bustRenderer: THREE.WebGLRenderer | undefined | null
 const BUST_PX = 160
 
-const BUILDS: Build3D[] = ['athletic', 'lithe', 'heavy', 'lean']
+/** Every character file: the four generic bodies and the demo roster's own models. */
+const BUILDS: Build3D[] = [...BASE_BUILDS, ...Object.values(HERO_MODELS)]
 const characters = new Map<Build3D, Gltf>()
 let preload: Promise<boolean> | undefined
 let gltf: Promise<(url: string) => Promise<Gltf>> | undefined
@@ -89,19 +90,21 @@ function loader(): Promise<(url: string) => Promise<Gltf>> {
   return gltf
 }
 
-/** One of the four character builds (cached; the arena reuses the same files). */
+/** A character file: a generic body or a demo hero's own model (cached; the arena reuses the same files). */
 export async function characterFile(build: Build3D): Promise<Gltf> {
   return loadBuild(build, await loader())
 }
 
 /**
- * Load the four character builds the busts are drawn from (once). Resolves false if they cannot load, and the busts
- * keep the procedural stand-in.
+ * Load the character files the busts are drawn from (once): the generic bodies and every demo hero's model. Resolves
+ * false only if none can load, and the busts keep the procedural stand-in; a hero whose own file failed keeps its
+ * stand-in too.
  */
 export function preloadBusts(): Promise<boolean> {
   preload ??= (async () => {
-    const files = await Promise.all(BUILDS.map((b) => characterFile(b)))
-    BUILDS.forEach((b, i) => characters.set(b, files[i]))
+    const files = await Promise.allSettled(BUILDS.map((b) => characterFile(b)))
+    files.forEach((f, i) => f.status === 'fulfilled' && characters.set(BUILDS[i], f.value))
+    if (!characters.size) throw new Error('no character files')
     return true
   })().catch(() => {
     preload = undefined
@@ -110,17 +113,14 @@ export function preloadBusts(): Promise<boolean> {
   return preload
 }
 
-/** A clone of the hero's build in its own colours and parts, held in the first beat of its idle. */
+/**
+ * A clone of the hero's character in its own colours and parts, held in the first beat of its idle. The bust draws
+ * with its own handle on the atlas, so its GPU copy can be freed once the portrait is taken without touching the
+ * arena's or the previews'.
+ */
 function posed(file: Gltf, look: CharacterLook): THREE.Object3D {
   const model = cloneSkinned(file.scene)
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 })
-  model.traverse((o) => {
-    const mesh = o as THREE.SkinnedMesh
-    if (!mesh.isSkinnedMesh) return
-    mesh.geometry = paintGeometry(mesh.geometry, look)
-    mesh.material = material
-    mesh.frustumCulled = false
-  })
+  paintModel(model, look, (map) => classicCharacterMaterial(map ? map.clone() : null))
   const idle = file.animations.find((c) => c.name === 'idle')
   if (idle) {
     const mixer = new THREE.AnimationMixer(model)
@@ -181,7 +181,15 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
     model.getObjectByName('head')?.getWorldPosition(head)
     camera.position.set(head.x + 0.42, head.y + 0.05, head.z + 1.3)
     camera.lookAt(head.x, head.y - 0.12, head.z)
-    release = () => model.traverse((o) => (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.dispose())
+    release = () =>
+      model.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (!mesh.isMesh) return
+        mesh.geometry.dispose()
+        const m = mesh.material as THREE.MeshStandardMaterial
+        m.map?.dispose()
+        m.dispose()
+      })
   } else {
     const stand = benchHero({ hue, sizeClass: 'medium', textureSize: 128, seed: index + 1, look: 'suit' })
     stand.animate(0, false)
