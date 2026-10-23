@@ -67,49 +67,78 @@ export const RUINS: readonly CoverPiece[] = (() => {
 
 export const initialCoverHealth = (pieces: readonly CoverPiece[]): CoverHealth[] => pieces.map((p) => p.health ?? -1)
 
-const standing = (health: readonly CoverHealth[], i: number) => health[i] !== 0
+/** Each piece's footprint box and height, computed once per layout so the hot loops reject far pieces cheaply. */
+interface Bounds {
+  minX: Float64Array
+  maxX: Float64Array
+  minZ: Float64Array
+  maxZ: Float64Array
+}
+const boundsCache = new WeakMap<readonly CoverPiece[], Bounds>()
+function boundsOf(pieces: readonly CoverPiece[]): Bounds {
+  let b = boundsCache.get(pieces)
+  if (b) return b
+  const n = pieces.length
+  b = { minX: new Float64Array(n), maxX: new Float64Array(n), minZ: new Float64Array(n), maxZ: new Float64Array(n) }
+  for (let i = 0; i < n; i++) {
+    const s = pieces[i].shape
+    const ex = s.kind === 'block' ? s.hx : s.r
+    const ez = s.kind === 'block' ? s.hz : s.r
+    b.minX[i] = s.x - ex
+    b.maxX[i] = s.x + ex
+    b.minZ[i] = s.z - ez
+    b.maxZ[i] = s.z + ez
+  }
+  boundsCache.set(pieces, b)
+  return b
+}
+
+/** Clip the fraction window [t0, t1] to where `start + t·d` lies within [lo, hi]; returns the new window or false. */
+function clip(start: number, d: number, lo: number, hi: number, w: [number, number]): boolean {
+  if (d === 0) return start >= lo && start <= hi
+  let u = (lo - start) / d
+  let v = (hi - start) / d
+  if (u > v) {
+    const t = u
+    u = v
+    v = t
+  }
+  if (u > w[0]) w[0] = u
+  if (v < w[1]) w[1] = v
+  return w[0] <= w[1]
+}
 
 /**
  * Where segment a→b, thickened by `radius`, first enters a standing piece: the fraction along the segment and the
  * piece's index, or undefined when the path is clear.
  */
 export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHealth[], a: Vec3, b: Vec3, radius = 0): { t: number; index: number } | undefined {
-  let best: { t: number; index: number } | undefined
+  const bounds = boundsOf(pieces)
+  let bestT = 2
+  let bestIndex = -1
   const dx = b.x - a.x
   const dy = b.y - a.y
   const dz = b.z - a.z
-  // the segment's box, to skip far pieces before any exact test
-  const minX = Math.min(a.x, b.x) - radius
-  const maxX = Math.max(a.x, b.x) + radius
-  const minZ = Math.min(a.z, b.z) - radius
-  const maxZ = Math.max(a.z, b.z) + radius
-  const minY = Math.min(a.y, b.y) - radius
-  const maxY = Math.max(a.y, b.y) + radius
+  // the segment's own box, to skip far pieces before any exact test
+  const minX = (dx < 0 ? b.x : a.x) - radius
+  const maxX = (dx < 0 ? a.x : b.x) + radius
+  const minZ = (dz < 0 ? b.z : a.z) - radius
+  const maxZ = (dz < 0 ? a.z : b.z) + radius
+  const minY = (dy < 0 ? b.y : a.y) - radius
+  const maxY = (dy < 0 ? a.y : b.y) + radius
+  const w: [number, number] = [0, 1]
   for (let i = 0; i < pieces.length; i++) {
-    if (!standing(health, i)) continue
+    if (health[i] === 0) continue
+    if (maxX < bounds.minX[i] || minX > bounds.maxX[i] || maxZ < bounds.minZ[i] || minZ > bounds.maxZ[i]) continue
     const p = pieces[i]
     if (maxY < p.base || minY > p.top) continue
-    const sh = p.shape
-    const ex = sh.kind === 'block' ? sh.hx : sh.r
-    const ez = sh.kind === 'block' ? sh.hz : sh.r
-    if (maxX < sh.x - ex || minX > sh.x + ex || maxZ < sh.z - ez || minZ > sh.z + ez) continue
-    let t0 = 0
-    let t1 = 1
-    // the height slab, shared by both shapes
-    const slab = (start: number, d: number, lo: number, hi: number) => {
-      if (d === 0) return start >= lo && start <= hi
-      let u = (lo - start) / d
-      let v = (hi - start) / d
-      if (u > v) [u, v] = [v, u]
-      if (u > t0) t0 = u
-      if (v < t1) t1 = v
-      return t0 <= t1
-    }
-    if (!slab(a.y, dy, p.base - radius, p.top + radius)) continue
+    w[0] = 0
+    w[1] = 1
+    if (!clip(a.y, dy, p.base - radius, p.top + radius, w)) continue
     const s = p.shape
     if (s.kind === 'block') {
-      if (!slab(a.x, dx, s.x - s.hx - radius, s.x + s.hx + radius)) continue
-      if (!slab(a.z, dz, s.z - s.hz - radius, s.z + s.hz + radius)) continue
+      if (!clip(a.x, dx, s.x - s.hx - radius, s.x + s.hx + radius, w)) continue
+      if (!clip(a.z, dz, s.z - s.hz - radius, s.z + s.hz + radius, w)) continue
     } else {
       // a circle in the ground plane: solve |a + t·d − c| = r for the entry and exit fractions
       const r = s.r + radius
@@ -126,14 +155,17 @@ export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHe
         const root = Math.sqrt(disc)
         const u = (-qb - root) / (2 * qa)
         const v = (-qb + root) / (2 * qa)
-        if (u > t0) t0 = u
-        if (v < t1) t1 = v
-        if (t0 > t1) continue
+        if (u > w[0]) w[0] = u
+        if (v < w[1]) w[1] = v
+        if (w[0] > w[1]) continue
       }
     }
-    if (t0 <= t1 && t0 <= 1 && t1 >= 0 && (!best || t0 < best.t)) best = { t: Math.max(0, t0), index: i }
+    if (w[0] <= 1 && w[1] >= 0 && w[0] < bestT) {
+      bestT = w[0]
+      bestIndex = i
+    }
   }
-  return best
+  return bestIndex < 0 ? undefined : { t: Math.max(0, bestT), index: bestIndex }
 }
 
 /** True when nothing standing blocks the straight line from a to b. */
@@ -144,9 +176,11 @@ export const clearLine = (pieces: readonly CoverPiece[], health: readonly CoverH
  * along walls rather than stopping dead. Returns whether it touched anything.
  */
 export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number): boolean {
+  const bounds = boundsOf(pieces)
   let touched = false
   for (let i = 0; i < pieces.length; i++) {
-    if (!standing(health, i)) continue
+    if (health[i] === 0) continue
+    if (p.x + radius < bounds.minX[i] || p.x - radius > bounds.maxX[i] || p.z + radius < bounds.minZ[i] || p.z - radius > bounds.maxZ[i]) continue
     const piece = pieces[i]
     if (p.y >= piece.top || p.y + height <= piece.base) continue
     const s = piece.shape
@@ -192,7 +226,7 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
 export function coverInDisc(pieces: readonly CoverPiece[], health: readonly CoverHealth[], at: Vec3, radius: number): number[] {
   const out: number[] = []
   for (let i = 0; i < pieces.length; i++) {
-    if (!standing(health, i)) continue
+    if (health[i] === 0) continue
     const piece = pieces[i]
     if (at.y > piece.top + radius || at.y < piece.base - radius) continue
     const s = piece.shape

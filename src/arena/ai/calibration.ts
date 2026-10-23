@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 2
+export const AI_CALIBRATION_VERSION = 3
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */

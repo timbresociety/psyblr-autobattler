@@ -63,7 +63,7 @@ export function bust(entry: LoadoutEntry, index: number): string | undefined {
   }
   if (!bustRenderer) return undefined
   const demo = DEMO_HEROES.find((h) => h.heroName === entry.build.heroName)
-  const hero = benchHero({ hue: demo?.hue ?? (index * 0.137) % 1, sizeClass: 'medium', textureSize: 128, seed: index + 1 })
+  const hero = benchHero({ hue: demo?.hue ?? (index * 0.137) % 1, sizeClass: 'medium', textureSize: 128, seed: index + 1, look: 'suit' })
   hero.animate(0, false)
   const scene = new THREE.Scene()
   scene.add(hero.mesh, new THREE.HemisphereLight(0xffffff, 0x334455, 2.2))
