@@ -91,7 +91,8 @@ export function createDamagePool(layer: HTMLElement, options: { cap?: number; re
         const pop = still || t >= 0.14 ? 1 : big - ((big - 1) * t) / 0.14
         const alpha = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35
         const near = distanceScale(p.depth)
-        n.node.style.transform = `translate3d(${(p.x + n.dx * near).toFixed(1)}px, ${(p.y - 18 - n.dy - rise).toFixed(1)}px, 0) translate(-50%, -100%) scale(${(near * pop).toFixed(3)})`
+        // starts just above the overhead bar and its name, which stand about 26 px tall at full size
+        n.node.style.transform = `translate3d(${(p.x + n.dx * near).toFixed(1)}px, ${(p.y - (30 + n.dy) * near - rise).toFixed(1)}px, 0) translate(-50%, -100%) scale(${(near * pop).toFixed(3)})`
         n.node.style.opacity = alpha.toFixed(3)
         if (!n.shown) {
           n.node.style.visibility = 'visible'

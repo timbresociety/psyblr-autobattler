@@ -144,7 +144,7 @@ function Live({ controller, staged, locked, started, paused, onLeave, onRematch 
   // under load the glass stops blurring the scene behind it, the same moment the stage thins its particles
   const lite = atLeast(state.quality, 'fewer-particles')
   return (
-    <div className={`hud${lite ? ' hud-lite' : ''}${controlled ? ' is-controlling' : ''}`}>
+    <div className={`hud${lite ? ' hud-lite' : ''}`}>
       <WorldHud controller={controller} heroes={heroes} />
       <MatchHud state={state} side={staged.side} builds={builds} heroes={heroes} controller={controller} />
       {controlled && <ControlHud hero={controlled} info={heroes[controlled.id]} controller={controller} state={state} heroes={heroes} />}

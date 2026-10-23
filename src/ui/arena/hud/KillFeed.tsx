@@ -32,7 +32,7 @@ const KillRow = memo(function KillRow({ kill, heroes }: { kill: Kill; heroes: re
 })
 
 /** Top right (R38): who took down whom, newest at the bottom; each entry fades out after five seconds. */
-export function KillFeed({ controller, heroes }: { controller: Pick<HudController, 'hooks' | 'arena'>; heroes: readonly HudHeroInfo[] }) {
+export const KillFeed = memo(function KillFeed({ controller, heroes }: { controller: Pick<HudController, 'hooks' | 'arena'>; heroes: readonly HudHeroInfo[] }) {
   const [kills, setKills] = useState<Kill[]>([])
   useEffect(() => {
     const tracker = createKillTracker()
@@ -61,4 +61,4 @@ export function KillFeed({ controller, heroes }: { controller: Pick<HudControlle
       ))}
     </ol>
   )
-}
+})

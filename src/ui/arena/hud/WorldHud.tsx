@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import { capsule } from '../../../arena/engine/state'
 import type { HudController } from './controller'
 import { createDamagePool } from './damage'
@@ -11,11 +11,11 @@ import { overheadLift, project, screenPoint } from './world'
  * The HUD layer that lives in the 3D world: overhead bars on every hero and floating damage numbers. It mounts once
  * per match and then runs entirely from the frame and event hooks; React never re-renders it.
  */
-export function WorldHud({ controller, heroes }: { controller: HudController; heroes: readonly HudHeroInfo[] }) {
+export const WorldHud = memo(function WorldHud({ controller, heroes }: { controller: HudController; heroes: readonly HudHeroInfo[] }) {
   const layer = useRef<HTMLDivElement>(null)
   useEffect(() => (layer.current ? attachWorldHud(layer.current, controller, heroes) : undefined), [controller, heroes])
   return <div ref={layer} className="hud-world" aria-hidden="true" />
-}
+})
 
 /** Wire the layer to a live match; returns the teardown. Read live health and cooldowns straight from the engine. */
 export function attachWorldHud(el: HTMLElement, controller: HudController, heroes: readonly HudHeroInfo[]) {
