@@ -1,16 +1,11 @@
-/* The Arena: staging first (unchanged), then everything inside a running match. */
+/* The Arena: everything inside a running match. Staging lives in staging/staging.css. */
 
 .arena { position: fixed; inset: 0; top: var(--tabs-height, 44px); background: #241a2e; color: #fff6ea; overflow: hidden; }
 .arena-canvas { position: absolute; inset: 0; }
 .arena-overlay { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; background: radial-gradient(ellipse at center, rgba(30, 18, 40, 0.6), rgba(12, 8, 20, 0.85)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: 15px; }
 .arena-overlay h2 { font-size: 30px; letter-spacing: -0.01em; margin: 0; }
 
-/* ── staging ─────────────────────────────────────────────────────────────── */
-.staging-pick h2 { margin: 0 0 8px; }
-.staging { position: fixed; inset: 0; top: var(--tabs-height, 44px); display: grid; grid-template-columns: minmax(200px, 260px) 1fr minmax(240px, 320px); grid-template-rows: 1fr auto; gap: 12px; padding: 12px; background: #10141c; color: #e8eef8; }
-.staging-board { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.staging-board .board { width: 100%; max-height: 62vh; aspect-ratio: 4 / 3; border-radius: 10px; touch-action: none; cursor: crosshair; }
-.staging-board .token { cursor: grab; }
+/* ── panels the HUD shares (staging has its own look in staging/staging.css) ── */
 .arena-panel { background: #182030; border-radius: 10px; padding: 12px; overflow: auto; font-size: 13px; }
 .arena-panel h3 { margin: 0 0 8px; font-size: 15px; }
 .arena-panel .lit { color: #7dffa0; }
@@ -18,15 +13,6 @@
 .arena-panel ul { margin: 0; padding-left: 16px; }
 .arena-panel .skills li { margin-bottom: 6px; }
 .arena-panel .skills span { display: block; color: #a9b4c6; }
-.bust-row { grid-column: 1 / -1; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.bust { flex: 0 0 auto; width: 92px; display: grid; justify-items: center; gap: 2px; padding: 6px 4px; border-radius: 10px; background: #1d2638; border: 1px solid #2c3850; color: inherit; cursor: grab; }
-.bust.on { border-color: #6fd0ff; }
-.bust img { width: 64px; height: 64px; }
-.bust .initials { width: 64px; height: 64px; display: grid; place-items: center; font-weight: 700; font-size: 20px; background: #2a3550; border-radius: 50%; }
-.bust-name { font-size: 11px; line-height: 1.2; text-align: center; max-height: 2.4em; overflow: hidden; }
-.bust-symbol { font-size: 14px; }
-@media (max-width: 900px) { .staging { grid-template-columns: 1fr; overflow: auto; } }
-.staging-board .row select { width: auto; margin-left: 4px; }
 .arena-panel { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 14px; backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3); box-shadow: 0 8px 24px rgba(10, 6, 20, 0.35); }
 
 /* ── match tokens ────────────────────────────────────────────────────────── */

@@ -61,10 +61,13 @@ function withSide(f: Formation, side: Team, list: Placement[]): Formation {
   return side === 0 ? [list, f[1]] : [f[0], list]
 }
 
-/** Fill a side up to `count` heroes in loose ranks across its half, cycling the loadout. */
-export function autoDeploy(f: Formation, side: Team, loadout: number, count: number): Formation {
+/**
+ * Replace a side with these heroes (loadout indices, in order) in loose ranks of five across its half: the first rank
+ * nearest the middle. At most 10.
+ */
+export function deployHeroes(f: Formation, side: Team, heroes: readonly number[]): Formation {
   let next = withSide(f, side, [])
-  const n = Math.max(1, Math.min(MAX_PER_SIDE, count))
+  const n = Math.min(MAX_PER_SIDE, heroes.length)
   const perRank = 5
   for (let i = 0; i < n; i++) {
     const rank = Math.floor(i / perRank)
@@ -74,7 +77,7 @@ export function autoDeploy(f: Formation, side: Team, loadout: number, count: num
     const z = (side === 0 ? -1 : 1) * (10 + rank * 4)
     // a spot on the ruins slides along the rank until it is clear
     for (const shift of [0, 1.5, -1.5, 3, -3]) {
-      const r = place(next, side, i % Math.max(1, loadout), x + shift, z)
+      const r = place(next, side, heroes[i], x + shift, z)
       if (r.ok) {
         next = r.formation
         break
@@ -82,4 +85,10 @@ export function autoDeploy(f: Formation, side: Team, loadout: number, count: num
     }
   }
   return next
+}
+
+/** Fill a side up to `count` heroes in loose ranks across its half, cycling the loadout. */
+export function autoDeploy(f: Formation, side: Team, loadout: number, count: number): Formation {
+  const n = Math.max(1, Math.min(MAX_PER_SIDE, count))
+  return deployHeroes(f, side, Array.from({ length: n }, (_, i) => i % Math.max(1, loadout)))
 }

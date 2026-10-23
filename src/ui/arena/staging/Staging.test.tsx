@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Staging, type StagingResult } from './Staging'
-import { demoLoadout, type LoadoutDeps } from './loadout'
+import { demoLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
 
 const none: LoadoutDeps = { search: async () => [] }
 
@@ -94,6 +94,63 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     expect(screen.getByRole('link', { name: /Make one in the Creator/ })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'use the demo roster' }))
-    expect(screen.getAllByRole('listitem')).toHaveLength(demoLoadout().length)
+    // the row of heroes (the army panel and the map key are lists too)
+    expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(demoLoadout().length)
+  })
+
+  it('"Moguls vs Leaders" sets up both sides from opposite factions in one click', async () => {
+    const onStart = await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Red side' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
+    expect(screen.getByRole('radio', { name: 'Your side Moguls (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    const { formation, loadout } = onStart.mock.calls[0][0]
+    const factions = (s: 0 | 1) => new Set(formation[s].map((p) => loadout[p.hero].faction))
+    expect(factions(1)).toEqual(new Set(['mogul']))
+    expect(factions(0)).toEqual(new Set(['leader']))
+  })
+
+  it('auto-deploying both sides gives a faction matchup, never a mirror', async () => {
+    const onStart = await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-deploy your side' }))
+    fireEvent.click(screen.getByRole('radio', { name: /Enemy side/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-deploy enemy side' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    const { formation, loadout } = onStart.mock.calls[0][0]
+    const mine = formation[0].map((p) => p.hero)
+    const theirs = formation[1].map((p) => p.hero)
+    expect(mine.filter((h) => theirs.includes(h))).toEqual([])
+    expect(new Set(mine.map((h) => loadout[h].faction))).toEqual(new Set(['mogul']))
+    expect(new Set(theirs.map((h) => loadout[h].faction))).toEqual(new Set(['leader']))
+  })
+
+  it('mirror copies your lineup to the enemy, and Clear empties the side being set up', async () => {
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Leaders vs Moguls' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mirror' }))
+    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(screen.getByRole('radio', { name: 'Your side Empty (0/10)' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it("the player's own heroes join the row first, and heroes already on the board stay who they are", async () => {
+    let resolve: (found: LoadoutEntry[]) => void = () => undefined
+    const deps: LoadoutDeps = { search: () => new Promise((r) => (resolve = r)) }
+    const onStart = vi.fn<(r: StagingResult) => void>()
+    render(<Staging onStart={onStart} deps={deps} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
+    const base = demoLoadout()[0]
+    await act(async () => resolve([{ key: 'build:mine', build: { ...base.build, heroName: 'Dario' }, symbol: base.symbol }]))
+    const row = within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')
+    expect(row[0].getAttribute('aria-label')).toMatch(/^Dario,/)
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    const { formation, loadout } = onStart.mock.calls[0][0]
+    expect(new Set(formation[0].map((p) => loadout[p.hero].faction))).toEqual(new Set(['mogul']))
+    expect(new Set(formation[1].map((p) => loadout[p.hero].faction))).toEqual(new Set(['leader']))
   })
 })
