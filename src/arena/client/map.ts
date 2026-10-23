@@ -1,6 +1,8 @@
 import * as THREE from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { color, dot, float, max, mix, mx_fractal_noise_float, normalize, positionLocal, pow, smoothstep, time, uniform, vec3 } from 'three/tsl'
 import { ENGINE } from '../engine/calibration'
-import { paving } from './textures'
+import { paintedMaterial } from './ruins'
 
 /**
  * The arena (R1, R25): a floating island in a dusk sky, paved and split into two near-mirror halves like Dire and
@@ -18,9 +20,14 @@ export const TEAM_COLORS = [0x4fa3ff, 0xff6a4a] as const
 
 /** The look in one place, so a later art pass tunes numbers instead of hunting through code. */
 export const PALETTE = {
-  zenith: '#1b2350',
-  horizon: '#f29a6b',
-  haze: 0xc98a78,
+  zenith: '#1a2560',
+  sky: '#4867b8',
+  lavender: '#9d8bc9',
+  peach: '#f4a37e',
+  horizon: '#ffd49c',
+  haze: 0xe2a986,
+  cloudShade: '#6f6596',
+  cloudLit: '#ffdcbc',
   stone: '#b7aa98',
   grout: '#7d7264',
   slab: 0x6f6458,
@@ -35,7 +42,10 @@ function seeded(seed: number) {
   return () => ((s = (s * 16807) % 2147483647) / 2147483647)
 }
 
-/** A vertical gradient for the sky dome. */
+/** Where the low sun sits in the sky: the key light's bearing, nearer the horizon. */
+const SUN = new THREE.Vector3(30, 11, -18).normalize()
+
+/** The sky's light for image-based lighting, top to bottom: blue above, a warm horizon, warm ground bounce below. */
 function skyTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas')
   canvas.width = 4
@@ -43,14 +53,49 @@ function skyTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!
   const g = ctx.createLinearGradient(0, 0, 0, 256)
   g.addColorStop(0, PALETTE.zenith)
-  g.addColorStop(0.55, '#6b4e7c')
-  g.addColorStop(0.8, PALETTE.horizon)
-  g.addColorStop(1, '#ffd7a8')
+  g.addColorStop(0.3, PALETTE.sky)
+  g.addColorStop(0.44, PALETTE.lavender)
+  g.addColorStop(0.5, PALETTE.horizon)
+  g.addColorStop(0.56, '#d39a78')
+  g.addColorStop(1, '#5a4334')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 4, 256)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
+}
+
+/**
+ * An Italian cypress crown, one unit tall: a flame that is full low down and tapers to a point, its surface pushed
+ * out in lumps so it reads as foliage, dark at the base and lighter toward the sunlit top.
+ */
+function cypressCrown(phase: number): THREE.BufferGeometry {
+  const profile: THREE.Vector2[] = []
+  const rows = 16
+  for (let i = 0; i <= rows; i++) {
+    const t = i / rows
+    const r = 0.17 * Math.pow(Math.sin(Math.PI * Math.min(1, 0.1 + t * 1.25)), 0.75) * (1 - 0.5 * t)
+    profile.push(new THREE.Vector2(Math.max(0.004, r), t))
+  }
+  const g = new THREE.LatheGeometry(profile, 14)
+  const pos = g.getAttribute('position')
+  const colors = new Float32Array(pos.count * 3)
+  const dark = new THREE.Color(0x1d3820)
+  const light = new THREE.Color(0x6b9444)
+  const c = new THREE.Color()
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i)
+    const y = pos.getY(i)
+    const z = pos.getZ(i)
+    const a = Math.atan2(z, x)
+    const lump = 1 + 0.16 * Math.sin(a * 5 + y * 23 + phase) + 0.1 * Math.sin(y * 51 + a * 3 + phase * 2)
+    pos.setXYZ(i, x * lump, y, z * lump)
+    c.copy(dark).lerp(light, Math.min(1, Math.max(0, y * 0.75 + (lump - 1) * 1.6)))
+    colors.set([c.r, c.g, c.b], i * 3)
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  g.computeVertexNormals()
+  return g
 }
 
 /** A barrier panel that fades upward, tinted to its half. */
@@ -74,15 +119,13 @@ export function buildMap(): ArenaMap {
   const proxies: THREE.Box3[] = []
 
   // the stage: large paving slabs with mossy joints, each half tinted a little toward its team
-  const stones = paving(41)
+  // painted irregular flagstones (generated art, tools/textures/process.py), one tile every 6 m
   const half = (side: 0 | 1) => {
-    const set = { map: stones.map.clone(), normalMap: stones.normalMap.clone(), roughnessMap: stones.roughnessMap.clone() }
-    for (const t of Object.values(set)) {
-      t.needsUpdate = true
-      t.repeat.set(W / 6, L / 12)
-    }
-    const tint = new THREE.Color(0xffffff).lerp(new THREE.Color(TEAM_COLORS[side]), 0.08)
-    const top = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, L), new THREE.MeshStandardMaterial({ ...set, color: tint, roughness: 1, normalScale: new THREE.Vector2(1.2, 1.2) }))
+    const mat = paintedMaterial('floor', 1.1)
+    mat.vertexColors = false
+    for (const t of [mat.map, mat.normalMap, mat.roughnessMap]) t?.repeat.set((W * 2) / 6, L / 6)
+    mat.color = new THREE.Color(0xffffff).lerp(new THREE.Color(TEAM_COLORS[side]), 0.06)
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, L), mat)
     top.rotation.x = -Math.PI / 2
     top.position.z = (side ? 1 : -1) * (L / 2)
     top.receiveShadow = true
@@ -137,25 +180,21 @@ export function buildMap(): ArenaMap {
 
   // cypress trees and a broken outer colonnade on the island's rim, outside the barrier
   const rnd = seeded(11)
-  const leaves = new THREE.MeshStandardMaterial({ color: 0x3f6b34, roughness: 0.85 })
+  const leaves = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9 })
   const bark = new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 1 })
+  const crowns = [0, 1, 2].map((k) => cypressCrown(k * 2.1))
   const cypress = (x: number, z: number, h: number) => {
     const tree = new THREE.Group()
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.25, 1.4, 6), bark)
     trunk.position.y = 0.7
-    // a cypress is a stack of soft, tapering puffs
-    tree.add(trunk)
     trunk.castShadow = true
-    const puffs = 4
-    for (let k = 0; k < puffs; k++) {
-      const t = k / (puffs - 1)
-      const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), leaves)
-      const r = 1.25 * (1 - t * 0.6)
-      crown.scale.set(r, h / puffs * 0.85, r)
-      crown.position.y = 1.2 + (h / puffs) * (k + 0.5)
-      crown.castShadow = true
-      tree.add(crown)
-    }
+    const crown = new THREE.Mesh(crowns[Math.floor(rnd() * crowns.length)], leaves)
+    crown.position.y = 0.9
+    const girth = h * (0.9 + rnd() * 0.3)
+    crown.scale.set(girth, h, girth)
+    crown.rotation.y = rnd() * Math.PI * 2
+    crown.castShadow = true
+    tree.add(trunk, crown)
     tree.position.set(x, 0, z)
     group.add(tree)
     proxies.push(new THREE.Box3().setFromObject(tree))
@@ -180,7 +219,8 @@ export function buildMap(): ArenaMap {
     const a = (i / 14) * Math.PI * 2 + rnd() * 0.3
     const r = 110 + rnd() * 70
     const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(2 + rnd() * 4, 1), rockMat)
-    rock.position.set(Math.cos(a) * r, -10 + rnd() * 26, Math.sin(a) * r)
+    // drifting below the island's rim, so they read as broken-off ground rather than shapes in the sky
+    rock.position.set(Math.cos(a) * r, -30 + rnd() * 24, Math.sin(a) * r)
     rock.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3)
     rock.scale.y = 0.6
     group.add(rock)
@@ -202,10 +242,51 @@ export function buildMap(): ArenaMap {
   return { group, proxies }
 }
 
+/** A charged ultimate tints the whole sky for a moment; the effects drive these two values. */
+export interface SkyFlash {
+  tint: THREE.Color
+  amount: { value: number }
+}
+export const skyFlashOf = (scene: THREE.Scene) => scene.userData.skyFlash as SkyFlash | undefined
+
+/**
+ * The dusk sky, drawn per pixel: deep blue overhead falling through lavender and peach to a golden band on the
+ * horizon, a low sun with a wide warm glow, and a slow-drifting cloud layer lit gold on the sun's side and lilac away
+ * from it. Below the horizon it melts into the haze the far props fade into.
+ */
+function skyMaterial(): { material: MeshBasicNodeMaterial; flash: SkyFlash } {
+  const m = new MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false })
+  const dir = normalize(positionLocal)
+  const h = dir.y
+  let sky = mix(color(PALETTE.horizon), color(PALETTE.peach), smoothstep(0, 0.07, h))
+  sky = mix(sky, color(PALETTE.lavender), smoothstep(0.07, 0.2, h))
+  sky = mix(sky, color(PALETTE.sky), smoothstep(0.2, 0.48, h))
+  sky = mix(sky, color(PALETTE.zenith), smoothstep(0.48, 1, h))
+  const toSun = max(dot(dir, vec3(SUN.x, SUN.y, SUN.z)), 0)
+  sky = sky.add(color('#ff9d5c').mul(pow(toSun, 6).mul(0.5))).add(color('#ffe0b0').mul(pow(toSun, 60).mul(0.9)))
+  // clouds: a noise layer seen in perspective overhead, thinning out toward the horizon so it never shimmers there
+  const plane = dir.xz.div(h.add(0.18)).mul(1.1)
+  const n = mx_fractal_noise_float(vec3(plane.x.add(time.mul(0.006)), plane.y, time.mul(0.004)), 4, 2, 0.5)
+  const cover = smoothstep(0.08, 0.5, n).mul(smoothstep(0.02, 0.22, h))
+  const lit = mix(color(PALETTE.cloudShade), color(PALETTE.cloudLit), pow(toSun, 1.5).mul(0.85).add(smoothstep(0.1, 0.45, n).mul(0.15)))
+  sky = mix(sky, lit, cover.mul(0.9))
+  // the sun's disc sits in front of the clouds' haze, hot enough to bloom
+  sky = sky.add(color('#fff3d6').mul(smoothstep(0.9991, 0.9996, toSun).mul(6)))
+  sky = mix(color(PALETTE.haze), sky, smoothstep(-0.06, 0.005, h))
+  const tint = uniform(new THREE.Color())
+  const amount = uniform(0)
+  m.colorNode = mix(sky, tint.mul(float(0.7)), amount)
+  return { material: m, flash: { tint: tint.value, amount } }
+}
+
 /** The dusk sky dome and the haze that blends the far props into it. */
 export function atmosphere(scene: THREE.Scene) {
-  const dome = new THREE.Mesh(new THREE.SphereGeometry(380, 32, 16), new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false }))
+  const { material, flash } = skyMaterial()
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(380, 48, 24), material)
+  dome.renderOrder = -1
+  dome.frustumCulled = false
   scene.add(dome)
+  scene.userData.skyFlash = flash
   scene.background = new THREE.Color(PALETTE.horizon)
   // the sky lights every material too, so stone picks up warm horizon light and a cool fill from above
   const env = skyTexture()
@@ -220,7 +301,7 @@ export function lights(scene: THREE.Scene) {
   // a strong low sun and a softer sky make the stone read in relief, the way stylised AAA arenas are lit
   scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x6a4a3a, 0.7))
   const sun = new THREE.DirectionalLight(0xffd2a6, 3.6)
-  sun.position.set(30, 38, -18)
+  sun.position.set(30, 28, -18)
   sun.castShadow = true
   sun.shadow.mapSize.set(2048, 2048)
   sun.shadow.bias = -0.0004

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { CoverPiece } from '../engine/cover'
-import { grassTexture, timber, travertine } from './textures'
+import { grassTexture, travertine } from './textures'
 
 /**
  * The ruins on screen (R25), built from the engine's own cover pieces so every wall the audience sees is a wall the
@@ -84,18 +84,47 @@ function shaft(r: number, h: number, rnd: () => number, broken: boolean): THREE.
   return geo
 }
 
+const textureLoader = new THREE.TextureLoader()
+
+/** A material from a painted texture set in public/textures: albedo, normal and roughness, tiling in world metres. */
+export function paintedMaterial(name: string, normalScale = 1): THREE.MeshStandardMaterial {
+  const load = (kind: string, color: boolean) => {
+    const t = textureLoader.load(`/textures/${name}_${kind}.webp`)
+    t.wrapS = t.wrapT = THREE.RepeatWrapping
+    t.anisotropy = 8
+    if (color) t.colorSpace = THREE.SRGBColorSpace
+    return t
+  }
+  return new THREE.MeshStandardMaterial({
+    map: load('albedo', true),
+    normalMap: load('normal', false),
+    roughnessMap: load('rough', false),
+    normalScale: new THREE.Vector2(normalScale, normalScale),
+    vertexColors: true,
+    roughness: 1,
+  })
+}
+
 export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   const group = new THREE.Group()
   const proxies: THREE.Box3[] = []
   const rnd = seeded(23)
   const stone = travertine(31)
-  const marble = travertine(57, [236, 228, 214])
-  const wood = timber(13)
   const stoneMat = new THREE.MeshStandardMaterial({ ...stone, vertexColors: true, roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) })
-  const marbleMat = new THREE.MeshStandardMaterial({ ...marble, vertexColors: true, roughness: 0.85, normalScale: new THREE.Vector2(0.6, 0.6) })
-  const woodMat = new THREE.MeshStandardMaterial({ ...wood, vertexColors: true, roughness: 1 })
+  // painted masonry (generated art, processed by tools/textures/process.py) for walls, lintels and plinths
+  const masonry = paintedMaterial('wall')
+  const masonry2 = paintedMaterial('wall2')
+  // weathered cream marble with gold veins for the columns and the fallen drums (generated art, same pipeline)
+  const marbleMat = paintedMaterial('marble', 0.5)
+  marbleMat.roughness = 0.8
+  // dark oak planks with iron nails (generated art) for the barricades
+  const woodMat = paintedMaterial('timber', 0.8)
   const bronze = new THREE.MeshStandardMaterial({ color: 0xb98a4a, metalness: 0.85, roughness: 0.35 })
-  const shieldRed = new THREE.MeshStandardMaterial({ color: 0x9c2a22, roughness: 0.6 })
+  // a legionary scutum painted front-on (generated art), wrapped once around each curved shield
+  const shieldMap = textureLoader.load('/textures/scutum_albedo.webp')
+  shieldMap.colorSpace = THREE.SRGBColorSpace
+  shieldMap.anisotropy = 8
+  const shieldFace = new THREE.MeshStandardMaterial({ map: shieldMap, roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide })
   const views: (THREE.Object3D | undefined)[] = []
   const shake: { obj: THREE.Object3D; t: number; base: THREE.Vector3 }[] = []
   const rubble: THREE.Matrix4[] = []
@@ -179,8 +208,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
         const count = Math.max(2, Math.round((long ? w : d) / 0.9))
         for (const face of [-1, 1]) {
           for (let k = 0; k < count; k++) {
-            const scutum = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, h * 0.62, 12, 1, true, -0.28, 0.56), shieldRed)
-            scutum.material.side = THREE.DoubleSide
+            const scutum = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.4, h * 0.62, 12, 1, true, -0.28, 0.56), shieldFace)
             const boss = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), bronze)
             const along = -((long ? w : d) / 2) + ((long ? w : d) / count) * (k + 0.5)
             const g = new THREE.Group()
@@ -196,27 +224,20 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
         node.add(planks, bands, shields)
         scatter(s.x, s.z, s.hx, s.hz, 6)
       } else {
-        // walls, plinths and lintels: courses of ashlar blocks with a little play in every joint
+        // walls, plinths and lintels: one weathered mass wrapped in the painted masonry at real scale (a course of the
+        // painting is about 0.55 m), its faces gently bowed and its edges worn so it never reads as a crisp box
         const parts: THREE.BufferGeometry[] = []
-        const course = piece.look === 'plinth' ? h / 3 : 0.55
-        const courses = Math.max(1, Math.round(h / course))
-        const ch = h / courses
-        const span = long ? w : d
-        for (let c = 0; c < courses; c++) {
-          const inset = piece.look === 'plinth' ? c * 0.25 : 0
-          let at = -span / 2 + inset + (c % 2) * 0.35
-          const end = span / 2 - inset
-          if (at > -span / 2 + inset) {
-            const first = at - (-span / 2 + inset)
-            parts.push(blockGeo(first, ch, long, d - inset * 2, w - inset * 2, -span / 2 + inset + first / 2, c * ch, rnd))
+        if (piece.look === 'plinth') {
+          for (let c = 0; c < 3; c++) {
+            const inset = c * 0.3
+            const g = new THREE.BoxGeometry(w - inset * 2, h / 3, d - inset * 2, 6, 2, 6).translate(0, h / 6 + (c * h) / 3, 0)
+            parts.push(weather(g, rnd, 0.05))
           }
-          while (at < end - 0.05) {
-            const len = Math.min(end - at, 0.9 + rnd() * 0.8)
-            parts.push(blockGeo(len, ch, long, d - inset * 2, w - inset * 2, at + len / 2, c * ch, rnd))
-            at += len
-          }
+        } else {
+          const g = new THREE.BoxGeometry(w, h, d, Math.max(4, Math.round(w * 3)), Math.max(3, Math.round(h * 3)), Math.max(3, Math.round(d * 3))).translate(0, h / 2, 0)
+          parts.push(weather(g, rnd, 0.06))
         }
-        const mesh = new THREE.Mesh(mergeGeometries(parts), stoneMat)
+        const mesh = new THREE.Mesh(mergeGeometries(parts.map((g) => worldUV(paint(g, new THREE.Color(1, 1, 1), 0, 1.0), 0.48))), piece.look === 'plinth' ? masonry2 : masonry)
         mesh.castShadow = mesh.receiveShadow = true
         node.add(mesh)
         if (piece.base <= 0) scatter(s.x, s.z, s.hx, s.hz, Math.round((s.hx + s.hz) * 2.5))
@@ -294,6 +315,31 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
       }
     },
   }
+}
+
+/** Wear a box: bow its faces in a little and round its edges, staying inside the original bounds (honest cover). */
+function weather(geo: THREE.BufferGeometry, rnd: () => number, amount: number): THREE.BufferGeometry {
+  geo.computeBoundingBox()
+  const box = geo.boundingBox!
+  const c = box.getCenter(new THREE.Vector3())
+  const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+  const pos = geo.getAttribute('position')
+  const seed = rnd() * 100
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i) - c.x
+    const y = pos.getY(i) - c.y
+    const z = pos.getZ(i) - c.z
+    // how close to an edge or corner: shrink there most, so edges look chipped and worn
+    const ex = Math.abs(x) / half.x
+    const ey = Math.abs(y) / half.y
+    const ez = Math.abs(z) / half.z
+    const edge = Math.max(0, Math.min(ex, ey) - 0.85) + Math.max(0, Math.min(ex, ez) - 0.85) + Math.max(0, Math.min(ey, ez) - 0.85)
+    const n = 0.5 + 0.5 * Math.sin(x * 5.3 + seed) * Math.cos(z * 4.1 + y * 3.7 + seed)
+    const k = 1 - (edge * 2.2 + n * 0.25) * amount
+    pos.setXYZ(i, c.x + x * k, c.y + y * (y > 0 ? 1 - edge * amount * 1.5 : 1), c.z + z * k)
+  }
+  geo.computeVertexNormals()
+  return geo
 }
 
 /** One ashlar block in a course: slightly smaller than its slot, a touch rotated, its own shade of stone. */
