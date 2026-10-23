@@ -1,98 +1,130 @@
-import { memo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import type { Build } from '../../charter/build'
+import { DIVERSITY_MIN, describeSynergy } from '../../charter/synergy'
 import type { HudHero, HudState } from '../../arena/client/match-view'
+import type { Team } from '../../arena/engine/state'
 import { SynergyPanel } from './staging/Panels'
+import { VolumeControl } from './PauseMenu'
+import { ScoreBanner } from './hud/Banner'
+import { AbilityCluster, Crosshair, HealthBlock, TargetFrame } from './hud/Control'
+import type { HudController } from './hud/controller'
+import { TEAM_NAME } from './hud/format'
+import { KillFeed } from './hud/KillFeed'
+import { infoFromHud, type HudHeroInfo } from './hud/model'
+import { HpBar, Portrait } from './hud/parts'
+import { AllyRoster, EnemyRoster } from './hud/Rosters'
 
-// synergies depend only on the roster, not on the 10 Hz match state
-const Synergies = memo(SynergyPanel)
+/** The model when one was passed, else stand-ins built from the snapshot (tests, or before the model exists). */
+function useInfo(state: HudState, heroes?: readonly HudHeroInfo[]): readonly HudHeroInfo[] {
+  const count = state.heroes.length
+  const fallback = useMemo(() => (heroes ? undefined : state.heroes.map(infoFromHud)), [heroes, count]) // eslint-disable-line react-hooks/exhaustive-deps
+  return heroes ?? fallback!
+}
 
-const cd = (left: number) => (left > 0.05 ? Math.ceil(left).toString() : '')
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+/**
+ * Synergies (R4) folded into one line under the banner; open it for the full panel. Depends only on the roster, not
+ * on the 10 Hz match state.
+ */
+const Synergies = memo(function Synergies({ builds }: { builds: Build[] }) {
+  const s = describeSynergy(builds)
+  return (
+    <details className="hud-syn">
+      <summary className="hud-btn">
+        <span>Synergies</span>
+        <b className={s.teamBonus ? 'lit' : ''}>{s.teamBonus ? `+${Math.round(s.teamBonus * 100)}% damage` : `${s.distinctRoles}/${DIVERSITY_MIN} roles`}</b>
+        {s.penalties.length > 0 && <b className="warn">stacked</b>}
+      </summary>
+      <SynergyPanel builds={builds} />
+    </details>
+  )
+})
 
-/** The HUD while a fight runs (R38): timer, the streamer's roster numbered 1-0, synergies, and toggleable stats. */
-export function MatchHud({ state, side, builds }: { state: HudState; side: 0 | 1; builds: Build[] }) {
+/**
+ * The HUD while a fight runs (R38): the score banner, the streamer's roster numbered 1-0, the enemy roster, the
+ * kill feed, synergies and toggleable stats. Everything here follows the 10 Hz store; the per-frame layer is WorldHud.
+ */
+export function MatchHud({ state, side, builds, heroes, controller }: { state: HudState; side: Team; builds: Build[]; heroes?: readonly HudHeroInfo[]; controller?: HudController }) {
   const [stats, setStats] = useState(false)
+  const info = useInfo(state, heroes)
   const mine = state.heroes.filter((h) => h.team === side)
-  const alive = (team: 0 | 1) => state.heroes.filter((h) => h.team === team && h.alive).length
+  const foes = state.heroes.filter((h) => h.team !== side)
   return (
     <>
-      <div className="arena-top" aria-live="polite">
-        <span className="team-a">{alive(0)} alive</span>
-        <span className="timer">{clock(Math.max(0, state.timerSeconds - state.seconds))}</span>
-        <span className="team-b">{alive(1)} alive</span>
-      </div>
-      <div className="hud-left">
+      <ScoreBanner state={state} heroes={info} side={side} />
+      <div className="hud-util">
         <Synergies builds={builds} />
+        <button className="hud-btn" aria-pressed={stats} onClick={() => setStats(!stats)}>
+          {stats ? 'Hide stats' : 'Stats'}
+        </button>
+        <VolumeControl compact />
       </div>
-      <button className="hud-stats-toggle" aria-pressed={stats} onClick={() => setStats(!stats)}>
-        {stats ? 'Hide stats' : 'Stats'}
-      </button>
-      {stats && <StatsPanel heroes={state.heroes} seconds={state.seconds} />}
-      <ol className={`roster side-${side}`} aria-label="Your heroes">
-        {mine.map((h, i) => (
-          <li key={h.id} className={`${h.alive ? '' : 'dead'} ${state.controlled === h.id ? 'controlled' : ''} ${h.fallback ? 'fallback' : ''}`} title={h.fallback ? 'This hero’s model failed to load; it fights as a stand-in.' : undefined}>
-            <kbd>{(i + 1) % 10}</kbd>
-            <span className="name">{h.name}</span>
-            <span className="hp" style={{ width: `${(h.hp / h.maxHp) * 100}%` }} />
-            <span className="cds">
-              {(['active1', 'active2', 'ultimate'] as const).map((s) => (
-                <span key={s} className={`cd ${h.cooldowns[s].left > 0.05 ? 'wait' : 'ready'} ${s}`} aria-label={`${s} ${h.cooldowns[s].left > 0.05 ? `in ${cd(h.cooldowns[s].left)} s` : 'ready'}`}>
-                  {s === 'ultimate' ? 'R' : s === 'active1' ? 'Q' : 'E'}
-                  {cd(h.cooldowns[s].left) && <small>{cd(h.cooldowns[s].left)}</small>}
-                </span>
-              ))}
-            </span>
-          </li>
-        ))}
-      </ol>
+      {stats && <StatsPanel heroes={state.heroes} seconds={state.seconds} info={info} />}
+      {controller && <KillFeed controller={controller} heroes={info} />}
+      <EnemyRoster heroes={foes} info={info} team={(1 - side) as Team} />
+      <AllyRoster heroes={mine} info={info} controlled={state.controlled} side={side} />
     </>
   )
 }
 
-/** Per-hero numbers (R38): damage per second and health, for both sides. */
-export function StatsPanel({ heroes, seconds }: { heroes: HudHero[]; seconds: number }) {
+/** Per-hero numbers (R38), a scoreboard per side: damage per second, damage and health. */
+export function StatsPanel({ heroes, seconds, info }: { heroes: HudHero[]; seconds: number; info?: readonly HudHeroInfo[] }) {
   return (
     <section className="arena-panel hud-stats" aria-label="Hero stats">
-      <table>
-        <thead>
-          <tr>
-            <th>Hero</th>
-            <th>DPS</th>
-            <th>Health</th>
-          </tr>
-        </thead>
-        <tbody>
-          {heroes.map((h) => (
-            <tr key={h.id} className={`team-${h.team} ${h.alive ? '' : 'dead'}`}>
-              <td>{h.name}</td>
-              <td>{seconds > 0 ? Math.round(h.damageDealt / seconds) : 0}</td>
-              <td>{Math.round(h.hp)}</td>
+      {([0, 1] as const).map((team) => (
+        <table key={team} className={`team-${team}`}>
+          <caption>{TEAM_NAME[team]}</caption>
+          <thead>
+            <tr>
+              <th>Hero</th>
+              <th>DPS</th>
+              <th>Damage</th>
+              <th>Health</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {heroes
+              .filter((h) => h.team === team)
+              .map((h) => {
+                const me = info?.[h.id]
+                return (
+                  <tr key={h.id} className={`team-${h.team} ${h.alive ? '' : 'dead'}`}>
+                    <td>
+                      <span className="hud-stats-hero">
+                        <Portrait src={me?.portrait} initials={me?.initials ?? h.name.slice(0, 2)} team={h.team} />
+                        {h.name}
+                      </span>
+                    </td>
+                    <td>{seconds > 0 ? Math.round(h.damageDealt / seconds) : 0}</td>
+                    <td>{Math.round(h.damageDealt)}</td>
+                    <td>
+                      <span className="hud-stats-hp">
+                        <HpBar hp={h.alive ? h.hp : 0} maxHp={h.maxHp} />
+                        {Math.round(h.hp)}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+          </tbody>
+        </table>
+      ))}
     </section>
   )
 }
 
-/** While controlling: health, cooldowns and the reticle at screen centre (R14, R42). */
-export function ControlHud({ hero }: { hero: HudHero }) {
+/** While controlling: health, abilities, the reticle at screen centre (R14, R42) and the target under it. */
+export function ControlHud({ hero, info, controller, state, heroes }: { hero: HudHero; info?: HudHeroInfo; controller?: HudController; state?: HudState; heroes?: readonly HudHeroInfo[] }) {
+  const me = useMemo(() => info ?? infoFromHud(hero), [info, hero.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  // shields are not in the 10 Hz snapshot; read them from the engine when the snapshot renders
+  const shield = controller?.arena.match.heroes[hero.id]?.shield ?? 0
   return (
     <>
-      <div className="reticle" aria-hidden="true" />
-      <div className="control-hud" aria-label="Controlled hero">
-        <strong>{hero.name}</strong>
-        <span className="hp big" style={{ width: `${(hero.hp / hero.maxHp) * 100}%` }} />
-        <span className="cds">
-          {(['basic', 'active1', 'active2', 'ultimate', 'movement'] as const).map((s) => (
-            <span key={s} className={`cd ${hero.cooldowns[s].left > 0.05 ? 'wait' : 'ready'}`}>
-              {{ basic: 'Click', active1: 'Q', active2: 'E', ultimate: 'R', movement: 'Shift' }[s]}
-              {cd(hero.cooldowns[s].left) && <small>{cd(hero.cooldowns[s].left)}</small>}
-            </span>
-          ))}
-        </span>
-        <span className="muted">Tab hands back · Esc frees the mouse</span>
+      <Crosshair controller={controller} />
+      <div className={`control-hud team-${hero.team}`} role="group" aria-label="Controlled hero">
+        <HealthBlock hero={hero} info={me} shield={shield} />
+        <AbilityCluster hero={hero} info={me} />
       </div>
+      {state && heroes && <TargetFrame controller={controller} state={state} heroes={heroes} team={hero.team} />}
     </>
   )
 }

@@ -1,0 +1,109 @@
+import type { Team } from '../../../arena/engine/state'
+import { segmentPct } from './format'
+import { FAR_METRES, distanceScale, type ScreenPoint } from './world'
+
+/**
+ * A health bar over every living hero, both sides (R38): team colour, a tick every 250 health, shields as a white
+ * overlay, a trailing chunk that shows the last hit draining away, the hero's short name and a pip that lights when
+ * the ultimate is ready. One DOM node per hero, made once and moved from the frame hook; a style is written only
+ * when the value it shows changes.
+ */
+
+export interface OverheadHero {
+  team: Team
+  short: string
+}
+
+export interface OverheadLive {
+  alive: boolean
+  hp: number
+  maxHp: number
+  shield: number
+  ultReady: boolean
+}
+
+interface Item {
+  root: HTMLDivElement
+  bar: HTMLElement
+  hp: HTMLElement
+  trail: HTMLElement
+  shield: HTMLElement
+  ult: HTMLElement
+  shown: boolean
+  far?: boolean
+  low?: boolean
+  ready?: boolean
+  maxHp: number
+  hpShown: number
+  trailShown: number
+  shieldKey: string
+  /** The trailing chunk's level and how long it has held since the last drop. */
+  trailLevel: number
+  hold: number
+}
+
+const q = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 1000) / 1000
+/** Seconds the trailing chunk holds after a hit, then how much of the bar it drains per second. */
+const TRAIL_HOLD = 0.35
+const TRAIL_RATE = 0.9
+
+export function createOverheads(layer: HTMLElement, heroes: readonly OverheadHero[]) {
+  const items: Item[] = heroes.map((h) => {
+    const root = document.createElement('div')
+    root.className = `hud-oh team-${h.team}`
+    root.style.visibility = 'hidden'
+    root.innerHTML = '<div class="hud-oh-top"><span class="hud-oh-name"></span><i class="hud-oh-ult"></i></div><div class="hud-oh-bar"><i class="hud-oh-trail"></i><i class="hud-oh-hp"></i><i class="hud-oh-sh"></i></div>'
+    root.querySelector('.hud-oh-name')!.textContent = h.short
+    layer.append(root)
+    const part = (c: string) => root.querySelector<HTMLElement>(c)!
+    return { root, bar: part('.hud-oh-bar'), hp: part('.hud-oh-hp'), trail: part('.hud-oh-trail'), shield: part('.hud-oh-sh'), ult: part('.hud-oh-ult'), shown: false, maxHp: -1, hpShown: -1, trailShown: -1, shieldKey: '', trailLevel: 1, hold: 0 }
+  })
+
+  return {
+    items: () => items.map((i) => i.root),
+    /** One hero, one frame. `hidden` drops the bar (the controlled hero, whose own HUD shows its health). */
+    update(i: number, p: ScreenPoint, live: OverheadLive, hidden: boolean, dt: number) {
+      const it = items[i]
+      if (!it) return
+      const hpF = q(live.hp / Math.max(1, live.maxHp))
+      if (hpF >= it.trailLevel) {
+        it.trailLevel = hpF
+        it.hold = 0
+      } else if ((it.hold += dt) > TRAIL_HOLD) it.trailLevel = Math.max(hpF, it.trailLevel - dt * TRAIL_RATE)
+
+      if (!live.alive || hidden || !p.visible) {
+        if (it.shown) {
+          it.root.style.visibility = 'hidden'
+          it.shown = false
+        }
+        return
+      }
+      if (!it.shown) {
+        it.root.style.visibility = 'visible'
+        it.shown = true
+      }
+      it.root.style.transform = `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${distanceScale(p.depth).toFixed(3)})`
+      const far = p.depth > FAR_METRES
+      if (far !== it.far) it.root.classList.toggle('far', (it.far = far))
+      if (live.maxHp !== it.maxHp) it.bar.style.setProperty('--seg', segmentPct((it.maxHp = live.maxHp)))
+      if (hpF !== it.hpShown) {
+        it.hp.style.transform = `scaleX(${(it.hpShown = hpF)})`
+        const low = hpF < 0.3
+        if (low !== it.low) it.root.classList.toggle('low', (it.low = low))
+      }
+      const trail = q(it.trailLevel)
+      if (trail !== it.trailShown) it.trail.style.transform = `scaleX(${(it.trailShown = trail)})`
+      const shF = q(live.shield / Math.max(1, live.maxHp))
+      const key = `${shF}|${hpF}`
+      if (key !== it.shieldKey) {
+        it.shieldKey = key
+        // the shield sits on the end of the health, pushed back inside the bar when the two overflow it
+        it.shield.style.transform = `translateX(${(Math.min(hpF, 1 - shF) * 100).toFixed(1)}%) scaleX(${shF})`
+      }
+      if (live.ultReady !== it.ready) it.ult.classList.toggle('ready', (it.ready = live.ultReady))
+    },
+    dispose() {
+      for (const it of items) it.root.remove()
+    },
+  }
+}

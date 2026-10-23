@@ -2,13 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { armyModifiers } from '../../charter/synergy'
 import { attachControls } from '../../arena/client/controls'
 import { createEffects } from '../../arena/client/effects/player'
+import { atLeast } from '../../arena/client/quality'
 import { ControlHud, MatchHud } from './MatchHud'
 import { canRender, startArena, type ArenaController, type HudState, type MatchSetup } from '../../arena/client/match-view'
 import { Staging, type StagingResult } from './staging/Staging'
 import { Loading, Unsupported } from './Loading'
 import { Countdown } from './Countdown'
-import { PauseMenu, VolumeControl } from './PauseMenu'
+import { PauseMenu } from './PauseMenu'
 import { Result } from './Result'
+import { hudHeroes } from './hud/model'
+import { stagedPortraits } from './hud/portraits'
+import { WorldHud } from './hud/WorldHud'
 import './arena.css'
 
 /** The Arena: stage two armies (U16), then watch the AI fight it out live (U13); rematches keep the staging (U18). */
@@ -40,6 +44,8 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
   const [locked, setLocked] = useState(false)
   const [started, setStarted] = useState(false)
   const [counting, setCounting] = useState(true)
+  // FIGHT! stays up a moment after the countdown hands the match to the engine
+  const [splash, setSplash] = useState(true)
   const [menu, setMenu] = useState(false)
   const toggleMenu = useRef(() => {})
 
@@ -100,21 +106,24 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
     setCounting(false)
     controller?.resume()
   }, [controller])
+  const splashDone = useCallback(() => setSplash(false), [])
 
   return (
     <div className="arena">
       <div ref={host} className="arena-canvas" />
       {error ? (
-        <div className="arena-overlay" role="alert">
+        <div className="arena-overlay hud-screen" role="alert">
           <p>The arena failed to start: {error}</p>
-          <button onClick={onBack}>Back to staging</button>
+          <button className="hud-btn primary big" onClick={onBack}>
+            Back to staging
+          </button>
         </div>
       ) : !controller ? (
         <Loading {...progress} />
       ) : (
         <>
           <Live controller={controller} staged={staged} locked={locked} started={started} paused={menu || counting} onLeave={onBack} onRematch={onRestart} />
-          {counting && <Countdown onDone={countdownDone} />}
+          {splash && <Countdown onDone={countdownDone} onFinished={splashDone} />}
           {menu && <PauseMenu onResume={resume} onRestart={onRestart} onBack={onBack} />}
         </>
       )}
@@ -125,36 +134,40 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
 function Live({ controller, staged, locked, started, paused, onLeave, onRematch }: { controller: ArenaController; staged: StagingResult; locked: boolean; started: boolean; paused: boolean; onLeave: () => void; onRematch: () => void }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
   const builds = useMemo(() => staged.formation[staged.side].map((p) => staged.loadout[p.hero].build), [staged])
+  // names, portraits and each skill's icon never change during a match: built once, not at 10 Hz
+  const heroes = useMemo(() => hudHeroes(controller.arena.setups, controller.arena.match.heroes.map((h) => h.team), stagedPortraits(staged)), [controller, staged])
   const controlled = state.controlled !== undefined ? state.heroes[state.controlled] : undefined
   const over = state.winner !== undefined
   useEffect(() => {
     if (over && document.pointerLockElement) document.exitPointerLock()
   }, [over])
+  // under load the glass stops blurring the scene behind it, the same moment the stage thins its particles
+  const lite = atLeast(state.quality, 'fewer-particles')
   return (
-    <>
-      <MatchHud state={state} side={staged.side} builds={builds} />
-      <div className="hud-volume">
-        <VolumeControl compact />
-      </div>
-      {controlled && <ControlHud hero={controlled} />}
-      {over && <Result state={state} side={staged.side} onRematch={onRematch} onBack={onLeave} />}
+    <div className={`hud${lite ? ' hud-lite' : ''}${controlled ? ' is-controlling' : ''}`}>
+      <WorldHud controller={controller} heroes={heroes} />
+      <MatchHud state={state} side={staged.side} builds={builds} heroes={heroes} controller={controller} />
+      {controlled && <ControlHud hero={controlled} info={heroes[controlled.id]} controller={controller} state={state} heroes={heroes} />}
+      {over && <Result state={state} side={staged.side} heroes={heroes} onRematch={onRematch} onBack={onLeave} />}
       {!locked && !over && !paused && (
-        <div className="arena-hint" role="status">
+        <div className={`arena-hint${started ? ' released' : ''}`} role="status">
           {started ? (
             <>
-              <p>Mouse released.</p>
-              <p className="row">
-                <button className="primary" onClick={() => document.querySelector<HTMLCanvasElement>('.arena-canvas canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))}>
-                  Resume
-                </button>
-                <button onClick={onLeave}>Leave match</button>
-              </p>
+              <span className="arena-hint-text">Mouse released</span>
+              <button className="hud-btn primary" onClick={() => document.querySelector<HTMLCanvasElement>('.arena-canvas canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))}>
+                Resume
+              </button>
+              <button className="hud-btn" onClick={onLeave}>
+                Leave match
+              </button>
             </>
           ) : (
-            <p>Click the arena to look around. Keys 1-0 take your heroes; Tab hands back; P pauses.</p>
+            <span className="arena-hint-text">
+              Click the arena to look around · <kbd>1</kbd>–<kbd>0</kbd> take your heroes · <kbd>Tab</kbd> hands back · <kbd>P</kbd> pauses
+            </span>
           )}
         </div>
       )}
-    </>
+    </div>
   )
 }

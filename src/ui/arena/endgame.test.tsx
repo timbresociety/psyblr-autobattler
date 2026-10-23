@@ -2,7 +2,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HudHero, HudState } from '../../arena/client/match-view'
-import { Countdown } from './Countdown'
+import { Countdown, FIGHT_SPLASH_MS } from './Countdown'
+import { LOADING_TIPS, Loading } from './Loading'
 import { PauseMenu } from './PauseMenu'
 import { Result, resultReason } from './Result'
 
@@ -26,6 +27,29 @@ describe('countdown (U18)', () => {
     expect(done).not.toHaveBeenCalled()
     act(() => void vi.advanceTimersByTime(100))
     expect(done).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows FIGHT! once the match runs, then finishes without calling onDone again', () => {
+    vi.useFakeTimers()
+    const [done, finished] = [vi.fn(), vi.fn()]
+    render(<Countdown from={1} onDone={done} onFinished={finished} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(screen.getByRole('status').textContent).toBe('Fight!')
+    expect(done).toHaveBeenCalledTimes(1)
+    act(() => void vi.advanceTimersByTime(FIGHT_SPLASH_MS))
+    expect(finished).toHaveBeenCalledTimes(1)
+    expect(done).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('loading (R40)', () => {
+  it('reports progress and turns over a tip every few seconds', () => {
+    vi.useFakeTimers()
+    render(<Loading done={3} total={21} />)
+    expect(screen.getByRole('status').textContent).toBe('Loading heroes… 3 of 21')
+    expect(screen.getByText(LOADING_TIPS[0])).toBeTruthy()
+    act(() => void vi.advanceTimersByTime(4000))
+    expect(screen.getByText(LOADING_TIPS[1])).toBeTruthy()
   })
 })
 
@@ -58,5 +82,15 @@ describe('result (U18, R13)', () => {
     expect(rows[2].textContent).toContain('Down')
     fireEvent.click(screen.getByRole('button', { name: 'Rematch' }))
     expect(rematch).toHaveBeenCalled()
+  })
+
+  it('puts the top damage dealer on an MVP card', () => {
+    render(<Result state={state({ winner: 0, reason: 'wipe', seconds: 100, heroes: [hero(0, 0, true, 300), hero(1, 1, false, 1250), hero(2, 0, true, 40)] })} side={0} onRematch={() => {}} onBack={() => {}} />)
+    expect(screen.getByRole('heading').textContent).toBe('Your side wins')
+    const mvp = screen.getByText('Most valuable:').closest('.hud-mvp')!
+    expect(mvp.textContent).toContain('Hero 1')
+    expect(mvp.textContent).toContain('1,250')
+    expect(mvp.textContent).toContain('13')
+    expect(mvp.className).toContain('team-1')
   })
 })
