@@ -260,9 +260,11 @@ function drawHeroes(
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
     const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
     const scaled = frame.dt * frame.timeScale
-    if (!far) view.pose(pose, frame.t + i, scaled)
-    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2)
-    const fallen = physics?.fallenPose(i)
+    const moving = moved > 0.01
+    if (!far) view.pose(pose, frame.t + i, scaled, moving)
+    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
+    // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
+    const fallen = view.animatesDeath ? undefined : physics?.fallenPose(i)
     if (fallen) {
       view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
       view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
@@ -292,23 +294,16 @@ function drawDebris(debris: THREE.InstancedMesh, physics: CosmeticPhysics | unde
   debris.instanceMatrix.needsUpdate = true
 }
 
-/** Team-coloured markers over every living hero except the controlled one, whose shoulder the camera sits on (R38). */
-function drawMarkers(markers: THREE.InstancedMesh, rings: THREE.InstancedMesh, arena: Arena, views: HeroView[], drawn: Vec3[]) {
+/** A team ring on the floor under every living hero, sized to its hitbox, so a crowd still reads at a glance (R38). */
+function drawRings(rings: THREE.InstancedMesh, arena: Arena, drawn: Vec3[]) {
   arena.match.heroes.forEach((h, i) => {
     const at = drawn[i]
-    place.quaternion.identity()
-    place.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
-    place.scale.setScalar(h.alive && arena.match.human !== i ? 1 : 0)
-    place.updateMatrix()
-    markers.setMatrixAt(i, place.matrix)
-    // a team ring on the floor under every living hero, sized to its hitbox, so a crowd still reads at a glance
     place.position.set(at.x, 0.03, at.z)
     place.quaternion.setFromAxisAngle(right, -Math.PI / 2)
     place.scale.setScalar(h.alive ? capsule(h).radius * 1.6 : 0)
     place.updateMatrix()
     rings.setMatrixAt(i, place.matrix)
   })
-  markers.instanceMatrix.needsUpdate = true
   rings.instanceMatrix.needsUpdate = true
 }
 const right = new THREE.Vector3(1, 0, 0)
@@ -342,7 +337,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
   const views = await Promise.all(
     builds.map(async (build, i) => {
-      const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer)
+      const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer, arena.match.heroes[i].team)
       onProgress(++loaded, total)
       return view
     }),
@@ -358,13 +353,10 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
   debris.count = 0
   scene.add(debris)
-  const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
   const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
-  arena.match.heroes.forEach((h, i) => {
-    markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team]))
-    rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team]))
-  })
-  scene.add(markers, rings)
+  // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
+  arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
+  scene.add(rings)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
@@ -431,7 +423,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     ruins?.update(dt)
     drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
     drawDebris(debris, physics)
-    drawMarkers(markers, rings, arena, views, drawn)
+    drawRings(rings, arena, drawn)
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
     hooks.emit.frame(dt, alpha)
     stage.draw()
@@ -441,7 +433,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   }
   requestAnimationFrame(loop)
 
-  return {
+  const controller: ArenaController = {
     arena,
     store,
     scene,
@@ -476,4 +468,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       stage.dispose()
     },
   }
+  // a dev-only handle for checking art and UI from a script, like the cameras and the match (never in production)
+  if (import.meta.env.DEV) (window as unknown as { __arena?: ArenaController }).__arena = controller
+  return controller
 }

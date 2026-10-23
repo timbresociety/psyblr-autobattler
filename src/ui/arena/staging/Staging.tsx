@@ -5,7 +5,7 @@ import type { Team } from '../../../arena/engine/state'
 import { TEAM_COLORS } from '../../../arena/client/map'
 import { DetailsPanel, SynergyPanel } from './Panels'
 import { MAX_PER_SIDE, autoDeploy, emptyFormation, move, place, remove, type Formation } from './formation'
-import { bust, demoLoadout, liveLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
+import { bust, demoLoadout, liveLoadout, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
 
 /**
  * Staging (U16, F1): pick a side, drag heroes from the loadout row onto your half, set up the enemy half the same
@@ -31,6 +31,15 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const [brush, setBrush] = useState<number>()
   const [count, setCount] = useState(10)
   const [notice, setNotice] = useState<string>()
+  // the busts are drawn from the arena's own characters; until their files load, a stand-in figure shows
+  const [, setCharactersLoaded] = useState(false)
+  useEffect(() => {
+    let live = true
+    void preloadBusts().then((ok) => ok && live && setCharactersLoaded(true))
+    return () => {
+      live = false
+    }
+  }, [])
   const board = useRef<SVGSVGElement>(null)
   const drag = useRef<{ side: Team; index: number } | undefined>(undefined)
 
