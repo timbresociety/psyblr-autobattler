@@ -20,7 +20,7 @@ export type MatchEvent =
   /** A basic attack missed: blinded, or turned aside by evasion. */
   | { type: 'miss'; source: number; target: number }
   /** A lingering field or a trap: raised, pulsing, sprung or gone. */
-  | { type: 'field'; id: number; owner: number; slot: BuildSlot; phase: 'start' | 'pulse' | 'end'; at: Vec3; radius: number; trap: boolean }
+  | { type: 'field'; id: number; owner: number; slot: BuildSlot; phase: 'start' | 'pulse' | 'end'; at: Vec3; radius: number; trap: boolean; sprung?: boolean }
   /** A turret: built, firing at a point, or gone. */
   | { type: 'turret'; id: number; owner: number; phase: 'start' | 'shot' | 'end'; at: Vec3; to?: Vec3 }
   /** A wall a skill raised, as a box: up, or fallen when its time ran out. */

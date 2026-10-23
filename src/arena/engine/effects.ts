@@ -323,14 +323,30 @@ export function firePassive(ctx: Ctx, hero: HeroState, trigger: PassiveTrigger, 
   resolve(ctx, hero, passive, 'passive', hit ? [hit] : [])
 }
 
-/** Always-on passives and the ultimate's opening cooldown, set once when a hero enters a match. */
+/** Always-on regeneration and the ultimate's opening cooldown, set once when a hero enters a match. */
 export function initHero(hero: HeroState, setup: HeroSetup) {
   hero.cooldowns.ultimate = ticks(ENGINE.ultimateStartCooldown)
   const passive = setup.kit.passive
   if ((passive.trigger ?? 'always') !== 'always') return
+  for (const e of passive.effects) if (e.kind === 'heal' && e.target === 'self') hero.passiveRegen += e.amount + e.ratio * setup.sheet.spiritPower
+}
+
+/**
+ * Always-on passive buffs, renewed every tick while the passive works: on the hero itself, or as an aura on every ally
+ * near it. A break stops the renewal, so the buff lapses within a tick and comes back when the break ends.
+ */
+function passiveBuffs(ctx: Ctx, hero: HeroState) {
+  const passive = ctx.setups[hero.id].kit.passive
+  const now = ctx.match.tick
+  const source = `passive:${hero.id}`
   for (const e of passive.effects) {
-    if (e.kind === 'buff') hero.buffs.push({ stat: e.stat, pct: e.pct, until: Number.MAX_SAFE_INTEGER, source: passive.id })
-    if (e.kind === 'heal') hero.passiveRegen += e.amount + e.ratio * setup.sheet.spiritPower
+    if (e.kind !== 'buff') continue
+    const radius = passive.delivery.radius ?? ENGINE.alliesRadius
+    const targets = e.target === 'self' ? [hero] : alliesOf(ctx.match, hero).filter((a) => distance(a.position, hero.position) <= radius)
+    for (const u of targets) {
+      u.buffs = u.buffs.filter((b) => !(b.source === source && b.stat === e.stat))
+      u.buffs.push({ stat: e.stat, pct: e.pct, until: now + 2, source })
+    }
   }
 }
 
@@ -359,6 +375,7 @@ export function tickStatuses(ctx: Ctx) {
     const broken = controlled(hero, 'break', now)
     heal(hero, (setup.sheet.regen + (broken ? 0 : hero.passiveRegen)) * DT)
     const passive = setup.kit.passive
+    if ((passive.trigger ?? 'always') === 'always' && !broken) passiveBuffs(ctx, hero)
     if ((passive.trigger ?? 'always') === 'always' && !broken)
       for (const e of passive.effects) {
         if (e.kind !== 'heal' || e.target !== 'allies') continue

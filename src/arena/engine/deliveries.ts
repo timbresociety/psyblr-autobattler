@@ -102,6 +102,12 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
     const wall = hit.length ? undefined : firstCover(m, from, end)
     return { hit, at: wall?.at ?? end, cover: wall ? [wall] : undefined }
   }
+  // a leap with a radius brings what it carries down on everyone near where it lands
+  if (d.kind === 'leap' && d.radius) {
+    const p = caster.position
+    const radius = d.radius
+    return { hit: enemies.filter((e) => gap(p, e) <= radius), at: { ...p }, cover: coverInBlast(m, p, radius) }
+  }
   switch (d.kind) {
     case 'melee': {
       // reach runs from the caster's body, not its chest: surface to surface, the way players and the AI judge it

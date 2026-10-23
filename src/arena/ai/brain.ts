@@ -35,6 +35,9 @@ export function preferredDistance(setup: HeroSetup): number {
 
 function reach(setup: HeroSetup, t: Template): number {
   const d = t.delivery
+  // a turret is worth placing wherever its gun reaches the target from the spot it lands on
+  const gun = t.effects.find((e) => e.kind === 'turret')
+  if (gun?.kind === 'turret') return d.range + gun.range * 0.8
   switch (d.kind) {
     case 'self':
       return preferredDistance(setup) + 3
@@ -48,8 +51,18 @@ function reach(setup: HeroSetup, t: Template): number {
 }
 
 // a skill that only changes its caster (a transformation) needs no crowd of enemies to be worth casting
-const hurtsEnemies = (t: Template) => t.effects.some((e) => e.kind === 'damage' || e.kind === 'stun' || e.kind === 'slow' || e.kind === 'displace')
-const helpsFriends = (t: Template) => t.effects.some((e) => e.kind === 'heal' || e.kind === 'shield' || (e.kind === 'buff' && e.target === 'allies'))
+const HOSTILE = new Set<Template['effects'][number]['kind']>(['damage', 'stun', 'slow', 'displace', 'pull', 'knockup', 'control', 'debuff', 'turret'])
+const hurtsEnemies = (t: Template) => t.effects.some((e) => HOSTILE.has(e.kind))
+const helpsFriends = (t: Template) => t.effects.some((e) => e.kind === 'heal' || e.kind === 'shield' || (e.kind === 'buff' && e.target === 'allies') || (e.kind === 'state' && e.target !== 'self'))
+
+/** Control a cleanse or unstoppable can lift: anything that leaves a hero able to act but hampered, or helpless. */
+function lockedDown(h: HeroState, now: number): boolean {
+  if (h.stunnedUntil > now || h.slows.some((s) => s.until > now && s.pct >= 30)) return true
+  return (['root', 'silence', 'disarm', 'sleep', 'blind', 'grounded', 'fear', 'taunt'] as const).some((c) => h.cc[c] > now)
+}
+
+/** An enemy in stealth is out of sight unless it is marked away or close enough to give itself away. */
+const hidden = (m: MatchState, hero: HeroState, e: HeroState) => e.stealthUntil > m.tick && gapTo(hero, e) > ENGINE.revealRange
 
 /** Whether a template's usage hint fits the moment (ported from the balance AI). */
 function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, target: HeroState): { ok: boolean; escape?: boolean } {
@@ -59,6 +72,13 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
   if (hint.targetHealthBelow !== undefined && hpFraction(target) >= hint.targetHealthBelow) return { ok: false }
   if (hint.minTargets && hurtsEnemies(t) && enemiesOf(m, hero).filter((e) => distance(e.position, target.position) <= (t.delivery.radius ?? 2) + 1).length < hint.minTargets) return { ok: false }
   const near = nearestGap(m, hero)
+  // a cleanse or an unstoppable is for control, so it fires when it would free someone, whatever else it does
+  const frees = t.effects.find((e) => e.kind === 'state' && (e.type === 'cleanse' || e.type === 'unstoppable'))
+  if (frees?.kind === 'state') {
+    const reachAllies = Math.max(t.delivery.range, ENGINE.alliesRadius) + (t.delivery.radius ?? 0)
+    const freed = frees.target === 'self' ? [hero] : alliesOf(m, hero).filter((a) => distance(hero.position, a.position) <= reachAllies)
+    if (freed.some((a) => lockedDown(a, m.tick))) return { ok: true }
+  }
   switch (hint.use) {
     case 'always':
       return { ok: false }
@@ -86,7 +106,7 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
  * suicide); others take the weakest in easy reach, else the nearest.
  */
 function chooseTarget(m: MatchState, hero: HeroState, setup: HeroSetup): HeroState | undefined {
-  const enemies = enemiesOf(m, hero)
+  const enemies = enemiesOf(m, hero).filter((e) => !hidden(m, hero, e))
   if (!enemies.length) return undefined
   const effective = (e: HeroState) => e.hp + e.shield
   if (setup.build.roleId === 'assassin') {
@@ -198,6 +218,8 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     if (brain.target < 0 || !m.heroes[brain.target].alive) brain.target = want.id
     else brain.pending = { target: want.id, at: m.tick + delay }
   }
+  // a target that slipped into stealth is lost until it shows itself again
+  if (brain.target >= 0 && hidden(m, hero, m.heroes[brain.target])) brain.target = want?.id ?? -1
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
   brain.cast = undefined
   if (!target || !target.alive) return
@@ -245,7 +267,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     brain.pending = undefined
   }
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
-  if (!target || !target.alive) return { moveX: 0, moveZ: 0, vertical: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
+  if (!target || !target.alive || hidden(m, hero, target)) return { moveX: 0, moveZ: 0, vertical: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
   const shotSpeed = (castTemplate ?? setup.kit.basic).delivery.kind === 'projectile' ? geometryOf((castTemplate ?? setup.kit.basic).delivery).speed : undefined

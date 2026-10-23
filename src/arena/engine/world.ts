@@ -110,7 +110,7 @@ export function tickWorld(ctx: Ctx) {
         const caught = now >= f.next && now < f.until ? inside(m, owner, area) : []
         if (caught.length) resolve(ctx, owner, templateOf(ctx, f.owner, f.slot), f.slot, caught, f.at, area)
         if (caught.length || now >= f.until) {
-          ctx.events.push({ type: 'field', id: f.id, owner: f.owner, slot: f.slot, phase: 'end', at: f.at, radius: f.radius, trap: true })
+          ctx.events.push({ type: 'field', id: f.id, owner: f.owner, slot: f.slot, phase: 'end', at: f.at, radius: f.radius, trap: true, sprung: caught.length > 0 })
           continue
         }
       } else {
