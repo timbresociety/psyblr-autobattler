@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { CoverPiece } from '../engine/cover'
+import { rockGeometry, sceneryMaterial } from './scenery'
 import { grassTexture, travertine } from './textures'
 
 /**
@@ -253,9 +254,20 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   })
 
   // rubble and grass at the feet of the ruins, instanced so hundreds cost two draw calls
-  const rubbleMesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ ...stone, color: 0xc9bca6, roughness: 1 }), rubble.length)
+  const rubbleMesh = new THREE.InstancedMesh<THREE.BufferGeometry, THREE.Material>(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ ...stone, color: 0xc9bca6, roughness: 1 }), rubble.length)
   rubble.forEach((m, i) => rubbleMesh.setMatrixAt(i, m))
   rubbleMesh.receiveShadow = true
+  // the stand-in chips give way to a sculpted, painted rock (tools/blender/scenery.py) once it loads
+  void rockGeometry(0)
+    .then((geo) => {
+      if (!geo) return
+      const old = rubbleMesh.geometry
+      rubbleMesh.geometry = geo
+      rubbleMesh.material = sceneryMaterial('rock')
+      rubbleMesh.computeBoundingSphere()
+      old.dispose()
+    })
+    .catch(() => undefined)
   const blade = new THREE.PlaneGeometry(0.7, 0.55).translate(0, 0.27, 0)
   const tuft = mergeGeometries([blade, blade.clone().rotateY(Math.PI / 2)])
   const grassMat = new THREE.MeshStandardMaterial({ map: grassTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 1 })
