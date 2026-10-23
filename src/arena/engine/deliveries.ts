@@ -6,7 +6,7 @@ import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, typ
 import { tickWorld } from './world'
 import { coverHit, coverInDisc } from './cover'
 import { keepOut } from './locomotion'
-import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
+import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 import type { TickRules } from './tick'
 
@@ -86,6 +86,23 @@ function strikeCover(ctx: Ctx, caster: HeroState, template: Template, struck: { 
   }
 }
 
+/**
+ * How far along the aim a ground skill lands: on the first enemy the aim passes over within its range, else where
+ * the aim meets the floor, else at full range. So a zone lands where the player points, and the AI's lands on its
+ * target, instead of always at the far end of its range.
+ */
+function zoneReach(enemies: readonly HeroState[], from: Vec3, dir: Vec3, range: number, radius: number): number {
+  let first = Infinity
+  for (const e of enemies) {
+    const to = sub(chest(e), from)
+    const along = dot(to, dir)
+    if (along <= 0 || along > range + radius) continue
+    if (length(sub(to, scale(dir, along))) <= radius + capsule(e).radius && along < first) first = along
+  }
+  if (first < Infinity) return Math.min(first, range)
+  return dir.y < -0.05 ? clamp(from.y / -dir.y, 0.5, range) : range
+}
+
 /** The enemies an instant delivery reaches from the caster's current aim, and where it lands. */
 export function landing(ctx: Ctx, caster: HeroState, template: Template): Landing {
   const d = template.delivery
@@ -128,7 +145,7 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
     }
     case 'zone': {
       if (d.range > 0) {
-        const centre = add(from, scale(dir, d.range))
+        const centre = add(from, scale(dir, zoneReach(enemies, from, dir, d.range, d.radius ?? 0)))
         return { hit: enemies.filter((e) => gap(centre, e) <= (d.radius ?? 0)), at: centre, cover: coverInBlast(m, centre, d.radius ?? 0) }
       }
       // a zone with no range is a disc at the caster's level: heroes flying well above or below escape it

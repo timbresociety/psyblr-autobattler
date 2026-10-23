@@ -70,7 +70,10 @@ function wants(m: MatchState, hero: HeroState, setup: HeroSetup, t: Template, ta
   const inReach = gapTo(hero, target) <= reach(setup, t)
   if (hint.selfHealthBelow !== undefined && hint.use !== 'escape' && hint.use !== 'sustain' && hpFraction(hero) >= hint.selfHealthBelow) return { ok: false }
   if (hint.targetHealthBelow !== undefined && hpFraction(target) >= hint.targetHealthBelow) return { ok: false }
-  if (hint.minTargets && hurtsEnemies(t) && enemiesOf(m, hero).filter((e) => distance(e.position, target.position) <= (t.delivery.radius ?? 2) + 1).length < hint.minTargets) return { ok: false }
+  // a skill meant for a crowd waits for one, unless fewer enemies than that are left: then all of them will do
+  const enemies = enemiesOf(m, hero)
+  const crowd = Math.min(hint.minTargets ?? 0, enemies.length)
+  if (crowd && hurtsEnemies(t) && enemies.filter((e) => distance(e.position, target.position) <= (t.delivery.radius ?? 2) + 1).length < crowd) return { ok: false }
   const near = nearestGap(m, hero)
   // a cleanse or an unstoppable is for control, so it fires when it would free someone, whatever else it does
   const frees = t.effects.find((e) => e.kind === 'state' && (e.type === 'cleanse' || e.type === 'unstoppable'))

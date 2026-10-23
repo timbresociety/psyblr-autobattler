@@ -78,7 +78,7 @@ const CONTROL_NOTE: Partial<Record<keyof typeof CONTROL_LINE, string>> = {
   root: ' (it can still fight)',
   silence: ' (no skills)',
   disarm: ' (no basic attacks)',
-  sleep: ' (any damage wakes it)',
+  sleep: ' (damage wakes it, and that hit deals 50% more)',
   blind: ' (basic attacks miss)',
   grounded: ' (no flight or movement skills)',
   fear: ' (it runs from you)',

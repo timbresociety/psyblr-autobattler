@@ -2,7 +2,7 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 6
+export const ENGINE_CALIBRATION_VERSION = 7
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
@@ -57,6 +57,8 @@ export const ENGINE = {
   evasionCap: 0.5,
   /** Enemies this close see through stealth, metres. */
   revealRange: 3,
+  /** The hit that wakes a sleeping hero deals this much more. */
+  wakeBonus: 0.5,
   /** A turret's shots, and anything a field or trap catches, reach heroes this close to the floor. */
   fieldHeight: 2.5,
 } as const

@@ -46,12 +46,14 @@ export const SIZES: Record<SizeClass, SizeProfile> = {
  * three duels in four and a tiny assassin almost none.
  */
 export const SIZE_HEALTH: Partial<Record<RoleId, Partial<Record<SizeClass, number>>>> = {
-  tank: { tiny: 1.46, small: 1.046, large: 0.999, huge: 1.012 },
-  fighter: { tiny: 1.109, small: 1.006, large: 0.999, huge: 0.999 },
-  assassin: { tiny: 1.441, small: 1.088, large: 1.004, huge: 1.009 },
-  mage: { tiny: 0.986, small: 0.986, large: 1.026, huge: 1.012 },
-  marksman: { tiny: 1.006, small: 0.986, large: 0.999, huge: 0.993 },
-  support: { tiny: 1.039, small: 0.983, large: 1.154, huge: 1.169 },
+  tank: { tiny: 1.366, small: 1.041, large: 1.009, huge: 1.015 },
+  fighter: { tiny: 1.062, small: 1.001, large: 1.009, huge: 1.017 },
+  assassin: { tiny: 1.318, small: 1.05, large: 0.991, huge: 1.019 },
+  mage: { tiny: 1.027, small: 1.012, large: 1.037, huge: 1.038 },
+  marksman: { tiny: 1.001, small: 1.004, large: 1.025, huge: 1.019 },
+  support: { tiny: 0.957, small: 0.993, large: 1.097, huge: 1.086 },
+  controller: { tiny: 0.965, small: 1.018, large: 0.995, huge: 1.034 },
+  summoner: { tiny: 0.972, small: 0.995, large: 0.995, huge: 1.01 },
 }
 
 /** The health multiplier `role` pays for `size`. */

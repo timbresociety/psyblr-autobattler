@@ -25,8 +25,8 @@ export const DEMO_HEROES: readonly DemoHero[] = [
   { faction: 'mogul', heroName: 'Jeff "Prime" Bezos', roleId: 'tank', sizeClass: 'huge', hue: 0.08, ultimate: 'Same-Day Delivery' },
   { faction: 'mogul', heroName: 'Mark "Metaverse" Zuckerberg', roleId: 'assassin', sizeClass: 'small', hue: 0.62, ultimate: 'Infinite Scroll' },
   { faction: 'mogul', heroName: 'Satya "Copilot" Nadella', roleId: 'support', sizeClass: 'medium', hue: 0.55, ultimate: 'Cloud Ascension' },
-  { faction: 'mogul', heroName: 'Sam "AGI" Altman', roleId: 'mage', sizeClass: 'small', hue: 0.75, ultimate: 'Scaling Law' },
-  { faction: 'mogul', heroName: 'Warren "Oracle" Buffett', roleId: 'support', sizeClass: 'tiny', hue: 0.14, ultimate: 'Compound Interest' },
+  { faction: 'mogul', heroName: 'Sam "AGI" Altman', roleId: 'controller', sizeClass: 'small', hue: 0.75, ultimate: 'Scaling Law' },
+  { faction: 'mogul', heroName: 'Warren "Oracle" Buffett', roleId: 'summoner', sizeClass: 'tiny', hue: 0.14, ultimate: 'Compound Interest' },
   { faction: 'mogul', heroName: 'Oprah "You Get One" Winfrey', roleId: 'fighter', sizeClass: 'medium', hue: 0.85, ultimate: 'Everybody Gets One' },
   { faction: 'mogul', heroName: 'Mukesh "Jio" Ambani', roleId: 'tank', sizeClass: 'large', hue: 0.02, ultimate: 'Network Effect' },
   { faction: 'mogul', heroName: 'Lisa "Zen Core" Su', roleId: 'assassin', sizeClass: 'tiny', hue: 0.0, ultimate: 'Chiplet Storm' },
@@ -35,11 +35,11 @@ export const DEMO_HEROES: readonly DemoHero[] = [
   { faction: 'leader', heroName: 'Barack "Hope Beam" Obama', roleId: 'marksman', sizeClass: 'medium', hue: 0.6, ultimate: 'Yes We Can' },
   { faction: 'leader', heroName: 'Donald "Dealmaker" Trump', roleId: 'fighter', sizeClass: 'large', hue: 0.12, ultimate: 'Art of the Deal' },
   { faction: 'leader', heroName: 'Narendra "Saffron Storm" Modi', roleId: 'mage', sizeClass: 'medium', hue: 0.07, ultimate: 'Digital India' },
-  { faction: 'leader', heroName: 'Angela "Iron Chancellor" Merkel', roleId: 'support', sizeClass: 'medium', hue: 0.95, ultimate: 'We Can Do This' },
+  { faction: 'leader', heroName: 'Angela "Iron Chancellor" Merkel', roleId: 'controller', sizeClass: 'medium', hue: 0.95, ultimate: 'We Can Do This' },
   { faction: 'leader', heroName: 'Emmanuel "Jupiter" Macron', roleId: 'assassin', sizeClass: 'small', hue: 0.66, ultimate: 'En Marche' },
   { faction: 'leader', heroName: 'Volodymyr "Kyiv Shield" Zelenskyy', roleId: 'tank', sizeClass: 'medium', hue: 0.16, ultimate: 'I Need Ammunition' },
   { faction: 'leader', heroName: 'Jacinda "Kindness Wave" Ardern', roleId: 'support', sizeClass: 'small', hue: 0.45, ultimate: 'Be Kind' },
-  { faction: 'leader', heroName: 'Lee Kuan "Miracle" Yew', roleId: 'marksman', sizeClass: 'tiny', hue: 0.0, ultimate: 'First World Leap' },
+  { faction: 'leader', heroName: 'Lee Kuan "Miracle" Yew', roleId: 'summoner', sizeClass: 'tiny', hue: 0.0, ultimate: 'First World Leap' },
 ]
 
 /** A Charter build for a demo hero: the role's proposed kit, with the hero's own ultimate name. */

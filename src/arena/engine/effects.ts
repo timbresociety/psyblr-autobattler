@@ -52,11 +52,16 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
       return
     }
   }
-  // any hurt wakes a sleeper, and striking from stealth gives the striker away
-  if (target.cc.sleep > match.tick) target.cc.sleep = 0
+  // any hurt wakes a sleeper, and the hit that does it lands harder (the payoff for putting someone to sleep); striking
+  // from stealth gives the striker away
+  let wake = 1
+  if (target.cc.sleep > match.tick) {
+    target.cc.sleep = 0
+    if (slot !== 'dot') wake = 1 + ENGINE.wakeBonus
+  }
   if (slot !== 'dot') source.stealthUntil = Math.min(source.stealthUntil, match.tick)
   const ramp = match.damageRamp && match.tick > match.damageRamp.fromTick ? ((match.tick - match.damageRamp.fromTick) / ENGINE.tickHz) * match.damageRamp.perSecond : 0
-  let amount = raw * (1 + source.damageBonus + sumBuff(source, 'damage') + executeBonus + ramp)
+  let amount = raw * wake * (1 + source.damageBonus + sumBuff(source, 'damage') + executeBonus + ramp)
   amount *= 1 + (next(match.rules) * 2 - 1) * ENGINE.variance
   const sourceSetup = ctx.setups[source.id]
   const passive = sourceSetup.kit.passive

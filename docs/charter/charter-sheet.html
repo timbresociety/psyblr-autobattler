@@ -65,7 +65,7 @@
     <p style="color:var(--muted);margin-top:6px">Mogul faction &middot; ultimate called "Full Stack Launch"</p>
     <div class="grid">
       <div class="cell"><b>Name and skill names <span class="tag gen">Generated</span></b>Elon "Starship" Musk, Full Stack Launch</div>
-      <div class="cell"><b>Role <span class="tag mix">Chosen</span></b>Mage, one of six</div>
+      <div class="cell"><b>Role <span class="tag mix">Chosen</span></b>Mage, one of eight</div>
       <div class="cell"><b>Size class <span class="tag mix">Chosen</span></b>Large, one of five (plus colossal for transformations)</div>
       <div class="cell"><b>Point spread <span class="tag mix">Chosen</span></b>Strength 6, Agility 6, Intellect 18, out of a pool of 30</div>
     </div>
@@ -73,8 +73,8 @@
     <div class="scroll"><table>
       <tr><th>Slot</th><th>Player's name</th><th>Engine mechanic</th><th>Delivery</th><th>Cooldown</th></tr>
       <tr><td>Basic</td><td>(none given)</td><td>Arcane Bolt</td><td>Projectile, 20 m, 30 m/s, 0.3 m shot</td><td class="num">0 s</td></tr>
-      <tr><td>Active 1</td><td>(none given)</td><td>Energy Wave</td><td>Projectile, 20 m</td><td class="num">7 s</td></tr>
-      <tr><td>Active 2</td><td>(none given)</td><td>Fireball</td><td>Projectile, 22 m, 2.5 m blast</td><td class="num">8 s</td></tr>
+      <tr><td>Active 1</td><td>(none given)</td><td>Fireball</td><td>Projectile, 22 m, 2.5 m blast</td><td class="num">8 s</td></tr>
+      <tr><td>Active 2</td><td>(none given)</td><td>Frost Nova</td><td>Aura, 4 m</td><td class="num">10 s</td></tr>
       <tr><td>Passive</td><td>(none given)</td><td>Overcharge, every third hit</td><td>Projectile, 20 m</td><td class="num">0 s</td></tr>
       <tr><td>Ultimate</td><td>Full Stack Launch</td><td>Meteor Storm</td><td>Zone, 25 m out, 6 m radius</td><td class="num">70 s</td></tr>
       <tr><td>Movement</td><td>(none given)</td><td>Teleport</td><td>Blink, 10 m</td><td class="num">10 s</td></tr>
@@ -83,12 +83,12 @@
     <p style="color:var(--muted)">Derived from the role, the spread and the size. Nobody types these.</p>
     <div class="scroll"><table class="num">
       <tr><th>Health</th><th>Armor</th><th>Magic resist</th><th>Move speed</th><th>Weapon dmg</th><th>Spirit power</th><th>Cooldown cut</th><th>Regen</th></tr>
-      <tr><td>2,273</td><td>17.0</td><td>43.7</td><td>5.5 m/s</td><td>55.4</td><td>108.5</td><td>30.7%</td><td>7.2/s</td></tr>
+      <tr><td>2,297</td><td>17.0</td><td>43.7</td><td>5.5 m/s</td><td>68.7</td><td>121.0</td><td>30.7%</td><td>7.2/s</td></tr>
     </table></div>
   </div>
 
   <h2>The rule underneath all of it</h2>
-  <p>You can call your ultimate anything, and it can look like anything you can describe, but the damage it does, the distance it reaches and the time until you can cast it again all come from a catalogue of 111 mechanics we built and priced by hand.</p>
+  <p>You can call your ultimate anything, and it can look like anything you can describe, but the damage it does, the distance it reaches and the time until you can cast it again all come from a catalogue of 298 mechanics we built and priced by hand. <a href="skill-library.html">The skill library</a> explains how they're organized.</p>
   <p>Your words pick a mechanic. The mechanic brings its numbers along.</p>
   <p>I think of that split as the whole trick. It's what lets a stranger's hero land in the global loadout without breaking everyone else's game, and it's why the Spirit Bomb you describe will look like a Spirit Bomb while hitting exactly as hard as every other ultimate in its tier.</p>
 
@@ -100,7 +100,7 @@
     <tr><td>Hero name</td><td><span class="tag gen">Generated</span></td><td>Free text. The director suggests one from your prompt and you can override it.</td></tr>
     <tr><td>Description, silhouette, signature elements</td><td><span class="tag gen">Generated</span></td><td>The director writes these from your prompt and answers, like "leather jacket" and "the more you buy, the more you save". They feed the art prompts and never touch a number.</td></tr>
     <tr><td>Tone</td><td><span class="tag gen">Generated</span></td><td>The director reads how heroic or how meme you're going and writes to match.</td></tr>
-    <tr><td>Role</td><td><span class="tag mix">Chosen</span></td><td>One of six: tank, fighter, assassin, mage, marksman, support. Each brings its own base sheet, caps and catalogue.</td></tr>
+    <tr><td>Role</td><td><span class="tag mix">Chosen</span></td><td>One of eight: tank, fighter, assassin, mage, marksman, support, controller, summoner. Each brings its own base sheet, caps and catalogue.</td></tr>
     <tr><td>Size class</td><td><span class="tag mix">Chosen</span></td><td>Tiny, small, medium, large or huge. Bigger bodies get more health and reach but slower feet and a bigger hitbox. Colossal is reserved for transformations.</td></tr>
   </table></div>
 
@@ -109,7 +109,7 @@
     <tr><th>Field</th><th>Who</th><th>What it is</th></tr>
     <tr><td>Skill names and flavour text</td><td><span class="tag gen">Generated</span></td><td>Yours. "Full Stack Launch" sits on top of the mechanic's own name.</td></tr>
     <tr><td>Which mechanic fills each slot</td><td><span class="tag mix">Chosen</span></td><td>The matcher reads your skill description and picks the closest template from the role's catalogue by its tags (fire, beam, kamehameha and so on). You can swap to another template the role allows.</td></tr>
-    <tr><td>Damage, healing, shields, stuns, slows, knockback</td><td><span class="tag fix">Engine</span></td><td>Baked into the template. Each slot type has a power budget (basic 70, active 22, passive 20, ultimate 14, movement 12) and every template is priced to fit it within 5%.</td></tr>
+    <tr><td>Damage, healing, shields, every kind of control, debuffs, states, zones and constructs</td><td><span class="tag fix">Engine</span></td><td>Baked into the template. Each slot type has a power budget (basic 70, active 22, passive 20, ultimate 14, movement 12) and every template is priced to fit it within 5%.</td></tr>
     <tr><td>Cooldowns</td><td><span class="tag fix">Engine</span></td><td>From the template, then cut by your cooldown stat up to a 40% ceiling.</td></tr>
     <tr><td>Hit geometry</td><td><span class="tag fix">Engine</span></td><td>Range, radius, projectile speed and size, melee arc and beam width. Defaults are 30 m/s, a 0.3 m shot, a 90&deg; swing and a 1 m beam, and anything bigger costs budget.</td></tr>
     <tr><td>Passive trigger</td><td><span class="tag fix">Engine</span></td><td>Always on, on hit, every third hit, below 35% health, or on a kill. It comes with the template.</td></tr>
@@ -123,7 +123,7 @@
     <tr><td>Point spread</td><td><span class="tag mix">Chosen</span></td><td>30 points across Strength, Agility and Intellect, each capped per role (a mage can put 22 in Intellect, a tank only 16).</td></tr>
     <tr><td>What a point buys</td><td><span class="tag fix">Engine</span></td><td>Strength gives health, armor, regen and a little weapon damage. Agility gives speed, attack and fire rate, weapon damage, lifesteal and ammo. Intellect gives spirit power, cooldown cut, magic resist and regen. The role's weights scale all of it.</td></tr>
     <tr><td>The twelve secondary stats</td><td><span class="tag fix">Engine</span></td><td>Health, armor, magic resist, move speed, attack speed, weapon damage, fire rate, ammo, spirit power, regen, lifesteal and cooldown cut. Each is derived, then capped per role.</td></tr>
-    <tr><td>Flight and jumping</td><td><span class="tag fix">Engine</span></td><td>Every hero flies. Flight is 1.3&times; ground speed, and jump range is 1.5 m per point of move speed.</td></tr>
+    <tr><td>Flight and jumping</td><td><span class="tag fix">Engine</span></td><td>Every hero flies, but flight is 0.75&times; ground speed and runs on a meter: 10 to take off, 18 a second to stay up, refilled on the ground. Jump range is 1.5 m per point of move speed.</td></tr>
   </table></div>
 
   <h3>Look and feel</h3>
@@ -141,7 +141,7 @@
   <div class="two">
     <div class="card">
       <h3 style="margin-top:0">The balance gate</h3>
-      <p>Every saved hero fights the six default heroes 30 times each on the real 60 Hz engine. A hero that wins more than 52% of those fights gets quietly retuned, up to six steps of 6% each, and if it still sits above the 55% ceiling after that, it's blocked, with the gate naming the slot that's doing it and the swaps that would fix it.</p>
+      <p>Every saved hero fights the eight default heroes 30 times each on the real 60 Hz engine. A hero that wins more than 52% of those fights gets quietly retuned, up to six steps of 6% each, and if it still sits above the 55% ceiling after that, it's blocked, with the gate naming the slot that's doing it and the swaps that would fix it.</p>
     </div>
     <div class="card">
       <h3 style="margin-top:0">Army rules</h3>
@@ -149,27 +149,29 @@
     </div>
   </div>
 
-  <h2>Where the six roles start</h2>
+  <h2>Where the eight roles start</h2>
   <p>Base sheets before any points are spent. These are the dials the balance pass turns.</p>
   <div class="scroll"><table class="num">
     <tr><th>Role</th><th>How it fights</th><th>Health</th><th>Weapon dmg</th><th>Spirit</th><th>Speed</th><th>Default spread (S/A/I)</th></tr>
-    <tr><td>Tank</td><td>Holds the front and locks enemies down</td><td>3,500</td><td>25</td><td>10</td><td>5.6</td><td>16 / 6 / 8</td></tr>
-    <tr><td>Fighter</td><td>Dives in and wins sustained brawls</td><td>2,000</td><td>21</td><td>8</td><td>6.2</td><td>12 / 12 / 6</td></tr>
-    <tr><td>Assassin</td><td>Picks off weak targets, then escapes</td><td>1,700</td><td>59</td><td>16</td><td>6.8</td><td>6 / 16 / 8</td></tr>
-    <tr><td>Mage</td><td>Skill damage, zones and control</td><td>1,900</td><td>46</td><td>43</td><td>6.0</td><td>6 / 6 / 18</td></tr>
-    <tr><td>Marksman</td><td>Steady ranged damage from the back</td><td>1,700</td><td>62</td><td>14</td><td>6.2</td><td>6 / 18 / 6</td></tr>
-    <tr><td>Support</td><td>Heals, shields and disrupts dives</td><td>2,000</td><td>47</td><td>35</td><td>6.1</td><td>10 / 4 / 16</td></tr>
+    <tr><td>Tank</td><td>Holds the front and soaks the damage meant for the team</td><td>3,500</td><td>20.1</td><td>8.0</td><td>5.6</td><td>16 / 6 / 8</td></tr>
+    <tr><td>Fighter</td><td>Wins long close-range brawls</td><td>2,000</td><td>16.3</td><td>6.2</td><td>6.2</td><td>12 / 12 / 6</td></tr>
+    <tr><td>Assassin</td><td>Bursts down isolated or hurt targets, then gets out</td><td>1,700</td><td>49.3</td><td>13.4</td><td>6.8</td><td>6 / 16 / 8</td></tr>
+    <tr><td>Mage</td><td>Burst and area spell damage from mid range</td><td>1,900</td><td>59.3</td><td>55.5</td><td>6.0</td><td>6 / 6 / 18</td></tr>
+    <tr><td>Marksman</td><td>Steady weapon damage from long range</td><td>1,700</td><td>61.1</td><td>13.8</td><td>6.2</td><td>6 / 18 / 6</td></tr>
+    <tr><td>Support</td><td>Heals, shields, buffs and cleanses</td><td>2,000</td><td>56.9</td><td>42.4</td><td>6.1</td><td>10 / 4 / 16</td></tr>
+    <tr><td>Controller</td><td>Takes enemies out of the fight</td><td>1,900</td><td>80.7</td><td>72.6</td><td>6.0</td><td>8 / 4 / 18</td></tr>
+    <tr><td>Summoner</td><td>Fights through turrets, traps, totems and walls</td><td>1,800</td><td>37.2</td><td>33.6</td><td>6.0</td><td>6 / 8 / 16</td></tr>
   </table></div>
 
   <h2>Sizes</h2>
   <p>A hero is drawn at its size's scale and its hitbox matches the body you see. Health is priced per role, because reach decides blade fights while a small body slips shots, so the same size is worth different amounts to a fighter and a marksman.</p>
   <div class="scroll"><table class="num">
     <tr><th>Size</th><th>Body scale</th><th>Hitbox</th><th>Extra reach</th><th>Health (by role)</th><th>Speed</th></tr>
-    <tr><td>Tiny</td><td>&times;0.8</td><td>&minus;0.08 m</td><td>&minus;0.5 m</td><td>&times;0.99 to 1.46</td><td>&times;1.16</td></tr>
-    <tr><td>Small</td><td>&times;0.9</td><td>&minus;0.04 m</td><td>&minus;0.25 m</td><td>&times;0.98 to 1.09</td><td>&times;1.08</td></tr>
+    <tr><td>Tiny</td><td>&times;0.8</td><td>&minus;0.08 m</td><td>&minus;0.5 m</td><td>&times;0.96 to 1.37</td><td>&times;1.16</td></tr>
+    <tr><td>Small</td><td>&times;0.9</td><td>&minus;0.04 m</td><td>&minus;0.25 m</td><td>&times;0.99 to 1.05</td><td>&times;1.08</td></tr>
     <tr><td>Medium</td><td>&times;1.0</td><td>0</td><td>0</td><td>&times;1.0</td><td>&times;1.0</td></tr>
-    <tr><td>Large</td><td>&times;1.15</td><td>+0.06 m</td><td>+0.4 m</td><td>&times;1.0 to 1.15</td><td>&times;0.88</td></tr>
-    <tr><td>Huge</td><td>&times;1.3</td><td>+0.12 m</td><td>+0.75 m</td><td>&times;0.99 to 1.17</td><td>&times;0.78</td></tr>
+    <tr><td>Large</td><td>&times;1.15</td><td>+0.06 m</td><td>+0.4 m</td><td>&times;0.99 to 1.10</td><td>&times;0.88</td></tr>
+    <tr><td>Huge</td><td>&times;1.3</td><td>+0.12 m</td><td>+0.75 m</td><td>&times;1.01 to 1.09</td><td>&times;0.78</td></tr>
     <tr><td>Colossal (transform only)</td><td>&times;1.6</td><td>+0.24 m</td><td>+2 m</td><td>&times;1.37</td><td>&times;0.85</td></tr>
   </table></div>
 
