@@ -67,14 +67,14 @@ describe('engine maths (KTD1)', () => {
 })
 
 describe('engine core (U3)', () => {
-  it('a hero with move speed 6 covers 6 m on the ground in 60 ticks, and flies faster', () => {
+  it('a hero with move speed 6 covers 6 m on the ground in 60 ticks, and flies slower: the air is a burst, not travel', () => {
     const setup = build(6)
     const m = emptyMatch(1)
     m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 0, z: 0 }))
     for (let i = 0; i < 60; i++) tick(m, [setup], [{ moveX: 0, moveZ: 1, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }])
     expect(m.heroes[0].position.z).toBeCloseTo(6, 6)
     const { flight, jumpReach } = heroLocomotion(m.heroes[0], setup)
-    expect(flight).toBeGreaterThan(6)
+    expect(flight).toBeLessThan(6)
     expect(heroLocomotion(m.heroes[0], build(8)).jumpReach).toBeGreaterThan(jumpReach)
   })
 
@@ -82,12 +82,37 @@ describe('engine core (U3)', () => {
     const setup = build(8)
     const m = emptyMatch(1)
     m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 0, z: 0 }))
-    for (let i = 0; i < 2000; i++) tick(m, [setup], [{ moveX: 1, moveZ: 1, vertical: 1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
+    for (let i = 0; i < 2000; i++) tick(m, [setup], [{ moveX: 1, moveZ: 1, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }])
     const p = m.heroes[0].position
-    expect([p.x, p.y, p.z]).toEqual([ENGINE.arena.halfWidth, ENGINE.arena.ceiling, ENGINE.arena.halfLength])
-    for (let i = 0; i < 2000; i++) tick(m, [setup], [{ moveX: 0, moveZ: 0, vertical: -1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    expect(p.y).toBe(0)
-    expect(m.heroes[0].airborne).toBe(false)
+    expect([p.x, p.y, p.z]).toEqual([ENGINE.arena.halfWidth, 0, ENGINE.arena.halfLength])
+    // just under the ceiling with a full meter, climbing stops at it
+    const high = createHero(setup, 1, 0, { x: 0, y: ENGINE.arena.ceiling - 0.2, z: 0 })
+    m.heroes.push(high)
+    for (let i = 0; i < 30; i++) tick(m, [setup, setup], [undefined, { moveX: 0, moveZ: 0, vertical: 1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
+    expect(high.position.y).toBe(ENGINE.arena.ceiling)
+    for (let i = 0; i < 2000; i++) tick(m, [setup, setup], [undefined, { moveX: 0, moveZ: 0, vertical: -1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
+    expect(high.position.y).toBe(0)
+    expect(high.airborne).toBe(false)
+  })
+
+  it('flying spends the flight meter: an empty meter glides down, and standing on the ground refills it', () => {
+    const setup = build(6)
+    const m = emptyMatch(1)
+    const h = createHero(setup, 0, 0, { x: 0, y: 0, z: 0 })
+    m.heroes.push(h)
+    const up = { moveX: 0, moveZ: 1, vertical: 1 as const, aimYaw: 0, aimPitch: 0, buttons: 0 }
+    tick(m, [setup], [up])
+    expect(h.airborne).toBe(true)
+    expect(h.flight).toBeLessThan(ENGINE.flight.max - ENGINE.flight.takeoff + 1)
+    // holding "up" for longer than the meter lasts still brings the hero back down to land
+    for (let i = 0; i < 60 * 30 && h.airborne; i++) tick(m, [setup], [up])
+    expect(h.airborne).toBe(false)
+    expect(h.flight).toBeLessThan(ENGINE.flight.takeoff)
+    // it can't take off again until the meter has refilled enough
+    tick(m, [setup], [up])
+    expect(h.airborne).toBe(false)
+    for (let i = 0; i < 60 * 5; i++) tick(m, [setup], [undefined])
+    expect(h.flight).toBe(ENGINE.flight.max)
   })
 
   it('a flying hero holds altitude with no vertical input', () => {

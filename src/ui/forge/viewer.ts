@@ -41,6 +41,7 @@ const HOLD: Record<Delivery['kind'], number> = {
   dash: 0.4,
   blink: 0.3,
   grapple: 0.6,
+  leap: 0.4,
 }
 const PROJECTILE_SPEED = 30
 

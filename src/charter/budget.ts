@@ -1,6 +1,6 @@
 import { geometryMultiplier, missingGeometry } from './geometry'
 import { ALL_SIZE_CLASSES } from './sizes'
-import type { Delivery, Effect, SecondarySheet, SlotKind, Template, Validation, LimitHit } from './types'
+import type { ControlType, DebuffType, Delivery, Effect, SecondarySheet, SlotKind, StateType, Template, Validation, LimitHit } from './types'
 
 /**
  * Power budget (KTD2). Every template in a slot is worth the same budget, measured on a reference sheet.
@@ -31,7 +31,13 @@ export function retuneFactor(steps: number): number {
 export const REFERENCE_SHEET: Pick<SecondarySheet, 'weaponDamage' | 'spiritPower'> = { weaponDamage: 60, spiritPower: 50 }
 
 const PASSIVE_TRIGGER_WEIGHT = { always: 1, onHit: 1, everyThirdHit: 0.4, lowHealth: 0.15, onKill: 0.15 } as const
-const BUFF_WEIGHT = { damage: 160, attackSpeed: 140, moveSpeed: 60, damageReduction: 190 } as const
+const BUFF_WEIGHT = { damage: 160, attackSpeed: 140, moveSpeed: 60, damageReduction: 190, lifesteal: 150, evasion: 170 } as const
+/** Per second of control on one enemy; a stun is 110. Behaviour control (fear, taunt) costs a little more. */
+const CONTROL_WEIGHT: Record<ControlType, number> = { root: 75, silence: 70, disarm: 55, sleep: 70, blind: 45, grounded: 30, fear: 105, taunt: 100, break: 30 }
+/** Per point (shreds) or percent (the rest) per second, on one enemy. */
+const DEBUFF_WEIGHT: Record<DebuffType, number> = { armorShred: 1.5, spiritShred: 1.5, vulnerable: 2, wound: 0.6, mark: 1.6 }
+/** Per second of the state on one hero; cleanse is a flat price. */
+const STATE_WEIGHT: Record<StateType, number> = { unstoppable: 80, stealth: 45, invulnerable: 130, cleanse: 45 }
 const TARGET_WEIGHT = { self: 1, ally: 1.1, allies: 1.6 } as const
 
 const AREA_KINDS: Delivery['kind'][] = ['zone', 'cone', 'aura']
@@ -77,11 +83,47 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
       const steps = Math.abs(ALL_SIZE_CLASSES.indexOf(effect.sizeClass) - ALL_SIZE_CLASSES.indexOf('medium'))
       return effect.duration * steps * 2
     }
+    case 'control':
+      return effect.duration * CONTROL_WEIGHT[effect.type] * area
+    case 'knockup':
+      return (effect.duration * 115 + effect.height * 3) * area
+    case 'pull':
+      return effect.distance * 10 * area
+    case 'debuff':
+      return effect.amount * effect.duration * DEBUFF_WEIGHT[effect.type] * area
+    case 'state':
+      return (effect.type === 'cleanse' ? STATE_WEIGHT.cleanse : effect.duration * STATE_WEIGHT[effect.type]) * TARGET_WEIGHT[effect.target]
+    case 'refresh':
+      return effect.seconds * 5
+    case 'wall':
+      return effect.length * effect.height * effect.duration * 0.45 + effect.health / 60
+    case 'turret': {
+      // each shot at the reference sheet, most of which find a target
+      const shots = effect.duration / Math.max(0.1, effect.interval)
+      return magnitude(effect.amount, effect.ratio, REFERENCE_SHEET[effect.scaling]) * shots * 0.7
+    }
+    case 'field':
+    case 'trap':
+      // priced in scoreTemplate: they change what the template's other effects are worth
+      return 0
   }
 }
 
+/**
+ * A field lands its effects again on every pulse (people walk out, so each pulse counts a little over half); a trap
+ * may never spring, so its effects count for most but not all. Everything else is worth what it says.
+ */
+function lingerMultiplier(template: Template): number {
+  let mul = 1
+  for (const e of template.effects) {
+    if (e.kind === 'field') mul *= 1 + Math.floor(e.duration / Math.max(0.1, e.interval)) * 0.55
+    if (e.kind === 'trap') mul *= 0.8
+  }
+  return mul
+}
+
 export function scoreTemplate(template: Template): number {
-  const raw = template.effects.reduce((sum, effect) => sum + effectValue(effect, template.delivery), 0) * rangeMultiplier(template.delivery) * geometryMultiplier(template.delivery)
+  const raw = template.effects.reduce((sum, effect) => sum + effectValue(effect, template.delivery), 0) * lingerMultiplier(template) * rangeMultiplier(template.delivery) * geometryMultiplier(template.delivery)
   switch (template.slot) {
     case 'basic':
       return raw
@@ -113,6 +155,8 @@ export function scaleMagnitudes(template: Template, factor: number): Template {
         return { ...effect, pct: round(effect.pct * factor, 1) }
       case 'execute':
         return { ...effect, bonusPct: round(effect.bonusPct * factor, 1) }
+      case 'turret':
+        return { ...effect, amount: round(effect.amount * factor, 1), ratio: round(effect.ratio * factor) }
       default:
         return effect
     }

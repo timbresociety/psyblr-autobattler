@@ -1,6 +1,6 @@
 import { locomotion } from '../../charter/locomotion'
 import { SIZES } from '../../charter/sizes'
-import { DT, ENGINE } from './calibration'
+import { DT, ENGINE, ticks } from './calibration'
 import { clamp } from './maths'
 import { pushOut } from './cover'
 import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
@@ -8,7 +8,7 @@ import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type
 /** Ground speed now: the sheet's move speed with buffs, the strongest slow, and any transformation's speed (KTD2). */
 export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
   let slow = 0
-  for (const s of hero.slows) if (s.pct / 100 > slow) slow = s.pct / 100
+  for (const s of hero.slows) if (s.stat !== 'attack' && s.pct / 100 > slow) slow = s.pct / 100
   let buff = 0
   for (const b of hero.buffs) if (b.stat === 'moveSpeed') buff += b.pct / 100
   // the sheet already carries the chosen size's speed; a transformation swaps it for the new class's
@@ -18,8 +18,14 @@ export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
 
 export const heroLocomotion = (hero: HeroState, setup: HeroSetup) => locomotion(moveSpeed(hero, setup))
 
-/** Move one tick by the command: run on the ground, or fly and hold altitude in the air (KTD2). */
+/**
+ * Move one tick by the command: run on the ground, or fly and hold altitude in the air (KTD2). Flying spends the
+ * flight meter; an empty meter can't climb and glides down. A root holds the hero in place (it can still act), and a
+ * grounded hero can't take off and is pulled down if it was up.
+ */
 export function move(hero: HeroState, setup: HeroSetup, command: Command, match?: MatchState) {
+  const now = match?.tick ?? 0
+  const F = ENGINE.flight
   const { ground, flight } = heroLocomotion(hero, setup)
   let mx = command.moveX
   let mz = command.moveZ
@@ -28,13 +34,30 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     mx /= len
     mz /= len
   }
-  if (command.vertical > 0) hero.airborne = true
+  const rooted = hero.cc.root > now
+  const grounded = hero.cc.grounded > now
+  let vertical = command.vertical
+  if (vertical > 0 && !hero.airborne) {
+    if (grounded || rooted || hero.flight < F.takeoff) vertical = 0
+    else {
+      hero.airborne = true
+      hero.flight -= F.takeoff
+    }
+  }
+  const wasAirborne = hero.airborne
+  if (hero.airborne) {
+    hero.flight = Math.max(0, hero.flight - F.drain * DT)
+    if (hero.flight <= 0 || grounded) vertical = -1
+  } else if (now - hero.landedAt >= ticks(F.refillDelay)) hero.flight = Math.min(F.max, hero.flight + F.refill * DT)
   const speed = hero.airborne ? flight : ground
   const p = hero.position
-  p.x += mx * speed * DT
-  p.z += mz * speed * DT
-  if (hero.airborne) p.y += command.vertical * flight * ENGINE.climbFraction * DT
+  if (!rooted) {
+    p.x += mx * speed * DT
+    p.z += mz * speed * DT
+  }
+  if (hero.airborne) p.y += vertical * flight * ENGINE.climbFraction * DT
   keepOut(hero, match)
+  if (wasAirborne && !hero.airborne) hero.landedAt = now
 }
 
 /** Keep a hero inside the arena and out of every standing piece of cover; returns whether it touched cover. */

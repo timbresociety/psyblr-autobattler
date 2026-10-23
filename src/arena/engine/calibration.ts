@@ -41,6 +41,24 @@ export const ENGINE = {
   heavyHit: 0.12,
   /** Ground-disc zones reach heroes this close to the floor, metres. */
   groundReach: 1.5,
+  /**
+   * Flight (R8): slower than running and paid for from a meter, so the air is a tactical burst over the ruins rather
+   * than the way to travel. Taking off costs `takeoff`, staying up drains `drain` a second, and standing on the ground
+   * refills `refill` a second after `refillDelay` seconds. An empty meter can't climb and glides down.
+   */
+  flight: { max: 100, takeoff: 10, drain: 18, refill: 30, refillDelay: 1 },
+  /** Shreds can't push a resist below this. */
+  resistFloor: -20,
+  /** More damage taken (vulnerable, marks) stacks to at most this fraction. */
+  vulnerableCap: 0.5,
+  /** Healing taken can be cut (wound) by at most this fraction. */
+  woundCap: 0.75,
+  /** Evasion can make a basic attack miss at most this often. */
+  evasionCap: 0.5,
+  /** Enemies this close see through stealth, metres. */
+  revealRange: 3,
+  /** A turret's shots, and anything a field or trap catches, reach heroes this close to the floor. */
+  fieldHeight: 2.5,
 } as const
 
 export const DT = 1 / ENGINE.tickHz

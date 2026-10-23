@@ -20,10 +20,16 @@ const BUFF_LABEL: Record<Extract<Effect, { kind: 'buff' }>['stat'], string> = {
   attackSpeed: 'Attack speed',
   moveSpeed: 'Speed up',
   damageReduction: 'Damage cut',
+  lifesteal: 'Lifesteal',
+  evasion: 'Evasion',
 }
 
+const CONTROL_LABEL = { root: 'Root', silence: 'Silence', disarm: 'Disarm', sleep: 'Sleep', blind: 'Blind', grounded: 'Ground', fear: 'Fear', taunt: 'Taunt', break: 'Break' } as const
+const DEBUFF_LABEL = { armorShred: 'Armour', spiritShred: 'Spirit resist', vulnerable: 'Vulnerable', wound: 'Anti-heal', mark: 'Mark' } as const
+const STATE_LABEL = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable', cleanse: 'Cleanse' } as const
+
 /** Most telling first: damage, then healing and shields, then control, then the rest. */
-const ORDER: Effect['kind'][] = ['damage', 'heal', 'shield', 'stun', 'slow', 'execute', 'resize', 'mobility', 'buff', 'displace']
+const ORDER: Effect['kind'][] = ['damage', 'turret', 'heal', 'shield', 'stun', 'knockup', 'control', 'wall', 'slow', 'debuff', 'pull', 'execute', 'resize', 'state', 'mobility', 'buff', 'displace', 'refresh', 'field', 'trap']
 
 function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headline {
   switch (effect.kind) {
@@ -47,6 +53,26 @@ function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headl
       return { label: `Under ${n(effect.thresholdPct)}%`, value: `+${n(effect.bonusPct * factor)}`, unit: '%' }
     case 'resize':
       return { label: 'Becomes', value: SIZES[effect.sizeClass].label, unit: `${n(effect.duration)} s` }
+    case 'control':
+      return { label: CONTROL_LABEL[effect.type], value: n(effect.duration), unit: 's' }
+    case 'knockup':
+      return { label: 'Knock-up', value: n(effect.duration), unit: 's' }
+    case 'pull':
+      return { label: 'Pull', value: n(effect.distance), unit: 'm' }
+    case 'debuff':
+      return { label: DEBUFF_LABEL[effect.type], value: `${effect.type.endsWith('Shred') ? '−' : ''}${n(effect.amount)}`, unit: effect.type.endsWith('Shred') ? `${n(effect.duration)} s` : '%' }
+    case 'state':
+      return { label: STATE_LABEL[effect.type], value: effect.type === 'cleanse' ? '✓' : n(effect.duration), ...(effect.type === 'cleanse' ? {} : { unit: 's' }) }
+    case 'refresh':
+      return { label: 'Cooldowns', value: `−${n(effect.seconds)}`, unit: 's' }
+    case 'field':
+      return { label: 'Lingers', value: n(effect.duration), unit: 's' }
+    case 'wall':
+      return { label: 'Wall', value: n(effect.length), unit: 'm' }
+    case 'trap':
+      return { label: 'Trap', value: n(effect.lifetime), unit: 's' }
+    case 'turret':
+      return { label: 'Turret', value: String(Math.round((effect.amount + effect.ratio * sheet[effect.scaling]) * factor)), unit: `every ${n(effect.interval)} s` }
   }
 }
 

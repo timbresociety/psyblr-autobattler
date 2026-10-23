@@ -47,6 +47,7 @@ const BY_DELIVERY: Record<Template['delivery']['kind'], Motion[]> = {
   dash: [preset('dive', 'Dive'), clip('dash-strike', 'Dash strike', 'run'), preset('run', 'Sprint')],
   blink: [clip('vanish', 'Vanish and reappear', 'dive'), preset('dive', 'Dive')],
   grapple: [clip('grapple-pull', 'Grapple pull', 'climb'), preset('climb', 'Climb')],
+  leap: [clip('leap-slam', 'Leap and land', 'jump'), preset('jump', 'Jump')],
 }
 
 const ULTIMATE_LEAD = clip('ultimate-charge', 'Charged ultimate', 'jump')

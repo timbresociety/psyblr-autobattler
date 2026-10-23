@@ -4,7 +4,7 @@ import { getRole } from '../../charter/roles'
 import { SIZES, type SizeClass } from '../../charter/sizes'
 import { deriveSheet } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
-import type { BuildSlot, DamageType, SecondarySheet, Template } from '../../charter/types'
+import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types'
 import { ENGINE } from './calibration'
 import type { CoverHealth, CoverPiece } from './cover'
 import type { Vec3 } from './maths'
@@ -35,7 +35,10 @@ export const AIM_STEPS = 4096
 export const IDLE: Command = { moveX: 0, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
 export const slotBit = (slot: BuildSlot) => 1 << BUILD_SLOTS.indexOf(slot)
 
-export type Stat = 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduction'
+export type Stat = BuffStat
+
+/** Every kind of crowd control, at zero: the tick each one lasts until. */
+export const noControl = (): Record<ControlType, number> => ({ root: 0, silence: 0, disarm: 0, sleep: 0, blind: 0, grounded: 0, fear: 0, taunt: 0, break: 0 })
 
 export interface HeroState {
   id: number
@@ -52,7 +55,25 @@ export interface HeroState {
   shieldUntil: number
   stunnedUntil: number
   invulnerableUntil: number
-  slows: { pct: number; until: number }[]
+  /** `stat` `attack` slows basic attacks and fire rate (cripple); absent means movement. */
+  slows: { pct: number; until: number; stat?: 'move' | 'attack' }[]
+  /** Crowd control: the tick each kind lasts until (0 when never applied). */
+  cc: Record<ControlType, number>
+  /** Who a fear runs from and a taunt must attack (-1 when none). */
+  fearFrom: number
+  tauntBy: number
+  /** Immune to crowd control and displacement until this tick. */
+  unstoppableUntil: number
+  /** Unseen by enemies until this tick, unless revealed; attacking ends it. */
+  stealthUntil: number
+  /** Weakening from enemies: flat resist down, more damage taken, less healing taken, marked for a team. */
+  debuffs: { type: DebuffType; amount: number; until: number; source: number }[]
+  /** The flight meter: taking off and staying up spend it, standing on the ground refills it. */
+  flight: number
+  /** The tick it last touched the ground, for the meter's refill delay. */
+  landedAt: number
+  /** A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. */
+  launch?: { from: number; until: number; height: number; base: number }
   /** `source` is the template that granted it; the same template refreshes its buff instead of stacking. */
   buffs: { stat: Stat; pct: number; until: number; source: string }[]
   dots: { perSecond: number; type: DamageType; until: number; source: number }[]
@@ -101,8 +122,41 @@ export interface MatchState {
   human?: number
   /** Each AI hero's memory, kept in the state so AI play snapshots and replays exactly (KTD7). */
   brains?: BrainState[]
-  /** The ruins on this map and each piece's health; absent on an open test floor. */
+  /** The ruins on this map and each piece's health; absent on an open test floor. Walls raised by skills join it. */
   cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
+  /** Lingering areas and traps left by skills, turrets, and the walls skills raised (with when they fall). */
+  fields?: FieldState[]
+  turrets?: TurretState[]
+  walls?: { index: number; until: number }[]
+  nextEntityId?: number
+}
+
+/** A lingering area or a trap: the template's effects land on whoever is inside, on a beat or on the first step. */
+export interface FieldState {
+  id: number
+  owner: number
+  slot: BuildSlot
+  at: Vec3
+  radius: number
+  until: number
+  /** Fields: the next pulse. Traps: armed from this tick. */
+  next: number
+  interval: number
+  trap: boolean
+  /** Fields cast as auras ride along with their owner. */
+  follow: boolean
+}
+
+/** A construct that shoots the nearest enemy in sight on a beat. */
+export interface TurretState {
+  id: number
+  owner: number
+  slot: BuildSlot
+  at: Vec3
+  until: number
+  next: number
+  interval: number
+  range: number
 }
 
 export interface BrainState {
@@ -154,6 +208,7 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     id, team, alive: true, position: { ...position }, airborne: position.y > 0, yaw: team === 0 ? 0 : Math.PI, pitch: 0,
     hp: setup.sheet.maxHealth, maxHp: setup.sheet.maxHealth, shield: 0, shieldUntil: 0, stunnedUntil: 0, invulnerableUntil: 0,
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, resizeUntil: 0,
+    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }
