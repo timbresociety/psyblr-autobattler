@@ -114,6 +114,14 @@ describe('score banner (R38)', () => {
     expect((red[0].querySelector('.hud-pip-hp') as HTMLElement).style.transform).toBe('scaleX(0.8)')
     expect(screen.getByText('Blue 2 alive, Red 1 alive')).toBeTruthy()
   })
+
+  it('says when overtime is on and how much harder every hit lands', () => {
+    const { rerender } = render(<ScoreBanner state={hudState([hudHero(0), hudHero(2)])} heroes={info} side={0} />)
+    expect(screen.getByRole('timer').textContent).not.toContain('Overtime')
+    rerender(<ScoreBanner state={{ ...hudState([hudHero(0), hudHero(2)]), overtime: 0.24 }} heroes={info} side={0} />)
+    expect(screen.getByRole('timer').textContent).toContain('Overtime')
+    expect(screen.getByRole('timer').textContent).toContain('+24% damage')
+  })
 })
 
 describe('kill feed (R38)', () => {

@@ -98,6 +98,15 @@ describe('staging (U16)', () => {
     expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(demoLoadout().length)
   })
 
+  it('Quick battle goes from the side pick to two full armies, moguls against world leaders, ready to start', async () => {
+    const onStart = await open()
+    fireEvent.click(screen.getByRole('button', { name: /Quick battle/ }))
+    expect(screen.getByRole('radio', { name: 'Your side Moguls (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
+    expect(onStart.mock.calls[0][0].side).toBe(0)
+  })
+
   it('"Moguls vs Leaders" sets up both sides from opposite factions in one click', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: 'Red side' }))

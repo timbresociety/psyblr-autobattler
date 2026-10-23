@@ -1,19 +1,11 @@
-import { DEMO_HEROES } from '../../arena/demo/roster'
 import type { BuildSlot, RoleId, Template } from '../../charter/types'
+
+export { heroHue } from '../../arena/client/character-look'
 
 /**
  * What the front end needs to draw a hero without a renderer: its suit colour, its role colour, and which of the
  * character's clips plays a skill. The 3D preview and the portraits read these, so they agree with each other.
  */
-
-/** A demo hero's own suit colour, else a stable one from the name (so a hero keeps its colours while it is edited). */
-export function heroHue(name: string): number {
-  const demo = DEMO_HEROES.find((h) => h.heroName === name)
-  if (demo) return demo.hue
-  let h = 2166136261
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
-  return ((h >>> 0) % 1000) / 1000
-}
 
 /** The role colours of theme.css (`.role-<id>`), for the 3D stage's floor light. */
 export const ROLE_RGB: Record<RoleId, [number, number, number]> = {

@@ -207,10 +207,11 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     canvas.addEventListener('pointerup', up)
     canvas.addEventListener('pointercancel', up)
 
-    const clock = new THREE.Clock()
+    const timer = new THREE.Timer()
     let acc = 0
     renderer.setAnimationLoop(() => {
-      const dt = Math.min(0.1, clock.getDelta())
+      timer.update()
+      const dt = Math.min(0.1, timer.getDelta())
       if (!visible) return
       acc += dt
       if (acc < 1 / FPS && !dragging) return

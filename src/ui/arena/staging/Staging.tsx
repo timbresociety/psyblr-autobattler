@@ -210,6 +210,20 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             </button>
           ))}
         </div>
+        {factions && (
+          <button
+            className="btn big primary quick-battle"
+            onClick={() => {
+              // one click from the menu to a ready fight: the blue side, moguls against the world leaders
+              setSide(0)
+              setEditing(0)
+              setFormation((f) => matchup('factions', loadout, 0, f))
+              setPreset('factions')
+            }}
+          >
+            Quick battle · Moguls vs Leaders
+          </button>
+        )}
       </div>
     )
 

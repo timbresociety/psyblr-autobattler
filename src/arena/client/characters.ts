@@ -7,7 +7,7 @@ import { getTemplate } from '../../charter/templates/catalog'
 import type { AnimState } from './animation'
 import { paintGeometry, type CharacterLook, type Gltf } from './character-look'
 
-export { characterLook, loadBuild } from './character-look'
+export { characterLook, heroHue, loadBuild } from './character-look'
 
 /**
  * The arena's own characters (R24): four rigged, animated builds made in Blender (tools/blender/hero.py), each one

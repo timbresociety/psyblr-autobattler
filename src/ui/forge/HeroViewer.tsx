@@ -214,14 +214,15 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, bui
       scene.add(halo)
     }
 
-    const clock = new THREE.Clock()
+    const timer = new THREE.Timer()
     const window_ = effect ? effectWindow(effect.delivery, CLIP_SECONDS) : undefined
     // the motion itself is what is being chosen, so it plays; only the idle sway stops for reduced motion
     const sway = prefersReducedMotion() ? 0 : 0.4
     let lastPhase = 0
     renderer.setAnimationLoop(() => {
-      const dt = clock.getDelta()
-      const t = clock.elapsedTime
+      timer.update()
+      const dt = timer.getDelta()
+      const t = timer.getElapsed()
       const phase = t % CLIP_SECONDS
       if (oneShot && phase < lastPhase) oneShot()
       lastPhase = phase

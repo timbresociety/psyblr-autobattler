@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, loadBuild, paintGeometry, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
+import { characterLook, heroHue, loadBuild, paintGeometry, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
 import type { Build } from '../../../charter/build'
 import type { RoleId } from '../../../charter/types'
 import type { HeroPackage } from '../../../forge/package'
@@ -159,8 +159,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
     }
   }
   if (!bustRenderer) return undefined
-  const demo = DEMO_HEROES.find((h) => h.heroName === hero.heroName)
-  const hue = hero.hue ?? demo?.hue ?? (index * 0.137) % 1
+  const hue = hero.hue ?? heroHue(hero.heroName)
   // the look reads only the name and the role
   const look = characterLook({ heroName: hero.heroName, roleId: hero.roleId } as Build, hue)
   const file = characters.get(look.build)

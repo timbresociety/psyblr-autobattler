@@ -37,14 +37,17 @@ function TeamPlate({ team, heroes, info, mine }: { team: Team; heroes: HudHero[]
 /** Top centre (R38): the clock, and each side's heroes as portrait pips with a health sliver; the fallen crossed out. */
 export function ScoreBanner({ state, heroes, side }: { state: HudState; heroes: readonly HudHeroInfo[]; side: Team }) {
   const left = Math.max(0, state.timerSeconds - state.seconds)
+  // in overtime every hit lands harder, so a stalled fight ends in a fight; the banner says by how much
+  const overtime = state.winner === undefined && (state.overtime ?? 0) > 0 ? state.overtime! : 0
   const byTeam = ([0, 1] as const).map((t) => state.heroes.filter((h) => h.team === t))
   const alive = byTeam.map((list) => list.filter((h) => h.alive).length)
   return (
     <header className="hud-banner">
       <TeamPlate team={0} heroes={byTeam[0]} info={heroes} mine={side === 0} />
-      <div className={`hud-timer${left <= 30 && state.winner === undefined ? ' hurry' : ''}`} role="timer">
-        <small>Time</small>
+      <div className={`hud-timer${left <= 30 && state.winner === undefined ? ' hurry' : ''}${overtime ? ' overtime' : ''}`} role="timer">
+        <small>{overtime ? 'Overtime' : 'Time'}</small>
         <b>{clock(left)}</b>
+        {overtime ? <em className="hud-overtime">+{Math.round(overtime * 100)}% damage</em> : null}
       </div>
       <TeamPlate team={1} heroes={byTeam[1]} info={heroes} mine={side === 1} />
       <p className="hud-sr" aria-live="polite">

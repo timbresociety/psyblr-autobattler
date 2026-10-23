@@ -3,14 +3,23 @@ import type { ArenaController } from './match-view'
 import { heroForKey } from './takeover'
 
 /**
- * Wires the keyboard, mouse and pointer lock to a live match (U17, KTD16). Pointer lock starts from a click; Escape
- * releases it (the browser does that) and the screen shows a resume overlay, since Chrome refuses a new lock for
- * about a second after Escape. Tab hands the hero back and keeps the pointer locked.
+ * Wires the keyboard, mouse and pointer lock to a live match (U17, KTD16). Pointer lock starts from a click, or from
+ * a hero's number key, which takes that hero once the lock is granted; Escape releases it (the browser does that)
+ * and the screen shows a resume overlay, since Chrome refuses a new lock for about a second after Escape. Tab hands
+ * the hero back and keeps the pointer locked.
  */
+/** True while the player is typing into a field, where a digit is text, not a hero. */
+const typing = (e: KeyboardEvent) => {
+  const el = e.target as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
+}
+
 export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLockChange: (locked: boolean) => void, extra: (code: string) => void = () => {}): () => void {
   const input: InputState = { held: new Set() }
   const canvas = canvasHost.querySelector('canvas') ?? canvasHost
   const locked = () => document.pointerLockElement === canvas
+  // a number key pressed with the mouse free asks for the lock first; the hero is taken once it is granted
+  let pending: number | undefined
 
   const requestLock = async () => {
     const el = canvas as HTMLElement & { requestPointerLock: (o?: { unadjustedMovement?: boolean }) => Promise<void> | void }
@@ -36,6 +45,10 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
     }
     if (/^Digit\d$/.test(e.code)) {
       if (down && locked()) c.take(heroForKey(c.arena.match, c.side, e.code))
+      else if (down && !c.arena.match.paused && !typing(e)) {
+        pending = heroForKey(c.arena.match, c.side, e.code)
+        void requestLock()
+      }
       return
     }
     if (e.code === 'Space') e.preventDefault()
@@ -51,6 +64,8 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   }
   const mouseup = (e: MouseEvent) => e.button === 0 && input.held.delete('Mouse0')
   const lockchange = () => {
+    if (locked() && pending !== undefined) c.take(pending)
+    pending = undefined
     if (!locked()) {
       input.held.clear()
       // without the mouse a controlled hero cannot be steered, so the AI takes it back rather than leave it idle;

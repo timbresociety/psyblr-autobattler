@@ -3,10 +3,9 @@ import type { Build } from '../../charter/build'
 import type { HeroPackage } from '../../forge/package'
 import type { Preset } from '../../forge/motion/library'
 import { pickAnimation, viewerSource } from '../../ui/forge/viewer'
-import { DEMO_HEROES } from '../demo/roster'
 import { SIZE_SCALE, benchHero } from '../demo/procedural-hero'
 import type { AnimState } from './animation'
-import { characterLook, characterView, loadBuild } from './characters'
+import { characterLook, characterView, heroHue, loadBuild } from './characters'
 import { TEAM_COLORS } from './map'
 
 /**
@@ -38,8 +37,7 @@ export interface HeroView {
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
-  const demo = DEMO_HEROES.find((h) => h.heroName === build.heroName)
-  const hue = demo?.hue ?? (index * 0.137) % 1
+  const hue = heroHue(build.heroName)
   const hero = benchHero({ hue: fallback ? 0 : hue, sizeClass: build.sizeClass ?? 'medium', textureSize: 512, seed: index + 1, look: 'suit' })
   if (fallback) (hero.mesh.material as THREE.MeshStandardMaterial).color.setRGB(0.55, 0.57, 0.62)
   const root = new THREE.Group()
@@ -55,8 +53,7 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
 }
 
 async function arenaCharacter(build: Build, index: number, team: number, renderer: unknown): Promise<HeroView> {
-  const demo = DEMO_HEROES.find((h) => h.heroName === build.heroName)
-  const look = characterLook(build, demo?.hue ?? (index * 0.137) % 1)
+  const look = characterLook(build, heroHue(build.heroName))
   const l = await gltf(renderer)
   const file = await loadBuild(look.build, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
   const view = characterView(file, look, new THREE.Color(TEAM_COLORS[team]), build)

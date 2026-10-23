@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build'
 import type { RoleId } from '../../charter/types'
+import { DEMO_HEROES } from '../demo/roster'
 
 /**
  * What a hero looks like in the arena's own characters (R24), without any renderer: which of the four Blender builds
@@ -25,6 +26,18 @@ export interface CharacterLook {
 }
 
 const BUILD_FOR: Record<RoleId, Build3D> = { tank: 'heavy', fighter: 'athletic', assassin: 'lean', mage: 'lithe', marksman: 'lean', support: 'lithe' }
+
+/**
+ * A hero's suit colour: a demo hero's own, else a stable one from its name. The arena, the portraits and the 3D
+ * previews all read this, so a hero wears the same suit everywhere and keeps it while it is edited.
+ */
+export function heroHue(name: string): number {
+  const demo = DEMO_HEROES.find((h) => h.heroName === name)
+  if (demo) return demo.hue
+  let h = 2166136261
+  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
+  return ((h >>> 0) % 1000) / 1000
+}
 
 /** A small stable number from a hero's name, so its hair and skin never depend on which slot or side it fights in. */
 function seedOf(name: string): number {
