@@ -9,6 +9,7 @@ import { begin, choose, confirm, createForge, editInputs, retry, succeed, skip }
 import type { Forge, StageId, Transition } from '../../forge/types'
 import type { ForgeAction, ForgeDeps } from './forge-api'
 import { EXAMPLE_PROMPT, ForgeScreen } from './ForgeScreen'
+import { signInToken } from './SignIn'
 
 afterEach(() => {
   cleanup()
@@ -139,7 +140,9 @@ describe('Forge screen (U11)', () => {
     const { deps } = memoryDeps()
     await openSpec(deps)
     await act(async () => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Size class' })).getByRole('radio', { name: 'huge' })))
-    expect(await screen.findByText(/Hitbox \+1\.8 m · health \+9 · speed -0\.9 · 51% vs field/)).toBeTruthy()
+    // the hitbox comes from the Charter's size table, which is tuned separately
+    const hitbox = String(SIZES.huge.hitRadius).replace('.', '\\.')
+    expect(await screen.findByText(new RegExp(`Hitbox \\+${hitbox} m · health \\+9 · speed -0\\.9 · 51% vs field`))).toBeTruthy()
   })
 
   it('the passive offers an aura or a body element (AE4)', async () => {
@@ -187,5 +190,36 @@ describe('Forge screen (U11)', () => {
     await click('Publish hero')
     expect(await screen.findByText(/is published to the global loadout/)).toBeTruthy()
     expect(current()!.current).toBe('published')
+  })
+})
+
+describe('sign-in on the dev server', () => {
+  async function requestLink(deps: ForgeDeps) {
+    render(<ForgeScreen deps={deps} />)
+    await forgeNew()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@example.com' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a link' })))
+  }
+
+  it('the dev server hands back the link; following it signs in and opens the prompt', async () => {
+    const { deps } = memoryDeps({ signedIn: false })
+    deps.startSignIn = vi.fn(async () => ({ devLink: 'http://localhost:3110/?signin=tok-123' }))
+    await requestLink(deps)
+    await click('Open sign-in link (dev)')
+    expect(deps.verifySignIn).toHaveBeenCalledWith('tok-123')
+    expect(((await screen.findByLabelText('Describe your hero')) as HTMLTextAreaElement).value).toBe(EXAMPLE_PROMPT)
+  })
+
+  it('when a real email went out, there is no dev link to follow', async () => {
+    const { deps } = memoryDeps({ signedIn: false })
+    await requestLink(deps)
+    expect(await screen.findByText(/Check a@example.com for a sign-in link/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Open sign-in link (dev)' })).toBeNull()
+  })
+
+  it('reads the token out of a sign-in link', () => {
+    expect(signInToken('http://localhost:3110/?signin=abc-DEF_1')).toBe('abc-DEF_1')
+    expect(signInToken('/?forge&signin=x')).toBe('x')
+    expect(signInToken('http://localhost:3110/')).toBeUndefined()
   })
 })

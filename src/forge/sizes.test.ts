@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { hydrateBuild } from '../charter/build'
 import { getRole } from '../charter/roles'
+import { SIZES, sizeHealth } from '../charter/sizes'
 import { deriveSheet } from '../charter/stats'
+import { getTemplate } from '../charter/templates/catalog'
+import { ENGINE } from '../arena/engine/calibration'
 import { cast } from '../arena/engine/deliveries'
 import type { MatchEvent } from '../arena/engine/events'
 import { createMatch } from '../arena/engine/match'
@@ -20,21 +23,24 @@ describe('size classes (U2)', () => {
     expect(ok.ok && ok.build.sizeClass).toBe('huge')
   })
 
-  it('a huge build has more health and less speed than the same build at medium', () => {
+  it('a huge build reaches further and moves slower, at the health its role pays for the size', () => {
     const role = getRole('fighter')
     const spread = role.defaultSpread
     const medium = deriveSheet(role, spread, 'medium').sheet
     const huge = deriveSheet(role, spread, 'huge').sheet
-    expect(huge.maxHealth).toBeGreaterThan(medium.maxHealth)
+    expect(SIZES.huge.reachBonus).toBeGreaterThan(0)
     expect(huge.moveSpeed).toBeLessThan(medium.moveSpeed)
+    expect(huge.maxHealth).toBeCloseTo(medium.maxHealth * sizeHealth('fighter', 'huge'), 1)
   })
 
   it('an area effect that misses a medium target hits a huge target at the same distance', () => {
     const mage = defaultBuild('mage')
     const caster = { ...mage, slots: { ...mage.slots, active1: { ...mage.slots.active1, templateId: 'mage-frost-nova' } } }
     const reach = (sizeClass?: 'huge') => {
+      // the target stands in the gap between a medium hitbox and a huge one, just past the nova's edge
+      const gap = (getTemplate('mage-frost-nova').delivery.radius ?? 0) + ENGINE.capsule.radius + SIZES.huge.hitRadius / 2
       const arena = createMatch([{ build: caster }], [{ build: { ...defaultBuild('tank'), ...(sizeClass ? { sizeClass } : {}) } }], 1, {
-        formations: [[{ x: 0, y: 0, z: -2.5 }], [{ x: 0, y: 0, z: 2.5 }]],
+        formations: [[{ x: 0, y: 0, z: -gap / 2 }], [{ x: 0, y: 0, z: gap / 2 }]],
       })
       const events: MatchEvent[] = []
       cast({ match: arena.match, setups: arena.setups, events }, 0, 'active1')

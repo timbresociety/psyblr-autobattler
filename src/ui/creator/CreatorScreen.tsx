@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   BUILD_SLOTS,
   changeRole,
@@ -11,9 +11,16 @@ import {
   type OpResult,
   type SkillText,
 } from '../../charter/build'
-import { POOL_SIZE, spentPoints } from '../../charter/stats'
+import { locomotion } from '../../charter/locomotion'
+import { getRole } from '../../charter/roles'
+import { SIZES } from '../../charter/sizes'
+import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
+import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
 import { liveDeps, type BuildRecord, type CreatorDeps, type HeroResult } from '../api'
+import { prefersReducedMotion } from '../arena/hud/format'
+import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
+import { SkillIcon } from '../common/SkillIcon'
 import { Loadout } from './Loadout'
 import { LoadoutSearch } from './LoadoutSearch'
 import { ChatPanel, type ChatMessage } from './ChatPanel'
@@ -24,7 +31,23 @@ import { StatSplit } from './StatSplit'
 import { describeLimit } from './labels'
 import './creator.css'
 
-/** The conversational hero creator (U11): chat on the left, the live kit, stats and balance check on the right. */
+// the live 3D preview brings three.js, so it loads after the screen is up
+const HeroStage = lazy(() => import('../common/HeroStage'))
+
+/** The plinth: the hero in 3D where WebGL runs, its initials where it does not. */
+function Stage({ build, cue }: { build?: Build; cue?: { clip: StageClip; at: number } }) {
+  const name = build?.heroName ?? ''
+  const label = name || 'your hero'
+  const backdrop = <div className={`hero-stage${build ? ` role-${build.roleId}` : ' is-empty'}`} role="img" aria-label={`3D preview of ${label}`} />
+  if (!webglAvailable()) return backdrop
+  return (
+    <Suspense fallback={backdrop}>
+      <HeroStage look={build ? { heroName: name, roleId: build.roleId } : undefined} hue={heroHue(name)} cue={cue} size={build?.sizeClass ?? 'medium'} label={label} />
+    </Suspense>
+  )
+}
+
+/** The conversational hero creator (U11): chat on the left, the hero on its plinth, its stats, kit and balance check. */
 export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps; initial?: Build }) {
   const [heroName, setHeroName] = useState(initial?.heroName ?? '')
   const [photos, setPhotos] = useState<string[]>([])
@@ -40,6 +63,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
   const [loadout, setLoadout] = useState<BuildRecord[]>([])
   const [saving, setSaving] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   // bumped on every change the player makes; an async result started before a change is discarded
   const edits = useRef(0)
   const changed = () => {
@@ -61,6 +85,20 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
     setHeroName(record.build.heroName)
     setAlternatives(undefined)
     setNotice(undefined)
+  }
+
+  /** A blank slate for the next hero; saved heroes stay in the loadout. */
+  function newHero() {
+    changed()
+    setPhotos([])
+    setPhotoUrls([])
+    setBuild(undefined)
+    setBuildId(undefined)
+    setHeroName('')
+    setAlternatives(undefined)
+    setNotice(undefined)
+    setOffline(false)
+    setMessages([])
   }
 
   async function addFromLoadout(hero: HeroResult) {
@@ -90,7 +128,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
         const created = await deps.createHero(build, photoUrls)
         setBuildId(created.buildId)
       }
-      say('Saved to your loadout.')
+      say('Saved to your loadout. It’s ready to place in the Arena.')
       refreshLoadout()
     } catch {
       say("Couldn't save right now. Your hero stays here; try again in a moment.")
@@ -125,7 +163,7 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
         setBuild({ ...res.build, heroName: heroName.trim() })
         setOffline(res.offline)
         showLimits(res.limits)
-        say(`Forged as a ${res.build.roleId}. Rename and describe each skill below, or ask me for changes. The engine sets every number.`)
+        say(`Forged as a ${res.build.roleId}. Rename and describe each skill, or ask me for changes. The engine sets every number.`)
         return
       }
       const res = await deps.chat(build, text)
@@ -196,6 +234,19 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
     apply(result)
     return {}
   }
+  const preview = (slot: BuildSlot) => build && setCue({ clip: castClip(getTemplate(build.slots[slot].templateId), slot), at: performance.now() })
+  /** From the kit row: the hero performs the skill and its card comes into view. */
+  const showSkill = (slot: BuildSlot) => {
+    preview(slot)
+    document.getElementById(`skill-${slot}`)?.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
+  }
+
+  const facts = useMemo(() => {
+    if (!build) return undefined
+    const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
+    const move = locomotion(sheet.moveSpeed)
+    return { health: Math.round(sheet.maxHealth), ground: move.ground, flight: move.flight, size: SIZES[build.sizeClass ?? 'medium'].label }
+  }, [build])
 
   return (
     <main className="creator">
@@ -216,52 +267,120 @@ export function CreatorScreen({ deps = liveDeps, initial }: { deps?: CreatorDeps
         onSend={send}
         search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} adding={adding} />}
       />
-      <div className="kit">
-        <Loadout builds={loadout} activeId={buildId} onOpen={open} />
-        {offline && (
-          <p className="offline" role="status">
-            Offline mode: the engine is matching skills by keywords until the AI is back.
-          </p>
-        )}
-        {!build ? (
-          <section className="panel empty">
-            <h1>Forge a hero</h1>
-            <p>Give a name, add up to three reference photos, then describe your hero. You own the look and the names; the engine keeps every fight fair.</p>
-          </section>
-        ) : (
-          <>
-            <header className="panel hero-head">
-              <div className="avatar">{photos[0] ? <img src={photos[0]} alt="" /> : <span>{(build.heroName || '?').slice(0, 1)}</span>}</div>
-              <div className="hero-meta">
-                <h1>{build.heroName}</h1>
-                <RoleSwitcher roleId={build.roleId} onChange={onRole} />
-                {spentPoints(build.spread) === 0 && (
-                  <button className="ghost" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
-                    Use suggested split
-                  </button>
-                )}
+      <section className="workbench">
+        <Loadout builds={loadout} activeId={buildId} onOpen={open} onNew={build ? newHero : undefined} />
+        <div className="bench-scroll">
+          {offline && (
+            <p className="offline" role="status">
+              Offline mode: the engine is matching skills by keywords until the AI is back.
+            </p>
+          )}
+          {!build ? (
+            <section className="showcase is-empty">
+              <Stage />
+              <div className="hero-info intro">
+                <h1 className="hero-name">Forge a hero</h1>
+                <p className="lead">Give a name, add up to three reference photos, then describe your hero. You own the look and the names; the engine keeps every fight fair.</p>
+                <ol className="steps">
+                  <li className={heroName.trim() ? 'done' : 'now'}>
+                    <b>Name it</b>
+                    <span>Anyone: Jensen, Goku, a superintelligence.</span>
+                  </li>
+                  <li className={photos.length ? 'done' : ''}>
+                    <b>Add photos</b>
+                    <span>Up to three, so the look lands. Optional.</span>
+                  </li>
+                  <li className={heroName.trim() ? 'now' : ''}>
+                    <b>Describe it</b>
+                    <span>One sentence in the chat. The engine drafts a role, six skills and a stat split.</span>
+                  </li>
+                </ol>
               </div>
-            </header>
-            {notice && (
-              <p className="notice" role="status">
-                {notice}
-              </p>
-            )}
-            <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
-            <div className="skills">
-              {BUILD_SLOTS.map((slot) => (
-                <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} />
-              ))}
-            </div>
-            <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))} />
+            </section>
+          ) : (
+            <>
+              <section className="showcase">
+                <Stage build={build} cue={cue} />
+                <div className="hero-info">
+                  <h1 className={`hero-name${build.heroName.length > 16 ? ' long' : ''}`}>{build.heroName}</h1>
+                  <RoleSwitcher roleId={build.roleId} onChange={onRole} />
+                  {facts && (
+                    <dl className="facts">
+                      <div>
+                        <dt>Health</dt>
+                        <dd>{facts.health}</dd>
+                      </div>
+                      <div>
+                        <dt>Speed</dt>
+                        <dd>
+                          {facts.ground.toFixed(1)}
+                          <small>m/s</small>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Flight</dt>
+                        <dd>
+                          {facts.flight.toFixed(1)}
+                          <small>m/s</small>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Size</dt>
+                        <dd>{facts.size}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  <ul className="kit-glance" aria-label="Kit at a glance">
+                    {BUILD_SLOTS.map((slot) => {
+                      const spec = build.slots[slot]
+                      const template = getTemplate(spec.templateId)
+                      return (
+                        <li key={slot}>
+                          <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
+                            <SkillIcon template={template} slot={slot} />
+                            <span>{spec.name.trim() || template.name}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {notice && (
+                    <p className="notice" role="status">
+                      {notice}
+                    </p>
+                  )}
+                  {spentPoints(build.spread) === 0 && (
+                    <button className="btn primary suggest" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
+                      Use suggested split
+                    </button>
+                  )}
+                </div>
+              </section>
+              <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
+              <section className="kit" aria-label="Kit">
+                <header className="kit-head">
+                  <h2 className="section-title">Kit</h2>
+                  <p className="muted">Your names and looks on the engine’s mechanics. Point at a skill to see the hero use it.</p>
+                </header>
+                <div className="skills">
+                  {BUILD_SLOTS.map((slot) => (
+                    <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} />
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+        {build && (
+          <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))}>
             {build.gate.state === 'ready' && (
-              <button className="primary save" onClick={save} disabled={saving}>
+              <button className="btn primary big save" onClick={save} disabled={saving}>
                 {buildId ? 'Save changes' : 'Save to loadout'}
               </button>
             )}
-          </>
+          </GateStatus>
         )}
-      </div>
+      </section>
     </main>
   )
 }

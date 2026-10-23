@@ -1,17 +1,23 @@
+import type { RoleId } from './types'
+
 /**
  * Size classes (R14, KTD8). Players pick any class for any role. Medium is the baseline the catalogue was
  * tuned on, so it changes nothing. Bigger heroes reach further but are slower and easier to hit; smaller ones
- * the reverse. Health multipliers were tuned on the 3D arena engine so each choosable class averages about 50%
- * against the field; the balance gate still prices each individual build at its size.
+ * the reverse. The body is drawn at `scale` and the hit capsule matches it, so what the audience sees is what can be
+ * hit (R23). A class's health price depends on the role wearing it (`sizeHealth`), tuned on the 3D arena engine so
+ * every role and class pairing sits near 50% against the field; the balance gate still prices each build.
  */
 export type SizeClass = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'colossal'
 
 export interface SizeProfile {
   label: string
-  /** Metres added to the hitbox when area effects check who they hit. */
+  /** The body's scale against medium: the model is drawn at this size and its hit capsule grows with it. */
+  scale: number
+  /** Metres added to the medium hit capsule's 0.4 m radius; always 0.4 × (scale − 1), so hitbox and body agree. */
   hitRadius: number
   /** Metres added to melee reach. */
   reachBonus: number
+  /** The health price when no role-specific one is set (colossal, and any role missing from SIZE_HEALTH). */
   healthMul: number
   speedMul: number
 }
@@ -22,14 +28,36 @@ export const SIZE_CLASSES: readonly SizeClass[] = ['tiny', 'small', 'medium', 'l
 /** Every class, including `colossal`, which only a transformation reaches (R44, KTD14). */
 export const ALL_SIZE_CLASSES: readonly SizeClass[] = [...SIZE_CLASSES, 'colossal']
 
+/** A body at `scale`: the hit radius follows from the medium capsule's 0.4 m. */
+const body = (scale: number) => ({ scale, hitRadius: Math.round(0.4 * (scale - 1) * 1000) / 1000 })
+
 export const SIZES: Record<SizeClass, SizeProfile> = {
-  tiny: { label: 'Tiny', hitRadius: -0.6, reachBonus: -0.5, healthMul: 1.055, speedMul: 1.16 },
-  small: { label: 'Small', hitRadius: -0.3, reachBonus: -0.25, healthMul: 0.945, speedMul: 1.08 },
-  medium: { label: 'Medium', hitRadius: 0, reachBonus: 0, healthMul: 1, speedMul: 1 },
-  large: { label: 'Large', hitRadius: 0.9, reachBonus: 0.5, healthMul: 1.115, speedMul: 0.88 },
-  huge: { label: 'Huge', hitRadius: 1.8, reachBonus: 1, healthMul: 1.155, speedMul: 0.78 },
-  colossal: { label: 'Colossal', hitRadius: 2.4, reachBonus: 2, healthMul: 1.37, speedMul: 0.85 },
+  tiny: { label: 'Tiny', ...body(0.8), reachBonus: -0.5, healthMul: 1, speedMul: 1.16 },
+  small: { label: 'Small', ...body(0.9), reachBonus: -0.25, healthMul: 1, speedMul: 1.08 },
+  medium: { label: 'Medium', ...body(1), reachBonus: 0, healthMul: 1, speedMul: 1 },
+  large: { label: 'Large', ...body(1.15), reachBonus: 0.4, healthMul: 1, speedMul: 0.88 },
+  huge: { label: 'Huge', ...body(1.3), reachBonus: 0.75, healthMul: 1, speedMul: 0.78 },
+  colossal: { label: 'Colossal', ...body(1.6), reachBonus: 2, healthMul: 1.37, speedMul: 0.85 },
 }
+
+/**
+ * What each class costs each role in health, tuned so every size of a role does as well in 3v3 skirmishes as the same
+ * role at medium. Reach decides blade fights and a small body slips shots, so the same class is worth very different
+ * amounts to a tank and a marksman: a tiny tank needs twice the health to keep up, a huge one gives a third of it back.
+ */
+export const SIZE_HEALTH: Partial<Record<RoleId, Partial<Record<SizeClass, number>>>> = {
+  tank: { tiny: 2.119, small: 1.109, large: 0.717, huge: 0.683 },
+  fighter: { tiny: 1.011, small: 0.995, large: 1.041, huge: 0.973 },
+  assassin: { tiny: 1.084, small: 1.121, large: 1.077, huge: 1.048 },
+  mage: { tiny: 1.023, small: 1.006, large: 1.085, huge: 1.076 },
+  marksman: { tiny: 1.119, small: 1.026, large: 1.109, huge: 0.983 },
+  support: { tiny: 1.203, small: 0.943, large: 0.981, huge: 1.267 },
+  controller: { tiny: 0.934, small: 1.147, large: 0.972, huge: 1.034 },
+  summoner: { tiny: 0.959, small: 1.112, large: 1.092, huge: 0.955 },
+}
+
+/** The health multiplier `role` pays for `size`. */
+export const sizeHealth = (role: RoleId | string, size: SizeClass) => SIZE_HEALTH[role as RoleId]?.[size] ?? SIZES[size].healthMul
 
 export function isAnySizeClass(value: unknown): value is SizeClass {
   return typeof value === 'string' && (ALL_SIZE_CLASSES as readonly string[]).includes(value)

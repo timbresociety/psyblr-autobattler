@@ -6,6 +6,7 @@ import { stagePrice } from '../../../forge/pricing'
 import { EFFECT_SLOT, STAGE_TABLE, formSize, stageOf } from '../../../forge/stages'
 import { SIZES } from '../../../charter/sizes'
 import type { Forge, StageId } from '../../../forge/types'
+import { SkillIcon } from '../../common/SkillIcon'
 
 const HeroViewer = lazy(() => import('../HeroViewer').then((m) => ({ default: m.HeroViewer })))
 
@@ -34,17 +35,30 @@ interface Props {
   onSkip?: () => void
 }
 
+function Coin() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.5 20.5 12 12 21.5 3.5 12z" fill="currentColor" />
+    </svg>
+  )
+}
+
 function Picks({ label, urls, chosen, onPick, busy }: { label: string; urls: string[]; chosen: number; onPick: (i: number) => void; busy: boolean }) {
   return (
     <div className="picks" role="radiogroup" aria-label={label}>
       {urls.map((url, i) => (
         <button key={url} role="radio" aria-checked={chosen === i} className={chosen === i ? 'on' : ''} disabled={busy} onClick={() => onPick(i)}>
           <img src={url} alt={`${label} option ${i + 1}`} />
+          <span className="pick-num" aria-hidden="true">
+            {chosen === i ? '✓' : i + 1}
+          </span>
         </button>
       ))}
     </div>
   )
 }
+
+const viewerFallback = <div className="hero-viewer loading-viewer" aria-hidden="true" />
 
 /** A paid generation stage: generate, look, pick, retry within the cap, confirm (R4, R11-R18). */
 export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, onConfirm, onChoose, onSkip }: Props) {
@@ -56,26 +70,30 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
   const motionArtifacts = forge.stages.motion.artifacts
   const rig = motionArtifacts.rig
   const motions = numbered(motionArtifacts, 'retarget')
+  const hero = forge.build ? { heroName: forge.spec?.heroName ?? forge.build.heroName, roleId: forge.build.roleId } : undefined
 
   const preview = (() => {
     if (s.status !== 'ready') return null
     if (stage === 'concept') return <Picks label="Concept sheet" urls={numbered(s.artifacts, 'sheet')} chosen={choice.sheet ?? 0} onPick={(i) => onChoose({ sheet: i })} busy={busy} />
-    if (stage === 'mesh') return <Suspense fallback={<p className="muted">Loading 3D…</p>}><HeroViewer label={forge.spec!.heroName} meshUrl={s.artifacts.mesh} /></Suspense>
-    if (stage === 'form') return <Suspense fallback={<p className="muted">Loading 3D…</p>}><HeroViewer label={`${forge.spec!.heroName} transformed`} meshUrl={s.artifacts['form-mesh']} /></Suspense>
+    if (stage === 'mesh') return <Suspense fallback={viewerFallback}><HeroViewer label={forge.spec!.heroName} meshUrl={s.artifacts.mesh} build={hero} /></Suspense>
+    if (stage === 'form') return <Suspense fallback={viewerFallback}><HeroViewer label={`${forge.spec!.heroName} transformed`} meshUrl={s.artifacts['form-mesh']} build={hero} /></Suspense>
     if (stage === 'motion') {
       const options = motionOptions(forge, 'basic')
       const chosen = options[choice.basic ?? 0] ?? options[0]
       return (
-        <>
-          <div className="segmented" role="radiogroup" aria-label="Basic attack motion">
-            {options.map((m, i) => (
-              <button key={m.id} role="radio" aria-checked={(choice.basic ?? 0) === i} className={(choice.basic ?? 0) === i ? 'on' : ''} disabled={busy} onClick={() => onChoose({ basic: i })}>
-                {m.label}
-              </button>
-            ))}
+        <div className="gen-preview">
+          <Suspense fallback={viewerFallback}><HeroViewer label={forge.spec!.heroName} meshUrl={rig} motionUrls={motions} motion={playable(chosen)} build={hero} /></Suspense>
+          <div className="gen-options">
+            <h3>Basic attack motion</h3>
+            <div className="segmented" role="radiogroup" aria-label="Basic attack motion">
+              {options.map((m, i) => (
+                <button key={m.id} role="radio" aria-checked={(choice.basic ?? 0) === i} className={(choice.basic ?? 0) === i ? 'on' : ''} disabled={busy} onClick={() => onChoose({ basic: i })}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <Suspense fallback={<p className="muted">Loading 3D…</p>}><HeroViewer label={forge.spec!.heroName} meshUrl={rig} motionUrls={motions} motion={playable(chosen)} /></Suspense>
-        </>
+        </div>
       )
     }
     if (slot) {
@@ -86,58 +104,82 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
       const template = getTemplate(forge.build!.slots[slot].templateId)
       const shape = (s.inputs.effect as { shape: EffectShape } | undefined)?.shape ?? effectShape(template.id)
       return (
-        <>
-          <Picks label="Effect" urls={effects} chosen={choice.effect ?? 0} onPick={(i) => onChoose({ effect: i })} busy={busy} />
-          <div className="segmented" role="radiogroup" aria-label="Motion">
-            {options.map((m, i) => (
-              <button key={m.id} role="radio" aria-checked={(choice.motion ?? 0) === i} className={(choice.motion ?? 0) === i ? 'on' : ''} disabled={busy} onClick={() => onChoose({ motion: i })}>
-                {m.label}
-              </button>
-            ))}
-          </div>
-          {passive.length > 0 && <Picks label={forge.spec!.passiveVisual === 'aura' ? 'Passive aura' : 'Passive body element'} urls={passive} chosen={choice.passive ?? 0} onPick={(i) => onChoose({ passive: i })} busy={busy} />}
-          <Suspense fallback={<p className="muted">Loading 3D…</p>}>
-            <HeroViewer label={forge.spec!.heroName} meshUrl={rig} motionUrls={motions} motion={playable(chosen)} effect={effects[choice.effect ?? 0] ? { url: effects[choice.effect ?? 0], delivery: template.delivery, shape } : undefined} />
+        <div className="gen-preview">
+          <Suspense fallback={viewerFallback}>
+            <HeroViewer label={forge.spec!.heroName} meshUrl={rig} motionUrls={motions} motion={playable(chosen)} build={hero} effect={effects[choice.effect ?? 0] ? { url: effects[choice.effect ?? 0], delivery: template.delivery, shape } : undefined} />
           </Suspense>
-        </>
+          <div className="gen-options">
+            <h3>Effect</h3>
+            <Picks label="Effect" urls={effects} chosen={choice.effect ?? 0} onPick={(i) => onChoose({ effect: i })} busy={busy} />
+            <h3>Motion</h3>
+            <div className="segmented" role="radiogroup" aria-label="Motion">
+              {options.map((m, i) => (
+                <button key={m.id} role="radio" aria-checked={(choice.motion ?? 0) === i} className={(choice.motion ?? 0) === i ? 'on' : ''} disabled={busy} onClick={() => onChoose({ motion: i })}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {passive.length > 0 && (
+              <>
+                <h3>{forge.spec!.passiveVisual === 'aura' ? 'Passive aura' : 'Passive body element'}</h3>
+                <Picks label={forge.spec!.passiveVisual === 'aura' ? 'Passive aura' : 'Passive body element'} urls={passive} chosen={choice.passive ?? 0} onPick={(i) => onChoose({ passive: i })} busy={busy} />
+              </>
+            )}
+          </div>
+        </div>
       )
     }
     return null
   })()
 
+  const skill = slot ? forge.build!.slots[slot] : undefined
+  const template = skill ? getTemplate(skill.templateId) : undefined
   return (
     <div className="stage-body">
       {stage === 'form' && (
         <p className="muted">
-          The form your hero takes when its ultimate transforms it, shown at {SIZES[formSize(forge.build) ?? 'colossal'].label} size, the same size as its hitbox in the arena.
+          Shown at {SIZES[formSize(forge.build) ?? 'colossal'].label} size, the same size as its hitbox in the arena.
         </p>
       )}
-      {slot && <p className="muted">{forge.build!.slots[slot].name || getTemplate(forge.build!.slots[slot].templateId).name}: {getTemplate(forge.build!.slots[slot].templateId).name}</p>}
+      {slot && skill && template && (
+        <div className="gen-skill">
+          <SkillIcon template={template} slot={slot} />
+          <span>
+            <strong>{skill.name || template.name}</strong>
+            <small>{template.name}</small>
+          </span>
+        </div>
+      )}
       {(s.status === 'draft' || s.status === 'failed') && (
-        <>
+        <div className="gen-cta">
           {s.status === 'failed' && <p className="inline-error">That didn’t work: {s.failure}. Nothing was charged.</p>}
-          <button className="primary" disabled={busy || balance < price} onClick={s.status === 'failed' ? onRetry : onStart}>
-            {s.status === 'failed' ? 'Try again' : 'Generate'} · {price} credits
-          </button>
-          {onSkip && (
-            <button disabled={busy} onClick={onSkip}>
-              Skip, no form
+          <div className="row">
+            <button className="btn primary big" disabled={busy || balance < price} onClick={s.status === 'failed' ? onRetry : onStart}>
+              <Coin />
+              {s.status === 'failed' ? 'Try again' : 'Generate'} · {price} credits
             </button>
-          )}
-        </>
+            {onSkip && (
+              <button className="btn ghost" disabled={busy} onClick={onSkip}>
+                Skip, no form
+              </button>
+            )}
+          </div>
+          <p className="muted">Up to {STAGE_TABLE[stage].retryCap} retries after the first result. A stage that fails costs nothing.</p>
+        </div>
       )}
       {s.status === 'generating' && (
-        <p className="notice" aria-live="polite">
-          Generating… you can leave; it keeps going and picks up here.
-        </p>
+        <div className="gen-progress" aria-live="polite">
+          <div className="busy-bar" aria-hidden="true" />
+          <p className="notice">Generating… you can leave; it keeps going and picks up here.</p>
+        </div>
       )}
       {preview}
       {s.status === 'ready' && (
-        <div className="row">
-          <button disabled={busy || left <= 0 || balance < price} onClick={onRetry}>
+        <div className="stage-actions">
+          <button className="btn ghost" disabled={busy || left <= 0 || balance < price} onClick={onRetry}>
             {left > 0 ? `Retry · ${left} left` : 'No retries left'}
           </button>
-          <button className="primary" disabled={busy} onClick={onConfirm}>
+          <button className="btn primary big" disabled={busy} onClick={onConfirm}>
             Confirm
           </button>
         </div>

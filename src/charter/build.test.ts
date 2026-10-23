@@ -9,6 +9,7 @@ import {
   requestStats,
   setAttribute,
   swapAlternatives,
+  swapOptions,
   swapTemplate,
 } from './build'
 import { getRole } from './roles'
@@ -148,11 +149,19 @@ describe('swapTemplate (R7)', () => {
     expect(result.ok && result.build.slots.active1.swapped).toBe(true)
   })
 
-  it('rejects a template outside the offered alternatives', () => {
+  it('accepts any template of the role for the slot, deep in the library too', () => {
     const build = mage()
-    const offered = new Set(swapAlternatives(build, 'active1').map((t) => t.id))
-    const outsider = ['mage-time-stop', 'tank-chain-hook', 'mage-mana-shield', 'mage-gravity-well'].find((id) => !offered.has(id) && id !== build.slots.active1.templateId)
-    expect(swapTemplate(build, 'active1', outsider as string).ok).toBe(false)
+    const options = swapOptions(build, 'active1')
+    expect(options.length).toBeGreaterThanOrEqual(12)
+    const last = options[options.length - 1]
+    expect(swapTemplate(build, 'active1', last.id).ok).toBe(true)
+  })
+
+  it("rejects another role's template, another slot's template and the other active", () => {
+    const build = mage()
+    expect(swapTemplate(build, 'active1', 'tank-chain-hook').ok).toBe(false)
+    expect(swapTemplate(build, 'active1', 'mage-time-stop').ok).toBe(false)
+    expect(swapTemplate(build, 'active1', build.slots.active2.templateId).ok).toBe(false)
   })
 })
 

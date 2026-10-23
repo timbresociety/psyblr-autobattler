@@ -4,8 +4,9 @@ import { getRole } from '../../charter/roles'
 import { SIZES, type SizeClass } from '../../charter/sizes'
 import { deriveSheet } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
-import type { BuildSlot, DamageType, SecondarySheet, Template } from '../../charter/types'
+import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types'
 import { ENGINE } from './calibration'
+import type { CoverHealth, CoverPiece } from './cover'
 import type { Vec3 } from './maths'
 import { aiSeed, rngState, type RngState } from './rng'
 
@@ -34,7 +35,10 @@ export const AIM_STEPS = 4096
 export const IDLE: Command = { moveX: 0, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
 export const slotBit = (slot: BuildSlot) => 1 << BUILD_SLOTS.indexOf(slot)
 
-export type Stat = 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduction'
+export type Stat = BuffStat
+
+/** Every kind of crowd control, at zero: the tick each one lasts until. */
+export const noControl = (): Record<ControlType, number> => ({ root: 0, silence: 0, disarm: 0, sleep: 0, blind: 0, grounded: 0, fear: 0, taunt: 0, break: 0 })
 
 export interface HeroState {
   id: number
@@ -51,7 +55,25 @@ export interface HeroState {
   shieldUntil: number
   stunnedUntil: number
   invulnerableUntil: number
-  slows: { pct: number; until: number }[]
+  /** `stat` `attack` slows basic attacks and fire rate (cripple); absent means movement. */
+  slows: { pct: number; until: number; stat?: 'move' | 'attack' }[]
+  /** Crowd control: the tick each kind lasts until (0 when never applied). */
+  cc: Record<ControlType, number>
+  /** Who a fear runs from and a taunt must attack (-1 when none). */
+  fearFrom: number
+  tauntBy: number
+  /** Immune to crowd control and displacement until this tick. */
+  unstoppableUntil: number
+  /** Unseen by enemies until this tick, unless revealed; attacking ends it. */
+  stealthUntil: number
+  /** Weakening from enemies: flat resist down, more damage taken, less healing taken, marked for a team. */
+  debuffs: { type: DebuffType; amount: number; until: number; source: number }[]
+  /** The flight meter: taking off and staying up spend it, standing on the ground refills it. */
+  flight: number
+  /** The tick it last touched the ground, for the meter's refill delay. */
+  landedAt: number
+  /** A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. */
+  launch?: { from: number; until: number; height: number; base: number }
   /** `source` is the template that granted it; the same template refreshes its buff instead of stacking. */
   buffs: { stat: Stat; pct: number; until: number; source: string }[]
   dots: { perSecond: number; type: DamageType; until: number; source: number }[]
@@ -94,12 +116,47 @@ export interface MatchState {
   ai: RngState
   winner?: Team | 'draw'
   endReason?: 'wipe' | 'time'
-  /** Gate profile only: from this tick, damage ramps up by `perSecond` each second so duels end (KTD5). */
+  /** From this tick, damage ramps up by `perSecond` each second: steeply so gate duels end (KTD5), gently as live overtime. */
   damageRamp?: { fromTick: number; perSecond: number }
   /** Who is driving each hero; the AI skips human-controlled ones (KTD4). */
   human?: number
   /** Each AI hero's memory, kept in the state so AI play snapshots and replays exactly (KTD7). */
   brains?: BrainState[]
+  /** The ruins on this map and each piece's health; absent on an open test floor. Walls raised by skills join it. */
+  cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
+  /** Lingering areas and traps left by skills, turrets, and the walls skills raised (with when they fall). */
+  fields?: FieldState[]
+  turrets?: TurretState[]
+  walls?: { index: number; until: number }[]
+  nextEntityId?: number
+}
+
+/** A lingering area or a trap: the template's effects land on whoever is inside, on a beat or on the first step. */
+export interface FieldState {
+  id: number
+  owner: number
+  slot: BuildSlot
+  at: Vec3
+  radius: number
+  until: number
+  /** Fields: the next pulse. Traps: armed from this tick. */
+  next: number
+  interval: number
+  trap: boolean
+  /** Fields cast as auras ride along with their owner. */
+  follow: boolean
+}
+
+/** A construct that shoots the nearest enemy in sight on a beat. */
+export interface TurretState {
+  id: number
+  owner: number
+  slot: BuildSlot
+  at: Vec3
+  until: number
+  next: number
+  interval: number
+  range: number
 }
 
 export interface BrainState {
@@ -121,6 +178,10 @@ export interface BrainState {
   overshoot: number
   /** The target's last seen position, to lead moving targets. */
   seen?: { x: number; y: number; z: number; tick: number; target: number }
+  /** Which way it walks around walls (R25): chosen at the first wall and kept, so corners do not turn it back; 0 before any. */
+  detour: -1 | 0 | 1
+  /** The spot behind cover it falls back to when retreating. */
+  hide?: { x: number; z: number }
 }
 
 export interface HeroSetup {
@@ -147,6 +208,7 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     id, team, alive: true, position: { ...position }, airborne: position.y > 0, yaw: team === 0 ? 0 : Math.PI, pitch: 0,
     hp: setup.sheet.maxHealth, maxHp: setup.sheet.maxHealth, shield: 0, shieldUntil: 0, stunnedUntil: 0, invulnerableUntil: 0,
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, resizeUntil: 0,
+    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }
@@ -156,8 +218,11 @@ export function emptyMatch(seed: number): MatchState {
 }
 
 /** The capsule a hero occupies now: base at its feet. */
+/** The body that bumps into walls: the hit capsule's radius, capped so big heroes still fit through gaps. */
+export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, capsule(hero).radius)
+
+/** The hit capsule: the medium one scaled by the size class's body, so it matches the model the audience sees (R23). */
 export function capsule(hero: HeroState): { radius: number; height: number } {
-  const profile = SIZES[hero.size]
-  const grow = 1 + Math.max(0, profile.hitRadius) / 3
-  return { radius: Math.max(0.15, ENGINE.capsule.radius + profile.hitRadius), height: ENGINE.capsule.height * grow }
+  const scale = SIZES[hero.size].scale
+  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale }
 }

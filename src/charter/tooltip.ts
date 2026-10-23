@@ -37,7 +37,7 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
     case 'stun':
       return `Stun ${num(effect.duration)} s`
     case 'slow':
-      return `Slow ${num(effect.pct)}% for ${num(effect.duration)} s`
+      return effect.stat === 'attack' ? `Attack speed −${num(effect.pct)}% for ${num(effect.duration)} s` : `Slow ${num(effect.pct)}% for ${num(effect.duration)} s`
     case 'displace':
       return `Knock back ${num(effect.distance)} m`
     case 'mobility':
@@ -48,8 +48,50 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
       return `+${num(effect.bonusPct * factor)}% damage to targets under ${num(effect.thresholdPct)}% health`
     case 'resize':
       return `Becomes ${SIZES[effect.sizeClass].label} for ${num(effect.duration)} s`
+    case 'control':
+      return `${CONTROL_LINE[effect.type]} ${num(effect.duration)} s${CONTROL_NOTE[effect.type] ?? ''}`
+    case 'knockup':
+      return `Knock up ${num(effect.height)} m, helpless for ${num(effect.duration)} s`
+    case 'pull':
+      return `Pull ${num(effect.distance)} m`
+    case 'debuff':
+      return DEBUFF_LINE[effect.type](num(effect.amount), num(effect.duration))
+    case 'state': {
+      const who = effect.target === 'self' ? '' : effect.target === 'ally' ? ' on an ally' : ' on nearby allies'
+      return effect.type === 'cleanse' ? `Cleanse control and debuffs${who}` : `${STATE_LINE[effect.type]} ${num(effect.duration)} s${who}`
+    }
+    case 'refresh':
+      return `Other cooldowns −${num(effect.seconds)} s`
+    case 'field':
+      return `Lingers ${num(effect.duration)} s, landing again every ${num(effect.interval)} s`
+    case 'wall':
+      return `Raises a wall ${num(effect.length)} m long and ${num(effect.height)} m tall for ${num(effect.duration)} s (${num(effect.health)} to break)`
+    case 'trap':
+      return `Waits up to ${num(effect.lifetime)} s for an enemy to step in, armed after ${num(effect.arm)} s`
+    case 'turret':
+      return `Turret: ${effect.type === 'spirit' ? 'spirit' : 'physical'} damage ${scaled(effect.amount, effect.ratio, effect.scaling, sheet, factor)} every ${num(effect.interval)} s for ${num(effect.duration)} s, ${num(effect.range)} m range`
   }
 }
+
+const CONTROL_LINE = { root: 'Root', silence: 'Silence', disarm: 'Disarm', sleep: 'Sleep', blind: 'Blind', grounded: 'Ground', fear: 'Fear', taunt: 'Taunt', break: 'Break its passive for' } as const
+const CONTROL_NOTE: Partial<Record<keyof typeof CONTROL_LINE, string>> = {
+  root: ' (it can still fight)',
+  silence: ' (no skills)',
+  disarm: ' (no basic attacks)',
+  sleep: ' (damage wakes it, and that hit deals 50% more)',
+  blind: ' (basic attacks miss)',
+  grounded: ' (no flight or movement skills)',
+  fear: ' (it runs from you)',
+  taunt: ' (it must attack you)',
+}
+const DEBUFF_LINE = {
+  armorShred: (a: string, d: string) => `Armour −${a} for ${d} s`,
+  spiritShred: (a: string, d: string) => `Spirit resist −${a} for ${d} s`,
+  vulnerable: (a: string, d: string) => `Takes ${a}% more damage for ${d} s`,
+  wound: (a: string, d: string) => `Healing received −${a}% for ${d} s`,
+  mark: (a: string, d: string) => `Marked for ${d} s: your team deals ${a}% more to it and it can't hide`,
+} as const
+const STATE_LINE = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable' } as const
 
 /** The tooltip shows the player's skill name with the template's real numbers on this hero's sheet (R6). */
 export function renderTooltip(template: Template, skill: SkillText, sheet: SecondarySheet, retuneSteps = 0): Tooltip {

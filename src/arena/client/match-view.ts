@@ -7,7 +7,7 @@ import { ENGINE } from '../engine/calibration'
 import type { MatchEvent } from '../engine/events'
 import type { Vec3 } from '../engine/maths'
 import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match'
-import type { Command, Team } from '../engine/state'
+import { capsule, type Command, type Team } from '../engine/state'
 import { tick } from '../engine/tick'
 import { createAnimator, onEvents, settle, type Animator } from './animation'
 import { Cameras } from './camera'
@@ -15,11 +15,14 @@ import { TEAM_COLORS } from './map'
 import { handBack, releaseIfDead, take } from './takeover'
 import { loadHeroView, type HeroView } from './heroes'
 import { createClock, frame } from './loop'
-import { buildMap, lights, type ArenaMap } from './map'
+import { atmosphere, buildMap, lights, type ArenaMap } from './map'
+import { buildRuins } from './ruins'
 import { CosmeticPhysics, PHYSICS } from './physics'
 import { atLeast, createGuard, observe, type QualityLevel } from './quality'
+import { createRangeIndicator } from './range'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
 import { createStore, type Store } from './store'
+import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status'
 
 /**
  * A live match in the browser (U13, KTD15): the engine and the AI tick at 60 Hz on a fixed clock, heroes are drawn
@@ -47,6 +50,10 @@ export interface HudHero {
   cooldowns: Record<BuildSlot, { left: number; total: number }>
   damageDealt: number
   airborne: boolean
+  /** The flight meter, 0 empty to 1 full. */
+  flight?: number
+  /** What is on the hero, worst first (status.ts). */
+  statuses?: HeroStatus[]
   fallback: boolean
 }
 
@@ -61,6 +68,8 @@ export interface HudState {
   backend?: Backend
   quality: QualityLevel
   healthShare: [number, number]
+  /** Overtime: the share of extra damage everyone deals now, 0 before it starts. */
+  overtime?: number
 }
 
 interface Listeners {
@@ -138,6 +147,7 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
     backend,
     quality,
     healthShare: [healthShare(match, 0), healthShare(match, 1)],
+    overtime: match.damageRamp && match.tick > match.damageRamp.fromTick ? ((match.tick - match.damageRamp.fromTick) / ENGINE.tickHz) * match.damageRamp.perSecond : 0,
     heroes: match.heroes.map((h) => ({
       id: h.id,
       name: setups[h.id].build.heroName,
@@ -147,47 +157,166 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
       maxHp: h.maxHp,
       damageDealt: h.damageDealt,
       airborne: h.airborne,
+      flight: (h.flight ?? ENGINE.flight.max) / ENGINE.flight.max,
+      statuses: statusesOf(h, match.tick).slice(0, 3),
       fallback: views[h.id]?.fallback ?? false,
       cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
     })),
   }
 }
 
-/** The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. */
-async function createStage(host: HTMLElement) {
+/**
+ * Bloom for the anime spectacle: only bright things glow (effects, the centre line, the barrier trim). Built through
+ * three's render pipeline, which works on both backends; if it cannot be built the match renders without it.
+ */
+async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>>['renderer'], scene: THREE.Scene, camera: THREE.Camera) {
+  try {
+    const [{ RenderPipeline }, { pass, screenUV, smoothstep, float }, { bloom }] = await Promise.all([import('three/webgpu'), import('three/tsl'), import('three/addons/tsl/display/BloomNode.js')])
+    const scenePass = pass(scene, camera)
+    const color = scenePass.getTextureNode('output')
+    // a soft vignette pulls the eye to the fight in the middle of the frame
+    const vignette = float(1).sub(smoothstep(0.35, 0.85, screenUV.sub(0.5).length()).mul(0.35))
+    const pipeline = new RenderPipeline(renderer, color.add(bloom(color, 0.55, 0.35, 0.82)).mul(vignette))
+    return { pipeline, enabled: true }
+  } catch {
+    return undefined
+  }
+}
+
+type Renderer = Awaited<ReturnType<typeof createRenderer>>['renderer']
+
+/** A fresh canvas with a renderer set up the way the arena draws: soft shadows, filmic tone mapping. */
+async function newRenderer(host: HTMLElement, forceWebGL: boolean) {
   const canvas = document.createElement('canvas')
   canvas.style.cssText = 'width:100%;height:100%;display:block'
-  host.append(canvas)
+  host.prepend(canvas)
   try {
-    const { renderer, backend } = await createRenderer(canvas, { forceWebGL: forceWebGLFlag(window.location.search) })
-    const pixelRatio = Math.min(2, window.devicePixelRatio)
-    renderer.setPixelRatio(pixelRatio)
+    const { renderer, backend } = await createRenderer(canvas, { forceWebGL })
     renderer.shadowMap.enabled = true
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x10141c)
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
-    const map = buildMap()
-    scene.add(map.group)
-    const sun = lights(scene)
-    const resize = () => {
-      const w = host.clientWidth
-      const h = host.clientHeight
-      renderer.setSize(w, h, false)
-      camera.aspect = w / Math.max(1, h)
-      camera.updateProjectionMatrix()
-    }
-    const dispose = () => {
-      window.removeEventListener('resize', resize)
-      renderer.dispose()
-      canvas.remove()
-    }
-    return { canvas, renderer, backend, pixelRatio, scene, camera, map, sun, resize, dispose }
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.05
+    return { canvas, renderer, backend }
   } catch (e) {
     canvas.remove()
     throw e
   }
 }
+
+/** Most times a lost graphics device is rebuilt in one match before the stage gives up. */
+const MAX_RECOVERIES = 3
+
+/**
+ * The canvas, renderer, scene, camera, map and lights; disposed again if any later setup step fails. A loaded machine
+ * can lose its graphics device mid-match (three then quietly stops drawing while the HUD runs on), so on a loss the
+ * stage swaps in a new canvas and renderer, on WebGL2 for stability, and keeps drawing the same scene and match.
+ */
+async function createStage(host: HTMLElement) {
+  const first = await newRenderer(host, forceWebGLFlag(window.location.search))
+  try {
+    const pixelRatio = Math.min(2, window.devicePixelRatio)
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
+    atmosphere(scene)
+    const map = buildMap()
+    scene.add(map.group)
+    const sun = lights(scene)
+    const stage = {
+      host,
+      canvas: first.canvas,
+      renderer: first.renderer as Renderer,
+      backend: first.backend,
+      pixelRatio,
+      scene,
+      camera,
+      map,
+      sun,
+      glow: await bloomPipeline(first.renderer, scene, camera),
+      recoveries: 0,
+      /** While a new renderer is being built nothing draws: the old device is gone. */
+      recovering: false,
+      resize: () => {
+        const w = host.clientWidth
+        const h = host.clientHeight
+        stage.renderer.setSize(w, h, false)
+        camera.aspect = w / Math.max(1, h)
+        camera.updateProjectionMatrix()
+      },
+      // with bloom off (unsupported, or dropped by the frame-rate guard) the frame renders directly
+      draw: () => {
+        if (stage.recovering) return
+        if (stage.glow?.enabled) stage.glow.pipeline.render()
+        else stage.renderer.render(scene, camera)
+      },
+      dispose: () => {
+        window.removeEventListener('resize', stage.resize)
+        stage.renderer.dispose()
+        stage.canvas.remove()
+      },
+      /** Rebuild the renderer on a new canvas after the graphics device was lost; false once out of attempts. */
+      recover: async (): Promise<boolean> => {
+        if (stage.recoveries >= MAX_RECOVERIES || stage.recovering) return false
+        stage.recoveries++
+        stage.recovering = true
+        try {
+          const pixel = stage.renderer.getPixelRatio()
+          const shadows = stage.sun.castShadow
+          const bloomOn = stage.glow?.enabled ?? false
+          const next = await newRenderer(host, true)
+          try {
+            stage.renderer.dispose()
+          } catch {
+            // a lost device may refuse to release; the canvas goes regardless
+          }
+          stage.canvas.remove()
+          stage.canvas = next.canvas
+          stage.renderer = next.renderer
+          stage.backend = next.backend
+          stage.renderer.setPixelRatio(pixel)
+          stage.sun.castShadow = shadows
+          stage.glow = await bloomPipeline(stage.renderer, scene, camera)
+          if (stage.glow) stage.glow.enabled = bloomOn
+          watchDevice(stage)
+          stage.resize()
+          return true
+        } catch {
+          return false
+        } finally {
+          stage.recovering = false
+        }
+      },
+      onRecovered: (_ok: boolean) => {},
+    }
+    watchDevice(stage)
+    return stage
+  } catch (e) {
+    first.canvas.remove()
+    throw e
+  }
+}
 type Stage = Awaited<ReturnType<typeof createStage>>
+
+/** A short-lived notice over the arena, for things the player should know but that need no answer. */
+function notice(host: HTMLElement, text: string) {
+  const el = document.createElement('div')
+  el.className = 'arena-notice'
+  el.setAttribute('role', 'status')
+  el.textContent = text
+  host.append(el)
+  setTimeout(() => el.remove(), 6000)
+}
+
+/** Hand a lost device to the stage's recovery instead of three's default (log once, then draw nothing forever). */
+function watchDevice(stage: { renderer: Renderer; recover: () => Promise<boolean>; onRecovered: (ok: boolean) => void }) {
+  const r = stage.renderer as Renderer & { onDeviceLost: (info: { message?: string; reason?: string }) => void }
+  r.onDeviceLost = (info) => {
+    console.warn(`[arena] graphics device lost (${info.reason ?? info.message ?? 'unknown'}); rebuilding the renderer`)
+    void stage.recover().then(
+      (ok) => stage.onRecovered(ok),
+      () => stage.onRecovered(false),
+    )
+  }
+}
 
 /**
  * The frame-rate guard wired to the stage (U18, R26): each step keeps the ones before it, shadows first and render
@@ -204,6 +333,8 @@ function qualityControl(stage: Stage) {
       if (next === current) return
       current = next
       stage.sun.castShadow = !atLeast(current, 'no-shadows')
+      // bloom is the first post effect to go when particles are thinned
+      if (stage.glow) stage.glow.enabled = !atLeast(current, 'fewer-particles')
       stage.renderer.setPixelRatio(atLeast(current, 'low-resolution') ? Math.max(0.75, stage.pixelRatio * 0.6) : stage.pixelRatio)
       stage.resize()
     },
@@ -233,9 +364,11 @@ function drawHeroes(
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
     const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
     const scaled = frame.dt * frame.timeScale
-    if (!far) view.pose(pose, frame.t + i, scaled)
-    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2)
-    const fallen = physics?.fallenPose(i)
+    const moving = moved > 0.01
+    if (!far) view.pose(pose, frame.t + i, scaled, moving)
+    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
+    // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
+    const fallen = view.animatesDeath ? undefined : physics?.fallenPose(i)
     if (fallen) {
       view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
       view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
@@ -265,18 +398,19 @@ function drawDebris(debris: THREE.InstancedMesh, physics: CosmeticPhysics | unde
   debris.instanceMatrix.needsUpdate = true
 }
 
-/** Team-coloured markers over every living hero except the controlled one, whose shoulder the camera sits on (R38). */
-function drawMarkers(markers: THREE.InstancedMesh, arena: Arena, views: HeroView[], drawn: Vec3[]) {
-  place.quaternion.identity()
+/** A team ring on the floor under every living hero, sized to its hitbox, so a crowd still reads at a glance (R38). */
+function drawRings(rings: THREE.InstancedMesh, arena: Arena, drawn: Vec3[]) {
   arena.match.heroes.forEach((h, i) => {
     const at = drawn[i]
-    place.position.set(at.x, at.y + views[i].root.scale.y * 2.3, at.z)
-    place.scale.setScalar(h.alive && arena.match.human !== i ? 1 : 0)
+    place.position.set(at.x, 0.03, at.z)
+    place.quaternion.setFromAxisAngle(right, -Math.PI / 2)
+    place.scale.setScalar(h.alive ? capsule(h).radius * 1.6 : 0)
     place.updateMatrix()
-    markers.setMatrixAt(i, place.matrix)
+    rings.setMatrixAt(i, place.matrix)
   })
-  markers.instanceMatrix.needsUpdate = true
+  rings.instanceMatrix.needsUpdate = true
 }
+const right = new THREE.Vector3(1, 0, 0)
 
 /** Load everything a match needs, reporting progress, then run it until `stop` (U13). */
 export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
@@ -293,7 +427,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 }
 
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
-  const { renderer, backend, scene, camera, map } = stage
+  const { renderer, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
   const builds = arena.setups.map((s) => s.build)
   let loaded = 0
@@ -307,19 +441,28 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
   const views = await Promise.all(
     builds.map(async (build, i) => {
-      const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer)
+      const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer, arena.match.heroes[i].team)
       onProgress(++loaded, total)
       return view
     }),
   )
   views.forEach((v) => scene.add(v.root))
+  // the ruins come from the engine's own cover, so what is drawn is exactly what blocks (R25)
+  const ruins = arena.match.cover ? buildRuins(arena.match.cover.pieces) : undefined
+  if (ruins) {
+    scene.add(ruins.group)
+    map.proxies.push(...ruins.proxies)
+  }
   const physics = await physicsReady
   const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
   debris.count = 0
   scene.add(debris)
-  const markers = new THREE.InstancedMesh(new THREE.ConeGeometry(0.28, 0.5, 4).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xffffff }), arena.match.heroes.length)
-  arena.match.heroes.forEach((h, i) => markers.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
-  scene.add(markers)
+  const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
+  // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
+  arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
+  scene.add(rings)
+  // the controlled hero's basic attack reach, on the floor
+  const range = createRangeIndicator(scene)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
@@ -327,12 +470,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const rules = matchRules(arena)
   const clock = createClock()
   const quality = qualityControl(stage)
-  const store = createStore<HudState>(hud(arena, views, false, backend, 'full'))
+  const store = createStore<HudState>(hud(arena, views, false, stage.backend, 'full'))
   const hooks = createHooks()
   const cameras = new Cameras(camera)
   // the free camera starts behind the streamer's half, looking across the arena
   if (setup.side === 1) {
-    cameras.free.set(0, 22, 34)
+    cameras.free.set(0, 13, 27)
     cameras.yaw = Math.PI
   }
   stage.resize()
@@ -344,7 +487,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let stopped = false
   let frameNo = 0
   const publish = () => {
-    store.set(hud(arena, views, clock.paused, backend, quality.current()))
+    store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
     store.flush()
   }
   const setPaused = (paused: boolean) => {
@@ -353,8 +496,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     publish()
   }
 
-  const loop = () => {
-    if (stopped) return
+  const step = () => {
     const now = performance.now()
     const dt = Math.min(0.25, (now - last) / 1000)
     last = now
@@ -370,32 +512,59 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       // the controlled hero died: control goes back to watching from the free camera (AE1)
       if (releaseIfDead(arena.match)) cameras.set('free')
       physics?.events(events, arena.match)
+      for (const e of events) {
+        if (e.type === 'cover-hit') ruins?.hit(e.index, e.health)
+        else if (e.type === 'cover-broken') {
+          ruins?.broken(e.index)
+          physics?.burst(e.at, 12)
+        }
+      }
       if (events.length) {
         arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
         hooks.emit.events(events)
       }
     }
     physics?.step(dt)
+    ruins?.update(dt)
     drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
     drawDebris(debris, physics)
-    drawMarkers(markers, arena, views, drawn)
-    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
+    drawRings(rings, arena, drawn)
+    const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
+    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
+    range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt, alpha)
-    renderer.render(scene, camera)
+    stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
-    if (store.due()) store.set(hud(arena, views, clock.paused, backend, quality.current()))
+    if (store.due()) store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
+  }
+  // a thrown frame must never stop the match: the next frame is booked first, and each distinct error is reported once
+  const reported = new Set<string>()
+  const loop = () => {
+    if (stopped) return
     requestAnimationFrame(loop)
+    try {
+      step()
+    } catch (e) {
+      const key = String((e as Error)?.message ?? e)
+      if (!reported.has(key)) {
+        reported.add(key)
+        console.error('[arena] a frame failed; the match keeps running', e)
+      }
+    }
   }
   requestAnimationFrame(loop)
+  stage.onRecovered = (ok) => notice(stage.host, ok ? 'Graphics reset. Recovered in compatibility mode.' : 'The graphics device was lost. Reload the page to keep watching.')
 
-  return {
+  const controller: ArenaController = {
     arena,
     store,
     scene,
     camera,
     map,
     views,
-    renderer,
+    get renderer() {
+      return stage.renderer
+    },
     hooks,
     cameras,
     side: setup.side,
@@ -421,6 +590,11 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       stopped = true
       physics?.dispose()
       stage.dispose()
+      // a stopped match must not stay reachable as the dev handle (a Vite reload or a double mount left one behind)
+      if (import.meta.env.DEV && (window as unknown as { __arena?: ArenaController }).__arena === controller) (window as unknown as { __arena?: ArenaController }).__arena = undefined
     },
   }
+  // a dev-only handle for checking art and UI from a script, like the cameras and the match (never in production)
+  if (import.meta.env.DEV) (window as unknown as { __arena?: ArenaController }).__arena = controller
+  return controller
 }

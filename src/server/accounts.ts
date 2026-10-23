@@ -53,7 +53,8 @@ export async function readCount(db: Db, key: string, bucket: string): Promise<nu
 
 export { dayBucket }
 
-export async function startSignIn(db: Db, rawEmail: string, ip: string, sender: EmailSender | undefined, baseUrl: string, now = new Date()): Promise<void> {
+/** Sends a one-time sign-in link and returns it; only the dev server ever shows it to the player (devSignInLink). */
+export async function startSignIn(db: Db, rawEmail: string, ip: string, sender: EmailSender | undefined, baseUrl: string, now = new Date()): Promise<string> {
   if (!sender) throw new AuthError('sign-in is not available right now', 503)
   const email = rawEmail.trim().toLowerCase()
   if (!EMAIL.test(email)) throw new AuthError('enter a valid email', 400)
@@ -64,7 +65,9 @@ export async function startSignIn(db: Db, rawEmail: string, ip: string, sender: 
   const token = randomBytes(32).toString('base64url')
   const expires = new Date(now.getTime() + LIMITS.tokenMinutes * 60_000)
   await db.query('insert into login_tokens (token_hash, email, expires_at) values ($1, $2, $3)', [sha(token), email, expires.toISOString()])
-  await sender.send(email, 'Your psyblr sign-in link', `Sign in to forge your hero: ${baseUrl}/?signin=${token}\nThe link works once and expires in ${LIMITS.tokenMinutes} minutes.`)
+  const link = `${baseUrl}/?signin=${token}`
+  await sender.send(email, 'Your psyblr sign-in link', `Sign in to forge your hero: ${link}\nThe link works once and expires in ${LIMITS.tokenMinutes} minutes.`)
+  return link
 }
 
 export interface SignedIn {

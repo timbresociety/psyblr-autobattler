@@ -3,7 +3,7 @@ import type { MatchEvent } from './events'
 import { move } from './locomotion'
 import { TAU } from './maths'
 import { next } from './rng'
-import { AIM_STEPS, IDLE, type Command, type HeroSetup, type MatchState } from './state'
+import { AIM_STEPS, IDLE, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
 
 /**
  * One fixed 60 Hz step (KTD1). Rules that act on heroes plug in through `TickRules`, so the core stays small: U4 adds
@@ -33,15 +33,35 @@ export function tick(match: MatchState, setups: readonly HeroSetup[], commands: 
     const hero = match.heroes[i]
     if (!hero.alive) continue
     for (const slot of BUILD_SLOTS) if (hero.cooldowns[slot] > 0) hero.cooldowns[slot]--
-    if (hero.stunnedUntil > match.tick) continue
-    const command = commands[i] ?? IDLE
+    // stunned, launched or asleep: nothing this tick
+    if (hero.stunnedUntil > match.tick || hero.cc.sleep > match.tick) continue
+    const command = compelled(match, hero, commands[i] ?? IDLE)
     hero.yaw = (command.aimYaw / AIM_STEPS) * TAU
     hero.pitch = (command.aimPitch / AIM_STEPS) * TAU
-    if (!hero.knockback) move(hero, setups[i], command)
+    if (!hero.knockback) move(hero, setups[i], command, match)
     rules.act?.(match, setups, i, command, events)
   }
   rules.after?.(match, setups, events)
   return events
+}
+
+/**
+ * Control that takes the hero's will away. A feared hero runs from whoever scared it and does nothing else; a
+ * taunted hero walks at its taunter and attacks it (deliveries aim the attack). Player and AI alike.
+ */
+function compelled(match: MatchState, hero: HeroState, command: Command): Command {
+  const now = match.tick
+  const flee = hero.cc.fear > now && hero.fearFrom >= 0 ? match.heroes[hero.fearFrom] : undefined
+  const chase = hero.cc.taunt > now && hero.tauntBy >= 0 ? match.heroes[hero.tauntBy] : undefined
+  const toward = (other: HeroState, sign: 1 | -1): Command => {
+    const dx = (other.position.x - hero.position.x) * sign
+    const dz = (other.position.z - hero.position.z) * sign
+    const len = Math.sqrt(dx * dx + dz * dz) || 1
+    return { ...command, moveX: dx / len, moveZ: dz / len, vertical: hero.airborne ? -1 : 0, buttons: sign > 0 ? slotBit('basic') : 0 }
+  }
+  if (flee?.alive) return toward(flee, -1)
+  if (chase?.alive) return toward(chase, 1)
+  return command
 }
 
 export const pause = (match: MatchState) => void (match.paused = true)

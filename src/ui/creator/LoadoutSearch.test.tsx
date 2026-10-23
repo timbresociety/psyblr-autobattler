@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { proposeBuild, type Build } from '../../charter/build'
 import type { CreatorDeps, HeroResult } from '../api'
@@ -27,6 +27,7 @@ function deps(over: Partial<CreatorDeps> = {}): CreatorDeps {
 }
 
 const typeName = (value: string) => fireEvent.change(screen.getByLabelText('Hero name'), { target: { value } })
+const roleGroup = () => screen.getByRole('radiogroup', { name: 'Role' })
 
 describe('global loadout (U12)', () => {
   it('typing "Jen" lists matching heroes within the debounce window', async () => {
@@ -45,7 +46,7 @@ describe('global loadout (U12)', () => {
     await act(async () => fireEvent.click(add))
     expect(d.addHero).toHaveBeenCalledWith('hero-jensen')
     expect(await screen.findByRole('heading', { name: 'Jensen' })).toBeTruthy()
-    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('marksman')
+    expect(within(roleGroup()).getByRole('radio', { name: 'Marksman' }).getAttribute('aria-checked')).toBe('true')
   })
 
   it("editing the added build saves to the player's own copy, not the shared original (AE7)", async () => {
@@ -54,7 +55,7 @@ describe('global loadout (U12)', () => {
     typeName('Jen')
     const add = await screen.findByRole('button', { name: 'Add free' })
     await act(async () => fireEvent.click(add))
-    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    await act(async () => fireEvent.click(within(roleGroup()).getByRole('radio', { name: 'Tank' })))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
     const saveButton = await screen.findByRole('button', { name: 'Save changes' })
     await act(async () => fireEvent.click(saveButton))

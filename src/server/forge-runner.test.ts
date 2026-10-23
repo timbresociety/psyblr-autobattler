@@ -87,6 +87,19 @@ async function finish(d: RunnerDeps, forge: Forge): Promise<Forge> {
   return f
 }
 
+/** Run every stage between the spec and the stat split, skipping the optional form stage when it is offered. */
+async function throughForm(d: RunnerDeps, forge: Forge): Promise<Forge> {
+  let f = forge
+  for (const stage of STAGE_ORDER.slice(1, -1)) {
+    if (stage === 'form') {
+      if (f.current === 'form') f = await act(d, f, { type: 'skip', stage: 'form' })
+      continue
+    }
+    f = await runStage(d, f, stage)
+  }
+  return f
+}
+
 async function specReady(d: RunnerDeps, accountId: string): Promise<Forge> {
   const forge = await startForge(d, accountId, DEVICE, { prompt: PROMPT })
   const chatted = await act(d, forge, { type: 'chat', text: PROMPT })
@@ -315,7 +328,7 @@ describe('publish (U10)', () => {
   it('when the publish commit loses a race, the hero rows it wrote are removed', async () => {
     const d = deps()
     let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
-    for (const stage of STAGE_ORDER.slice(1, -1)) f = await runStage(d, f, stage)
+    f = await throughForm(d, f)
     f = await settle(d, await act(d, f, { type: 'start', stage: 'stats' }))
     await db.query('update forges set version = version + 1 where id = $1', [f.id])
     await expect(publishForge(d, f)).rejects.toMatchObject({ status: 409 })
@@ -326,7 +339,7 @@ describe('publish (U10)', () => {
   it('a blocked gate result does not publish', async () => {
     const d = { ...deps(), gateOptions: { duelsPerMember: 2, candidateScale: 3 } }
     let f = await act(d, await specReady(d, await account()), { type: 'confirm', stage: 'spec' })
-    for (const stage of STAGE_ORDER.slice(1, -1)) f = await runStage(d, f, stage)
+    f = await throughForm(d, f)
     f = await settle(d, await act(d, f, { type: 'start', stage: 'stats' }))
     const after = await act(d, f, { type: 'confirm', stage: 'stats' })
     expect(after.current).toBe('stats')

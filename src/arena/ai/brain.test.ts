@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { armyModifiers } from '../../charter/synergy'
 import { getTemplate } from '../../charter/templates/catalog'
+import { referenceArmy } from '../../sim/field'
 import { defaultBuild } from '../../sim/fixtures'
 import { chest } from '../engine/deliveries'
 import type { MatchEvent } from '../engine/events'
-import { createMatch, matchRules, play, type Arena } from '../engine/match'
+import { GATE_PROFILE, createMatch, matchRules, play, type Arena } from '../engine/match'
 import { hashState } from '../engine/snapshot'
 import { tick } from '../engine/tick'
 import { anglesTo, trackAim } from './aim'
@@ -24,7 +25,7 @@ describe('demo AI (U7)', () => {
   it('uses an escape skill below 30% health when an enemy is near', () => {
     const build = defaultBuild('assassin')
     const sprint = { ...build, slots: { ...build.slots, movement: { ...build.slots.movement, templateId: 'shared-sprint-burst' } } }
-    const a = createMatch([{ build: sprint }], [{ build: defaultBuild('fighter') }], 1, { formations: [[{ x: 0, y: 0, z: -2 }], [{ x: 0, y: 0, z: 2 }]] })
+    const a = createMatch([{ build: sprint }], [{ build: defaultBuild('fighter') }], 1, { formations: [[{ x: 0, y: 0, z: -2 }], [{ x: 0, y: 0, z: 2 }]], cover: false })
     a.match.heroes[0].hp = a.match.heroes[0].maxHp * 0.2
     expect(getTemplate('shared-sprint-burst').ai.use).toBe('escape')
     expect(casts(run(a, 60), 0)).toContain('movement')
@@ -34,7 +35,7 @@ describe('demo AI (U7)', () => {
     const build = defaultBuild('fighter')
     const meteor = { ...build, slots: { ...build.slots, ultimate: { ...build.slots.ultimate, templateId: 'fighter-meteor-combo' } } }
     const setup = (hpFraction: number) => {
-      const a = createMatch([{ build: meteor }], [{ build: defaultBuild('tank') }], 2, { formations: [[{ x: 0, y: 0, z: -1 }], [{ x: 0, y: 0, z: 1 }]] })
+      const a = createMatch([{ build: meteor }], [{ build: defaultBuild('tank') }], 2, { formations: [[{ x: 0, y: 0, z: -1 }], [{ x: 0, y: 0, z: 1 }]], cover: false })
       a.match.heroes[0].cooldowns.ultimate = 0
       a.match.heroes[1].hp = a.match.heroes[1].maxHp * hpFraction
       return a
@@ -85,7 +86,7 @@ describe('demo AI (U7)', () => {
   it('dodges some projectiles it can see, and never one beyond sight', () => {
     let dodged = 0
     for (let seed = 1; seed <= 20; seed++) {
-      const a = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], seed, { formations: [[{ x: 0, y: 0, z: -10 }], [{ x: 0, y: 0, z: 10 }]] })
+      const a = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('marksman') }], seed, { formations: [[{ x: 0, y: 0, z: -10 }], [{ x: 0, y: 0, z: 10 }]], cover: false })
       aiCommands(a)
       const me = chest(a.match.heroes[0])
       a.match.projectiles.push({ id: 1, owner: 1, slot: 'basic', position: { x: me.x, y: me.y, z: me.z + AI.seeDistance - 4 }, step: { x: 0, y: 0, z: -0.5 }, ticksLeft: 60 })
@@ -142,5 +143,29 @@ describe('demo AI (U7)', () => {
     expect(used('ultimate')).toBeGreaterThanOrEqual(3)
     expect(play).toBeDefined()
     expect(Math.abs(wrapAngle(7))).toBeLessThan(Math.PI + 1e-9)
+  })
+
+  it('fights on the ground among the ruins instead of drifting up into the sky (R25)', () => {
+    const army = referenceArmy()
+    const arena = createMatch(armyModifiers(army), armyModifiers(army), 3)
+    const rules = matchRules(arena)
+    let airborne = 0
+    let samples = 0
+    for (let i = 0; i < 60 * 40 && arena.match.winner === undefined; i++) {
+      tick(arena.match, arena.setups, aiCommands(arena), rules)
+      // a hero thrown up by a knock-up is not flying, it is falling
+      for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && !h.launch && airborne++)
+    }
+    // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall
+    expect(airborne / samples).toBeLessThan(0.1)
+  })
+
+  it('a sword across low cover from its target goes round it rather than standing there swinging at stone', () => {
+    // a fighter and an assassin meet across the fallen column in the middle; when they stood still, every seed timed out
+    for (const seed of [1, 2, 3]) {
+      const arena = createMatch([{ build: defaultBuild('fighter') }], [{ build: defaultBuild('assassin') }], seed, { profile: GATE_PROFILE })
+      play(arena, aiCommands)
+      expect(arena.match.endReason).toBe('wipe')
+    }
   })
 })

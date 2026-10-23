@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "sim": "node scripts/sim.mjs"
+    "sim": "node scripts/sim.mjs",
+    "bench:gate": "GATE_BENCH=1 vitest run src/sim/gate.bench.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",

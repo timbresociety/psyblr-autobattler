@@ -98,6 +98,19 @@ export class CosmeticPhysics {
     return b
   }
 
+  /** Throw `count` chunks from `at`, for a barrier the engine just broke. */
+  burst(at: Vec3, count: number) {
+    if (this.broken) return
+    try {
+      for (let i = 0; i < count && this.budget(); i++) {
+        const a = (i / count) * Math.PI * 2
+        this.debris.push(this.body({ x: at.x + Math.cos(a) * 0.4, y: at.y, z: at.z + Math.sin(a) * 0.4 }, { x: Math.cos(a) * 5, y: 4 + (i % 3) * 2, z: Math.sin(a) * 5 }, 10, { x: 0.18, y: 0.12, z: 0.25 }))
+      }
+    } catch {
+      this.broken = true
+    }
+  }
+
   /** React to this tick's engine events. */
   events(events: readonly MatchEvent[], match: MatchState) {
     if (this.broken) return

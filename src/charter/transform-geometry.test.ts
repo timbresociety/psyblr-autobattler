@@ -74,10 +74,11 @@ describe('locomotion (R28)', () => {
   it('derives flight and jump reach from move speed, and the hint names all three', () => {
     const l = locomotion(6)
     expect(l.ground).toBe(6)
-    expect(l.flight).toBeGreaterThan(6)
+    expect(l.flight).toBeLessThan(6)
     expect(locomotion(8).jumpReach).toBeGreaterThan(l.jumpReach)
     expect(LOCOMOTION_HINT).toMatch(/Ground speed/)
     expect(LOCOMOTION_HINT).toMatch(/Flight/)
+    expect(LOCOMOTION_HINT).toMatch(/flight meter/)
     expect(LOCOMOTION_HINT).toMatch(/jump range/)
   })
 })

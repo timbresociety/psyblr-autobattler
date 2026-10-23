@@ -12,7 +12,7 @@ import { createRng } from './rng'
 
 const args = new Map<string, string>()
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ''), process.argv[i + 1])
-const SAMPLES = Number(args.get('samples') ?? 60)
+const SAMPLES = Number(args.get('samples') ?? 40)
 const ARMY_SEEDS = Number(args.get('army-seeds') ?? 20)
 const SEED = Number(args.get('seed') ?? 7)
 
@@ -30,7 +30,7 @@ for (const build of referenceField()) {
 }
 
 console.log(`\nSampled builds: ${SAMPLES} seeded random legal builds`)
-const samples = sampleBuilds(SAMPLES, SEED).map((build) => ({ build, rate: winRateVsField(build, { duelsPerMember: 12 }) }))
+const samples = sampleBuilds(SAMPLES, SEED).map((build) => ({ build, rate: winRateVsField(build, { duelsPerMember: 8 }) }))
 samples.sort((a, b) => b.rate - a.rate)
 const over = samples.filter((s) => s.rate > GATE_CEILING)
 console.log(`  ${over.length} of ${SAMPLES} would be retuned or blocked by the gate`)
@@ -65,20 +65,23 @@ for (const army of armies.slice(ROLE_IDS.length)) {
 }
 console.log(`\nTemplate distinctness: ${pct(unique / total)} of heroes in sampled mixed armies have a unique template set`)
 
-// Team fights on the 3D engine still mostly run to the timer, so until the team AI is tuned in playtests (U18) the
-// army check warns instead of failing; per-hero duel balance (R15) is what gates every build.
+// 10v10 armies swing more than the gate's 3v3 skirmishes, so the army check warns instead of failing; per-hero
+// skirmish balance (R15) is what gates every build.
 console.log(`\nArmies (warning only): 10-hero armies of gate-passed builds against the reference army, synergy applied (${ARMY_SEEDS} fights each)`)
 let blocked = 0
-// every hero in a real army has passed the gate, so sampled armies are gated (and retuned) first
-const gated = (b: Build): Build | undefined => {
-  const outcome = runGate(b, { duelsPerMember: 12 })
+// every hero in a real army has passed the gate, so mixed armies are gated (and retuned) first; a single-role army
+// loses to the stacking penalty whatever its kits, so gating it would only cost time
+const gated = (b: Build, mixed: boolean): Build | undefined => {
+  if (!mixed) return b
+  const outcome = runGate(b, { duelsPerMember: 6 })
   if (outcome.state === 'blocked') blocked++
   return outcome.state === 'ready' ? outcome.build : undefined
 }
 // the yardstick is the reference army: one default build per role plus a second line of the core roles
 const refs = [armyModifiers(referenceArmy())]
 const armyRates = armies.map((army) => {
-  const mine = armyModifiers(army.builds.map(gated).filter((b): b is Build => !!b))
+  const mixed = army.label.startsWith('themed')
+  const mine = armyModifiers(army.builds.map((b) => gated(b, mixed)).filter((b): b is Build => !!b))
   const fight = (from: number, count: number) => {
     let score = 0
     for (let s = from; s < from + count; s++) score += playScored(mine, refs[s % refs.length], Math.floor(s / refs.length) % 2 === 1, SEED * 31 + s)

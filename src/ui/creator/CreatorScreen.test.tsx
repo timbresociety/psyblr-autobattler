@@ -33,10 +33,14 @@ async function forge(d: CreatorDeps) {
   await screen.findByRole('heading', { name: 'Dario' })
 }
 
+/** The role is a radio group of tiles (R10). */
+const roleNow = () => (screen.getByRole('radiogroup', { name: 'Role' }).querySelector('[aria-checked="true"]') as HTMLElement).dataset.roleId
+const pickRole = (name: string) => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Role' })).getByRole('radio', { name }))
+
 describe('creator (U11)', () => {
   it('name and first message produce a role, six skill cards and a stat split (F1)', async () => {
     await forge(deps())
-    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('mage')
+    expect(roleNow()).toBe('mage')
     expect(screen.getAllByRole('article')).toHaveLength(6)
     expect(screen.getByLabelText('Stat split')).toBeTruthy()
     expect(screen.getByText(/of 30 points free/)).toBeTruthy()
@@ -66,19 +70,22 @@ describe('creator (U11)', () => {
     await forge(deps())
     fireEvent.change(screen.getByLabelText('Active 1 name'), { target: { value: 'Rewind' } })
     const before = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
-    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    await act(async () => pickRole('Tank'))
     expect((screen.getByLabelText('Active 1 name') as HTMLInputElement).value).toBe('Rewind')
     expect(screen.getByText(/30 of 30 points free/)).toBeTruthy()
     const after = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
     expect(after).not.toBe(before)
   })
 
-  it('the swap menu offers 2 to 3 alternatives and swapping updates the tooltip live', async () => {
+  it('the swap menu offers the closest 2 to 3 first, then the whole library by family, and swapping updates the tooltip live', async () => {
     await forge(deps())
     const select = screen.getByLabelText('Ultimate mechanic') as HTMLSelectElement
-    expect(select.options.length - 1).toBeGreaterThanOrEqual(2)
-    expect(select.options.length - 1).toBeLessThanOrEqual(3)
-    const target = select.options[1]
+    const groups = [...select.querySelectorAll('optgroup')]
+    expect(groups[0].label).toBe('Closest to your words')
+    expect(groups[0].querySelectorAll('option').length).toBeGreaterThanOrEqual(2)
+    expect(groups[0].querySelectorAll('option').length).toBeLessThanOrEqual(3)
+    expect(select.options.length).toBeGreaterThanOrEqual(7)
+    const target = select.options[select.options.length - 1]
     await act(async () => fireEvent.change(select, { target: { value: target.value } }))
     expect(within(screen.getByLabelText('Ultimate tooltip')).getByText(target.textContent as string)).toBeTruthy()
   })
@@ -99,6 +106,22 @@ describe('creator (U11)', () => {
     const alt = within(alert).getAllByRole('button')[0]
     await act(async () => fireEvent.click(alt))
     expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('a kit too weak to hold its own is blocked with the slot holding it back, not sent in hopeless', async () => {
+    const runGate = vi.fn(async (build: Build): Promise<GateOutcome> => ({
+      state: 'blocked',
+      winRate: 0.04,
+      strongestSlot: 'basic',
+      alternatives: swapAlternatives(build, 'basic'),
+      build: { ...build, gate: { state: 'blocked', winRate: 0.04, strongestSlot: 'basic', blockedFor: 'weak' } },
+    }))
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/Too weak to hold its own/)
+    expect(alert.textContent).toMatch(/Basic attack is holding it back|holding it back/)
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('with the API offline, the creator still proposes a kit and shows an offline notice', async () => {
@@ -144,10 +167,10 @@ describe('creator async safety', () => {
     const runGate = vi.fn((build: Build) => new Promise<GateOutcome>((resolve) => { finish = resolve; void build }))
     await forge(deps({ runGate }))
     fireEvent.click(screen.getByRole('button', { name: 'Ready' }))
-    await act(async () => fireEvent.change(screen.getByLabelText('Role'), { target: { value: 'tank' } }))
+    await act(async () => pickRole('Tank'))
     const stale = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: {} }).build
     await act(async () => finish({ state: 'ready', winRate: 0.5, build: { ...stale, gate: { state: 'ready', winRate: 0.5 } } }))
-    expect((screen.getByLabelText('Role') as HTMLSelectElement).value).toBe('tank')
+    expect(roleNow()).toBe('tank')
     expect(await screen.findByText(/changed during the balance check/)).toBeTruthy()
   })
 

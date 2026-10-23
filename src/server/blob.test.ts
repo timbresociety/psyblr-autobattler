@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_PHOTO_BYTES, PhotoError, detectImageType, uploadPhoto } from './blob'
+import { MAX_PHOTO_BYTES, PhotoError, detectImageType, devPut, pickPut, uploadPhoto } from './blob'
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])
@@ -31,5 +31,15 @@ describe('photo upload', () => {
     const b = await uploadPhoto(png, { put })
     expect(a.url).not.toBe(b.url)
     expect(put.mock.calls[0][0]).toMatch(/^heroes\/[0-9a-f-]{36}\.webp$/)
+  })
+
+  it('keeps photos working on the local dev server: a data URL with fakes on and no Blob token, never in production', async () => {
+    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1' })).toBe(devPut)
+    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1', BLOB_READ_WRITE_TOKEN: 'set' })).toBeUndefined()
+    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1', VERCEL_ENV: 'production' })).toBeUndefined()
+    expect(pickPut({})).toBeUndefined()
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
+    const { url } = await uploadPhoto(png, { put: devPut })
+    expect(url).toBe(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
   })
 })

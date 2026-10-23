@@ -1,18 +1,11 @@
-.arena { position: fixed; inset: 0; top: var(--tabs-height, 44px); background: #10141c; color: #e8eef8; overflow: hidden; }
-.arena-canvas { position: absolute; inset: 0; }
-.arena-overlay { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; background: rgba(8, 10, 16, 0.72); font-size: 15px; }
-.arena-progress { width: min(360px, 70vw); height: 6px; border-radius: 3px; background: #2a3342; overflow: hidden; }
-.arena-progress > div { height: 100%; background: #6fd0ff; transition: width 0.2s; }
-.arena-top { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: flex; gap: 18px; align-items: center; padding: 6px 14px; border-radius: 10px; background: rgba(0, 0, 0, 0.55); font: 600 15px/1.2 ui-sans-serif, system-ui; }
-.arena-top .timer { font-variant-numeric: tabular-nums; font-size: 18px; }
-.arena-top .team-a { color: #6fb7ff; }
-.arena-top .team-b { color: #ff8a70; }
+/* The Arena: everything inside a running match. Staging lives in staging/staging.css. */
 
-.staging-pick h2 { margin: 0 0 8px; }
-.staging { position: fixed; inset: 0; top: var(--tabs-height, 44px); display: grid; grid-template-columns: minmax(200px, 260px) 1fr minmax(240px, 320px); grid-template-rows: 1fr auto; gap: 12px; padding: 12px; background: #10141c; color: #e8eef8; }
-.staging-board { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.staging-board .board { width: 100%; max-height: 62vh; aspect-ratio: 4 / 3; border-radius: 10px; touch-action: none; cursor: crosshair; }
-.staging-board .token { cursor: grab; }
+.arena { position: fixed; inset: 0; top: var(--tabs-height, 44px); background: #241a2e; color: #fff6ea; overflow: hidden; }
+.arena-canvas { position: absolute; inset: 0; }
+.arena-overlay { position: absolute; inset: 0; display: grid; place-content: center; gap: 12px; text-align: center; background: radial-gradient(ellipse at center, rgba(30, 18, 40, 0.6), rgba(12, 8, 20, 0.85)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: 15px; }
+.arena-overlay h2 { font-size: 30px; letter-spacing: -0.01em; margin: 0; }
+
+/* ── panels the HUD shares (staging has its own look in staging/staging.css) ── */
 .arena-panel { background: #182030; border-radius: 10px; padding: 12px; overflow: auto; font-size: 13px; }
 .arena-panel h3 { margin: 0 0 8px; font-size: 15px; }
 .arena-panel .lit { color: #7dffa0; }
@@ -20,48 +13,419 @@
 .arena-panel ul { margin: 0; padding-left: 16px; }
 .arena-panel .skills li { margin-bottom: 6px; }
 .arena-panel .skills span { display: block; color: #a9b4c6; }
-.bust-row { grid-column: 1 / -1; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.bust { flex: 0 0 auto; width: 92px; display: grid; justify-items: center; gap: 2px; padding: 6px 4px; border-radius: 10px; background: #1d2638; border: 1px solid #2c3850; color: inherit; cursor: grab; }
-.bust.on { border-color: #6fd0ff; }
-.bust img { width: 64px; height: 64px; }
-.bust .initials { width: 64px; height: 64px; display: grid; place-items: center; font-weight: 700; font-size: 20px; background: #2a3550; border-radius: 50%; }
-.bust-name { font-size: 11px; line-height: 1.2; text-align: center; max-height: 2.4em; overflow: hidden; }
-.bust-symbol { font-size: 14px; }
-@media (max-width: 900px) { .staging { grid-template-columns: 1fr; overflow: auto; } }
-.staging-board .row select { width: auto; margin-left: 4px; }
-.hud-left { position: absolute; top: 60px; left: 12px; width: 230px; }
-.hud-stats-toggle { position: absolute; top: 12px; right: 12px; }
-.hud-stats { position: absolute; top: 48px; right: 12px; max-height: 60vh; width: 280px; }
-.hud-stats table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.hud-stats td, .hud-stats th { padding: 2px 4px; text-align: left; }
-.hud-stats .team-0 td:first-child { color: #6fb7ff; }
-.hud-stats .team-1 td:first-child { color: #ff8a70; }
-.hud-stats .dead { opacity: 0.4; }
-.roster { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; max-width: calc(100vw - 24px); overflow-x: auto; }
-.roster li { position: relative; width: 118px; padding: 4px 6px 8px; border-radius: 8px; background: rgba(10, 14, 22, 0.78); font-size: 11px; }
-.roster li.dead { opacity: 0.35; filter: grayscale(1); }
-.roster li.controlled { outline: 2px solid #fff; }
-.roster li.fallback .name::after { content: ' ⚠'; color: #ffb86b; }
-.roster kbd { font-size: 10px; padding: 0 4px; border-radius: 4px; background: #2a3550; margin-right: 4px; }
-.roster .name { display: inline-block; max-width: 86px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; vertical-align: bottom; }
-.hp { position: absolute; left: 6px; bottom: 3px; height: 3px; max-width: calc(100% - 12px); background: #6fd07a; border-radius: 2px; }
-.hp.big { position: static; display: block; height: 6px; max-width: 220px; margin: 4px 0; }
-.cds { display: flex; gap: 3px; margin-top: 3px; }
-.cd { position: relative; min-width: 20px; height: 18px; display: grid; place-items: center; border-radius: 4px; font-size: 10px; background: #2f8f5b; }
-.cd.wait { background: #39404d; color: #8a93a3; }
-.cd small { position: absolute; right: -2px; top: -6px; font-size: 9px; color: #fff; background: #000a; padding: 0 2px; border-radius: 3px; }
-.control-hud { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; padding: 8px 12px; border-radius: 10px; background: rgba(10, 14, 22, 0.78); font-size: 12px; }
-.reticle { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 6px #000; pointer-events: none; }
-.arena-hint { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); padding: 10px 16px; border-radius: 10px; background: rgba(8, 10, 16, 0.78); text-align: center; }
-.arena-hint p { margin: 4px 0; }
+.arena-panel { background: var(--glass); border: 1px solid var(--glass-line); border-radius: 14px; backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3); box-shadow: 0 8px 24px rgba(10, 6, 20, 0.35); }
 
-.countdown { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font-size: 96px; font-weight: 800; color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); pointer-events: none; }
-.pause-menu, .result { gap: 10px; }
-.pause-menu .column { display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
-.result table { border-collapse: collapse; font-size: 13px; max-height: 50vh; overflow: auto; display: block; }
-.result td, .result th { padding: 3px 10px; text-align: left; }
-.result tr.team-0 td:first-child { color: #7fb4ff; }
-.result tr.team-1 td:first-child { color: #ff8f7f; }
-.result tr.dead { opacity: 0.55; }
-.volume { display: inline-flex; gap: 8px; align-items: center; }
-.hud-volume { position: absolute; top: 8px; right: 110px; }
+/* ── match tokens ────────────────────────────────────────────────────────── */
+@property --done { syntax: '<percentage>'; inherits: true; initial-value: 100%; }
+
+.arena {
+  --blue: #4fa3ff; --red: #ff6a4a; --gold: #ffcf5a; --gold-hot: #ffad2e;
+  --ink: #fff6ea; --ink-dim: rgba(255, 242, 228, 0.7); --ink-faint: rgba(255, 242, 228, 0.42);
+  --glass: rgba(20, 13, 34, 0.56); --glass-strong: rgba(15, 9, 26, 0.8); --glass-line: rgba(255, 236, 214, 0.16);
+  --hud-display: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --hud-font: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --edge: 16px;
+  --card-w: clamp(78px, 6.5vw, 98px);
+  --roster-h: calc(var(--card-w) * 0.5 + (var(--card-w) - 14px) / 3 + 46px);
+  font-family: var(--hud-font);
+}
+.arena .team-0 { --team: var(--blue); --team-rgb: 79, 163, 255; }
+.arena .team-1 { --team: var(--red); --team-rgb: 255, 106, 74; }
+.arena .tone-phys { --tone-rgb: 255, 184, 102; }
+.arena .tone-spirit { --tone-rgb: 200, 156, 255; }
+.arena .tone-heal { --tone-rgb: 116, 240, 158; }
+.arena .tone-shield { --tone-rgb: 160, 228, 255; }
+.arena .tone-move { --tone-rgb: 120, 214, 255; }
+.arena .tone-cc { --tone-rgb: 255, 226, 110; }
+.arena .tone-buff { --tone-rgb: 255, 160, 96; }
+
+.hud { position: absolute; inset: 0; z-index: 1; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.hud button, .hud summary, .hud input, .hud .arena-panel, .hud .arena-overlay, .hud-stats { pointer-events: auto; }
+/* while watching, a roster card is a way to point the camera at that hero */
+.hud-card.follows, .hud-foe.follows { pointer-events: auto; cursor: pointer; }
+.hud-card.follows:hover, .hud-foe.follows:hover { filter: brightness(1.15); }
+.hud-card.followed, .hud-foe.followed { box-shadow: 0 0 0 2px var(--gold); }
+.arena .hud-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.arena kbd { display: inline-grid; place-items: center; min-width: 1.6em; height: 1.6em; padding: 0 0.35em; border-radius: 4px; background: rgba(255, 246, 234, 0.12); box-shadow: inset 0 0 0 1px rgba(255, 246, 234, 0.28), 0 1px 0 rgba(0, 0, 0, 0.4); font: 700 0.78em/1 var(--hud-font); color: var(--ink); vertical-align: 0.1em; }
+
+/* buttons: an angled plate behind upright italic type */
+.arena .hud-btn { position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 14px; border: 0; border-radius: 0; background: none; color: var(--ink); font: 700 italic 15px/1 var(--hud-display); letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
+.arena .hud-btn::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 3px; transform: skewX(-12deg); background: linear-gradient(180deg, rgba(42, 30, 62, 0.86), rgba(20, 13, 34, 0.86)); box-shadow: inset 0 0 0 1px var(--glass-line), inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 18px rgba(8, 4, 16, 0.35); transition: background 0.15s, box-shadow 0.15s, transform 0.15s; }
+.arena .hud-btn:hover:not(:disabled)::before { background: linear-gradient(180deg, rgba(66, 46, 92, 0.92), rgba(32, 21, 52, 0.92)); box-shadow: inset 0 0 0 1px rgba(255, 207, 90, 0.55), 0 6px 18px rgba(8, 4, 16, 0.4); }
+.arena .hud-btn:active:not(:disabled)::before { transform: skewX(-12deg) scale(0.97); }
+.arena .hud-btn:focus-visible { outline: none; }
+.arena .hud-btn:focus-visible::before { box-shadow: inset 0 0 0 2px var(--gold), 0 0 0 3px rgba(255, 207, 90, 0.3); }
+.arena .hud-btn[aria-pressed='true']::before { box-shadow: inset 0 0 0 1px var(--gold), inset 0 -2px 0 var(--gold); }
+.arena .hud-btn.primary { color: #1d1206; }
+.arena .hud-btn.primary::before { background: linear-gradient(180deg, #ffe08a, #ffad2e); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 0 22px rgba(255, 170, 60, 0.45); }
+.arena .hud-btn.primary:hover::before { background: linear-gradient(180deg, #fff0b8, #ffbf4d); }
+.arena .hud-btn.big { min-height: 48px; padding: 0 28px; font-size: 21px; font-weight: 800; }
+.arena .hud-btn .hud-icon { width: 18px; height: 18px; }
+
+/* ── shared pieces ───────────────────────────────────────────────────────── */
+.hud-portrait { position: relative; display: grid; place-items: center; flex: none; width: 32px; height: 32px; overflow: hidden; border-radius: 5px; background: radial-gradient(circle at 50% 30%, rgba(var(--team-rgb, 255, 255, 255), 0.55), rgba(16, 10, 28, 0.95) 75%); box-shadow: inset 0 0 0 1px rgba(var(--team-rgb, 255, 255, 255), 0.65); }
+.hud-portrait img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; transform: scale(1.18); }
+.hud-initials { font: 800 italic 1em/1 var(--hud-display); color: var(--ink); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); letter-spacing: 0.02em; }
+
+.hud-hp { position: relative; display: block; height: 6px; border-radius: 2px; overflow: hidden; background: rgba(8, 5, 16, 0.75); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.hud-hp > i { position: absolute; inset: 0; transform-origin: 0 50%; }
+.hud-hp-fill { background: linear-gradient(180deg, color-mix(in srgb, var(--team, #7dffa0) 62%, white), var(--team, #7dffa0)); transition: transform 0.2s ease-out; }
+.hud-hp-sh { background: rgba(255, 255, 255, 0.92); }
+.hud-hp::after, .hud-oh-bar::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(var(--seg, 10%) - 1px), rgba(8, 5, 16, 0.85) calc(var(--seg, 10%) - 1px) var(--seg, 10%)); pointer-events: none; }
+.hud-hp.low .hud-hp-fill { background: linear-gradient(180deg, #ffb39a, #ff3d2e); animation: hud-low 0.8s ease-in-out infinite alternate; }
+
+/* ability chips: icon, clockwise cooldown sweep, seconds, key */
+.hud-ab { position: relative; display: grid; place-items: center; flex: none; width: 26px; aspect-ratio: 1; border-radius: 5px; color: rgb(var(--tone-rgb)); background: radial-gradient(circle at 50% 28%, rgba(var(--tone-rgb), 0.34), rgba(12, 8, 22, 0.9) 72%); box-shadow: inset 0 0 0 1px rgba(var(--tone-rgb), 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.16); }
+.hud-ab .hud-icon { width: 64%; height: 64%; }
+.hud-ab::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: conic-gradient(transparent 0 var(--done), rgba(6, 4, 14, 0.76) var(--done) 100%); pointer-events: none; }
+.hud-ab.is-ready::after { display: none; }
+.hud-ab.is-ready { animation: hud-ready 0.4s ease-out; }
+.hud-ab.is-cd .hud-icon { opacity: 0.42; }
+/* only the five big chips of the control cluster sweep smoothly between 10 Hz updates */
+.hud-ab.size-md, .hud-ab.size-lg { transition: --done 0.12s linear; }
+.hud-ab.size-md .hud-icon, .hud-ab.size-lg .hud-icon { filter: drop-shadow(0 0 4px rgba(var(--tone-rgb), 0.75)); }
+.hud-ab-sec { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; font: 800 italic 14px/1 var(--hud-display); color: #fff; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.8); }
+.arena .hud-ab-key { position: absolute; left: 1px; bottom: 1px; z-index: 3; min-width: 0; height: auto; padding: 1px 2px; border-radius: 3px; background: rgba(6, 4, 14, 0.78); box-shadow: none; font: 700 8px/1 var(--hud-font); color: var(--ink); }
+.hud-ab.is-ult { border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(255, 207, 90, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.16); }
+.hud-ab.is-ult .hud-ab-key { left: 50%; bottom: 0; transform: translateX(-50%); }
+.hud-ab.is-ult.is-ready { color: var(--gold); background: radial-gradient(circle at 50% 30%, rgba(255, 214, 110, 0.55), rgba(40, 24, 8, 0.92) 72%); box-shadow: inset 0 0 0 2px var(--gold), 0 0 8px 1px rgba(255, 186, 70, 0.6); }
+.hud-ab.is-ult.is-ready::after { display: block; inset: -3px; border-radius: 50%; background: none; box-shadow: 0 0 14px 3px rgba(255, 186, 70, 0.85), inset 0 0 0 1px rgba(255, 241, 184, 0.9); animation: hud-ult 1.6s ease-in-out infinite; }
+.hud-ab.size-xs { width: 22px; border-radius: 4px; }
+.hud-ab.size-xs .hud-ab-sec { font-size: 12px; }
+.hud-ab.size-xs .hud-ab-key { font-size: 7px; padding: 0 1px; }
+.hud-ab.size-md { width: 50px; border-radius: 8px; }
+.hud-ab.size-md .hud-ab-sec { font-size: 24px; }
+.hud-ab.size-md .hud-ab-key { left: 50%; bottom: -1px; transform: translateX(-50%); padding: 2px 5px; font-size: 10px; border-radius: 4px 4px 0 0; }
+.hud-ab.size-lg { width: 74px; }
+.hud-ab.size-lg .hud-ab-sec { font-size: 32px; }
+.hud-ab.size-lg .hud-ab-key { padding: 2px 6px; font-size: 11px; border-radius: 4px 4px 0 0; }
+.hud-ab.size-lg::before { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: conic-gradient(rgba(255, 207, 90, 0.95) 0 var(--done), rgba(255, 207, 90, 0.12) var(--done) 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+
+/* ── per-frame layer: overhead bars and damage numbers ───────────────────── */
+.hud-world { position: absolute; inset: 0; overflow: hidden; pointer-events: none; contain: strict; }
+.hud-oh { position: absolute; left: 0; top: 0; width: 80px; display: grid; gap: 2px; transform-origin: 50% 100%; will-change: transform; }
+.hud-oh-top { display: flex; align-items: center; justify-content: center; gap: 4px; height: 13px; font: 700 italic 13px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.6); }
+.hud-oh-name { max-width: 66px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hud-oh-ult { flex: none; width: 7px; height: 7px; transform: rotate(45deg); background: rgba(255, 255, 255, 0.22); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7); }
+.hud-oh-ult.ready { background: var(--gold); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 0 8px 2px rgba(255, 186, 70, 0.85); }
+.hud-oh-bar { position: relative; height: 8px; border-radius: 2px; overflow: hidden; background: rgba(8, 5, 16, 0.8); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75), 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(var(--team-rgb), 0.35); }
+.hud-oh-bar > i { position: absolute; inset: 0; transform-origin: 0 50%; }
+.hud-oh-trail { background: #fff1c2; opacity: 0.85; }
+.hud-oh-hp { background: linear-gradient(180deg, color-mix(in srgb, var(--team) 60%, white), var(--team) 70%); }
+.hud-oh-sh { background: rgba(255, 255, 255, 0.95); transform: scaleX(0); }
+.hud-oh.low .hud-oh-bar { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75), 0 0 8px rgba(255, 70, 40, 0.75); }
+.hud-oh.far .hud-oh-top, .hud-oh.crowded .hud-oh-top { visibility: hidden; }
+/* statuses under the bar: hard control loud, soft control amber, debuffs violet, protections cyan */
+.hud-oh-st { display: flex; justify-content: center; gap: 3px; min-height: 0; }
+.hud-oh-chip { padding: 1px 4px 2px; border-radius: 2px; font: 700 9px/1 var(--hud-display); font-style: normal; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: #120a1e; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7), 0 1px 4px rgba(0, 0, 0, 0.5); }
+.hud-oh-chip.tone-hard { background: #ff5a3c; color: #fff; }
+.hud-oh-chip.tone-soft { background: #ffd25e; }
+.hud-oh-chip.tone-debuff { background: #c69bff; }
+.hud-oh-chip.tone-state { background: #7fe3ff; }
+.hud-oh.far .hud-oh-st { display: none; }
+
+.hud-dmg { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; will-change: transform, opacity; white-space: nowrap; font: 800 italic 22px/1 var(--hud-display); color: #fff; -webkit-text-stroke: 1px rgba(24, 10, 34, 0.75); paint-order: stroke fill; text-shadow: 0 2px 0 rgba(24, 10, 34, 0.65), 0 0 10px rgba(0, 0, 0, 0.45); }
+.hud-dmg.own { color: #ffe36e; }
+.hud-dmg.heavy { font-size: 32px; color: #ff9a3c; text-shadow: 0 2px 0 rgba(70, 14, 0, 0.75), 0 0 16px rgba(255, 120, 40, 0.85); }
+
+/* ── score banner ────────────────────────────────────────────────────────── */
+/* equal plates either side keep the clock dead centre even when the sides are uneven */
+.hud-banner { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; }
+.hud-plate { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 14px 6px; background: linear-gradient(180deg, rgba(var(--team-rgb), 0.3), rgba(16, 10, 28, 0.74) 70%); box-shadow: inset 0 -2px 0 var(--team); backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3); }
+.hud-plate.team-0 { clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%); padding-left: 22px; padding-right: 26px; }
+.hud-plate.team-1 { flex-direction: row-reverse; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 100%, 0 100%); padding-right: 22px; padding-left: 26px; }
+.hud-plate-count { display: grid; justify-items: center; min-width: 34px; }
+.hud-plate-count b { font: 800 italic 34px/0.9 var(--hud-display); color: var(--team); text-shadow: 0 0 14px rgba(var(--team-rgb), 0.7); font-variant-numeric: tabular-nums; }
+.hud-plate-count small { font: 700 10px/1.2 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
+.hud-plate.mine .hud-plate-count small { color: var(--gold); }
+.hud-pips { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.hud-plate.team-1 .hud-pips { flex-direction: row-reverse; }
+.hud-pip { position: relative; display: grid; gap: 2px; width: 22px; }
+.hud-pip .hud-portrait { width: 22px; height: 24px; border-radius: 3px; font-size: 10px; }
+.hud-pip::after { content: ''; height: 3px; border-radius: 1px; background: rgba(8, 5, 16, 0.8); }
+.hud-pip-hp { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 1px; background: var(--team); transform-origin: 0 50%; transition: transform 0.2s ease-out; z-index: 1; }
+.hud-pip.low .hud-pip-hp { background: #ff4a32; }
+.hud-pip.dead .hud-portrait { filter: grayscale(1) brightness(0.5); }
+.hud-pip.dead .hud-portrait::after { content: ''; position: absolute; inset: 0; background: linear-gradient(45deg, transparent 44%, rgba(255, 92, 70, 0.95) 44% 56%, transparent 56%), linear-gradient(-45deg, transparent 44%, rgba(255, 92, 70, 0.95) 44% 56%, transparent 56%); }
+.hud-timer { position: relative; z-index: 1; margin: 0 -14px; display: grid; justify-items: center; align-content: center; min-width: 112px; padding: 4px 22px 6px; background: linear-gradient(180deg, rgba(36, 22, 52, 0.92), rgba(12, 7, 22, 0.92)); box-shadow: inset 0 2px 0 rgba(255, 207, 90, 0.85); clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 14px 100%); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.hud-timer small { font: 700 9px/1.4 var(--hud-font); letter-spacing: 0.34em; text-transform: uppercase; color: var(--ink-faint); padding-left: 0.34em; }
+.hud-timer b { font: 800 italic 38px/0.95 var(--hud-display); color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; text-shadow: 0 0 18px rgba(255, 190, 120, 0.35); }
+.hud-timer.hurry b { color: #ff7a5c; animation: hud-hurry 1s ease-in-out infinite; }
+.hud-timer.overtime { box-shadow: inset 0 2px 0 #ff7a5c; }
+.hud-timer.overtime small { color: #ff9b7a; }
+.hud-overtime { font: 700 italic 11px/1.2 var(--hud-display); letter-spacing: 0.06em; text-transform: uppercase; color: #ffb38a; text-shadow: 0 0 10px rgba(255, 110, 70, 0.6); }
+
+/* ── utility row: stats, sound, synergies ────────────────────────────────── */
+.hud-util { position: absolute; top: 12px; left: var(--edge); width: 270px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.hud-util > .hud-btn, .hud-util > .volume { order: 1; }
+.hud-util .volume.compact .hud-btn { width: 40px; padding: 0; }
+.hud-syn { order: 2; flex-basis: 100%; }
+.arena .hud-syn > summary { list-style: none; justify-content: flex-start; gap: 8px; min-height: 30px; font-size: 14px; }
+.hud-syn > summary::-webkit-details-marker { display: none; }
+.hud-syn > summary::after { content: ''; width: 6px; height: 6px; margin-left: 2px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform 0.15s; }
+.hud-syn[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
+.hud-syn > summary b { font: 600 12px/1 var(--hud-font); letter-spacing: 0; text-transform: none; color: var(--ink-dim); }
+.hud-syn > summary b.lit { color: #8dffb0; }
+.hud-syn > summary b.warn { color: #ffb86b; }
+.hud .hud-syn .arena-panel { margin-top: 8px; padding: 10px 12px; border-radius: 6px; font-size: 12px; line-height: 1.45; animation: hud-drop 0.18s ease-out; }
+.hud .hud-syn .arena-panel h3 { display: none; }
+.hud .hud-syn .arena-panel p { margin: 0 0 6px; }
+
+/* ── stats scoreboard ────────────────────────────────────────────────────── */
+.hud .hud-stats { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); width: min(880px, calc(100% - 2 * var(--edge) - 460px)); min-width: 560px; max-height: calc(100% - 96px - var(--roster-h) - 40px); display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 14px 16px; border-radius: 8px; background: var(--glass-strong); animation: hud-drop 0.18s ease-out; }
+.hud-stats table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.hud-stats caption { text-align: left; padding: 0 0 6px; font: 800 italic 18px/1 var(--hud-display); letter-spacing: 0.06em; text-transform: uppercase; color: var(--team); }
+.hud-stats th { padding: 0 4px 4px; text-align: left; font: 700 10px/1 var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); border-bottom: 1px solid var(--glass-line); }
+.hud-stats td { padding: 3px 4px; border-bottom: 1px solid rgba(255, 236, 214, 0.06); }
+.hud-stats tr.dead td { opacity: 0.4; }
+.hud-stats-hero { display: flex; align-items: center; gap: 6px; max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-stats-hero .hud-portrait { width: 20px; height: 20px; font-size: 9px; }
+.hud-stats-hp { display: flex; align-items: center; gap: 6px; }
+.hud-stats-hp .hud-hp { width: 44px; height: 5px; }
+
+/* ── kill feed ───────────────────────────────────────────────────────────── */
+.hud-killfeed { position: absolute; top: 12px; right: var(--edge); width: 270px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hud-kill { position: relative; isolation: isolate; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px 0 8px; animation: hud-kill-in 0.25s ease-out both, hud-kill-out 0.6s ease-in calc(var(--kill-life, 5s) - 0.6s) forwards; }
+.hud-kill::before { content: ''; position: absolute; inset: 0; z-index: -1; transform: skewX(-14deg); border-radius: 2px; background: linear-gradient(90deg, rgba(14, 9, 24, 0.78), rgba(var(--team-rgb), 0.34)); box-shadow: inset 2px 0 0 var(--team); }
+.hud-kill.mine::before { box-shadow: inset 0 0 0 1px var(--gold), inset 3px 0 0 var(--gold), 0 0 14px rgba(255, 186, 70, 0.45); }
+.hud-kill-who { display: flex; align-items: center; gap: 5px; }
+.hud-kill-who .hud-portrait { width: 22px; height: 22px; border-radius: 3px; font-size: 10px; }
+.hud-kill-name { font: 700 italic 15px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; color: color-mix(in srgb, var(--team) 70%, white); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); max-width: 84px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hud-kill-who.victim .hud-portrait { filter: grayscale(0.7) brightness(0.8); }
+.hud-kill-how { display: grid; place-items: center; width: 18px; height: 18px; color: var(--ink); }
+.hud-kill.heavy .hud-kill-how { color: #ff9a3c; }
+.hud-kill-how .hud-icon { width: 18px; height: 18px; filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.8)); }
+.hud-kill-x { width: 12px; height: 12px; background: linear-gradient(45deg, transparent 40%, currentColor 40% 60%, transparent 60%), linear-gradient(-45deg, transparent 40%, currentColor 40% 60%, transparent 60%); }
+
+/* ── enemy roster: right edge ────────────────────────────────────────────── */
+.hud-enemies { position: absolute; top: 148px; right: var(--edge); width: 214px; display: grid; gap: 4px; }
+.hud-enemies-head { display: flex; justify-content: space-between; align-items: baseline; padding: 0 2px 3px; border-bottom: 2px solid var(--team); font: 700 italic 13px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); }
+.hud-enemies-head b { font-size: 18px; color: var(--team); letter-spacing: 0.02em; }
+.hud-enemies ol { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.hud-foe { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 7px; height: 38px; padding: 0 6px 0 4px; border-radius: 4px 2px 2px 4px; background: linear-gradient(270deg, rgba(var(--team-rgb), 0.26), rgba(16, 10, 28, 0.64) 55%); box-shadow: inset -3px 0 0 var(--team); transition: opacity 0.3s; }
+.hud-foe .hud-portrait { width: 30px; height: 30px; font-size: 12px; }
+.hud-foe-main { display: grid; gap: 4px; min-width: 0; }
+.hud-foe-name { font: 700 italic 14px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hud-foe .hud-hp { height: 5px; }
+.hud-foe .hud-abs { display: flex; gap: 3px; }
+.hud-foe.dead { opacity: 0.42; }
+.hud-foe.dead .hud-portrait, .hud-card.dead .hud-portrait { filter: grayscale(1) brightness(0.55); }
+.hud-foe.dead .hud-foe-name { text-decoration: line-through; text-decoration-color: rgba(255, 92, 70, 0.9); text-decoration-thickness: 2px; }
+.hud-foe.dead .hud-ab, .hud-card.dead .hud-ab { animation: none; color: rgba(255, 246, 234, 0.4); background: rgba(12, 8, 22, 0.85); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.hud-foe.dead .hud-ab::after, .hud-card.dead .hud-ab::after { display: none; }
+
+/* ── ally roster: bottom left, keys 1-0 ──────────────────────────────────── */
+.hud-roster { position: absolute; left: var(--edge); bottom: var(--edge); display: flex; align-items: flex-end; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.hud-card { position: relative; width: var(--card-w); display: grid; gap: 4px; padding: 4px 4px 5px; border-radius: 4px 4px 12px 4px; background: linear-gradient(180deg, rgba(var(--team-rgb), 0.3), rgba(16, 10, 28, 0.72) 52%); box-shadow: inset 0 2px 0 var(--team), inset 0 0 0 1px rgba(255, 236, 214, 0.08), 0 8px 18px rgba(8, 4, 16, 0.35); transition: transform 0.2s ease-out, box-shadow 0.2s, opacity 0.3s; }
+.hud-card-face { position: relative; display: block; height: calc(var(--card-w) * 0.5); }
+.hud-card-face .hud-portrait { width: 100%; height: 100%; border-radius: 3px; font-size: 18px; }
+.hud-card-face .hud-portrait img { transform: scale(1.05); object-position: 50% 22%; }
+.arena .hud-card-key { position: absolute; top: 3px; left: 3px; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 3px; background: rgba(6, 4, 14, 0.78); box-shadow: inset 0 0 0 1px rgba(255, 246, 234, 0.32); font: 800 italic 13px/1 var(--hud-display); }
+.hud-card-tag { position: absolute; top: 3px; right: 3px; padding: 2px 4px; border-radius: 2px; background: var(--gold); color: #1d1206; font: 800 italic 10px/1 var(--hud-display); letter-spacing: 0.08em; text-transform: uppercase; }
+.hud-card-name { font: 700 italic 14px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.hud-card .hud-abs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.hud-card .hud-ab { width: 100%; }
+.hud-card .hud-ab-sec { font-size: 15px; }
+.hud-card.controlled { transform: translateY(-8px); box-shadow: inset 0 2px 0 var(--gold), inset 0 0 0 1px rgba(255, 207, 90, 0.8), 0 0 22px rgba(255, 186, 70, 0.45), 0 8px 18px rgba(8, 4, 16, 0.35); }
+.hud-card.dead { opacity: 0.55; }
+.hud-card.dead .hud-card-face::after { content: 'Down'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); padding: 2px 6px; border-radius: 2px; background: rgba(200, 40, 30, 0.85); font: 800 italic 13px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: #fff; }
+.hud-card.fallback .hud-card-name::after { content: ' ⚠'; color: #ffb86b; }
+
+/* ── controlling a hero ──────────────────────────────────────────────────── */
+.control-hud { position: absolute; inset: 0; pointer-events: none; }
+.hud-health { position: absolute; left: calc(var(--edge) + 6px); bottom: calc(var(--edge) + var(--roster-h) + 14px); isolation: isolate; display: flex; align-items: flex-end; gap: 12px; padding: 10px 26px 10px 12px; animation: hud-rise 0.22s ease-out; }
+.hud-health::before { content: ''; position: absolute; inset: 0; z-index: -1; transform: skewX(-12deg); border-radius: 4px; background: linear-gradient(90deg, rgba(var(--team-rgb), 0.3), rgba(16, 10, 28, 0.7) 45%, rgba(16, 10, 28, 0.35)); box-shadow: inset 3px 0 0 var(--team); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.hud-portrait.big { width: 64px; height: 64px; border-radius: 6px; font-size: 24px; box-shadow: inset 0 0 0 2px var(--team), 0 0 16px rgba(var(--team-rgb), 0.45); }
+.hud-health-main { display: grid; gap: 4px; }
+.hud-health-name { display: flex; align-items: baseline; gap: 8px; font: 800 italic 22px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; }
+.hud-health-name small { font: 600 11px/1 var(--hud-font); letter-spacing: 0.12em; color: var(--ink-dim); }
+.hud-health-num { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
+.hud-health-num b { font: 800 italic 42px/0.85 var(--hud-display); color: #fff; text-shadow: 0 0 18px rgba(255, 255, 255, 0.25); }
+.hud-health-num small { font: 700 italic 20px/1 var(--hud-display); color: var(--ink-dim); }
+.hud-health-num em { font: 700 italic 20px/1 var(--hud-display); color: #bfeeff; }
+.hud-blocks { display: flex; gap: 3px; width: clamp(220px, 21vw, 320px); height: 14px; padding-left: 3px; }
+.hud-block { position: relative; flex: 1 1 0; overflow: hidden; transform: skewX(-14deg); border-radius: 1px; background: rgba(10, 6, 20, 0.72); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16); }
+.hud-block::before { content: ''; position: absolute; inset: 0; transform-origin: 0 50%; transform: scaleX(var(--f, 1)); background: linear-gradient(180deg, #ffffff, #ffe6cc); box-shadow: 0 0 6px rgba(255, 255, 255, 0.4); transition: transform 0.18s ease-out; }
+.hud-block.sh::before { background: linear-gradient(180deg, #e2f8ff, #8fd8ff); }
+.hud-health.low .hud-block::before { background: linear-gradient(180deg, #ffb39a, #ff3d2e); }
+.hud-health.low .hud-health-num b { color: #ff8a6a; animation: hud-low 0.8s ease-in-out infinite alternate; }
+.hud-health-hint { font-size: 11px; color: var(--ink-faint); }
+.hud-health-hint kbd { font-size: 10px; }
+.hud-cluster { position: absolute; right: var(--edge); bottom: var(--edge); isolation: isolate; display: flex; align-items: flex-end; gap: 14px; padding: 10px 14px 10px 22px; animation: hud-rise 0.22s ease-out; }
+.hud-cluster::before { content: ''; position: absolute; inset: 22px 0 0; z-index: -1; transform: skewX(-12deg); border-radius: 4px; background: linear-gradient(270deg, rgba(var(--team-rgb), 0.22), rgba(16, 10, 28, 0.66) 55%, rgba(16, 10, 28, 0.3)); box-shadow: inset -3px 0 0 var(--team); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.hud-cluster-row { display: flex; gap: 8px; padding-bottom: 6px; }
+.hud-ult { display: grid; justify-items: center; gap: 4px; }
+.hud-ult-name { max-width: 130px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 13px/1 var(--hud-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
+.hud-ult.ready .hud-ult-name { color: var(--gold); text-shadow: 0 0 10px rgba(255, 186, 70, 0.8); }
+
+.hud-target { position: absolute; top: 92px; left: 50%; transform: translateX(-50%); display: grid; grid-template-columns: 40px minmax(170px, 230px) auto; align-items: center; gap: 10px; padding: 6px 12px 6px 8px; border-radius: 4px; background: linear-gradient(180deg, rgba(var(--team-rgb), 0.22), rgba(14, 9, 24, 0.8)); box-shadow: inset 0 -2px 0 var(--team), 0 8px 20px rgba(8, 4, 16, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); animation: hud-drop 0.15s ease-out; }
+.hud-target .hud-portrait { width: 40px; height: 40px; font-size: 15px; }
+.hud-target-main { display: grid; gap: 5px; }
+.hud-target-top { display: flex; align-items: baseline; gap: 8px; }
+.hud-target-name { font: 800 italic 19px/1 var(--hud-display); letter-spacing: 0.04em; text-transform: uppercase; color: color-mix(in srgb, var(--team) 55%, white); }
+.hud-target-role { font: 600 10px/1 var(--hud-font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+.hud-target-num { margin-left: auto; font: 600 12px/1 var(--hud-font); color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.hud-target-num b { font: 800 italic 17px/1 var(--hud-display); color: var(--ink); }
+.hud-target .hud-hp { height: 8px; }
+.hud-target .hud-abs { display: flex; gap: 4px; }
+
+.hud-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; }
+/* an enemy where the next basic attack would land: the reticle turns gold */
+.hud-crosshair.in-range .hud-ch-dot, .hud-crosshair.in-range .hud-ch-ticks i { background: var(--gold); box-shadow: 0 0 6px rgba(255, 186, 70, 0.9); }
+/* under the reticle: what is on the controlled hero, and the flight meter while it is in use */
+.hud-self { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; pointer-events: none; z-index: 2; }
+.hud-self-status { display: flex; gap: 4px; }
+.hud-self-status .hud-oh-chip { font-size: 11px; padding: 2px 6px 3px; }
+.hud-flight { position: relative; display: block; width: 120px; height: 5px; border-radius: 3px; overflow: hidden; background: rgba(8, 5, 16, 0.7); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+.hud-flight i { position: absolute; inset: 0; transform-origin: 0 50%; background: linear-gradient(90deg, #7fe3ff, #e8fbff); transition: transform 0.1s linear; }
+.hud-flight.low i { background: #ff6a4a; }
+.hud-flight small { position: absolute; left: 50%; top: 7px; transform: translateX(-50%); font: 600 9px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
+.hud-ch-dot { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55), 0 0 6px rgba(255, 170, 90, 0.85); }
+.hud-ch-ticks, .hud-hitmark { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.hud-ch-ticks i { position: absolute; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5); }
+.hud-ch-ticks i:nth-child(1) { left: -1px; top: -16px; width: 2px; height: 8px; }
+.hud-ch-ticks i:nth-child(2) { left: -1px; top: 8px; width: 2px; height: 8px; }
+.hud-ch-ticks i:nth-child(3) { left: -16px; top: -1px; width: 8px; height: 2px; }
+.hud-ch-ticks i:nth-child(4) { left: 8px; top: -1px; width: 8px; height: 2px; }
+.hud-hitmark { opacity: 0; }
+.hud-hitmark i { position: absolute; left: -1px; top: -4px; width: 2px; height: 8px; border-radius: 1px; background: #fff; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6); }
+.hud-hitmark i:nth-child(1) { transform: rotate(45deg) translateY(-13px); }
+.hud-hitmark i:nth-child(2) { transform: rotate(135deg) translateY(-13px); }
+.hud-hitmark i:nth-child(3) { transform: rotate(225deg) translateY(-13px); }
+.hud-hitmark i:nth-child(4) { transform: rotate(315deg) translateY(-13px); }
+.hud-crosshair.kick-a .hud-ch-ticks { animation: hud-kick-a 0.18s ease-out; }
+.hud-crosshair.kick-b .hud-ch-ticks { animation: hud-kick-b 0.18s ease-out; }
+.hud-crosshair.kick-a .hud-hitmark { animation: hud-mark-a 0.24s ease-out; }
+.hud-crosshair.kick-b .hud-hitmark { animation: hud-mark-b 0.24s ease-out; }
+.hud-crosshair.heavy .hud-hitmark i { background: #ff9a3c; }
+.hud-crosshair.kill .hud-hitmark i { background: #ff4d3d; height: 11px; }
+.hud-crosshair.kill .hud-ch-dot { background: #ff4d3d; }
+
+.arena-notice { position: absolute; left: 50%; top: 120px; z-index: 3; transform: translateX(-50%); padding: 8px 18px; border-radius: 999px; background: rgba(14, 9, 24, 0.82); box-shadow: inset 0 0 0 1px rgba(255, 186, 70, 0.5), 0 8px 20px rgba(8, 4, 16, 0.4); color: var(--ink); font-size: 13px; pointer-events: none; animation: hud-rise 0.3s ease-out; }
+
+/* ── the look-around hint: a small pill above the roster ─────────────────── */
+.arena .arena-hint { position: absolute; left: 50%; bottom: calc(var(--edge) + var(--roster-h) + 16px); transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100% - 2 * var(--edge)); padding: 6px 16px; border-radius: 999px; background: rgba(14, 9, 24, 0.72); box-shadow: inset 0 0 0 1px var(--glass-line), 0 8px 20px rgba(8, 4, 16, 0.35); font-size: 13px; color: var(--ink-dim); white-space: nowrap; pointer-events: none; animation: hud-rise 0.3s ease-out; }
+.arena .arena-hint.released { padding: 4px 6px 4px 16px; gap: 8px; }
+/* the opening controls line steps aside after a few seconds so it never sits on the fight; "Mouse released" stays */
+.arena .arena-hint:not(.released) { animation: hud-rise 0.3s ease-out, hud-hint-out 0.6s ease-in 8s forwards; }
+@keyframes hud-hint-out { to { opacity: 0; visibility: hidden; } }
+.arena .arena-hint .hud-btn { min-height: 28px; font-size: 14px; }
+.arena-hint-text { overflow: hidden; text-overflow: ellipsis; }
+.arena-hint kbd { font-size: 11px; }
+/* the camera help: one line at the start, folding to a small button; unlike the old hint it takes clicks */
+.arena .arena-hint.camera-help { pointer-events: auto; padding: 4px 5px 4px 16px; animation: hud-rise 0.3s ease-out; }
+.arena .arena-hint.camera-help:not(.open) { padding: 3px; background: rgba(14, 9, 24, 0.55); }
+.arena-hint.camera-help b { color: var(--ink); font-weight: 600; }
+.camera-help-btn { min-height: 26px; padding: 0 12px; font-size: 13px; }
+
+/* ── full-screen moments: loading, pause, result, errors ─────────────────── */
+.arena .hud-screen { z-index: 10; gap: 16px; justify-items: center; padding: 24px; background: radial-gradient(ellipse at 50% 38%, rgba(48, 26, 64, 0.5), rgba(10, 6, 18, 0.9) 75%); pointer-events: auto; animation: hud-fade 0.22s ease-out; }
+.arena .hud-screen h2 { margin: 0; font: 800 italic clamp(44px, 6vw, 76px)/0.9 var(--hud-display); letter-spacing: 0.01em; text-transform: uppercase; color: var(--ink); text-shadow: 0 0 30px rgba(255, 170, 90, 0.35), 0 4px 0 rgba(40, 18, 60, 0.6); }
+.hud-kicker { margin: 0; font: 700 12px/1 var(--hud-font); letter-spacing: 0.34em; text-transform: uppercase; color: var(--gold); padding-left: 0.34em; }
+.hud-menu { display: grid; justify-items: center; gap: 18px; }
+.pause-menu .column { display: grid; gap: 10px; width: 340px; }
+.pause-menu .column .hud-btn { width: 100%; }
+.arena .volume { display: inline-flex; align-items: center; gap: 12px; }
+.hud-range { width: 160px; height: 18px; padding: 0; border: 0; background: none; appearance: none; -webkit-appearance: none; cursor: pointer; }
+.hud-range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--gold) var(--v, 50%), rgba(255, 246, 234, 0.18) var(--v, 50%)); }
+.hud-range::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--gold) var(--v, 50%), rgba(255, 246, 234, 0.18) var(--v, 50%)); }
+.hud-range::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255, 207, 90, 0.5); }
+.hud-range::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px rgba(255, 207, 90, 0.5); }
+.hud-foot { margin: 0; font-size: 12px; color: var(--ink-faint); }
+
+.arena .hud-loading.hud-screen { gap: 14px; }
+.hud-loading-title { margin: 0; font: 800 italic clamp(48px, 7vw, 92px)/0.9 var(--hud-display); text-transform: uppercase; letter-spacing: 0.01em; color: var(--ink); text-shadow: 0 0 34px rgba(255, 150, 80, 0.45), 0 4px 0 rgba(40, 18, 60, 0.6); }
+.arena .hud-loading .arena-progress { width: min(460px, 70vw); height: 10px; border-radius: 2px; overflow: hidden; transform: skewX(-14deg); background: rgba(255, 246, 234, 0.1); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.arena .hud-loading .arena-progress > div { height: 100%; background: linear-gradient(90deg, #ff8a3d, var(--gold)); box-shadow: 0 0 16px rgba(255, 170, 60, 0.8); transition: width 0.25s ease-out; }
+.hud-loading-label { margin: 0; font: 600 13px/1 var(--hud-font); letter-spacing: 0.06em; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.hud-tip { display: flex; align-items: baseline; gap: 10px; max-width: 540px; margin: 10px 0 0; padding: 10px 16px; border-radius: 6px; background: rgba(14, 9, 24, 0.6); box-shadow: inset 0 0 0 1px var(--glass-line); font-size: 14px; color: var(--ink); text-align: left; animation: hud-rise 0.35s ease-out; }
+.hud-tip b { flex: none; font: 800 italic 13px/1 var(--hud-display); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+
+.arena .result.hud-screen { gap: 12px; }
+.result-banner span { display: block; font: 800 italic clamp(72px, 11vw, 148px)/0.82 var(--hud-display); letter-spacing: 0.01em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #fff8e2 10%, var(--gold) 55%, #ff8a2e); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 28px rgba(255, 170, 60, 0.5)); animation: hud-slam 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.result.is-loss .result-banner span { background-image: linear-gradient(180deg, #ffd9cf 10%, #ff6a4a 55%, #a3201a); filter: drop-shadow(0 0 28px rgba(255, 80, 50, 0.45)); }
+.result.is-draw .result-banner span { background-image: linear-gradient(180deg, #ffffff 10%, #cfd6e6 55%, #8890a8); filter: drop-shadow(0 0 24px rgba(200, 210, 255, 0.35)); }
+.arena .result h2 { font-size: clamp(24px, 2.6vw, 34px); color: var(--ink); text-shadow: none; }
+.hud-reason { margin: -4px 0 0; font-size: 14px; color: var(--ink-dim); }
+.result-body { display: grid; grid-template-columns: 220px minmax(0, 580px); gap: 18px; align-items: start; max-width: calc(100vw - 48px); text-align: left; }
+.hud-mvp { position: relative; display: grid; justify-items: center; gap: 6px; padding: 18px 14px 14px; border-radius: 6px; background: linear-gradient(180deg, rgba(var(--team-rgb), 0.32), rgba(14, 9, 24, 0.82) 60%); box-shadow: inset 0 3px 0 var(--team), inset 0 0 0 1px rgba(255, 207, 90, 0.35), 0 10px 30px rgba(8, 4, 16, 0.45); text-align: center; animation: hud-rise 0.4s 0.2s ease-out both; }
+.hud-mvp p { margin: 0; }
+.hud-mvp-tag { position: absolute; top: -11px; left: 50%; transform: translateX(-50%) skewX(-12deg); padding: 3px 12px; border-radius: 2px; background: linear-gradient(180deg, #ffe08a, #ffad2e); color: #1d1206; font: 800 italic 15px/1 var(--hud-display); letter-spacing: 0.2em; box-shadow: 0 0 16px rgba(255, 170, 60, 0.6); }
+.hud-portrait.huge { width: 112px; height: 112px; border-radius: 8px; font-size: 40px; box-shadow: inset 0 0 0 2px var(--team), 0 0 26px rgba(var(--team-rgb), 0.5); }
+.hud-mvp-name { font: 800 italic 30px/1 var(--hud-display); letter-spacing: 0.03em; text-transform: uppercase; }
+.hud-mvp-full { font-size: 12px; color: var(--ink-dim); }
+.hud-mvp-role { font: 700 10px/1 var(--hud-font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--team); }
+.hud-mvp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin: 6px 0 0; }
+.hud-mvp-stats div { display: grid; gap: 2px; padding: 6px 0; border-radius: 4px; background: rgba(255, 246, 234, 0.06); }
+.hud-mvp-stats dt { font: 700 9px/1 var(--hud-font); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-faint); }
+.hud-mvp-stats dd { margin: 0; font: 800 italic 22px/1 var(--hud-display); font-variant-numeric: tabular-nums; }
+.result-table { max-height: min(46vh, 420px); overflow: auto; border-radius: 6px; background: rgba(14, 9, 24, 0.66); box-shadow: inset 0 0 0 1px var(--glass-line); animation: hud-rise 0.4s 0.3s ease-out both; }
+.result-table table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.result-table th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; text-align: left; background: rgba(20, 13, 34, 0.96); font: 700 10px/1 var(--hud-font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.result-table td { padding: 5px 10px; border-top: 1px solid rgba(255, 236, 214, 0.06); }
+.result-table tr td:first-child { box-shadow: inset 3px 0 0 var(--team); }
+.result-table tr.dead td { color: var(--ink-faint); }
+.result-table .hud-stats-hero { max-width: 260px; }
+.hud-actions { display: flex; gap: 12px; margin-top: 4px; }
+
+/* ── countdown and FIGHT! ────────────────────────────────────────────────── */
+.countdown-stage { position: absolute; inset: 0; z-index: 6; display: grid; place-content: center; justify-items: center; pointer-events: none; }
+.countdown-kicker { margin: 0 0 6px; font: 700 14px/1 var(--hud-font); letter-spacing: 0.42em; padding-left: 0.42em; text-transform: uppercase; color: var(--gold); text-shadow: 0 0 12px rgba(255, 170, 60, 0.6); }
+.countdown { font: 800 italic 190px/0.85 var(--hud-display); color: var(--ink); -webkit-text-stroke: 3px rgba(40, 18, 60, 0.5); paint-order: stroke fill; text-shadow: 0 0 46px rgba(255, 160, 80, 0.75), 0 8px 0 rgba(40, 18, 60, 0.55); }
+.countdown-num { display: block; animation: hud-count 1s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.countdown-ring { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px; margin: -130px 0 0 -130px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(255, 207, 90, 0.7), 0 0 40px rgba(255, 170, 60, 0.5), inset 0 0 40px rgba(255, 170, 60, 0.35); animation: hud-ring 1s ease-out both; }
+.countdown-stage.is-fight .countdown { font-size: 170px; -webkit-text-stroke: 0; text-shadow: none; }
+.countdown-stage.is-fight .countdown-num { padding: 0 0.08em; color: transparent; -webkit-text-fill-color: transparent; background: linear-gradient(180deg, #fff8e2 10%, var(--gold) 50%, #ff7a2e); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 30px rgba(255, 150, 60, 0.75)); animation: hud-slam 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both; }
+.countdown-stage.is-fight .countdown-ring { animation-duration: 0.7s; }
+
+/* ── sizes: 1440x900 down to 1280x720 ────────────────────────────────────── */
+@media (max-width: 1360px) {
+  .hud-pip { width: 19px; }
+  .hud-pip .hud-portrait { width: 19px; height: 21px; font-size: 9px; }
+  .hud-plate { gap: 8px; padding-left: 10px; padding-right: 10px; }
+  .hud-plate.team-0 { padding-left: 20px; }
+  .hud-plate.team-1 { padding-right: 20px; }
+  .hud-timer { min-width: 100px; padding-left: 18px; padding-right: 18px; }
+  .hud-timer b { font-size: 34px; }
+  .hud-killfeed { width: 250px; }
+  .hud-enemies { width: 200px; }
+  .hud-util { width: 250px; }
+}
+@media (max-height: 780px) {
+  .hud-enemies { top: 140px; }
+  .hud-foe { height: 32px; }
+  .hud-foe .hud-portrait { width: 26px; height: 26px; }
+  .hud-foe-name { font-size: 13px; }
+  .hud-health-num b { font-size: 36px; }
+  .hud-portrait.big { width: 54px; height: 54px; }
+  .hud-ab.size-md { width: 46px; }
+  .hud-ab.size-lg { width: 66px; }
+  .countdown { font-size: 150px; }
+  .countdown-stage.is-fight .countdown { font-size: 130px; }
+  .result-banner span { font-size: clamp(60px, 9vw, 110px); }
+  .hud-portrait.huge { width: 88px; height: 88px; }
+}
+
+/* under load the glass stops blurring what is behind it */
+.hud-lite .hud-plate, .hud-lite .hud-timer, .hud-lite .hud-health::before, .hud-lite .hud-cluster::before, .hud-lite .hud-target, .hud-lite .arena-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+@keyframes hud-low { from { opacity: 1; } to { opacity: 0.55; } }
+@keyframes hud-ready { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
+@keyframes hud-ult { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+@keyframes hud-hurry { 50% { color: #fff; text-shadow: 0 0 20px rgba(255, 90, 60, 0.9); } }
+@keyframes hud-drop { from { opacity: 0; translate: 0 -6px; } to { opacity: 1; translate: 0 0; } }
+@keyframes hud-rise { from { opacity: 0; translate: 0 8px; } to { opacity: 1; translate: 0 0; } }
+@keyframes hud-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes hud-kill-in { from { opacity: 0; translate: 24px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes hud-kill-out { to { opacity: 0; translate: 12px 0; } }
+@keyframes hud-kick-a { from { transform: scale(1.75); } to { transform: scale(1); } }
+@keyframes hud-kick-b { from { transform: scale(1.75); } to { transform: scale(1); } }
+@keyframes hud-mark-a { from { opacity: 1; transform: scale(1.3); } to { opacity: 0; transform: scale(1); } }
+@keyframes hud-mark-b { from { opacity: 1; transform: scale(1.3); } to { opacity: 0; transform: scale(1); } }
+@keyframes hud-count { 0% { opacity: 0; transform: scale(1.7); filter: blur(6px); } 22% { opacity: 1; transform: scale(1); filter: blur(0); } 100% { opacity: 0.85; transform: scale(0.9); } }
+@keyframes hud-ring { from { opacity: 0.9; transform: scale(0.45); } to { opacity: 0; transform: scale(1.5); } }
+@keyframes hud-slam { 0% { opacity: 0; transform: scale(2.2) skewX(-8deg); } 60% { opacity: 1; transform: scale(0.94) skewX(0deg); } 100% { opacity: 1; transform: scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .arena *, .arena *::before, .arena *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

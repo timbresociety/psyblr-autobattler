@@ -49,7 +49,7 @@ describe('description matcher', () => {
 
 describe('nearest alternatives', () => {
   it('gives 2 to 3 options from the same slot and role, never the chosen one', () => {
-    const chosen = getTemplate('mage-recall-step')
+    const chosen = getTemplate('mage-chrono-rewind')
     const alternatives = nearestAlternatives('mage', 'active', chosen.id, 'rewind the last 5 seconds')
     expect(alternatives.length).toBeGreaterThanOrEqual(2)
     expect(alternatives.length).toBeLessThanOrEqual(3)

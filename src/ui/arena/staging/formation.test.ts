@@ -10,7 +10,7 @@ describe('staging formation (U16)', () => {
   it('refuses an 11th hero on one side', () => {
     let f = emptyFormation()
     for (let i = 0; i < MAX_PER_SIDE; i++) {
-      const r = place(f, 0, 0, (i % 5) * 3 - 6, -5 - Math.floor(i / 5) * 3)
+      const r = place(f, 0, 0, (i % 5) * 3 - 6, -5 - Math.floor(i / 5) * 4)
       if (!r.ok) throw new Error(r.reason)
       f = r.formation
     }
@@ -20,7 +20,7 @@ describe('staging formation (U16)', () => {
   it('lets the same hero be placed three times', () => {
     let f = emptyFormation()
     for (const x of [-4, 0, 4]) {
-      const r = place(f, 0, 7, x, -8)
+      const r = place(f, 0, 7, x, -10)
       if (!r.ok) throw new Error(r.reason)
       f = r.formation
     }
