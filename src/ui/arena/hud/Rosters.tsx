@@ -17,14 +17,23 @@ function Abilities({ hero, info, size }: { hero: HudHero; info: HudHeroInfo; siz
 }
 
 /** Bottom left (R38): the streamer's heroes in key order 1-0, the one being steered lifted and lit. */
-export function AllyRoster({ heroes, info, controlled, side }: { heroes: HudHero[]; info: readonly HudHeroInfo[]; controlled?: number; side: Team }) {
+/** What a roster card does on a click while watching: the camera follows that hero. */
+interface Follow {
+  followed?: number
+  onFollow?: (id: number) => void
+}
+
+const followProps = (id: number, { onFollow }: Follow) =>
+  onFollow ? { role: 'button', tabIndex: 0, onClick: () => onFollow(id), onKeyDown: (e: { key: string }) => e.key === 'Enter' && onFollow(id) } : {}
+
+export function AllyRoster({ heroes, info, controlled, side, followed, onFollow }: { heroes: HudHero[]; info: readonly HudHeroInfo[]; controlled?: number; side: Team } & Follow) {
   return (
     <ol className={`hud-roster side-${side}`} aria-label="Your heroes">
       {heroes.map((h, i) => {
         const me = info[h.id]
         const steering = controlled === h.id
         return (
-          <li key={h.id} className={`hud-card team-${h.team}${h.alive ? '' : ' dead'}${steering ? ' controlled' : ''}${h.fallback ? ' fallback' : ''}`} title={h.fallback ? FALLBACK_NOTE : undefined}>
+          <li key={h.id} className={`hud-card team-${h.team}${h.alive ? '' : ' dead'}${steering ? ' controlled' : ''}${h.fallback ? ' fallback' : ''}${onFollow && h.alive ? ' follows' : ''}${followed === h.id ? ' followed' : ''}`} title={h.fallback ? FALLBACK_NOTE : onFollow ? `Follow ${me.short}` : undefined} {...(h.alive ? followProps(h.id, { onFollow }) : {})}>
             <span className="hud-card-face">
               <Portrait src={me.portrait} initials={me.initials} team={h.team} />
               <kbd className="hud-card-key">{(i + 1) % 10}</kbd>
@@ -41,7 +50,7 @@ export function AllyRoster({ heroes, info, controlled, side }: { heroes: HudHero
 }
 
 /** Right edge: the other side, same numbers as the streamer's own (R38), without keys since they cannot be taken. */
-export function EnemyRoster({ heroes, info, team }: { heroes: HudHero[]; info: readonly HudHeroInfo[]; team: Team }) {
+export function EnemyRoster({ heroes, info, team, followed, onFollow }: { heroes: HudHero[]; info: readonly HudHeroInfo[]; team: Team } & Follow) {
   const alive = heroes.filter((h) => h.alive).length
   return (
     <section className={`hud-enemies team-${team}`} aria-label="Enemy team">
@@ -55,7 +64,7 @@ export function EnemyRoster({ heroes, info, team }: { heroes: HudHero[]; info: r
         {heroes.map((h) => {
           const foe = info[h.id]
           return (
-            <li key={h.id} className={`hud-foe team-${h.team}${h.alive ? '' : ' dead'}`} title={h.fallback ? FALLBACK_NOTE : undefined}>
+            <li key={h.id} className={`hud-foe team-${h.team}${h.alive ? '' : ' dead'}${onFollow && h.alive ? ' follows' : ''}${followed === h.id ? ' followed' : ''}`} title={h.fallback ? FALLBACK_NOTE : onFollow ? `Follow ${foe.short}` : undefined} {...(h.alive ? followProps(h.id, { onFollow }) : {})}>
               <Portrait src={foe.portrait} initials={foe.initials} team={h.team} />
               <span className="hud-foe-main">
                 <span className="hud-foe-name">{foe.short}</span>

@@ -6,7 +6,7 @@ import type { Team } from '../../arena/engine/state'
 import { SynergyPanel } from './staging/Panels'
 import { VolumeControl } from './PauseMenu'
 import { ScoreBanner } from './hud/Banner'
-import { AbilityCluster, Crosshair, HealthBlock, TargetFrame } from './hud/Control'
+import { AbilityCluster, Crosshair, HealthBlock, SelfStatus, TargetFrame } from './hud/Control'
 import type { HudController } from './hud/controller'
 import { TEAM_NAME } from './hud/format'
 import { KillFeed } from './hud/KillFeed'
@@ -48,6 +48,9 @@ export function MatchHud({ state, side, builds, heroes, controller }: { state: H
   const info = useInfo(state, heroes)
   const mine = state.heroes.filter((h) => h.team === side)
   const foes = state.heroes.filter((h) => h.team !== side)
+  // while watching, a click on a roster card points the camera at that hero and follows it
+  const cameras = (controller as { cameras?: { follow: number | undefined } } | undefined)?.cameras
+  const follow = cameras && state.controlled === undefined ? (id: number) => void (cameras.follow = id) : undefined
   return (
     <>
       <ScoreBanner state={state} heroes={info} side={side} />
@@ -60,8 +63,8 @@ export function MatchHud({ state, side, builds, heroes, controller }: { state: H
       </div>
       {stats && <StatsPanel heroes={state.heroes} seconds={state.seconds} info={info} />}
       {controller && <KillFeed controller={controller} heroes={info} />}
-      <EnemyRoster heroes={foes} info={info} team={(1 - side) as Team} />
-      <AllyRoster heroes={mine} info={info} controlled={state.controlled} side={side} />
+      <EnemyRoster heroes={foes} info={info} team={(1 - side) as Team} onFollow={follow} />
+      <AllyRoster heroes={mine} info={info} controlled={state.controlled} side={side} onFollow={follow} />
     </>
   )
 }
@@ -120,6 +123,7 @@ export function ControlHud({ hero, info, controller, state, heroes }: { hero: Hu
   return (
     <>
       <Crosshair controller={controller} />
+      <SelfStatus hero={hero} />
       <div className={`control-hud team-${hero.team}`} role="group" aria-label="Controlled hero">
         <HealthBlock hero={hero} info={me} shield={shield} />
         <AbilityCluster hero={hero} info={me} />

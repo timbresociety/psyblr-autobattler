@@ -19,8 +19,10 @@ import { atmosphere, buildMap, lights, type ArenaMap } from './map'
 import { buildRuins } from './ruins'
 import { CosmeticPhysics, PHYSICS } from './physics'
 import { atLeast, createGuard, observe, type QualityLevel } from './quality'
+import { createRangeIndicator } from './range'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
 import { createStore, type Store } from './store'
+import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status'
 
 /**
  * A live match in the browser (U13, KTD15): the engine and the AI tick at 60 Hz on a fixed clock, heroes are drawn
@@ -48,6 +50,10 @@ export interface HudHero {
   cooldowns: Record<BuildSlot, { left: number; total: number }>
   damageDealt: number
   airborne: boolean
+  /** The flight meter, 0 empty to 1 full. */
+  flight?: number
+  /** What is on the hero, worst first (status.ts). */
+  statuses?: HeroStatus[]
   fallback: boolean
 }
 
@@ -151,6 +157,8 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
       maxHp: h.maxHp,
       damageDealt: h.damageDealt,
       airborne: h.airborne,
+      flight: (h.flight ?? ENGINE.flight.max) / ENGINE.flight.max,
+      statuses: statusesOf(h, match.tick).slice(0, 3),
       fallback: views[h.id]?.fallback ?? false,
       cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
     })),
@@ -453,6 +461,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
   arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
   scene.add(rings)
+  // the controlled hero's basic attack reach, on the floor
+  const range = createRangeIndicator(scene)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
@@ -519,7 +529,9 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
     drawDebris(debris, physics)
     drawRings(rings, arena, drawn)
-    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies)
+    const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
+    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
+    range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt, alpha)
     stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)

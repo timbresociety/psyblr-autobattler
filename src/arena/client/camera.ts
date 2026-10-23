@@ -2,12 +2,15 @@ import * as THREE from 'three'
 import type { Vec3 } from '../engine/maths'
 
 /**
- * The two cameras (U17, R13, R42, KTD16): a free camera that flies anywhere for watching, and an over-the-shoulder
- * camera behind and right of the controlled hero, reticle at screen centre. Switching blends over half a second, and
- * walls pull the camera in rather than letting it clip inside scenery.
+ * The two cameras (U17, R13, R42, KTD16): a watching camera that works like a strategy game's (drag to turn around
+ * what it looks at, right drag or WASD to slide, the wheel to zoom, click a hero to follow it), and an
+ * over-the-shoulder camera behind and right of the controlled hero, reticle at screen centre. Switching blends over
+ * half a second, and walls pull the camera in rather than letting it clip inside scenery.
  */
 
 export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2 }
+/** The watching camera's limits: how low, high and far it goes, how steep it tilts, and the edge of the map. */
+export const WATCH = { minHeight: 1.5, maxHeight: 55, minDistance: 5, maxDistance: 75, levelDistance: 20, minPitch: -1.4, maxPitch: 0.15, bounds: 60 }
 export const BLEND_SECONDS = 0.5
 
 /** Where a camera at `from` can sit on the way to `to` without passing through a box. */
@@ -31,6 +34,8 @@ export class Cameras {
   private from = new THREE.Vector3()
   private fromQ = new THREE.Quaternion()
   mode: 'free' | 'hero' = 'free'
+  /** The hero the watching camera follows (a click on a hero or its portrait); panning ends it. */
+  follow: number | undefined
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {
     camera.position.copy(this.free)
@@ -56,16 +61,68 @@ export class Cameras {
     this.pitch = Math.max(-HERO_CAMERA.pitchLimit, Math.min(HERO_CAMERA.pitchLimit, this.pitch - dy * 0.0025))
   }
 
-  /** The free camera flies along its own view (WASD, Space up, Z down). */
-  fly(dt: number, f: number, r: number, u: number) {
-    const speed = 18 * dt
-    const fwd = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
-    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
-    this.free.addScaledVector(fwd, f * speed).addScaledVector(right, r * speed).y += u * speed
-    this.free.y = Math.max(1, Math.min(40, this.free.y))
+  private forward() {
+    return new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
   }
 
-  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[]) {
+  /**
+   * What the watching camera turns around and zooms toward: where its view meets the floor, or a point straight ahead
+   * when it looks level.
+   */
+  pivot(): THREE.Vector3 {
+    const f = this.forward()
+    const t = f.y < -0.08 ? Math.min(WATCH.maxDistance, -this.free.y / f.y) : WATCH.levelDistance
+    return this.free.clone().addScaledVector(f, t)
+  }
+
+  /** Watching: slide across the ground in screen directions (WASD, right drag); Space and Z rise and sink. Ends a follow. */
+  fly(dt: number, f: number, r: number, u: number) {
+    // higher up, the same key covers more ground, the way a strategy camera feels
+    const speed = (10 + this.free.y * 0.9) * dt
+    this.pan(r * speed, f * speed)
+    this.free.y = Math.max(WATCH.minHeight, Math.min(WATCH.maxHeight, this.free.y + u * speed))
+  }
+
+  /** Watching: move the camera and what it looks at together, along the ground. */
+  pan(right: number, forward: number) {
+    if (right === 0 && forward === 0) return
+    const flat = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw))
+    const side = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
+    this.free.addScaledVector(side, right).addScaledVector(flat, forward)
+    this.free.x = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.x))
+    this.free.z = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.z))
+    this.follow = undefined
+  }
+
+  /** Watching: turn around the point being looked at (left drag, Q and E). */
+  orbit(dx: number, dy: number) {
+    const pivot = this.pivot()
+    const distance = this.free.distanceTo(pivot)
+    this.yaw -= dx * 0.005
+    this.pitch = Math.max(WATCH.minPitch, Math.min(WATCH.maxPitch, this.pitch - dy * 0.004))
+    this.free.copy(pivot).addScaledVector(this.forward(), -distance)
+    this.free.y = Math.max(WATCH.minHeight, this.free.y)
+  }
+
+  /** Watching: move in toward the point being looked at, or back out (the wheel). */
+  zoom(factor: number) {
+    const pivot = this.pivot()
+    const distance = Math.max(WATCH.minDistance, Math.min(WATCH.maxDistance, this.free.distanceTo(pivot) * factor))
+    this.free.copy(pivot).addScaledVector(this.forward(), -distance)
+    this.free.y = Math.max(WATCH.minHeight, Math.min(WATCH.maxHeight, this.free.y))
+  }
+
+  /**
+   * `hero` is the controlled hero, `followed` the hero the watching camera keeps in view (its drawn position), if any.
+   */
+  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3) {
+    if (this.mode === 'free' && followed) {
+      // keep the same angle and distance, and glide the point being looked at onto the followed hero
+      const pivot = this.pivot()
+      const k = 1 - Math.exp(-dt * 5)
+      this.free.x += (followed.x - pivot.x) * k
+      this.free.z += (followed.z - pivot.z) * k
+    }
     const target = new THREE.Vector3()
     const forward = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
     if (this.mode === 'hero' && hero) {

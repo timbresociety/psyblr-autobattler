@@ -1,10 +1,12 @@
 import { memo, useEffect, useRef } from 'react'
+import { ENGINE } from '../../../arena/engine/calibration'
 import { capsule } from '../../../arena/engine/state'
 import type { HudController } from './controller'
 import { createDamagePool } from './damage'
 import { prefersReducedMotion } from './format'
 import type { HudHeroInfo } from './model'
 import { createOverheads, type OverheadLive } from './overheads'
+import { statusesOf } from './status'
 import { overheadLift, project, screenPoint } from './world'
 
 /**
@@ -57,7 +59,11 @@ export function attachWorldHud(el: HTMLElement, controller: HudController, heroe
       live.maxHp = hero.maxHp
       live.shield = hero.shield
       live.ultReady = hero.cooldowns.ultimate <= 0
-      overheads.update(i, heads[i], live, match.human === i, dt)
+      live.statuses = statusesOf(hero, match.tick)
+      // an enemy in stealth shows nothing over its head to the player hunting it
+      const hunter = match.human !== undefined ? match.heroes[match.human] : undefined
+      const unseen = !!hunter && hero.team !== hunter.team && (hero.stealthUntil ?? 0) > match.tick && Math.hypot(hero.position.x - hunter.position.x, hero.position.z - hunter.position.z) > ENGINE.revealRange + 1
+      overheads.update(i, heads[i], live, match.human === i || unseen, dt)
     }
     overheads.declutter(heads)
     damage.frame(dt, (t) => heads[t])

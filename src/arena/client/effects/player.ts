@@ -13,6 +13,7 @@ import type { ArenaController } from '../match-view'
 import { skyFlashOf } from '../map'
 import { baseSize, coneYaw, hitFeel, layerSize, type ImpactEvent } from './sizing'
 import { playCast, playHit } from './sound'
+import { createWorldFx } from './world-fx'
 import { SpritePool, Trail, arcGeometry, crackTexture, flowTexture, magicCircleTexture, shockTexture, slashTexture, spriteAtlas, type SpriteSpec } from './vfx'
 
 /**
@@ -302,6 +303,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   }
 
   const v3 = (p: { x: number; y: number; z: number }) => new THREE.Vector3(p.x, p.y, p.z)
+  // walls, turrets, fields, traps and stealth: what skills leave in the world
+  const world = createWorldFx(ctrl, { sparkle, puff, flash, tint: (hero, slot = 'active1') => vivid(recipe(hero, slot), 0) })
 
   const dropForm = (hero: number) => {
     const m = forms.get(hero)
@@ -315,6 +318,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
 
   return {
     events: (events) => {
+      world.events(events)
       for (const e of events) {
         if (e.type === 'cast') {
           const r = recipe(e.hero, e.slot)
@@ -417,6 +421,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     },
     frame: (dt) => {
       clock += dt
+      world.frame(dt)
       glow.update(clock)
       smoke.update(clock)
       hitStop = Math.max(0, hitStop - dt)

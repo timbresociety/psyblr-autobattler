@@ -9,6 +9,7 @@ import { createKillTracker } from './kills'
 import { CARD_SLOTS, SLOT_KEY, type HudHeroInfo } from './model'
 import { AbilityChip, HpBar, Portrait } from './parts'
 import { project, screenPoint, stickyTarget } from './world'
+import { inReach } from '../../../arena/client/range'
 
 /**
  * The HUD while the streamer steers a hero (R14, R42): an Overwatch-style health block bottom left, the ability
@@ -33,9 +34,17 @@ export function Crosshair({ controller }: { controller?: Pick<HudController, 'ho
       for (const e of events) if (e.type === 'hit' && e.source === me) level = Math.max(level, e.heavy ? 2 : 1)
       if (fallen.some((k) => k.byStreamer)) level = 3
     })
+    // gold while an enemy stands where the next basic attack would land (the floor ring agrees)
+    let lit = false
     const offFrame = controller.hooks.on('frame', () => {
       const el = ref.current
-      if (!level || !el) return
+      if (!el) return
+      const { match, setups } = controller.arena
+      const me = match.human !== undefined ? match.heroes[match.human] : undefined
+      const ready = !!me?.alive && !!me.position && !!setups?.[me.id]?.kit?.basic
+      const on = ready && !!inReach(match, setups, me!, me!.yaw, me!.pitch)
+      if (on !== lit) el.classList.toggle('in-range', (lit = on))
+      if (!level) return
       flip = !flip
       el.classList.remove('kick-a', 'kick-b', 'heavy', 'kill')
       el.classList.add(flip ? 'kick-a' : 'kick-b')
@@ -95,7 +104,7 @@ export function HealthBlock({ hero, info, shield }: { hero: HudHero; info: HudHe
           ))}
         </span>
         <span className="hud-health-hint">
-          <kbd>Tab</kbd> hands back · <kbd>Esc</kbd> frees the mouse
+          <kbd>Tab</kbd> hands back · <kbd>Esc</kbd> frees the mouse · <kbd>Space</kbd> flies
         </span>
       </div>
     </div>
@@ -188,5 +197,35 @@ export function TargetFrame({ controller, state, heroes, team }: { controller?: 
         ))}
       </span>
     </section>
+  )
+}
+
+/**
+ * Under the reticle: the flight meter while it is in use (flying costs it, landing refills it), and whatever is on
+ * the hero right now, so a silence or a root is never a mystery.
+ */
+export function SelfStatus({ hero }: { hero: HudHero }) {
+  const flight = hero.flight ?? 1
+  const showMeter = hero.airborne || flight < 0.995
+  const statuses = hero.statuses ?? []
+  if (!showMeter && !statuses.length) return null
+  return (
+    <div className="hud-self" aria-live="polite">
+      {statuses.length > 0 && (
+        <span className="hud-self-status">
+          {statuses.map((s) => (
+            <i key={s.key} className={`hud-oh-chip tone-${s.tone}`}>
+              {s.label}
+            </i>
+          ))}
+        </span>
+      )}
+      {showMeter && (
+        <span className={`hud-flight${flight < 0.12 ? ' low' : ''}`} role="meter" aria-label="Flight" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(flight * 100)}>
+          <i style={{ transform: `scaleX(${flight.toFixed(3)})` }} />
+          <small>Flight</small>
+        </span>
+      )}
+    </div>
   )
 }

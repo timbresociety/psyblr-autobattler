@@ -1,5 +1,6 @@
 import type { Team } from '../../../arena/engine/state'
 import { segmentPct } from './format'
+import { statusKey, type HeroStatus } from './status'
 import { FAR_METRES, distanceScale, type ScreenPoint } from './world'
 
 /**
@@ -20,6 +21,8 @@ export interface OverheadLive {
   maxHp: number
   shield: number
   ultReady: boolean
+  /** What is on the hero, worst first; the top two show under the bar. */
+  statuses?: readonly HeroStatus[]
 }
 
 interface Item {
@@ -29,6 +32,8 @@ interface Item {
   trail: HTMLElement
   shield: HTMLElement
   ult: HTMLElement
+  st: HTMLElement
+  stKey: string
   shown: boolean
   far?: boolean
   crowded?: boolean
@@ -47,6 +52,8 @@ const q = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 1000) / 1000
 /** Seconds the trailing chunk holds after a hit, then how much of the bar it drains per second. */
 const TRAIL_HOLD = 0.35
 const TRAIL_RATE = 0.9
+/** How many statuses show under a bar: the worst two, so a pile of debuffs never buries the one that matters. */
+const STATUS_SHOWN = 2
 /** The name row's box at scale 1, in pixels: its width, its height, and how far above the overhead's foot it starts. */
 const NAME = { w: 70, h: 13, above: 23 }
 
@@ -55,11 +62,11 @@ export function createOverheads(layer: HTMLElement, heroes: readonly OverheadHer
     const root = document.createElement('div')
     root.className = `hud-oh team-${h.team}`
     root.style.visibility = 'hidden'
-    root.innerHTML = '<div class="hud-oh-top"><span class="hud-oh-name"></span><i class="hud-oh-ult"></i></div><div class="hud-oh-bar"><i class="hud-oh-trail"></i><i class="hud-oh-hp"></i><i class="hud-oh-sh"></i></div>'
+    root.innerHTML = '<div class="hud-oh-top"><span class="hud-oh-name"></span><i class="hud-oh-ult"></i></div><div class="hud-oh-bar"><i class="hud-oh-trail"></i><i class="hud-oh-hp"></i><i class="hud-oh-sh"></i></div><div class="hud-oh-st"></div>'
     root.querySelector('.hud-oh-name')!.textContent = h.short
     layer.append(root)
     const part = (c: string) => root.querySelector<HTMLElement>(c)!
-    return { root, bar: part('.hud-oh-bar'), hp: part('.hud-oh-hp'), trail: part('.hud-oh-trail'), shield: part('.hud-oh-sh'), ult: part('.hud-oh-ult'), shown: false, maxHp: -1, hpShown: -1, trailShown: -1, shieldKey: '', trailLevel: 1, hold: 0 }
+    return { root, bar: part('.hud-oh-bar'), hp: part('.hud-oh-hp'), trail: part('.hud-oh-trail'), shield: part('.hud-oh-sh'), ult: part('.hud-oh-ult'), st: part('.hud-oh-st'), stKey: '', shown: false, maxHp: -1, hpShown: -1, trailShown: -1, shieldKey: '', trailLevel: 1, hold: 0 }
   })
 
   const order: number[] = []
@@ -129,6 +136,19 @@ export function createOverheads(layer: HTMLElement, heroes: readonly OverheadHer
         it.shield.style.transform = `translateX(${(Math.min(hpF, 1 - shF) * 100).toFixed(1)}%) scaleX(${shF})`
       }
       if (live.ultReady !== it.ready) it.ult.classList.toggle('ready', (it.ready = live.ultReady))
+      const statuses = live.statuses ?? []
+      const shown = statusKey(statuses, STATUS_SHOWN)
+      if (shown !== it.stKey) {
+        it.stKey = shown
+        it.st.replaceChildren(
+          ...statuses.slice(0, STATUS_SHOWN).map((st) => {
+            const chip = document.createElement('i')
+            chip.className = `hud-oh-chip tone-${st.tone}`
+            chip.textContent = st.label
+            return chip
+          }),
+        )
+      }
     },
     dispose() {
       for (const it of items) it.root.remove()

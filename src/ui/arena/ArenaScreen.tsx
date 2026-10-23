@@ -42,7 +42,8 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState<string>()
   const [locked, setLocked] = useState(false)
-  const [started, setStarted] = useState(false)
+  // the camera help shows at the start of a match and whenever H is pressed
+  const [help, setHelp] = useState(true)
   const [counting, setCounting] = useState(true)
   // FIGHT! stays up a moment after the countdown hands the match to the engine
   const [splash, setSplash] = useState(true)
@@ -74,9 +75,11 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
           host.current!,
           (on) => {
             setLocked(on)
-            if (on) setStarted(true)
           },
-          (code) => code === 'KeyP' && toggleMenu.current(),
+          (code) => {
+            if (code === 'KeyP') toggleMenu.current()
+            if (code === 'KeyH') setHelp((on) => !on)
+          },
         )
         setController(c)
       })
@@ -122,7 +125,7 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
         <Loading {...progress} />
       ) : (
         <>
-          <Live controller={controller} staged={staged} locked={locked} started={started} paused={menu || counting} onLeave={onBack} onRematch={onRestart} />
+          <Live controller={controller} staged={staged} locked={locked} help={help} onHelp={setHelp} paused={menu || counting} onLeave={onBack} onRematch={onRestart} />
           {splash && <Countdown onDone={countdownDone} onFinished={splashDone} />}
           {menu && <PauseMenu onResume={resume} onRestart={onRestart} onBack={onBack} />}
         </>
@@ -131,13 +134,14 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
   )
 }
 
-function Live({ controller, staged, locked, started, paused, onLeave, onRematch }: { controller: ArenaController; staged: StagingResult; locked: boolean; started: boolean; paused: boolean; onLeave: () => void; onRematch: () => void }) {
+function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRematch }: { controller: ArenaController; staged: StagingResult; locked: boolean; help: boolean; onHelp: (on: boolean) => void; paused: boolean; onLeave: () => void; onRematch: () => void }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
   const builds = useMemo(() => staged.formation[staged.side].map((p) => staged.loadout[p.hero].build), [staged])
   // names, portraits and each skill's icon never change during a match: built once, not at 10 Hz
   const heroes = useMemo(() => hudHeroes(controller.arena.setups, controller.arena.match.heroes.map((h) => h.team), stagedPortraits(staged)), [controller, staged])
   const controlled = state.controlled !== undefined ? state.heroes[state.controlled] : undefined
   const over = state.winner !== undefined
+  const toggleHelp = useCallback(() => onHelp(!help), [help, onHelp])
   useEffect(() => {
     if (over && document.pointerLockElement) document.exitPointerLock()
   }, [over])
@@ -149,25 +153,32 @@ function Live({ controller, staged, locked, started, paused, onLeave, onRematch 
       <MatchHud state={state} side={staged.side} builds={builds} heroes={heroes} controller={controller} />
       {controlled && <ControlHud hero={controlled} info={heroes[controlled.id]} controller={controller} state={state} heroes={heroes} />}
       {over && <Result state={state} side={staged.side} heroes={heroes} onRematch={onRematch} onBack={onLeave} />}
-      {!locked && !over && !paused && (
-        <div className={`arena-hint${started ? ' released' : ''}`} role="status">
-          {started ? (
-            <>
-              <span className="arena-hint-text">Mouse released</span>
-              <button className="hud-btn primary" onClick={() => document.querySelector<HTMLCanvasElement>('.arena-canvas canvas')?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))}>
-                Resume
-              </button>
-              <button className="hud-btn" onClick={onLeave}>
-                Leave match
-              </button>
-            </>
-          ) : (
-            <span className="arena-hint-text">
-              Click the arena to look around · <kbd>1</kbd>–<kbd>0</kbd> take your heroes · <kbd>Tab</kbd> hands back · <kbd>P</kbd> pauses
-            </span>
-          )}
-        </div>
+      {!locked && !over && !paused && !controlled && <CameraHelp open={help} onToggle={toggleHelp} />}
+    </div>
+  )
+}
+
+/**
+ * How to watch and how to play, in one line along the bottom: it shows at the start and whenever H or its button is
+ * pressed, and folds to a small button the rest of the time.
+ */
+function CameraHelp({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  // it folds itself away once it has been read
+  useEffect(() => {
+    if (!open) return
+    const fold = setTimeout(onToggle, 14_000)
+    return () => clearTimeout(fold)
+  }, [open, onToggle])
+  return (
+    <div className={`arena-hint camera-help${open ? ' open' : ''}`} role="status">
+      {open && (
+        <span className="arena-hint-text">
+          <b>Drag</b> turn · <b>Right drag</b> slide · <b>Wheel</b> zoom · <kbd>WASD</kbd> move · <b>Click a hero</b> follow · <b>Double click</b> or <kbd>1</kbd>–<kbd>0</kbd> play it · <kbd>P</kbd> pause
+        </span>
       )}
+      <button className="hud-btn camera-help-btn" onClick={onToggle} aria-expanded={open} aria-label={open ? 'Hide camera help' : 'Show camera help'}>
+        {open ? 'Got it' : '? Controls'}
+      </button>
     </div>
   )
 }
