@@ -460,9 +460,10 @@ def spires(count=7, seed=9):
     out = bmesh.new()
     for i in range(count):
         a = 2 * math.pi * (i + rnd.uniform(-0.3, 0.3)) / count
-        dist = rnd.uniform(190, 255)
+        # far enough out that the haze softens them, low enough that they frame the arena rather than loom over it
+        dist = rnd.uniform(225, 290)
         cx, cy = math.cos(a) * dist, math.sin(a) * dist
-        top = rnd.uniform(-6, 30)
+        top = rnd.uniform(-14, 18)
         base = -75.0
         rad = rnd.uniform(11, 24)
         lean = Vector((rnd.uniform(-0.12, 0.12), rnd.uniform(-0.12, 0.12)))
