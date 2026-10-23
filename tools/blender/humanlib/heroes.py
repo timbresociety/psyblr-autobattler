@@ -65,6 +65,8 @@ def kit(role, metal='bronze', accent='sash', side='L'):
         'mage': [('bracers', dict(mat=metal, start=0.62, end=0.9))],
         'marksman': [('pauldron', dict(side=side, mat=metal, layers=2, size=0.12)), ('bracers', dict(mat='strap')), ('belt', dict(mat='belt', buckle=metal))],
         'support': [('pauldron', dict(side=side, mat=metal, layers=1, size=0.12)), ('belt', dict(mat='belt', buckle=metal))],
+        'controller': [('bracers', dict(mat=metal, start=0.55, end=0.9)), ('belt', dict(mat='belt', buckle=metal))],
+        'summoner': [('bracers', dict(mat='strap', start=0.5)), ('belt', dict(mat='belt', buckle=metal))],
     }[role]
     if accent == 'sash':
         out.append(('sash', dict(mat='accent', side='R' if side == 'L' else 'L')))
@@ -180,16 +182,15 @@ HEROES = {
     'altman': hero(
         'Sam "AGI" Altman', 'altman', caucasian(gender=1.0, age=age(40), muscle=0.4, weight=0.4), 1.70,
         dict(style='short', mat='hair'),
-        casual(top='sweater', sleeve=1.93, thick=0.009), 'mage',
+        casual(top='sweater', sleeve=1.93, thick=0.009), 'controller',
         dict(sweater=dict(paint='knit', color=(0.36, 0.38, 0.42)), trousers=dict(paint='denim', color=DENIM), shoes=dict(paint='leather', color=(0.82, 0.82, 0.8)), hair=hair_mat((0.2, 0.14, 0.09), (0.3, 0.21, 0.14))),
-        accent='cape',
     ),
     'buffett': hero(
         'Warren "Oracle" Buffett', 'buffett', caucasian(gender=1.0, age=age(90), muscle=0.3, weight=0.62), 1.76,
         dict(style='fringe_white', recede=0.02, temple=0.01, mat='hair'),
-        suit(tie='tie'), 'support',
+        suit(tie='tie'), 'summoner',
         dict(jacket=dict(paint='wool', color=(0.33, 0.34, 0.37)), shirt=dict(paint='cotton', color=WHITE_SHIRT), tie=dict(paint='silk', color=(0.5, 0.1, 0.12)), trousers=dict(paint='wool', color=(0.3, 0.31, 0.34)), shoes=dict(paint='leather', color=black(0.06)), hair=hair_mat((0.86, 0.86, 0.84), (0.7, 0.7, 0.7))),
-        extra_gear=[('glasses', dict(shape='round'))],
+        extra_gear=[('glasses', dict(shape='round'))], accent='cape',
     ),
     'winfrey': hero(
         'Oprah "You Get One" Winfrey', 'winfrey', african(gender=0.0, age=age(71), muscle=0.4, weight=0.66), 1.69,
@@ -253,7 +254,7 @@ HEROES = {
     'merkel': hero(
         'Angela "Iron Chancellor" Merkel', 'merkel', caucasian(gender=0.0, age=age(71), muscle=0.35, weight=0.62), 1.65,
         dict(style='bob', mat='hair'),
-        suit(jacket='accent', shirt='top', collar=False, lapels=False), 'support',
+        suit(jacket='accent', shirt='top', collar=False, lapels=False), 'controller',
         dict(top=dict(paint='silk', color=black(0.06)), trousers=dict(paint='fabric', color=black(0.07)), shoes=dict(paint='leather', color=black(0.05)), hair=hair_mat((0.78, 0.66, 0.46), (0.88, 0.8, 0.62))),
         accent=None,
     ),
@@ -279,9 +280,9 @@ HEROES = {
     'yew': hero(
         'Lee Kuan "Miracle" Yew', 'yew', asian(gender=1.0, age=age(52), muscle=0.45, weight=0.42), 1.74,
         dict(style='side_part', recede=0.012, mat='hair'),
-        casual(top='shirt', sleeve=0.55, neck='collar'), 'marksman',
+        casual(top='shirt', sleeve=0.55, neck='collar'), 'summoner',
         dict(shirt=dict(paint='cotton', color=(0.94, 0.94, 0.95)), trousers=dict(paint='cotton', color=(0.92, 0.92, 0.93)), shoes=dict(paint='leather', color=black(0.06)), hair=hair_mat((0.08, 0.08, 0.08), (0.3, 0.3, 0.3))),
-        extra_gear=[('collar', dict(mat='shirt', height=0.03, gap=0.2, offset=0.006))],
+        extra_gear=[('collar', dict(mat='shirt', height=0.03, gap=0.2, offset=0.006))], accent='cape',
     ),
 }
 

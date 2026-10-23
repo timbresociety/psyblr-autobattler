@@ -21,9 +21,10 @@ export { characterLook, heroHue, loadBuild } from './character-look'
  * metallic, leather and silk glossy, everything else soft, and a rim light in the team's colour so a crowd of twenty
  * reads by side at a glance (R38). `meta` is the UV set carrying regions (the second one on textured files).
  */
-export function characterMaterial(team: THREE.Color, map: THREE.Texture | null = null, meta: 'uv' | 'uv1' = 'uv'): MeshStandardNodeMaterial {
+export function characterMaterial(team: THREE.Color, map: THREE.Texture | null = null, meta: 'uv' | 'uv1' = 'uv', normalMap: THREE.Texture | null = null): MeshStandardNodeMaterial {
   const m = new MeshStandardNodeMaterial({ vertexColors: true })
   if (map) m.map = map
+  if (normalMap) m.normalMap = normalMap
   const region = uv(meta === 'uv1' ? 1 : 0).x
   const inRegion = (index: number) => step(index, region).mul(step(region, index + 1))
   const metal = inRegion(REGION_INDEX.metal).add(inRegion(REGION_INDEX.bakedMetal))
@@ -63,7 +64,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     const mesh = o as THREE.SkinnedMesh
     if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
   })
-  paintModel(scene, look, (map) => characterMaterial(team, map, meta))
+  paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap))
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

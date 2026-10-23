@@ -138,7 +138,7 @@ export function HeroViewer({ meshUrl, motionUrls = [], motion, effect, aura, bui
           if (disposed) return
           const model = cloneSkinned(file.scene)
           // its own handle on the shared atlas: the cleanup below disposes maps, and must not free the arena's copy
-          paintModel(model, look, (map) => classicCharacterMaterial(map ? map.clone() : null))
+          paintModel(model, look, (map, normalMap) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null))
           stage.add(model)
           mixer = new THREE.AnimationMixer(model)
           const names = file.animations.map((c) => c.name)

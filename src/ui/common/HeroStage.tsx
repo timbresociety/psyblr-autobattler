@@ -275,7 +275,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
         const model = cloneSkinned(file.scene)
         // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-        paintModel(model, painted, (map) => (look ? classicCharacterMaterial(map) : empty))
+        paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty))
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

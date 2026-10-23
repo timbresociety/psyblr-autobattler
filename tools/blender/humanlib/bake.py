@@ -361,6 +361,60 @@ def paint_material(mat, face_img=None, hair_img=None):
     return nt
 
 
+def add_relief(mat):
+    """
+    A second network on each material for the normal bake: a Principled BSDF whose normal is bumped by the surface's
+    own small relief (cloth folds and weave, leather grain and creases, hammered bronze, hair strands, skin pores).
+    """
+    nt = mat.node_tree
+    paint = mat.get('paint', 'flat')
+    bsdf = nt.nodes.new('ShaderNodeBsdfPrincipled')
+    bsdf.name = 'relief'
+    bump = nt.nodes.new('ShaderNodeBump')
+
+    def folds(scale=6.0):
+        # soft folds that ring the limbs and drape on the body
+        return _range(nt, _noise(nt, scale, 3, stretch=(1, 1, 3.5), distortion=0.6), 0.25, 0.75, 0.0, 1.0)
+
+    if paint in ('fabric', 'wool', 'cotton', 'flat', 'silk', 'dots'):
+        weave = _range(nt, _wave(nt, 420, 'X', 0.0), 0.0, 1.0, 0.0, 0.08)
+        h = _math(nt, 'ADD', folds(), weave)
+        strength, distance = 0.45, 0.012
+    elif paint == 'knit':
+        h = _math(nt, 'ADD', folds(), _range(nt, _wave(nt, 260, 'X', 0.4), 0.0, 1.0, 0.0, 0.25))
+        strength, distance = 0.5, 0.012
+    elif paint == 'denim':
+        h = _math(nt, 'ADD', folds(), _range(nt, _wave(nt, 300, 'Z', 0.6), 0.0, 1.0, 0.0, 0.15))
+        strength, distance = 0.45, 0.012
+    elif paint == 'leather':
+        grain = _range(nt, _voronoi(nt, 160), 0.0, 0.12, 0.0, 0.3)
+        h = _math(nt, 'ADD', folds(8.0), grain)
+        strength, distance = 0.55, 0.01
+    elif paint == 'metal':
+        h = _range(nt, _noise(nt, 70, 3), 0.3, 0.7, 0.0, 1.0)
+        strength, distance = 0.3, 0.006
+    elif paint == 'hair':
+        h = _range(nt, _noise(nt, 40, 4, stretch=(50, 50, 4), distortion=1.0), 0.3, 0.7, 0.0, 1.0)
+        strength, distance = 0.6, 0.008
+    else:
+        # skin: the faintest pores, so painted faces keep their paint
+        h = _range(nt, _noise(nt, 380, 2), 0.3, 0.7, 0.0, 1.0)
+        strength, distance = 0.06, 0.002
+    nt.links.new(h, bump.inputs['Height'])
+    bump.inputs['Strength'].default_value = strength
+    bump.inputs['Distance'].default_value = distance
+    nt.links.new(bump.outputs['Normal'], bsdf.inputs['Normal'])
+    return bsdf
+
+
+def show(mat, which):
+    """Route the material output to the emission (albedo bake) or the relief BSDF (normal bake)."""
+    nt = mat.node_tree
+    out = next(n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL')
+    src = nt.nodes.get('relief') if which == 'relief' else next(n for n in nt.nodes if n.type == 'EMISSION')
+    nt.links.new(src.outputs[0], out.inputs['Surface'])
+
+
 def setup_cycles(samples=1):
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
@@ -377,7 +431,7 @@ def setup_cycles(samples=1):
         scene.cycles.device = 'CPU'
 
 
-def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=None, log=print, hair_img=None):
+def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=None, log=print, hair_img=None, normal_size=512):
     """Bake the albedo (and multiply in ambient occlusion); returns the atlas image."""
     me = hero.data
     for m in me.materials:
@@ -414,6 +468,20 @@ def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=Non
         bpy.context.scene.world = bpy.context.scene.world or bpy.data.worlds.new('w')
         bpy.ops.object.bake(type='AO', uv_layer='atlas', margin=6, margin_type='EXTEND', use_clear=True)
         log('ao bake', f'{time.time() - t0:.1f}s')
+    normal = None
+    if normal_size:
+        normal = bpy.data.images.new('normal', normal_size, normal_size, alpha=False)
+        normal.colorspace_settings.name = 'Non-Color'
+        for m in me.materials:
+            add_relief(m)
+            show(m, 'relief')
+        setup_cycles(4)
+        target(normal)
+        bpy.ops.object.bake(type='NORMAL', normal_space='TANGENT', uv_layer='atlas', margin=4, margin_type='EXTEND', use_clear=True)
+        log('normal bake', f'{time.time() - t0:.1f}s')
+        for m in me.materials:
+            show(m, 'emit')
+        normal.pack()
     n = size * size * 4
     a = np.empty(n, dtype=np.float32)
     albedo.pixels.foreach_get(a)
@@ -432,10 +500,10 @@ def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=Non
         atlas.file_format = 'PNG'
         atlas.save()
     atlas.pack()
-    return atlas
+    return atlas, normal
 
 
-def final_material(hero, atlas):
+def final_material(hero, atlas, normal=None):
     """One material for export: the atlas as base colour; the game's own material takes over from here."""
     me = hero.data
     regions = [m.get('region', 'baked') for m in me.materials]
@@ -462,6 +530,14 @@ def final_material(hero, atlas):
     nt.links.new(uvn.outputs['UV'], tex.inputs['Vector'])
     nt.links.new(tex.outputs['Color'], bsdf.inputs['Base Color'])
     bsdf.inputs['Roughness'].default_value = 0.6
+    if normal is not None:
+        ntex = nt.nodes.new('ShaderNodeTexImage')
+        ntex.image = normal
+        nt.links.new(uvn.outputs['UV'], ntex.inputs['Vector'])
+        nmap = nt.nodes.new('ShaderNodeNormalMap')
+        nmap.uv_map = 'atlas'
+        nt.links.new(ntex.outputs['Color'], nmap.inputs['Color'])
+        nt.links.new(nmap.outputs['Normal'], bsdf.inputs['Normal'])
     me.materials.append(m)
     for p in me.polygons:
         p.material_index = 0

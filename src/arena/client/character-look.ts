@@ -190,23 +190,34 @@ export function characterMap(mesh: THREE.Mesh): THREE.Texture | null {
   return (Array.isArray(m) ? m[0]?.map : m?.map) ?? null
 }
 
+/** The baked relief (cloth folds and weave, leather grain, hammered bronze, hair strands) a character carries, if any. */
+export function characterNormalMap(mesh: THREE.Mesh): THREE.Texture | null {
+  const m = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[]
+  return (Array.isArray(m) ? m[0]?.normalMap : m?.normalMap) ?? null
+}
+
 /**
  * Repaint a cloned character for one hero: each skinned mesh gets the hero's geometry (colours, parts) and the
- * material `material(map)` makes from the file's atlas. Renderer-agnostic: the arena passes node materials, the
- * previews and busts classic ones.
+ * material `material(map, normalMap)` makes from the file's atlas and relief. Renderer-agnostic: the arena passes
+ * node materials, the previews and busts classic ones.
  */
-export function paintModel(model: THREE.Object3D, look: CharacterLook, material: (map: THREE.Texture | null) => THREE.Material): void {
+export function paintModel(model: THREE.Object3D, look: CharacterLook, material: (map: THREE.Texture | null, normalMap: THREE.Texture | null) => THREE.Material): void {
   model.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh
     if (!mesh.isSkinnedMesh) return
     const map = characterMap(mesh)
+    const normalMap = characterNormalMap(mesh)
+    const source = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial
     mesh.geometry = paintGeometry(mesh.geometry, look)
-    mesh.material = material(map)
+    const made = material(map, normalMap) as THREE.MeshStandardMaterial
+    // glTF's tangent-space convention: the loader flips the normal scale's y for meshes without tangents; keep it
+    if (normalMap && source?.normalScale && made.normalScale) made.normalScale.copy(source.normalScale)
+    mesh.material = made
     mesh.frustumCulled = false
   })
 }
 
 /** The classic (WebGL) material the previews and busts draw a character with. */
-export function classicCharacterMaterial(map: THREE.Texture | null): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ vertexColors: true, map, roughness: 0.58, metalness: 0.04 })
+export function classicCharacterMaterial(map: THREE.Texture | null, normalMap: THREE.Texture | null = null): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({ vertexColors: true, map, normalMap, roughness: 0.58, metalness: 0.04 })
 }

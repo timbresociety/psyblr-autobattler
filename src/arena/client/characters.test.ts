@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { getTemplate } from '../../charter/templates/catalog'
 import { defaultBuild } from '../../sim/fixtures'
 import { DEMO_HEROES, demoBuild } from '../demo/roster'
-import { characterLook, HERO_MODELS, modelFor, paintGeometry } from './character-look'
+import { characterLook, classicCharacterMaterial, HERO_MODELS, modelFor, paintGeometry, paintModel } from './character-look'
 import { castClip } from './characters'
 
 describe('a hero’s look', () => {
@@ -100,5 +100,27 @@ describe('painting a textured model', () => {
     expect(g.getIndex()!.count).toBe(6)
     // the atlas UVs pass through untouched
     expect(g.getAttribute('uv').getX(0)).toBeCloseTo(0.25)
+  })
+})
+
+describe('repainting a loaded model', () => {
+  it('keeps the atlas and the relief, with glTF’s normal convention', () => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Array(9).fill(0), 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Array(6).fill(0.5), 2))
+    g.setAttribute('uv1', new THREE.Float32BufferAttribute([12.5, 0.5, 12.5, 0.5, 12.5, 0.5], 2))
+    g.setIndex([0, 1, 2])
+    const map = new THREE.Texture()
+    const normalMap = new THREE.Texture()
+    const source = new THREE.MeshStandardMaterial({ map, normalMap })
+    source.normalScale.set(1, -1)
+    const mesh = new THREE.SkinnedMesh(g, source)
+    const root = new THREE.Group().add(mesh)
+    paintModel(root, characterLook(defaultBuild('tank', 'T'), 0.1), classicCharacterMaterial)
+    const painted = mesh.material as THREE.MeshStandardMaterial
+    expect(painted).not.toBe(source)
+    expect(painted.map).toBe(map)
+    expect(painted.normalMap).toBe(normalMap)
+    expect(painted.normalScale.y).toBe(-1)
   })
 })

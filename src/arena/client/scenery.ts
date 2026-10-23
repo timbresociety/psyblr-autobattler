@@ -200,9 +200,10 @@ export function surroundings(W: number, L: number, rim: number): Surroundings {
   // rocks: boulders along the lawn's edge, and islets drifting below the rim so the sky has depth
   const rocks: Placement[] = []
   for (let i = 0; i < 18; i++) {
-    const a = rnd() * Math.PI * 2
-    const ex = (W + rim - 2) * Math.cos(a)
-    const ez = (L + rim - 2) * Math.sin(a)
+    // on the meadow between the barrier and the island's edge, never on the stage (a rock there would read as cover)
+    const out = 3 + rnd() * (rim - 5)
+    const along = rnd() * 2 - 1
+    const [ex, ez] = i % 2 ? [Math.sign(along || 1) * (W + out), along * (L + rim - 3)] : [along * (W + rim - 3), Math.sign(rnd() - 0.5 || 1) * (L + out)]
     rocks.push({ variant: Math.floor(rnd() * 3), matrix: place(ex, -0.2, ez, rnd() * 6.28, new THREE.Vector3(1.2 + rnd() * 1.4, 0.8 + rnd() * 0.9, 1.2 + rnd() * 1.4)) })
   }
   for (let i = 0; i < 16; i++) {

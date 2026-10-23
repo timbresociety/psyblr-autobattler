@@ -120,7 +120,7 @@ export function preloadBusts(): Promise<boolean> {
  */
 function posed(file: Gltf, look: CharacterLook): THREE.Object3D {
   const model = cloneSkinned(file.scene)
-  paintModel(model, look, (map) => classicCharacterMaterial(map ? map.clone() : null))
+  paintModel(model, look, (map, normalMap) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null))
   const idle = file.animations.find((c) => c.name === 'idle')
   if (idle) {
     const mixer = new THREE.AnimationMixer(model)
@@ -188,6 +188,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
         mesh.geometry.dispose()
         const m = mesh.material as THREE.MeshStandardMaterial
         m.map?.dispose()
+        m.normalMap?.dispose()
         m.dispose()
       })
   } else {

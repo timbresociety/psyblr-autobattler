@@ -171,8 +171,8 @@ def main(opts):
     out = opts.get('out')
     png = (os.path.splitext(out)[0] + '_atlas.png') if opts.get('keep-atlas') and out else None
     log('laid out', f'{time.time() - t0:.1f}s')
-    atlas = K.bake(hero, size, face_img, ao_samples=int(opts.get('ao', 24)), out_png=png, log=log, hair_img=hair_img)
-    K.final_material(hero, atlas)
+    atlas, normal = K.bake(hero, size, face_img, ao_samples=int(opts.get('ao', 24)), out_png=png, log=log, hair_img=hair_img, normal_size=int(opts.get('normal', 512)))
+    K.final_material(hero, atlas, normal)
     R.bind(rig, [hero])
     C.author(rig, arms_out=spec.get('arms_out', 0.0))
     log('baked', f'{time.time() - t0:.1f}s', 'tris', B.triangles([hero]), 'verts', len(hero.data.vertices))
@@ -506,9 +506,17 @@ def play(rig, name):
         rig.animation_data.action_slot = act.slots[0]
 
 
+def preview_engine(scene):
+    """Previews render on the CPU with Cycles: EEVEE can stall in a background Blender while browsers hold the GPU."""
+    scene.render.engine = 'CYCLES'
+    scene.cycles.device = 'CPU'
+    scene.cycles.samples = 16
+    scene.cycles.use_denoising = False
+
+
 def portrait_render(path, rig, head):
     scene = bpy.context.scene
-    scene.render.engine = 'BLENDER_EEVEE'
+    preview_engine(scene)
     _lights(scene)
     play(rig, 'idle')
     scene.frame_set(1)
@@ -526,7 +534,7 @@ SHEET = [('idle', 0), ('run', 0.17), ('slash', 0.2), ('shoot', 0.1), ('cast', 0.
 def sheet(folder, rig):
     os.makedirs(folder, exist_ok=True)
     scene = bpy.context.scene
-    scene.render.engine = 'BLENDER_EEVEE'
+    preview_engine(scene)
     _lights(scene)
     scene.render.resolution_x, scene.render.resolution_y = 360, 420
     _camera(scene, (1.9, -3.3, 1.3), (0, 0, 0.95), 50)
