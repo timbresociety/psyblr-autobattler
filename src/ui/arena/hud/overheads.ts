@@ -31,6 +31,7 @@ interface Item {
   ult: HTMLElement
   shown: boolean
   far?: boolean
+  crowded?: boolean
   low?: boolean
   ready?: boolean
   maxHp: number
@@ -46,6 +47,8 @@ const q = (x: number) => Math.round(Math.max(0, Math.min(1, x)) * 1000) / 1000
 /** Seconds the trailing chunk holds after a hit, then how much of the bar it drains per second. */
 const TRAIL_HOLD = 0.35
 const TRAIL_RATE = 0.9
+/** The name row's box at scale 1, in pixels: its width, its height, and how far above the overhead's foot it starts. */
+const NAME = { w: 70, h: 13, above: 23 }
 
 export function createOverheads(layer: HTMLElement, heroes: readonly OverheadHero[]) {
   const items: Item[] = heroes.map((h) => {
@@ -59,8 +62,33 @@ export function createOverheads(layer: HTMLElement, heroes: readonly OverheadHer
     return { root, bar: part('.hud-oh-bar'), hp: part('.hud-oh-hp'), trail: part('.hud-oh-trail'), shield: part('.hud-oh-sh'), ult: part('.hud-oh-ult'), shown: false, maxHp: -1, hpShown: -1, trailShown: -1, shieldKey: '', trailLevel: 1, hold: 0 }
   })
 
+  const order: number[] = []
+  const placed: number[] = []
   return {
     items: () => items.map((i) => i.root),
+    /**
+     * After every hero is updated: a name that would sit on a nearer hero's name gives way and keeps only its bar,
+     * so a melee of twenty still reads. Nearest first, so the heroes closest to the camera keep their names.
+     */
+    declutter(points: readonly ScreenPoint[]) {
+      order.length = 0
+      for (let i = 0; i < items.length; i++) if (items[i].shown && !items[i].far && points[i]) order.push(i)
+      order.sort((a, b) => points[a].depth - points[b].depth)
+      placed.length = 0
+      for (const i of order) {
+        const p = points[i]
+        const s = distanceScale(p.depth)
+        const w = NAME.w * s
+        const x0 = p.x - w / 2
+        const y0 = p.y - NAME.above * s
+        const y1 = y0 + NAME.h * s
+        let hit = false
+        for (let k = 0; k < placed.length && !hit; k += 4) hit = x0 < placed[k + 2] && placed[k] < x0 + w && y0 < placed[k + 3] && placed[k + 1] < y1
+        if (!hit) placed.push(x0, y0, x0 + w, y1)
+        const it = items[i]
+        if (hit !== !!it.crowded) it.root.classList.toggle('crowded', (it.crowded = hit))
+      }
+    },
     /** One hero, one frame. `hidden` drops the bar (the controlled hero, whose own HUD shows its health). */
     update(i: number, p: ScreenPoint, live: OverheadLive, hidden: boolean, dt: number) {
       const it = items[i]

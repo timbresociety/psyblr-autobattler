@@ -59,6 +59,7 @@ export function attachWorldHud(el: HTMLElement, controller: HudController, heroe
       live.ultReady = hero.cooldowns.ultimate <= 0
       overheads.update(i, heads[i], live, match.human === i, dt)
     }
+    overheads.declutter(heads)
     damage.frame(dt, (t) => heads[t])
   })
 
