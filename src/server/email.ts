@@ -1,4 +1,4 @@
-import { isProduction } from '../forge/providers/router'
+import { fakeMode, isProduction } from '../forge/providers/router'
 import type { Env } from '../forge/providers/types'
 import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http'
 
@@ -44,4 +44,13 @@ export function pickEmailSender(env: Env, fetchImpl?: FetchLike): EmailSender | 
   const live = resendSender(env, fetchImpl)
   if (live.available()) return live
   return isProduction(env) ? undefined : fakeEmailSender()
+}
+
+/**
+ * Development only: the sign-in link itself, for the response, so a local player can sign in without an inbox. Only
+ * the fake sender qualifies, and only with fake providers switched on outside production (the dev server). A preview
+ * deployment that merely lacks an email key keeps logging the link instead of handing it to whoever asked.
+ */
+export function devSignInLink(sender: EmailSender | undefined, env: Env, link: string): string | undefined {
+  return sender?.id === 'fake-email' && fakeMode(env) ? link : undefined
 }

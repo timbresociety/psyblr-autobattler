@@ -10,6 +10,7 @@ export function StatsStage({ forge, busy, onCheck, onPublish }: { forge: Forge; 
   const build = draft && draft.base === forge.build ? draft.build : forge.build!
   const s = forge.stages.stats
   const changed = JSON.stringify(build.spread) !== JSON.stringify(forge.build!.spread)
+  const saved = s.status === 'ready' && !changed
   return (
     <div className="stage-body">
       <StatSplit
@@ -19,12 +20,13 @@ export function StatsStage({ forge, busy, onCheck, onPublish }: { forge: Forge; 
           if (result.ok) setDraft({ base: forge.build!, build: result.build })
         }}
       />
-      {s.failure && <p className="inline-error">{s.failure}</p>}
-      <div className="row">
-        <button disabled={busy || (s.status === 'ready' && !changed)} onClick={() => onCheck(build.spread)}>
-          {s.status === 'ready' && !changed ? 'Split saved' : 'Save split'}
+      {s.failure && <p className="inline-error" role="alert">{s.failure}</p>}
+      <p className="muted">{saved ? 'Split saved. Publishing runs the balance check one last time and puts your hero in the global loadout.' : 'Save the split first; publishing checks it against the field.'}</p>
+      <div className="stage-actions">
+        <button className={`btn${saved ? ' ghost' : ' primary'}`} disabled={busy || saved} onClick={() => onCheck(build.spread)}>
+          {saved ? 'Split saved' : 'Save split'}
         </button>
-        <button className="primary" disabled={busy || s.status !== 'ready' || changed} onClick={onPublish}>
+        <button className="btn primary big" disabled={busy || s.status !== 'ready' || changed} onClick={onPublish}>
           Publish hero
         </button>
       </div>

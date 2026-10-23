@@ -29,6 +29,12 @@ describe('accounts and sessions (U7)', () => {
     expect(mail.outbox[0].text).toMatch(/https:\/\/psyblr\.test\/\?signin=/)
   })
 
+  it('starting sign-in returns the link it sent', async () => {
+    const link = await startSignIn(db, 'jen@example.com', '1.1.1.1', mail, BASE)
+    expect(link).toMatch(/^https:\/\/psyblr\.test\/\?signin=[\w-]+$/)
+    expect(mail.outbox[0].text).toContain(link)
+  })
+
   it('a valid token creates a session once; reuse is rejected', async () => {
     await startSignIn(db, 'a@example.com', '1.1.1.1', mail, BASE)
     const token = tokenFrom(mail.outbox[0].text)

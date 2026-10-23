@@ -33,21 +33,28 @@ export class ApiError extends Error {
   }
 }
 
+/** What starting a sign-in returns. Only the dev server adds `devLink`, since it sends no real email. */
+export interface SignInStart {
+  devLink?: string
+}
+
 export interface ForgeDeps {
   session(): Promise<SessionView>
-  startSignIn(email: string): Promise<void>
+  startSignIn(email: string): Promise<SignInStart | void>
   verifySignIn(token: string): Promise<void>
   signOut(): Promise<void>
   credits(): Promise<CreditsView>
   claimFree(): Promise<number>
   purchase(pack: string): Promise<{ url: string }>
-  create(input: { prompt?: string; referenceHeroId?: string }): Promise<ForgeView>
+  create(input: { prompt?: string; referenceHeroId?: string; referenceUrls?: string[] }): Promise<ForgeView>
   get(id: string): Promise<ForgeView>
   list(): Promise<ForgeSummary[]>
   act(id: string, action: ForgeAction): Promise<ForgeView>
   search(query: string): Promise<HeroResult[]>
   addHero(heroId: string): Promise<BuildRecord>
   sizeCost(build: Build, size: SizeClass): Promise<SizeCost>
+  /** Reference images for a new forge go through the photo endpoint; without it the prompt takes no images. */
+  uploadPhoto?(file: File): Promise<string | undefined>
 }
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -72,7 +79,7 @@ function wire(id: string, action: ForgeAction): Record<string, unknown> {
 
 export const liveForgeDeps: ForgeDeps = {
   session: () => call<SessionView>('/api/auth/session'),
-  startSignIn: (email) => post('/api/auth/start', { email }),
+  startSignIn: (email) => post<SignInStart>('/api/auth/start', { email }),
   verifySignIn: (token) => post('/api/auth/verify', { token }),
   signOut: () => call('/api/auth/session', { method: 'DELETE' }),
   credits: () => call<CreditsView>('/api/credits'),
@@ -84,6 +91,7 @@ export const liveForgeDeps: ForgeDeps = {
   act: (id, action) => post<ForgeView>('/api/forge/stage', wire(id, action)),
   search: liveDeps.search,
   addHero: liveDeps.addHero,
+  uploadPhoto: liveDeps.uploadPhoto,
   // a quick estimate for the size picker; the server gate prices the final build at publish
   sizeCost: async (build, size) => sizeCost(build, size, { duelsPerMember: 2 }),
 }
