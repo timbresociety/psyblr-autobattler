@@ -1,14 +1,14 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { defaultBuild } from '../../sim/fixtures'
-import { ENGINE } from './calibration'
-import { heroLocomotion } from './locomotion'
-import { FORBIDDEN_MATHS, atan2, cos, sin } from './maths'
-import { next } from './rng'
-import { hashState, restore, snapshot } from './snapshot'
-import { AIM_STEPS, createHero, emptyMatch, prepareHero, type Command, type MatchState } from './state'
-import { pause, resume, tick } from './tick'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { ENGINE } from './calibration.js'
+import { heroLocomotion } from './locomotion.js'
+import { FORBIDDEN_MATHS, atan2, cos, sin } from './maths.js'
+import { next } from './rng.js'
+import { hashState, restore, snapshot } from './snapshot.js'
+import { AIM_STEPS, createHero, emptyMatch, prepareHero, type Command, type MatchState } from './state.js'
+import { pause, resume, tick } from './tick.js'
 
 const build = (moveSpeed?: number) => {
   const setup = prepareHero(defaultBuild('fighter'))

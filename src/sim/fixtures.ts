@@ -1,5 +1,5 @@
-import { proposeBuild, type Build } from '../charter/build'
-import type { RoleId } from '../charter/types'
+import { proposeBuild, type Build } from '../charter/build.js'
+import type { RoleId } from '../charter/types.js'
 
 /** A build that uses each slot's role default, for tests and the reference field. */
 export function defaultBuild(roleId: RoleId, heroName: string = roleId): Build {

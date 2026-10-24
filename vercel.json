@@ -7,7 +7,13 @@
   "functions": {
     "api/**/*.ts": {
       "includeFiles": "db/schema.sql",
-      "maxDuration": 60
+      "maxDuration": 300
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:route*",
+      "destination": "/api/router?__route=:route*"
+    }
+  ]
 }

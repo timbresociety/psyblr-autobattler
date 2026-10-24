@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { emptyFormation, MAX_PER_SIDE, SPACING } from './formation'
-import { demoLoadout } from './loadout'
-import { byRank, defaultLineup, factionLineup, hasFactions, lineupName, matchup } from './presets'
+import { emptyFormation, MAX_PER_SIDE, SPACING } from './formation.js'
+import { demoLoadout } from './loadout.js'
+import { byRank, defaultLineup, factionLineup, hasFactions, lineupName, matchup } from './presets.js'
 
 const roster = demoLoadout()
 const faction = (heroes: number[]) => new Set(heroes.map((h) => roster[h].faction))

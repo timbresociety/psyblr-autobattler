@@ -1,6 +1,6 @@
-import type { Build } from '../charter/build'
-import { aiCommands } from '../arena/ai/brain'
-import { GATE_PROFILE, GATE_TEAM_PROFILE, createMatch, play, type Combatant } from '../arena/engine/match'
+import type { Build } from '../charter/build.js'
+import { aiCommands } from '../arena/ai/brain.js'
+import { GATE_PROFILE, GATE_TEAM_PROFILE, createMatch, play, type Combatant } from '../arena/engine/match.js'
 
 /**
  * The balance model's entry points (KTD1, KTD6), now thin wrappers over the 3D arena engine: a headless match under

@@ -1,6 +1,6 @@
 import { PerspectiveCamera } from 'three'
 import { describe, expect, it } from 'vitest'
-import { distanceScale, nearestToCentre, project, screenPoint, stickyTarget, type ScreenPoint } from './world'
+import { distanceScale, nearestToCentre, project, screenPoint, stickyTarget, type ScreenPoint } from './world.js'
 
 // a 90° vertical field of view: at 10 m the screen spans 10 m up and down from centre, and twice that across at 2:1
 const camera = () => {

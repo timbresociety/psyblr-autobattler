@@ -1,9 +1,10 @@
 import { memo, useMemo, useState } from 'react'
 import type { Build } from '../../charter/build'
-import { DIVERSITY_MIN, describeSynergy } from '../../charter/synergy'
+import { armyTraits } from '../../charter/traits'
+import { RoleIcon } from '../common/RoleIcon'
 import type { HudHero, HudState } from '../../arena/client/match-view'
 import type { Team } from '../../arena/engine/state'
-import { SynergyPanel } from './staging/Panels'
+import { TraitPanel } from './staging/Panels'
 import { VolumeControl } from './PauseMenu'
 import { ScoreBanner } from './hud/Banner'
 import { AbilityCluster, Crosshair, HealthBlock, SelfStatus, TargetFrame } from './hud/Control'
@@ -22,19 +23,29 @@ function useInfo(state: HudState, heroes?: readonly HudHeroInfo[]): readonly Hud
 }
 
 /**
- * Synergies (R4) folded into one line under the banner; open it for the full panel. Depends only on the roster, not
- * on the 10 Hz match state.
+ * Synergies (R4) folded into one line under the banner: a badge for each lit trait, coloured by its tier; open it for
+ * the full panel. Depends only on the roster, not on the 10 Hz match state.
  */
 const Synergies = memo(function Synergies({ builds }: { builds: Build[] }) {
-  const s = describeSynergy(builds)
+  const lit = armyTraits(builds).filter((t) => t.tier >= 0)
   return (
     <details className="hud-syn">
       <summary className="hud-btn">
         <span>Synergies</span>
-        <b className={s.teamBonus ? 'lit' : ''}>{s.teamBonus ? `+${Math.round(s.teamBonus * 100)}% damage` : `${s.distinctRoles}/${DIVERSITY_MIN} roles`}</b>
-        {s.penalties.length > 0 && <b className="warn">stacked</b>}
+        {lit.length ? (
+          <span className="hud-syn-lit">
+            {lit.map(({ trait, count, tier }) => (
+              <i key={trait.role} className={`trait-badge sm role-${trait.role} tier-${tier}`} title={`${trait.name} ${count}`}>
+                <RoleIcon role={trait.role} />
+                <b>{count}</b>
+              </i>
+            ))}
+          </span>
+        ) : (
+          <b>none lit</b>
+        )}
       </summary>
-      <SynergyPanel builds={builds} />
+      <TraitPanel builds={builds} compact />
     </details>
   )
 })

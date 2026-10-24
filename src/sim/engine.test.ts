@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { duel, simulate } from './engine'
-import { defaultBuild } from './fixtures'
-import type { Build } from '../charter/build'
+import { duel, simulate } from './engine.js'
+import { defaultBuild } from './fixtures.js'
+import type { Build } from '../charter/build.js'
 
 describe('combat engine', () => {
   it('the same seed and builds give identical results', () => {

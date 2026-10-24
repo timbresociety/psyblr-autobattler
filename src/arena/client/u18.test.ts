@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { QUALITY_LEVELS, createGuard, observe } from './quality'
-import { loadAudio, saveAudio } from './settings'
+import { QUALITY_LEVELS, createGuard, observe } from './quality.js'
+import { loadAudio, saveAudio } from './settings.js'
 
 describe('frame-rate guard (U18)', () => {
   it('steps quality down one level at a time under sustained 25 ms frames', () => {

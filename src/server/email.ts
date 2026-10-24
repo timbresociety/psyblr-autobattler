@@ -1,6 +1,7 @@
-import { fakeMode, isProduction } from '../forge/providers/router'
-import type { Env } from '../forge/providers/types'
-import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http'
+import { isProduction } from '../forge/providers/router.js'
+import { localDev } from './dev-store.js'
+import type { Env } from '../forge/providers/types.js'
+import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http.js'
 
 /** Sends sign-in links (KTD5). The fake keeps an outbox for tests and local development; production never uses it. */
 export interface EmailSender {
@@ -48,9 +49,9 @@ export function pickEmailSender(env: Env, fetchImpl?: FetchLike): EmailSender | 
 
 /**
  * Development only: the sign-in link itself, for the response, so a local player can sign in without an inbox. Only
- * the fake sender qualifies, and only with fake providers switched on outside production (the dev server). A preview
- * deployment that merely lacks an email key keeps logging the link instead of handing it to whoever asked.
+ * the fake sender qualifies, and only on the local dev server: a preview may run fake providers, but handing a sign-in
+ * link to whoever asked there would let anyone sign in as anyone.
  */
 export function devSignInLink(sender: EmailSender | undefined, env: Env, link: string): string | undefined {
-  return sender?.id === 'fake-email' && fakeMode(env) ? link : undefined
+  return sender?.id === 'fake-email' && localDev(env) ? link : undefined
 }

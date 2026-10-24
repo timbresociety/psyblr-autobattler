@@ -1,11 +1,11 @@
 import * as THREE from 'three'
-import { geometryOf } from '../../charter/geometry'
-import { SIZES } from '../../charter/sizes'
-import { ENGINE } from '../engine/calibration'
-import { chest, isRanged } from '../engine/deliveries'
-import { enemiesOf } from '../engine/effects'
-import type { Vec3 } from '../engine/maths'
-import { capsule, type HeroSetup, type HeroState, type MatchState } from '../engine/state'
+import { geometryOf } from '../../charter/geometry.js'
+import { SIZES } from '../../charter/sizes.js'
+import { ENGINE } from '../engine/calibration.js'
+import { chest, isRanged } from '../engine/deliveries.js'
+import { enemiesOf } from '../engine/effects.js'
+import type { Vec3 } from '../engine/maths.js'
+import { capsule, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
 
 /**
  * How far the controlled hero's basic attack reaches, on the floor around it: an arc in front for a swing (it turns

@@ -1,4 +1,4 @@
-import { bust } from '../staging/loadout'
+import { bust } from '../staging/loadout.js'
 import type { StagingResult } from '../staging/Staging'
 
 /**

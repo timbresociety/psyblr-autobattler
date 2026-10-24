@@ -1,6 +1,6 @@
-import type { BuildSlot } from '../../charter/types'
-import type { MatchEvent } from '../engine/events'
-import type { HeroState } from '../engine/state'
+import type { BuildSlot } from '../../charter/types.js'
+import type { MatchEvent } from '../engine/events.js'
+import type { HeroState } from '../engine/state.js'
 
 /**
  * Each hero's animation state (KTD9), driven only by engine events and state: run or fly while moving, a cast

@@ -106,3 +106,40 @@ create table if not exists gate_cache (
   outcome jsonb not null,
   created_at timestamptz not null default now()
 );
+
+-- The asset repository's community pieces: gear players generated, free for everyone to wear (Forge plan, Phase C).
+-- Built-in pieces ship with the game (src/kit/pieces.gen.ts) and are never stored here.
+create table if not exists assets (
+  id text primary key,
+  kind text not null check (kind in ('head', 'face', 'hand', 'offhand', 'back')),
+  name text not null,
+  name_lower text not null,
+  tags text[] not null default '{}',
+  prompt text not null default '',
+  url text not null,
+  thumb_url text,
+  triangles integer not null default 0,
+  creator_account text,
+  use_count integer not null default 0,
+  hidden boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists assets_kind on assets (kind, use_count desc);
+
+-- One row per piece being generated (Phase D). The browser polls; each poll moves the job along, and a job that
+-- finishes is claimed by exactly one poll ('finishing') before its model is cleaned up and published.
+create table if not exists piece_jobs (
+  id text primary key,
+  account_id text not null references accounts(id),
+  kind text not null,
+  name text not null,
+  prompt text not null,
+  image_url text,
+  status text not null check (status in ('running', 'finishing', 'done', 'failed')),
+  provider text,
+  task_id text,
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists piece_jobs_account on piece_jobs (account_id, created_at desc);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { MatchEvent } from '../../../arena/engine/events'
-import { createKillTracker } from './kills'
+import type { MatchEvent } from '../../../arena/engine/events.js'
+import { createKillTracker } from './kills.js'
 
 const hit = (source: number, target: number, slot: 'basic' | 'active1' | 'ultimate' = 'basic', heavy = false): MatchEvent => ({ type: 'hit', source, target, slot, amount: 40, heavy })
 const death = (hero: number): MatchEvent => ({ type: 'death', hero })

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { InputError, chatEdit, proposeHero, type ModelCall } from './propose'
-import { RateLimiter } from './rate-limit'
-import { getTemplate } from '../charter/templates/catalog'
-import { POOL_SIZE, spentPoints } from '../charter/stats'
-import { proposeBuild } from '../charter/build'
+import { InputError, chatEdit, proposeHero, type ModelCall } from './propose.js'
+import { RateLimiter } from './rate-limit.js'
+import { getTemplate } from '../charter/templates/catalog.js'
+import { POOL_SIZE, spentPoints } from '../charter/stats.js'
+import { proposeBuild } from '../charter/build.js'
 
 const input = {
   heroName: 'Dario',
@@ -28,6 +28,15 @@ describe('proposeHero', () => {
     expect(result.build.slots.active1.templateId).toBe('mage-chrono-rewind')
     expect(result.build.slots.active1.name).toBe('Rewind')
     expect(result.build.gate.state).toBe('draft')
+  })
+
+  it('the model names only the slots the player left unnamed, and never with numbers', async () => {
+    const call: ModelCall = vi.fn(async () => ({ ...valid, names: { active1: 'Not This', active2: 'Ember Lance 9000', movement: 'Phase  Step' } }))
+    const result = await proposeHero(input, { callModel: call })
+    expect(result.build.slots.active1.name).toBe('Rewind')
+    expect(result.build.slots.active2.name).toBe('Ember Lance')
+    expect(result.build.slots.movement.name).toBe('Phase Step')
+    expect(result.build.slots.basic.name).toBe('')
   })
 
   it('an unknown template ID falls back to the matcher for that slot', async () => {

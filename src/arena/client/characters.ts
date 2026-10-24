@@ -2,12 +2,13 @@ import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { float, mix, normalView, positionViewDirection, step, uniform, uv } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import type { Build } from '../../charter/build'
-import { getTemplate } from '../../charter/templates/catalog'
-import type { AnimState } from './animation'
-import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look'
+import type { Build } from '../../charter/build.js'
+import { getTemplate } from '../../charter/templates/catalog.js'
+import type { AnimState } from './animation.js'
+import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look.js'
+import { wearGear, type LoadedGear } from './gear.js'
 
-export { characterLook, heroHue, loadBuild } from './character-look'
+export { characterLook, heroHue, loadBuild } from './character-look.js'
 
 /**
  * The arena's own characters (R24): rigged, animated MakeHuman-based models made in Blender (tools/blender/human.py),
@@ -55,8 +56,8 @@ export interface CharacterView {
   pose: (state: AnimState, dt: number, moving: boolean) => void
 }
 
-/** A posed, animated clone of a build for one hero. */
-export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build): CharacterView {
+/** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face, `gear` its pieces. */
+export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null, gear?: LoadedGear): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   let meta: 'uv' | 'uv1' = 'uv'
@@ -64,7 +65,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     const mesh = o as THREE.SkinnedMesh
     if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
   })
-  paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap))
+  paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap), atlas)
+  if (gear) wearGear(scene, look.gear, gear)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

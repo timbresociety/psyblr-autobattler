@@ -1,13 +1,14 @@
-import { RUINS, initialCoverHealth, type CoverPiece } from './cover'
-import { keepOut } from './locomotion'
-import type { Build } from '../../charter/build'
-import { ENGINE, ticks } from './calibration'
-import { COMBAT_RULES } from './deliveries'
-import { initHero } from './effects'
-import { clamp, type Vec3 } from './maths'
-import { next } from './rng'
-import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state'
-import { tick, type TickRules } from './tick'
+import { RUINS, initialCoverHealth, type CoverPiece } from './cover.js'
+import type { TraitMods } from '../../charter/traits.js'
+import { keepOut } from './locomotion.js'
+import type { Build } from '../../charter/build.js'
+import { ENGINE, ticks } from './calibration.js'
+import { COMBAT_RULES } from './deliveries.js'
+import { initHero } from './effects.js'
+import { clamp, type Vec3 } from './maths.js'
+import { next } from './rng.js'
+import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state.js'
+import { tick, type TickRules } from './tick.js'
 
 /**
  * Match setup and rules (U5, KTD5). The profiles share every rule: the live match runs a long timer with an overtime
@@ -25,11 +26,12 @@ export const GATE_PROFILE: Profile = { timerSeconds: 60, damageRamp: { fromSecon
 /** Team fights in the balance report need longer to play out than duels. */
 export const GATE_TEAM_PROFILE: Profile = { timerSeconds: 120, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
 
-/** A hero entering a match; army synergy has already set its power scale and damage bonus. */
+/** A hero entering a match, with what its army's traits give it (src/charter/traits.ts) in army fights. */
 export interface Combatant {
   build: Build
   powerScale?: number
   damageBonus?: number
+  mods?: TraitMods
 }
 
 export interface Arena {
@@ -68,7 +70,7 @@ export function createMatch(
   const setups: HeroSetup[] = []
   const add = (team: Combatant[], side: Team) =>
     team.forEach((c, i) => {
-      const setup = prepareHero(c.build, c.powerScale ?? 1, c.damageBonus ?? 0)
+      const setup = prepareHero(c.build, c.powerScale ?? 1, c.damageBonus ?? 0, c.mods)
       const staged = options.formations?.[side]?.[i]
       const spot = staged ? ownHalf(side, staged) : defaultSpot(match, side, i, team.length)
       const hero = createHero(setup, setups.length, side, spot)

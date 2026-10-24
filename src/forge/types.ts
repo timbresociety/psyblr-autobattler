@@ -1,7 +1,7 @@
-import type { RecipeLook } from '../arena/recipes/schema'
-import type { Build } from '../charter/build'
-import type { SizeClass } from '../charter/sizes'
-import type { BuildSlot } from '../charter/types'
+import type { RecipeLook } from '../arena/recipes/schema.js'
+import type { Build } from '../charter/build.js'
+import type { SizeClass } from '../charter/sizes.js'
+import type { BuildSlot } from '../charter/types.js'
 
 /** The stages of a forge, in order (R11). */
 export type StageId = 'spec' | 'concept' | 'mesh' | 'motion' | 'active1' | 'active2' | 'ultimate' | 'form' | 'stats'

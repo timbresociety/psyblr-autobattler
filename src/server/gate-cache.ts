@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
-import { BUILD_SLOTS, swapAlternatives, type Build } from '../charter/build'
-import { CATALOG_VERSION } from '../charter/templates/catalog'
-import type { BuildSlot } from '../charter/types'
-import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from '../sim/calibration'
-import { MAX_RETUNE_STEPS } from '../charter/budget'
-import { GATE_CEILING, GATE_MARGIN, gateStamp, runGate, type GateOptions, type GateOutcome } from '../sim/gate'
-import type { Db } from './db'
+import { BUILD_SLOTS, swapAlternatives, type Build } from '../charter/build.js'
+import { CATALOG_VERSION } from '../charter/templates/catalog.js'
+import type { BuildSlot } from '../charter/types.js'
+import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from '../sim/calibration.js'
+import { MAX_RETUNE_STEPS } from '../charter/budget.js'
+import { GATE_CEILING, GATE_MARGIN, gateStamp, runGate, verifyGate, type GateOptions, type GateOutcome } from '../sim/gate.js'
+import type { Db } from './db.js'
 
 /**
  * A cache in front of the balance gate (KTD6). The key covers only what the gate reads: role, templates, spread,
@@ -45,8 +45,11 @@ function replay(input: Build, cached: Cached): GateOutcome {
     : { state: 'blocked', winRate: cached.winRate, build, strongestSlot: cached.strongestSlot, alternatives: cached.strongestSlot ? swapAlternatives(input, cached.strongestSlot) : [] }
 }
 
-/** Run the gate, or reuse the result for the same numbers. */
-export async function cachedGate(db: Db, build: Build, options: GateOptions = {}): Promise<GateOutcome> {
+/**
+ * Run the gate, or reuse the result for the same numbers. `claimedSteps` are the steps a browser's own gate found: one
+ * measurement confirms them, and only a claim that fails falls back to the whole search.
+ */
+export async function cachedGate(db: Db, build: Build, options: GateOptions = {}, claimedSteps?: number): Promise<GateOutcome> {
   const key = gateKey(build, options)
   // the cache only saves time: if it cannot be read or written, the gate still runs and the save still succeeds
   const hit = await db.query<{ outcome: Cached }>('select outcome from gate_cache where key = $1', [key]).then(
@@ -54,7 +57,7 @@ export async function cachedGate(db: Db, build: Build, options: GateOptions = {}
     () => undefined,
   )
   if (hit) return replay(build, hit)
-  const outcome = runGate(build, options)
+  const outcome = (claimedSteps !== undefined ? verifyGate(build, claimedSteps, options) : undefined) ?? runGate(build, options)
   const cached: Cached = { state: outcome.state, winRate: outcome.winRate, retuneSteps: outcome.build.slots.basic.retuneSteps, ...(outcome.strongestSlot ? { strongestSlot: outcome.strongestSlot } : {}) }
   await db.query('insert into gate_cache (key, outcome) values ($1, $2) on conflict (key) do nothing', [key, JSON.stringify(cached)]).catch(() => undefined)
   return outcome

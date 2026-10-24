@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { armyModifiers } from '../../charter/synergy'
-import { defaultBuild } from '../../sim/fixtures'
-import { createMatch } from '../engine/match'
-import { attachControls } from './controls'
-import { createHooks, type ArenaController } from './match-view'
+import { armyModifiers } from '../../charter/traits.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { createMatch } from '../engine/match.js'
+import { attachControls } from './controls.js'
+import { createHooks, type ArenaController } from './match-view.js'
 
 /** Just enough of a live match for the controls: the match, hooks, cameras and the take / hand-back calls. */
 function controller() {

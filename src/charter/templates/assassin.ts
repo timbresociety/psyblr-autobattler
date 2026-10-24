@@ -1,4 +1,4 @@
-import { active, ai, at, basic, blind, breakPassive, buff, cripple, execute, field, heal, invulnerable, mark, movement, move, passive, phys, refresh, root, silence, slow, spirit, stealth, stun, trap, ultimate, vulnerable, wound } from './dsl'
+import { active, ai, at, basic, blind, breakPassive, buff, cripple, execute, field, heal, invulnerable, mark, movement, move, passive, phys, refresh, root, silence, slow, spirit, stealth, stun, trap, ultimate, vulnerable, wound } from './dsl.js'
 
 /** Assassin: bursts down isolated or hurt targets, then gets out. Stealth, marks, executes, silences and evasion. */
 export const ASSASSIN = [

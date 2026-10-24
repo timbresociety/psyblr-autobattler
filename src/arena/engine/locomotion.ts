@@ -1,9 +1,9 @@
-import { locomotion } from '../../charter/locomotion'
-import { SIZES } from '../../charter/sizes'
-import { DT, ENGINE, ticks } from './calibration'
-import { clamp } from './maths'
-import { pushOut } from './cover'
-import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
+import { locomotion } from '../../charter/locomotion.js'
+import { SIZES } from '../../charter/sizes.js'
+import { DT, ENGINE, ticks } from './calibration.js'
+import { clamp } from './maths.js'
+import { pushOut } from './cover.js'
+import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 
 /** Ground speed now: the sheet's move speed with buffs, the strongest slow, and any transformation's speed (KTD2). */
 export function moveSpeed(hero: HeroState, setup: HeroSetup): number {

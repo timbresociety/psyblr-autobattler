@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CATALOG } from '../../charter/templates/catalog'
-import { FLIGHT_SET, MOVEMENT_SET, TRIPO_PRESETS, basicMotions, motionsFor, playable, presetsNeeded } from './library'
+import { CATALOG } from '../../charter/templates/catalog.js'
+import { FLIGHT_SET, MOVEMENT_SET, TRIPO_PRESETS, basicMotions, motionsFor, playable, presetsNeeded } from './library.js'
 
 describe('motion library (U6)', () => {
   it('every catalogue template resolves to 1-3 motions, each with a Tripo preset fallback', () => {

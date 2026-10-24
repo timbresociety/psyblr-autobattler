@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { devSignInLink, fakeEmailSender, pickEmailSender, resendSender } from './email'
+import { devSignInLink, fakeEmailSender, pickEmailSender, resendSender } from './email.js'
 
 const LINK = 'http://localhost:3110/?signin=abc'
 
@@ -11,6 +11,8 @@ describe('the dev sign-in link', () => {
   it('production never hands it back, even with the fake switch set', () => {
     expect(devSignInLink(fakeEmailSender(), { FORGE_FAKE_PROVIDERS: '1', VERCEL_ENV: 'production' }, LINK)).toBeUndefined()
     expect(devSignInLink(fakeEmailSender(), { FORGE_FAKE_PROVIDERS: '1', NODE_ENV: 'production' }, LINK)).toBeUndefined()
+    // a preview may run fake providers, but must never hand out sign-in links
+    expect(devSignInLink(fakeEmailSender(), { FORGE_FAKE_PROVIDERS: '1', VERCEL: '1', VERCEL_ENV: 'preview' }, LINK)).toBeUndefined()
     expect(pickEmailSender({ NODE_ENV: 'production' })).toBeUndefined()
   })
 

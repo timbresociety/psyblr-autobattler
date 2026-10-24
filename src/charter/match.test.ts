@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { matchTemplate, nearestAlternatives, tokenize } from './match'
-import { defaultTemplate, getTemplate } from './templates/catalog'
+import { matchTemplate, nearestAlternatives, tokenize } from './match.js'
+import { defaultTemplate, getTemplate } from './templates/catalog.js'
 
 describe('description matcher', () => {
   it('"rewind the last 5 seconds" on a Mage active finds a return-to-past template (AE1)', () => {

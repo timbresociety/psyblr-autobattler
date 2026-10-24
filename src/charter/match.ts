@@ -1,5 +1,5 @@
-import { defaultTemplate, poolFor } from './templates/catalog'
-import type { RoleId, SlotKind, Template } from './types'
+import { defaultTemplate, poolFor } from './templates/catalog.js'
+import type { RoleId, SlotKind, Template } from './types.js'
 
 /**
  * Offline matcher (KTD5): maps a player's skill description to a mechanic template by tag overlap.

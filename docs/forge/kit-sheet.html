@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Character Kit</title>
+<style>
+  :root { --bg: #f6f3ec; --panel: #fffdf8; --ink: #1d1b17; --muted: #6b655a; --line: #e2dccf; --stage: #2a2531; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161b; --panel: #1b1e25; --ink: #ece8df; --muted: #a39d90; --line: #2c3039; --stage: #23202b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 40px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 26px; margin: 56px 0 8px; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  p { margin: 0 0 14px; max-width: 70ch; }
+  .lede { font-size: 19px; color: var(--muted); }
+  .stage { background: radial-gradient(ellipse at 50% 35%, #4a4156, var(--stage)); border-radius: 14px; padding: 12px; }
+  .stage img { display: block; width: 100%; height: auto; }
+  .sizes { display: grid; grid-template-columns: repeat(6, 1fr); text-align: center; font-size: 13px; color: var(--muted); margin: 6px 0 24px; }
+  .sizes em { font-style: normal; opacity: 0.7; }
+  .heads { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .heads figure, .piece { margin: 0; background: var(--stage); border-radius: 12px; overflow: hidden; }
+  .heads img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+  figcaption { padding: 6px 10px 8px; font-size: 13px; color: #ece8df; }
+  .pieces { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .piece img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; padding: 8px; }
+  .piece figcaption b { display: block; font-weight: 650; }
+  .piece figcaption span { display: block; font-size: 12px; color: #a39d90; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--panel); border: 1px solid var(--line); padding: 1px 5px; border-radius: 5px; }
+  @media (max-width: 640px) { .sizes { font-size: 11px; } h1 { font-size: 32px; } }
+</style>
+</head>
+<body>
+<main>
+<h1>Character kit</h1>
+<p class="lede">Every hero in the Forge starts from this kit, and nothing in it costs a credit: twelve bodies, eleven hair styles, three beards and 23 pieces of gear. Generation only fills what's missing. Once a player generates a piece, it joins the repository and everyone else can wear it free.</p>
+
+<h2>Bodies</h2>
+<p>Six sizes in two builds. Each size is its own body, not the medium one stretched, so a tiny hero is a compact adult and a huge one has a brawler's frame. Colossal is the transformation size: a hero whose ultimate transforms swaps into that body mid-fight. The game still scales each body by its size class, because the size sets the hitbox.</p>
+<div class="stage"><img src="kit/lineup-m.webp" alt="The six men's bodies from tiny to colossal, side by side at their in-game scale"></div>
+<div class="sizes"><span>Tiny <em>0.8x</em></span><span>Small <em>0.9x</em></span><span>Medium <em>1x</em></span><span>Large <em>1.15x</em></span><span>Huge <em>1.3x</em></span><span>Colossal <em>1.6x</em></span></div>
+<div class="stage"><img src="kit/lineup-f.webp" alt="The six women's bodies from tiny to colossal, side by side at their in-game scale"></div>
+<div class="sizes"><span>Tiny <em>0.8x</em></span><span>Small <em>0.9x</em></span><span>Medium <em>1x</em></span><span>Large <em>1.15x</em></span><span>Huge <em>1.3x</em></span><span>Colossal <em>1.6x</em></span></div>
+
+<h2>Hair and beards</h2>
+<p>Every body carries all of these at once and the look decides which one shows, so switching is free and instant. Beards fit either build.</p>
+<div class="heads"><figure><img src="kit/hair-m-none.webp" alt="" loading="lazy"><figcaption>Bald</figcaption></figure><figure><img src="kit/hair-f-none.webp" alt="" loading="lazy"><figcaption>Bald</figcaption></figure><figure><img src="kit/hair-m-buzz.webp" alt="" loading="lazy"><figcaption>Buzz</figcaption></figure><figure><img src="kit/hair-f-buzz.webp" alt="" loading="lazy"><figcaption>Buzz</figcaption></figure><figure><img src="kit/hair-m-crop.webp" alt="" loading="lazy"><figcaption>Crop</figcaption></figure><figure><img src="kit/hair-f-crop.webp" alt="" loading="lazy"><figcaption>Crop</figcaption></figure><figure><img src="kit/hair-m-short.webp" alt="" loading="lazy"><figcaption>Short</figcaption></figure><figure><img src="kit/hair-f-short.webp" alt="" loading="lazy"><figcaption>Short</figcaption></figure><figure><img src="kit/hair-m-curly.webp" alt="" loading="lazy"><figcaption>Curly</figcaption></figure><figure><img src="kit/hair-f-curly.webp" alt="" loading="lazy"><figcaption>Curly</figcaption></figure><figure><img src="kit/hair-m-swept.webp" alt="" loading="lazy"><figcaption>Swept</figcaption></figure><figure><img src="kit/hair-f-swept.webp" alt="" loading="lazy"><figcaption>Swept</figcaption></figure><figure><img src="kit/hair-m-spiky.webp" alt="" loading="lazy"><figcaption>Spiky</figcaption></figure><figure><img src="kit/hair-f-spiky.webp" alt="" loading="lazy"><figcaption>Spiky</figcaption></figure><figure><img src="kit/hair-m-bob.webp" alt="" loading="lazy"><figcaption>Bob</figcaption></figure><figure><img src="kit/hair-f-bob.webp" alt="" loading="lazy"><figcaption>Bob</figcaption></figure><figure><img src="kit/hair-m-long.webp" alt="" loading="lazy"><figcaption>Long</figcaption></figure><figure><img src="kit/hair-f-long.webp" alt="" loading="lazy"><figcaption>Long</figcaption></figure><figure><img src="kit/hair-m-volume.webp" alt="" loading="lazy"><figcaption>Volume</figcaption></figure><figure><img src="kit/hair-f-volume.webp" alt="" loading="lazy"><figcaption>Volume</figcaption></figure><figure><img src="kit/hair-m-helmet.webp" alt="" loading="lazy"><figcaption>Helmet</figcaption></figure><figure><img src="kit/hair-f-helmet.webp" alt="" loading="lazy"><figcaption>Helmet</figcaption></figure></div>
+<h3>Beards</h3>
+<div class="heads"><figure><img src="kit/beard-goatee.webp" alt="" loading="lazy"><figcaption>Goatee</figcaption></figure><figure><img src="kit/beard-full.webp" alt="" loading="lazy"><figcaption>Full</figcaption></figure><figure><img src="kit/beard-chin_curtain.webp" alt="" loading="lazy"><figcaption>Chin curtain</figcaption></figure></div>
+
+<h2>Gear</h2>
+<p>Rigid pieces, each its own small model of 4 to 12 KB. The pipeline puts five sockets on every body, and a piece hangs on one, so any piece fits any body and follows every animation. A piece with a colour slot takes the colour picked beside its row in the Forge. The prompt picks pieces too: "a knight" gets a sword and a shield.</p>
+<div class="scroll"><table>
+<tr><th>Socket</th><th>Where it sits</th><th>What fits</th></tr>
+<tr><td>Head</td><td>On the hairline, scaled to the body's head</td><td>Hats, crowns, helms, a halo</td></tr>
+<tr><td>Face</td><td>In front of the eyes, scaled to the head</td><td>Glasses, shades, a visor, an eyepatch</td></tr>
+<tr><td>Right hand</td><td>In the palm, the length along the thumb</td><td>Any hand piece</td></tr>
+<tr><td>Left hand</td><td>The same on the left</td><td>Any hand piece, plus shields and bows</td></tr>
+<tr><td>Back</td><td>Between the shoulder blades</td><td>Wings, a jetpack, a quiver</td></tr>
+</table></div>
+<h3>Head</h3><div class="pieces"><figure class="piece"><img src="../../public/kit/pieces/crown.webp" alt="" loading="lazy"><figcaption><b>Crown</b><span>crown, king, queen, royal crown</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/top_hat.webp" alt="" loading="lazy"><figcaption><b>Top hat</b><span>top hat, tophat, stovepipe, gentleman</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/wizard_hat.webp" alt="" loading="lazy"><figcaption><b>Wizard hat</b><span>wizard hat, witch hat, pointy hat, wizard</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/horned_helm.webp" alt="" loading="lazy"><figcaption><b>Horned helm</b><span>horned helmet, viking helmet, horns, horned helm</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/halo.webp" alt="" loading="lazy"><figcaption><b>Halo</b><span>halo, angel, saint, holy</span></figcaption></figure></div><h3>Face</h3><div class="pieces"><figure class="piece"><img src="../../public/kit/pieces/glasses.webp" alt="" loading="lazy"><figcaption><b>Glasses</b><span>glasses, spectacles, specs, nerd</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/shades.webp" alt="" loading="lazy"><figcaption><b>Shades</b><span>sunglasses, shades, aviators, cool glasses</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/eyepatch.webp" alt="" loading="lazy"><figcaption><b>Eyepatch</b><span>eyepatch, eye patch, pirate</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/visor.webp" alt="" loading="lazy"><figcaption><b>Visor</b><span>visor, cyber visor, cyborg, goggles</span></figcaption></figure></div><h3>Either hand</h3><div class="pieces"><figure class="piece"><img src="../../public/kit/pieces/katana.webp" alt="" loading="lazy"><figcaption><b>Katana</b><span>katana, samurai sword, japanese sword, samurai</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/sword.webp" alt="" loading="lazy"><figcaption><b>Sword</b><span>sword, longsword, broadsword, blade</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/dagger.webp" alt="" loading="lazy"><figcaption><b>Dagger</b><span>dagger, knife, dirk, kunai</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/axe.webp" alt="" loading="lazy"><figcaption><b>Battle axe</b><span>axe, battle axe, battleaxe, hatchet</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/hammer.webp" alt="" loading="lazy"><figcaption><b>War hammer</b><span>hammer, warhammer, war hammer, maul</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/spear.webp" alt="" loading="lazy"><figcaption><b>Spear</b><span>spear, lance, javelin, pike</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/staff.webp" alt="" loading="lazy"><figcaption><b>Staff</b><span>staff, magic staff, quarterstaff, stave</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/wand.webp" alt="" loading="lazy"><figcaption><b>Wand</b><span>wand, magic wand, magician, fairy</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/pistol.webp" alt="" loading="lazy"><figcaption><b>Pistol</b><span>pistol, gun, handgun, revolver</span></figcaption></figure></div><h3>Left hand only</h3><div class="pieces"><figure class="piece"><img src="../../public/kit/pieces/shield.webp" alt="" loading="lazy"><figcaption><b>Round shield</b><span>shield, round shield, buckler, viking shield</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/bow.webp" alt="" loading="lazy"><figcaption><b>Bow</b><span>bow, longbow, recurve bow, archer</span></figcaption></figure></div><h3>Back</h3><div class="pieces"><figure class="piece"><img src="../../public/kit/pieces/wings.webp" alt="" loading="lazy"><figcaption><b>Wings</b><span>wings, angel wings, feathered wings, angel</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/jetpack.webp" alt="" loading="lazy"><figcaption><b>Jetpack</b><span>jetpack, jet pack, rocket pack, thrusters</span></figcaption></figure><figure class="piece"><img src="../../public/kit/pieces/quiver.webp" alt="" loading="lazy"><figcaption><b>Quiver</b><span>quiver, arrows, arrow quiver, archer</span></figcaption></figure></div>
+
+<h2>Making more</h2>
+<p>Built-in pieces come from <code>tools/blender/pieces.py</code>. <code>Blender -b --python tools/blender/pieces.py -- --only katana</code> rebuilds one piece, its thumbnail and the list the game reads in <code>src/kit/pieces.gen.ts</code>. Bodies come from <code>tools/blender/human.py</code>, and <code>tools/blender/kit_sheet.py</code> redraws this page.</p>
+</main>
+</body>
+</html>

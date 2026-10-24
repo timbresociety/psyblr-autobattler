@@ -1,4 +1,4 @@
-import { ENGINE } from '../engine/calibration'
+import { ENGINE } from '../engine/calibration.js'
 
 /**
  * The client's fixed-step clock (KTD9, KTD15): each frame runs as many 60 Hz engine ticks as wall time allows, then

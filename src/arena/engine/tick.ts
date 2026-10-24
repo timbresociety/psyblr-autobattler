@@ -1,9 +1,9 @@
-import { BUILD_SLOTS } from '../../charter/build'
-import type { MatchEvent } from './events'
-import { move } from './locomotion'
-import { TAU } from './maths'
-import { next } from './rng'
-import { AIM_STEPS, IDLE, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state'
+import { BUILD_SLOTS } from '../../charter/build.js'
+import type { MatchEvent } from './events.js'
+import { move } from './locomotion.js'
+import { TAU } from './maths.js'
+import { next } from './rng.js'
+import { AIM_STEPS, IDLE, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 
 /**
  * One fixed 60 Hz step (KTD1). Rules that act on heroes plug in through `TickRules`, so the core stays small: U4 adds

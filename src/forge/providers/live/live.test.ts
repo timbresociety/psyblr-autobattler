@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { anthropicDirector, anthropicModeration } from './anthropic'
-import type { FetchLike } from './http'
-import { openAICompatibleDirector, openAIImage } from './openai-compatible'
-import { tripoMesh, tripoRetarget, tripoRig } from './tripo'
+import { anthropicDirector, anthropicModeration } from './anthropic.js'
+import type { FetchLike } from './http.js'
+import { openAICompatibleDirector, openAIImage } from './openai-compatible.js'
+import { TRIPO_PIECE_MODEL, tripoMesh, tripoPiece, tripoRetarget, tripoRig } from './tripo.js'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -98,7 +98,7 @@ describe('OpenAI-compatible adapters (U4)', () => {
 describe('Anthropic adapters (U4)', () => {
   const env = { ANTHROPIC_API_KEY: 'k' }
   const message = (stop: string, text: string) =>
-    json(200, { id: 'm', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: stop, content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } })
+    json(200, { id: 'm', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: stop, content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } })
 
   it('a refusal is a decline', async () => {
     const f = mockFetch(message('refusal', ''))
@@ -108,5 +108,34 @@ describe('Anthropic adapters (U4)', () => {
   it('moderation returns the four flags', async () => {
     const f = mockFetch(message('end_turn', '{"realPerson":true,"sexual":false,"minors":false,"endorsement":false}'))
     expect(await anthropicModeration(env, f).classify({ text: 'Jensen roast' })).toEqual({ ok: true, value: { realPerson: true, sexual: false, minors: false, endorsement: false } })
+  })
+})
+
+describe('Tripo pieces on the v3 API (developers.tripo3d.com, 2026-10)', () => {
+  it('makes a piece from words with text-to-model, and a success poll returns the model and its preview', async () => {
+    const f = mockFetch(json(200, { code: 0, data: { task_id: 'task_1' } }), json(200, { code: 0, data: { task_id: 'task_1', status: 'success', progress: 100, output: { model_url: 'https://cdn.tripo3d.ai/m.glb', rendered_image_url: 'https://cdn.tripo3d.ai/p.png' } } }))
+    const piece = tripoPiece(TRIPO, f)
+    expect(await piece.start({ prompt: 'a straw hat', kind: 'head', faceLimit: 20000 })).toEqual({ ok: 'pending', taskId: 'task_1' })
+    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.com/v3/generation/text-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, prompt: 'a straw hat' } })
+    expect(await piece.poll('task_1')).toEqual({ ok: true, value: { url: 'https://cdn.tripo3d.ai/m.glb', format: 'glb', preview: 'https://cdn.tripo3d.ai/p.png' } })
+    expect(f.calls[1].url).toBe('https://openapi.tripo3d.com/v3/tasks/task_1')
+  })
+
+  it('models a piece from a picture with image-to-model, the picture passed as input', async () => {
+    const f = mockFetch(json(200, { code: 0, data: { task_id: 'task_2' } }))
+    await tripoPiece(TRIPO, f).start({ prompt: 'this sword', kind: 'hand', imageUrl: 'https://store.public.blob.vercel-storage.com/heroes/x.webp', faceLimit: 20000 })
+    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.com/v3/generation/image-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, input: 'https://store.public.blob.vercel-storage.com/heroes/x.webp' } })
+  })
+
+  it('reads a content refusal as a decline, a running task as pending, and anything else as a failure', async () => {
+    const refused = mockFetch(json(400, { code: 2008, status: 'error', message: 'content policy violation' }))
+    expect(await tripoPiece(TRIPO, refused).start({ prompt: 'x', kind: 'head', faceLimit: 1 })).toMatchObject({ ok: false, kind: 'declined' })
+    const states = mockFetch(json(200, { code: 0, data: { status: 'running', progress: 40 } }), json(200, { code: 0, data: { status: 'failed', error_code: 2008, error_message: 'banned words' } }), json(200, { code: 0, data: { status: 'failed', error_message: 'model too complex' } }), json(403, { code: 2010, message: 'insufficient credits' }))
+    const piece = tripoPiece(TRIPO, states)
+    expect(await piece.poll('t')).toEqual({ ok: 'pending', taskId: 't' })
+    expect(await piece.poll('t')).toMatchObject({ ok: false, kind: 'declined', reason: 'banned words' })
+    expect(await piece.poll('t')).toMatchObject({ ok: false, kind: 'failed', reason: 'model too complex' })
+    expect(await piece.poll('t')).toMatchObject({ ok: false, kind: 'failed' })
+    expect(tripoPiece({}).available()).toBe(false)
   })
 })

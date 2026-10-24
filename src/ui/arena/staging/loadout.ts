@@ -1,12 +1,14 @@
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { BASE_BUILDS, characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
-import type { Build } from '../../../charter/build'
-import type { RoleId } from '../../../charter/types'
-import type { HeroPackage } from '../../../forge/package'
-import { DEMO_HEROES, demoBuild, type DemoFaction } from '../../../arena/demo/roster'
-import { benchHero } from '../../../arena/demo/procedural-hero'
-import { liveDeps } from '../../api'
+import { characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
+import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
+import { gearNow, wearGear, type LoadedGear } from '../../../arena/client/gear.js'
+import type { Build } from '../../../charter/build.js'
+import type { RoleId } from '../../../charter/types.js'
+import type { HeroPackage } from '../../../forge/package.js'
+import { DEMO_HEROES, demoBuild, type DemoFaction } from '../../../arena/demo/roster.js'
+import { benchHero } from '../../../arena/demo/procedural-hero.js'
+import { liveDeps } from '../../api.js'
 
 /** One hero the streamer can place: a build, plus its package when it was forged. */
 export interface LoadoutEntry {
@@ -41,7 +43,7 @@ async function packageOf(heroId: string): Promise<HeroPackage | undefined> {
 
 export const liveLoadout: LoadoutDeps = {
   search: async (q) => {
-    // the player's own heroes: everything this device saved in the Creator or forged (a forged one also has a package)
+    // the player's own heroes: everything this device made in the Forge or added in the Loadout (a staged-forge one also has a package)
     if (!q.trim()) {
       const builds = await liveDeps.listBuilds()
       return Promise.all(
@@ -71,9 +73,31 @@ const standIns = new Map<string, string>()
 let bustRenderer: THREE.WebGLRenderer | undefined | null
 const BUST_PX = 160
 
-/** Every character file: the four generic bodies and the demo roster's own models. */
-const BUILDS: Build3D[] = [...BASE_BUILDS, ...Object.values(HERO_MODELS)]
+/** Loaded with the busts up front: the demo roster's own models and the medium bodies; other bodies load when needed. */
+const BUILDS: Build3D[] = ['m-medium', 'f-medium', ...Object.values(HERO_MODELS)]
 const characters = new Map<Build3D, Gltf>()
+const wanted = new Set<Build3D>()
+const listeners = new Set<() => void>()
+
+/** Called whenever another character file or photo face is ready, so portraits drawn as stand-ins can redraw. */
+export function onCharacters(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
+const changed = () => listeners.forEach((listener) => listener())
+
+/** Load a body the busts need but don't have yet; portraits redraw when it arrives. */
+function want(build: Build3D) {
+  if (characters.has(build) || wanted.has(build)) return
+  wanted.add(build)
+  characterFile(build).then(
+    (file) => {
+      characters.set(build, file)
+      changed()
+    },
+    () => wanted.delete(build),
+  )
+}
 let preload: Promise<boolean> | undefined
 let gltf: Promise<(url: string) => Promise<Gltf>> | undefined
 
@@ -93,6 +117,11 @@ function loader(): Promise<(url: string) => Promise<Gltf>> {
 /** A character file: a generic body or a demo hero's own model (cached; the arena reuses the same files). */
 export async function characterFile(build: Build3D): Promise<Gltf> {
   return loadBuild(build, await loader())
+}
+
+/** Any other model through the same loader: a piece of gear. */
+export async function modelFile(url: string): Promise<Gltf> {
+  return (await loader())(url)
 }
 
 /**
@@ -118,9 +147,10 @@ export function preloadBusts(): Promise<boolean> {
  * with its own handle on the atlas, so its GPU copy can be freed once the portrait is taken without touching the
  * arena's or the previews'.
  */
-function posed(file: Gltf, look: CharacterLook): THREE.Object3D {
+function posed(file: Gltf, look: CharacterLook, atlas: THREE.Texture | null = null, gear?: LoadedGear): THREE.Object3D {
   const model = cloneSkinned(file.scene)
-  paintModel(model, look, (map, normalMap) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null))
+  paintModel(model, look, (map, normalMap) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null), atlas)
+  if (gear) wearGear(model, look.gear, gear)
   const idle = file.animations.find((c) => c.name === 'idle')
   if (idle) {
     const mixer = new THREE.AnimationMixer(model)
@@ -131,12 +161,14 @@ function posed(file: Gltf, look: CharacterLook): THREE.Object3D {
   return model
 }
 
-/** What a portrait needs to know about a hero: a cache key, its name and role, and optionally its suit colour. */
+/** What a portrait needs to know about a hero: a cache key, its name and role, its suit colour, and its whole build. */
 export interface PortraitHero {
   key: string
   heroName: string
   roleId: RoleId
   hue?: number
+  /** With it, the bust wears the hero's own body (size, gender), look and photo face. */
+  build?: Build
 }
 
 /**
@@ -145,7 +177,9 @@ export interface PortraitHero {
  * returns undefined and the UI shows initials instead.
  */
 export function portrait(hero: PortraitHero, index = 0): string | undefined {
-  const done = busts.get(hero.key)
+  // a hero edited in the Forge gets a new bust: the key carries what the bust is drawn from
+  const cacheKey = hero.build ? `${hero.key}|${hero.build.sizeClass ?? 'medium'}|${JSON.stringify(hero.build.look ?? null)}` : hero.key
+  const done = busts.get(cacheKey)
   if (done) return done
   if (bustRenderer === undefined) {
     try {
@@ -160,10 +194,15 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   }
   if (!bustRenderer) return undefined
   const hue = hero.hue ?? heroHue(hero.heroName)
-  // the look reads only the name and the role
-  const look = characterLook({ heroName: hero.heroName, roleId: hero.roleId } as Build, hue)
+  const look = characterLook(hero.build ?? ({ heroName: hero.heroName, roleId: hero.roleId } as Build), hue)
   const file = characters.get(look.build)
-  if (!file && standIns.has(hero.key)) return standIns.get(hero.key)
+  if (!file) want(look.build)
+  // a photo face is made off the drawing path; until it is ready the bust shows the body without it, not cached
+  const atlas = file ? heroAtlasNow(file, look, changed) : null
+  // gear loads off the drawing path too: until every piece is in, the bust waits and is not cached
+  const gear = file ? gearNow(look.build, look.gear, modelFile, changed) : undefined
+  const final = !!file && atlas !== undefined && gear !== null
+  if (!final && standIns.has(cacheKey)) return standIns.get(cacheKey)
   const scene = new THREE.Scene()
   scene.add(new THREE.HemisphereLight(0xfff2e2, 0x3a3048, 1.5))
   const key = new THREE.DirectionalLight(0xffe2c4, 2.4)
@@ -174,7 +213,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 10)
   let release: () => void
   if (file) {
-    const model = posed(file, look)
+    const model = posed(file, look, atlas ?? null, gear ?? undefined)
     scene.add(model)
     // frame the head and shoulders from the head bone, so every build sits the same way in its frame
     const head = new THREE.Vector3(0, 1.62, 0)
@@ -202,11 +241,11 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   bustRenderer.render(scene, camera)
   const url = bustRenderer.domElement.toDataURL('image/png')
   release()
-  ;(file ? busts : standIns).set(hero.key, url)
+  ;(final ? busts : standIns).set(cacheKey, url)
   return url
 }
 
 /** A loadout entry's bust (the staging row, the board's tokens and the HUD's portraits). */
 export function bust(entry: LoadoutEntry, index: number): string | undefined {
-  return portrait({ key: entry.key, heroName: entry.build.heroName, roleId: entry.build.roleId, hue: entry.hue }, index)
+  return portrait({ key: entry.key, heroName: entry.build.heroName, roleId: entry.build.roleId, hue: entry.hue, build: entry.build }, index)
 }

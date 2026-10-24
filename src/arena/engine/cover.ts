@@ -1,4 +1,4 @@
-import type { Vec3 } from './maths'
+import type { Vec3 } from './maths.js'
 
 /**
  * Cover (R1, R25): the ruins heroes hide behind. Every piece is engine geometry, so the renderer draws exactly what

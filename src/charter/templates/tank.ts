@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, heal, knockup, movement, move, passive, phys, pull, push, root, shield, shred, slow, cripple, spirit, stun, taunt, ultimate, resize, unstoppable, invulnerable, wall, field } from './dsl'
+import { active, ai, at, basic, buff, heal, knockup, movement, move, passive, phys, pull, push, root, shield, shred, slow, cripple, spirit, stun, taunt, ultimate, resize, unstoppable, invulnerable, wall, field } from './dsl.js'
 
 /** Tank: soaks the damage meant for the team and holds space; taunts, walls and knock-ups are its tools. */
 export const TANK = [

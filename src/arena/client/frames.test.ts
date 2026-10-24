@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { summarizeFrames } from './frames'
+import { summarizeFrames } from './frames.js'
 
 describe('frame-time summary (U1)', () => {
   it('reports the median and the 1% low of a fixed list', () => {

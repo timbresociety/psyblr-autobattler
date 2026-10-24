@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { DAMAGE_CAP, DAMAGE_LIFE, DAMAGE_MERGE, createDamagePool } from './damage'
-import type { ScreenPoint } from './world'
+import { DAMAGE_CAP, DAMAGE_LIFE, DAMAGE_MERGE, createDamagePool } from './damage.js'
+import type { ScreenPoint } from './world.js'
 
 const head: ScreenPoint = { x: 400, y: 300, depth: 12, visible: true }
 

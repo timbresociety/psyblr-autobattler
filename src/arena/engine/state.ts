@@ -1,14 +1,15 @@
-import { BUILD_SLOTS, type Build } from '../../charter/build'
-import { retuneFactor, scaleMagnitudes } from '../../charter/budget'
-import { getRole } from '../../charter/roles'
-import { SIZES, type SizeClass } from '../../charter/sizes'
-import { deriveSheet } from '../../charter/stats'
-import { getTemplate } from '../../charter/templates/catalog'
-import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types'
-import { ENGINE } from './calibration'
-import type { CoverHealth, CoverPiece } from './cover'
-import type { Vec3 } from './maths'
-import { aiSeed, rngState, type RngState } from './rng'
+import { BUILD_SLOTS, type Build } from '../../charter/build.js'
+import { retuneFactor, scaleMagnitudes } from '../../charter/budget.js'
+import { getRole } from '../../charter/roles.js'
+import { SIZES, type SizeClass } from '../../charter/sizes.js'
+import { deriveSheet } from '../../charter/stats.js'
+import { getTemplate } from '../../charter/templates/catalog.js'
+import type { TraitMods } from '../../charter/traits.js'
+import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types.js'
+import { ENGINE, ticks } from './calibration.js'
+import type { CoverHealth, CoverPiece } from './cover.js'
+import type { Vec3 } from './maths.js'
+import { aiSeed, rngState, type RngState } from './rng.js'
 
 /**
  * Match state (KTD1): flat plain data, so it can be snapshotted, restored and hashed every tick. Everything that never
@@ -189,16 +190,30 @@ export interface HeroSetup {
   sheet: SecondarySheet
   kit: Record<BuildSlot, Template>
   powerScale: number
+  /** What the army's traits give this hero (src/charter/traits.ts); nothing outside army fights. */
+  mods: TraitMods
+  /** The kit its zones, traps and turrets use: the kit scaled by its construct power, when it has any. */
+  constructKit?: Record<BuildSlot, Template>
 }
 
-export function prepareHero(build: Build, powerScale = 1, damageBonus = 0): HeroSetup & { damageBonus: number } {
-  const { sheet } = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass)
+/** A derived sheet with trait multipliers and additions applied on top (they can pass the role's caps). */
+function withMods(sheet: SecondarySheet, mods: TraitMods): SecondarySheet {
+  if (!mods.mul && !mods.add) return sheet
+  const out = { ...sheet }
+  for (const [stat, pct] of Object.entries(mods.mul ?? {}) as [keyof SecondarySheet, number][]) out[stat] *= 1 + pct
+  for (const [stat, plus] of Object.entries(mods.add ?? {}) as [keyof SecondarySheet, number][]) out[stat] += plus
+  return out
+}
+
+export function prepareHero(build: Build, powerScale = 1, damageBonus = 0, mods: TraitMods = {}): HeroSetup & { damageBonus: number } {
+  const sheet = withMods(deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet, mods)
   const kit = {} as Record<BuildSlot, Template>
   for (const slot of BUILD_SLOTS) {
     const spec = build.slots[slot]
     kit[slot] = scaleMagnitudes(getTemplate(spec.templateId), retuneFactor(spec.retuneSteps) * powerScale)
   }
-  return { build, sheet, kit, powerScale, damageBonus }
+  const constructKit = mods.constructPower ? (Object.fromEntries(BUILD_SLOTS.map((s) => [s, scaleMagnitudes(kit[s], 1 + mods.constructPower!)])) as Record<BuildSlot, Template>) : undefined
+  return { build, sheet, kit, powerScale, damageBonus, mods, ...(constructKit ? { constructKit } : {}) }
 }
 
 export function createHero(setup: HeroSetup & { damageBonus?: number }, id: number, team: Team, position: Vec3): HeroState {
@@ -208,7 +223,7 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     id, team, alive: true, position: { ...position }, airborne: position.y > 0, yaw: team === 0 ? 0 : Math.PI, pitch: 0,
     hp: setup.sheet.maxHealth, maxHp: setup.sheet.maxHealth, shield: 0, shieldUntil: 0, stunnedUntil: 0, invulnerableUntil: 0,
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, resizeUntil: 0,
-    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
+    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }

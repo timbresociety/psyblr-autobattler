@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { ALL_SIZE_CLASSES, SIZES, type SizeClass } from '../../charter/sizes'
+import { ALL_SIZE_CLASSES, SIZES, type SizeClass } from '../../charter/sizes.js'
 
 /**
  * A procedural skinned humanoid for the performance bench (U1): about 7,500 triangles on a Mixamo-named skeleton,

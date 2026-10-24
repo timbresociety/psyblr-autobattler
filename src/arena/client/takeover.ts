@@ -1,4 +1,4 @@
-import type { MatchState, Team } from '../engine/state'
+import type { MatchState, Team } from '../engine/state.js'
 
 /**
  * Who drives which hero (U17, R14-R16, R20): the streamer may take any living hero on their own side with keys 1-0,

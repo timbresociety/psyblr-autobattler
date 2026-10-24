@@ -51,16 +51,24 @@ describe('staging (U16)', () => {
     expect(screen.queryByTestId('token-0-1')).toBeNull()
   })
 
-  it('shows the stacking penalty at a fourth tank, and lights the team bonus at four roles', async () => {
+  it('lights a role synergy tier by tier as heroes of that role deploy, like TFT traits', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    for (const x of [-12, -6, 0, 6]) await placeAt(/Bezos/, x, -10)
-    expect(screen.getByText(/Tank ×4 · stacked past 3/)).toBeTruthy()
-    expect(screen.getByTestId('team-bonus').className).not.toContain('lit')
+    const synergies = () => within(screen.getByRole('region', { name: 'Synergies' }))
+    const bulwark = () => synergies().getByText('Bulwark').closest('li')!
+    await placeAt(/Bezos/, -12, -10)
+    // one tank: the trait shows, unlit, with what lights it
+    expect(bulwark().className).toContain('tier--1')
+    expect(within(bulwark()).getByText(/1 more to light it/)).toBeTruthy()
+    await placeAt(/Bezos/, -6, -10)
+    expect(bulwark().className).toContain('tier-0')
+    for (const x of [0, 6]) await placeAt(/Bezos/, x, -10)
+    // a fourth tank lights the second tier, which reaches the rest of the side
+    expect(bulwark().className).toContain('tier-1')
+    expect(within(bulwark()).getByText(/everyone else \+10%/)).toBeTruthy()
     await placeAt(/Musk/, -12, -14)
-    await placeAt(/Huang/, -4, -14)
-    await placeAt(/Satya/, 3, -14)
-    expect(screen.getByTestId('team-bonus').className).toContain('lit')
+    // the lit trait sorts above the unlit one
+    expect(synergies().getAllByRole('listitem')[0]).toBe(bulwark())
   })
 
   it('keeps Start disabled until both sides have a hero', async () => {
@@ -89,10 +97,33 @@ describe('staging (U16)', () => {
     expect(details.textContent).toContain('Ultimate')
   })
 
-  it('offers the Creator and the demo roster when the loadout is empty', async () => {
+  it('shows a unit card like TFT: the trait it counts toward, its health, a stats grid and the attribute split', async () => {
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
+    await placeAt(/Bezos/, -12, -10)
+    fireEvent.click(bustOf(/Bezos/))
+    const card = () => screen.getByRole('region', { name: 'Hero details' })
+    const value = (stat: string) => Number(card().querySelector(`.stat-${stat} .stat-value`)!.firstChild!.textContent)
+    // one tank on the side: Bulwark shows 1 of the 2 it needs
+    expect(within(card()).getByText('Bulwark')).toBeTruthy()
+    expect(within(card()).getByText('1/2')).toBeTruthy()
+    for (const label of ['Attack', 'Range', 'DPS', 'Armor', 'Spirit res', 'Regen', 'Move', 'Cooldowns']) expect(within(card()).getByText(label)).toBeTruthy()
+    expect(within(card()).getAllByText(/% less$/)).toHaveLength(2)
+    expect(within(within(card()).getByLabelText('Attribute split')).getAllByText(/^(Str|Agi|Int)$/)).toHaveLength(3)
+    const armor = value('armor')
+    // a second tank lights Bulwark, and the card shows the armor it fights with
+    fireEvent.click(bustOf(/Bezos/))
+    await placeAt(/Bezos/, -6, -10)
+    fireEvent.click(bustOf(/Bezos/))
+    expect(within(card()).getByText('2/4')).toBeTruthy()
+    expect(value('armor') / armor).toBeCloseTo(1.2, 1)
+  })
+
+  it('offers the Forge, the Loadout and the demo roster when the loadout is empty', async () => {
     await open({ demo: false })
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    expect(screen.getByRole('link', { name: /Make one in the Creator/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Make one in the Forge/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /add some in the Loadout/ }).getAttribute('href')).toBe('?loadout')
     fireEvent.click(screen.getByRole('button', { name: 'use the demo roster' }))
     // the row of heroes (the army panel and the map key are lists too)
     expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(demoLoadout().length)

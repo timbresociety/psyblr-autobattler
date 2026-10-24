@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { candidates, pollTask, providerOrder, route, type Registry } from './router'
-import { allFakes, fakeImage, fakeMesh, fakeRetarget, fakeRig } from './fakes'
-import type { ImageProvider, Outcome } from './types'
-import { createRegistry } from './registry'
+import { candidates, fakeMode, pollTask, providerOrder, route, type Registry } from './router.js'
+import { allFakes, fakeImage, fakeMesh, fakeRetarget, fakeRig } from './fakes/index.js'
+import type { ImageProvider, Outcome } from './types.js'
+import { createRegistry } from './registry.js'
 
 function imageProvider(id: string, outcome: Outcome<{ urls: string[] }>, available = true): ImageProvider {
   return { id, capability: 'image', available: () => available, generate: vi.fn(async () => outcome) }
@@ -78,5 +78,17 @@ describe('provider router (U3)', () => {
     expect(rig).toEqual(rig2)
     const motion = await fakeRetarget().start({ riggedUrl: 'r', presets: ['idle', 'walk'] })
     expect(motion.ok).toBe('pending')
+  })
+})
+
+describe('fake mode', () => {
+  it('runs locally and on previews that opt in, never in production', () => {
+    expect(fakeMode({ FORGE_FAKE_PROVIDERS: '1' })).toBe(true)
+    expect(fakeMode({ FORGE_FAKE_PROVIDERS: '1', NODE_ENV: 'production' })).toBe(false)
+    // Vercel runs previews with NODE_ENV=production; an explicit opt-in still lets them fake
+    expect(fakeMode({ FORGE_FAKE_PROVIDERS: '1', NODE_ENV: 'production', VERCEL_ENV: 'preview' })).toBe(true)
+    expect(fakeMode({ FORGE_FAKE_PROVIDERS: '1', NODE_ENV: 'production', VERCEL_ENV: 'production' })).toBe(false)
+    expect(fakeMode({ FORGE_FAKE_PROVIDERS: '1', VERCEL_ENV: 'production' })).toBe(false)
+    expect(fakeMode({ VERCEL_ENV: 'preview' })).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import type { Delivery } from '../../../charter/types'
+import type { Delivery } from '../../../charter/types.js'
 
 /**
  * Basic impact and ability sounds (R10, R41), synthesised so no audio files ship: a filtered noise crack for hits,

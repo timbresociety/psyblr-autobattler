@@ -1,7 +1,7 @@
-import type { Build } from '../../../charter/build'
-import type { BuildSlot, Template } from '../../../charter/types'
-import type { Team } from '../../../arena/engine/state'
-import { initials, shortName } from './format'
+import type { Build } from '../../../charter/build.js'
+import type { BuildSlot, Template } from '../../../charter/types.js'
+import type { Team } from '../../../arena/engine/state.js'
+import { initials, shortName } from './format.js'
 import { iconFor, toneFor, type IconKey, type Tone } from './icons'
 
 /**
