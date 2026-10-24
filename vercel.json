@@ -9,5 +9,11 @@
       "includeFiles": "db/schema.sql",
       "maxDuration": 300
     }
-  }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:route*",
+      "destination": "/api/router?__route=:route*"
+    }
+  ]
 }

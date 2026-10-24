@@ -9,7 +9,7 @@ export const DEV_STORE_DIR = join(process.cwd(), '.dev-store')
 export const DEV_STORE_PATH = '/dev-store/'
 
 /**
- * Development only: serve /api through Vite, via the same catch-all function Vercel runs (api/[...path].ts), so the
+ * Development only: serve /api through Vite, via the same router function Vercel runs (api/router.ts), so the
  * Forge runs end to end without Vercel (KTD3 offline path).
  * Forces fake providers, so no live or paid call can happen. The database is PGlite kept on disk in the dev store,
  * so heroes and device IDs survive a restart; uploads are stored there too and served from /dev-store/.
@@ -100,8 +100,8 @@ async function serveStored(req: IncomingMessage, res: ServerResponse) {
 async function handle(server: ViteDevServer, setup: () => Promise<void>, req: IncomingMessage, res: ServerResponse) {
   await setup()
   const url = new URL(req.url!, `http://${req.headers.host ?? 'localhost'}`)
-  // the same catch-all function Vercel runs, so local requests take the production path
-  const api = (await server.ssrLoadModule('/api/[...path].ts')) as { dispatch: (request: Request) => Promise<Response> }
+  // the same router function Vercel runs, so local requests take the production path
+  const api = (await server.ssrLoadModule('/api/router.ts')) as { dispatch: (request: Request) => Promise<Response> }
   const method = req.method ?? 'GET'
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)

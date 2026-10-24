@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ROUTES, dispatch, routeKey } from '../api/[...path].js'
+import { ROUTES, dispatch, routeKey } from '../api/router.js'
 
 /** Every route module under routes/, keyed the way its URL reads: routes/builds/index.ts serves /api/builds. */
 function routeModules(dir: string, root = dir): string[] {
@@ -22,6 +22,8 @@ describe('one function serves every route', () => {
     expect(routeKey('https://x.test/api/heroes/search?q=jen')).toBe('heroes/search')
     expect(routeKey('https://x.test/api/builds/')).toBe('builds')
     expect(routeKey('https://x.test/api/device')).toBe('device')
+    // on Vercel the rewrite hands the route over in a parameter, beside the request's own query
+    expect(routeKey('https://x.test/api/router?__route=heroes/search&popular=1')).toBe('heroes/search')
   })
 
   it('an unknown route is a 404 and a method the route lacks is a 405', async () => {

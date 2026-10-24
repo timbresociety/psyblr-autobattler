@@ -1,7 +1,8 @@
 /**
  * Every /api route in one serverless function. Vercel's Hobby plan deploys at most 12 functions, and the app has more
- * routes than that, so this catch-all reads the path and hands the request to the route's own module in routes/,
- * loading only that module. The local dev server dispatches through this same file (scripts/dev-api.ts).
+ * routes than that, so vercel.json rewrites /api/* here, this router reads the route and hands the request to that
+ * route's own module in routes/, loading only that module. The local dev server dispatches through this same file
+ * (scripts/dev-api.ts).
  */
 
 type Handler = (request: Request) => Promise<Response>
@@ -30,9 +31,14 @@ export const ROUTES: Record<string, () => Promise<RouteModule>> = {
   'photos/upload': () => import('../routes/photos/upload.js'),
 }
 
-/** The route key of a request: /api/heroes/search?q=x is "heroes/search". */
+/**
+ * The route key of a request: /api/heroes/search?q=x is "heroes/search". On Vercel the rewrite delivers the route in
+ * `__route`, since the function may see its own path; locally the path itself carries it.
+ */
 export function routeKey(url: string): string {
-  return new URL(url).pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '')
+  const parsed = new URL(url)
+  const rewritten = parsed.searchParams.get('__route')
+  return (rewritten ?? parsed.pathname.replace(/^\/api\/?/, '')).replace(/^\/+|\/+$/g, '')
 }
 
 export async function dispatch(request: Request): Promise<Response> {
