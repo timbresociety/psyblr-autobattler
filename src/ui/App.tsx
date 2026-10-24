@@ -1,6 +1,7 @@
-import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Build } from '../charter/build'
 import type { BuildRecord } from './api'
+import { Token, Wordmark } from './brand/Brand'
 import { ForgeScreen } from './forge/ForgeScreen'
 import { LoadoutScreen } from './loadout/LoadoutScreen'
 import './theme.css'
@@ -11,6 +12,46 @@ const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ defa
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
 
 type Tab = 'arena' | 'forge' | 'loadout'
+type Theme = 'light' | 'dark'
+
+const THEME_KEY = 'psyblr.theme'
+
+/** The mode index.html chose before the first paint: the visitor's own choice, or else their system's. */
+const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
+
+/** Light or dark: a choice made here sticks on this browser; until then the system's setting decides, live. */
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(currentTheme)
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+  useEffect(() => {
+    const system = window.matchMedia?.('(prefers-color-scheme: light)')
+    if (!system) return
+    const follow = (e: MediaQueryListEvent) => {
+      let chosen: string | null = null
+      try {
+        chosen = localStorage.getItem(THEME_KEY)
+      } catch {
+        // storage can be blocked; the system setting still decides
+      }
+      if (!chosen) setTheme(e.matches ? 'light' : 'dark')
+    }
+    system.addEventListener('change', follow)
+    return () => system.removeEventListener('change', follow)
+  }, [])
+  const toggle = () =>
+    setTheme((t) => {
+      const next = t === 'light' ? 'dark' : 'light'
+      try {
+        localStorage.setItem(THEME_KEY, next)
+      } catch {
+        // the choice lasts for this visit when storage is blocked
+      }
+      return next
+    })
+  return [theme, toggle]
+}
 
 const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[] = [
   {
@@ -85,6 +126,7 @@ interface ForgeOpen {
 
 function Screens() {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [theme, toggleTheme] = useTheme()
   const [forge, setForge] = useState<ForgeOpen>({ key: 0 })
   // the Forge stays mounted once opened, so leaving it for the Arena or the Loadout never loses an unsaved hero
   const [forgeKept, setForgeKept] = useState(tab === 'forge')
@@ -110,11 +152,9 @@ function Screens() {
     <>
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <span>P</span>
-          </span>
+          <Token className="brand-token" />
           <span className="brand-word">
-            <b>psyblr</b>
+            <Wordmark className="brand-wordmark" />
             <small>autobattler</small>
           </span>
         </div>
@@ -133,6 +173,20 @@ function Screens() {
             </button>
           ))}
         </nav>
+        <div className="topbar-end">
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {theme === 'light' ? (
+                <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor" />
+              ) : (
+                <g fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none" />
+                  <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" />
+                </g>
+              )}
+            </svg>
+          </button>
+        </div>
       </header>
       <div id="screen" className="screen" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {tab === 'arena' && (
