@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
+import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, partsFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
 
 describe('reading a Forge prompt', () => {
   it('takes the name from capitalised words, the culture table, or the words that describe the hero', () => {
@@ -40,5 +40,26 @@ describe('reading a Forge prompt', () => {
 
   it('leaves the kit to the engine when the prompt names no skills', () => {
     expect(skillsFromPrompt('a quiet librarian')).toEqual({})
+  })
+})
+
+describe('the look a prompt asks for', () => {
+  it('reads colours by noun, brand colours included', () => {
+    expect(coloursFromPrompt('a knight in gold armour with a red cape')).toEqual({ metal: '#d4a531', cape: '#c8242c' })
+    expect(coloursFromPrompt('Jensen in a black leather jacket')).toEqual({ suit: '#1a1a1e' })
+    expect(coloursFromPrompt('a GPU god glowing NVIDIA green')).toEqual({ suit: '#76b900' })
+    expect(coloursFromPrompt('a red-haired witch with long hair')).toEqual({})
+  })
+
+  it('reads a stated gender, and leaves it alone when the prompt does not say', () => {
+    expect(genderFromPrompt('a queen who freezes the battlefield')).toBe('f')
+    expect(genderFromPrompt('a GPU god of compute')).toBe('m')
+    expect(genderFromPrompt('a robot made of tensors')).toBeUndefined()
+  })
+
+  it('reads hair, armour and a cape', () => {
+    expect(partsFromPrompt('a bald monk with a cape')).toEqual({ hair: 'none', cape: true })
+    expect(partsFromPrompt('an armoured knight')).toEqual({ hair: 'helmet', armour: true })
+    expect(partsFromPrompt('a samurai with long hair')).toEqual({ hair: 'long' })
   })
 })

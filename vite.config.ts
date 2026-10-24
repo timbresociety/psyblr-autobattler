@@ -2,9 +2,10 @@ import { defineConfig } from 'vite'
 import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { devApi } from './scripts/dev-api'
+import { mediapipeWasm } from './scripts/mediapipe-wasm'
 
 export default defineConfig({
-  plugins: [react(), devApi()],
+  plugins: [react(), devApi(), mediapipeWasm()],
   test: {
     exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**', '.vercel/**', '.dev-store/**'],
     setupFiles: ['./vitest.setup.ts'],

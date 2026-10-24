@@ -8,7 +8,7 @@ import { Board3D, canDraw3D, type Board3DHandle } from './Board3D'
 import { refine, type Reason } from './board-math'
 import type { BoardState } from './board-scene'
 import { MAX_PER_SIDE, deployHeroes, emptyFormation, move, place, remove, type Formation } from './formation'
-import { bust, demoLoadout, liveLoadout, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
+import { bust, demoLoadout, liveLoadout, onCharacters, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
 import { FACTION_NAME, MATCHUPS, defaultLineup, hasFactions, lineupName, matchup, type MatchupId } from './presets'
 import './staging.css'
 
@@ -69,12 +69,15 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const swallowClickUntil = useRef(0)
   const starting = useRef(false)
   // the busts are drawn from the arena's own characters; until their files load, a stand-in figure shows
-  const [, setCharactersLoaded] = useState(false)
+  const [, setCharactersLoaded] = useState(0)
   useEffect(() => {
     let live = true
-    void preloadBusts().then((ok) => ok && live && setCharactersLoaded(true))
+    void preloadBusts().then((ok) => ok && live && setCharactersLoaded((n) => n + 1))
+    // bodies the row needs beyond the preload, and photo faces, arrive later: redraw the busts as they do
+    const stop = onCharacters(() => live && setCharactersLoaded((n) => n + 1))
     return () => {
       live = false
+      stop()
     }
   }, [])
 

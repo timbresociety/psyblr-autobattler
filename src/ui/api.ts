@@ -4,6 +4,7 @@ import type { LimitHit } from '../charter/types.js'
 import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
 import { prepareImage, type PreparedImage } from './common/image-prep.js'
+import type { FaceFinding } from './forge/face/find.js'
 
 /**
  * Forge and Loadout I/O. Every Forge call has an offline path, so making a hero keeps working without the API (R13):
@@ -44,6 +45,8 @@ export interface ForgeDeps {
   runGate(build: Build): Promise<GateOutcome>
   /** Decode, shrink and re-encode a reference image before it is uploaded. */
   prepareImage(file: Blob): Promise<PreparedImage>
+  /** The face on a prepared image, with its landmarks and colours; undefined when there is none or it can't be read. */
+  findFace(image: Blob): Promise<FaceFinding | undefined>
   uploadPhoto(file: Blob): Promise<UploadResult>
   /** Global loadout search by name (R18). Throws when the API is unreachable. */
   search(query: string): Promise<HeroResult[]>
@@ -231,6 +234,8 @@ export const liveDeps: ForgeDeps & LoadoutDeps = {
     return ((await res.json()) as { builds: BuildRecord[] }).builds
   },
   prepareImage: (file) => prepareImage(file),
+  // MediaPipe loads only here, the first time a photo comes in
+  findFace: (image) => import('./forge/face/find.js').then((m) => m.findFace(image)).catch(() => undefined),
   async uploadPhoto(file) {
     try {
       const res = await withDevice((id) => fetch('/api/photos/upload', { method: 'POST', headers: { ...deviceHeader(id), 'content-type': file.type || 'application/octet-stream' }, body: file }))

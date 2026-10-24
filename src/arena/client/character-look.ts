@@ -1,19 +1,21 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import type { RoleId } from '../../charter/types.js'
+import { defaultLook, ROLE_GENDER, type FacePhoto, type Gender, type HairStyle, type LookColor } from '../../charter/look.js'
+import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 import { DEMO_HEROES } from '../demo/roster.js'
 
 /**
  * What a hero looks like in the arena's own characters (R24), without any renderer: which character file it wears,
- * its colours per body region, and which switchable parts show. The demo roster's real people each have their own
- * model (a MakeHuman body with their face, hair and signature outfit over battle gear); every other hero wears one of
- * four generic bodies, recoloured. Both come from tools/blender/human.py. The arena, the staging busts and the 3D
- * previews all read this, so a hero looks the same in its portrait as on the field, on either side.
+ * its colours per body region, which switchable parts show, and its photo face if it has one. The demo roster's real
+ * people each have their own model (a MakeHuman body with their face, hair and signature outfit over battle gear);
+ * every other hero wears the body for its size and gender, dressed and coloured by its look. Both come from
+ * tools/blender/human.py. The arena, the staging busts and the 3D previews all read this, so a hero looks the same in
+ * its portrait as on the field, on either side.
  */
 
-/** The generic bodies every hero without a model of its own wears, recoloured per hero. */
-export type BaseBuild = 'athletic' | 'lithe' | 'heavy' | 'lean'
-export const BASE_BUILDS: readonly BaseBuild[] = ['athletic', 'lithe', 'heavy', 'lean']
+/** A body for every size class in both genders, drawn at one nominal height: the game's size scale makes it big. */
+export type BodyName = `${Gender}-${SizeClass}`
+export const BODIES: readonly BodyName[] = (['m', 'f'] as const).flatMap((g) => ALL_SIZE_CLASSES.map((s) => `${g}-${s}` as BodyName))
 
 /** The demo roster's own models, public/heroes/<id>.glb, by hero name. */
 export const HERO_MODELS = {
@@ -40,9 +42,9 @@ export const HERO_MODELS = {
 } as const
 export type HeroModel = (typeof HERO_MODELS)[keyof typeof HERO_MODELS]
 
-/** Which character file a look loads: a generic body or a demo hero's own model. */
-export type Build3D = BaseBuild | HeroModel
-export type Hair = 'crop' | 'spiky' | 'long' | 'helmet'
+/** Which character file a look loads: a body or a demo hero's own model. */
+export type Build3D = BodyName | HeroModel
+export type Hair = HairStyle
 
 /**
  * Order matches REGIONS and PARTS in tools/blender/humanlib/bake.py. The first twelve take a colour from the look and
@@ -63,9 +65,16 @@ export interface CharacterLook {
   armour: boolean
   cape: boolean
   colors: Record<TintRegion, THREE.Color>
+  /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
+  face?: FacePhoto
 }
 
-const BUILD_FOR: Record<RoleId, BaseBuild> = { tank: 'heavy', fighter: 'athletic', assassin: 'lean', mage: 'lithe', marksman: 'lean', support: 'lithe', controller: 'lithe', summoner: 'athletic' }
+/** The body a hero wears: its size class (colossal while transformed) in its look's gender, or its role's without one. */
+export function bodyFor(build: Pick<Build, 'roleId' | 'sizeClass' | 'look'>, size: SizeClass = build.sizeClass ?? 'medium'): BodyName {
+  return `${build.look?.gender ?? ROLE_GENDER[build.roleId] ?? 'm'}-${size}`
+}
+
+const hexColor = (hex: string) => new THREE.Color().setStyle(hex, THREE.SRGBColorSpace)
 
 /** The demo hero's own model, if this name is one of the demo roster. */
 export function modelFor(heroName: string | undefined): HeroModel | undefined {
@@ -84,46 +93,29 @@ export function heroHue(name: string): number {
   return ((h >>> 0) % 1000) / 1000
 }
 
-/** A small stable number from a hero's name, so its hair and skin never depend on which slot or side it fights in. */
-function seedOf(name: string): number {
-  let h = 2166136261
-  for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
-  return h >>> 0
-}
-
 /**
  * A hero's look from its role and hue. A demo hero wears its own model (its outfit is baked in; its suit colour still
  * tints its accent pieces). Anyone else wears the generic body for the role: tanks a Roman helmet and armour, fighters
  * a cape, and so on.
  */
 export function characterLook(build: Build, hue: number): CharacterLook {
-  const role = build.roleId as RoleId
-  const index = seedOf(build.heroName ?? build.roleId)
-  const styles: Hair[] = ['spiky', 'crop', 'long']
-  const hair: Hair = role === 'tank' ? 'helmet' : styles[index % styles.length]
-  const c = (h: number, s: number, l: number) => new THREE.Color().setHSL(((h % 1) + 1) % 1, s, l, THREE.SRGBColorSpace)
-  const skinTones = [c(0.07, 0.45, 0.72), c(0.06, 0.4, 0.55), c(0.07, 0.35, 0.4), c(0.08, 0.5, 0.82)]
-  return {
-    build: modelFor(build.heroName) ?? BUILD_FOR[role] ?? 'athletic',
-    hair,
-    armour: role === 'tank' || role === 'fighter' || role === 'support',
-    cape: role === 'fighter' || role === 'mage' || role === 'tank',
+  const base = defaultLook(build.roleId, build.heroName ?? build.roleId, hue)
+  const model = modelFor(build.heroName)
+  // a demo hero keeps its model's baked outfit whatever its look says; its hue still tints its accent pieces
+  const look = model ? undefined : build.look
+  const colors = { ...base.colors, ...(look?.colors ?? {}) }
+  const out: CharacterLook = {
+    build: model ?? bodyFor(build),
+    hair: look?.hair ?? base.hair,
+    armour: look ? look.armour : base.armour,
+    cape: look ? look.cape : base.cape,
     colors: {
-      skin: skinTones[index % skinTones.length],
-      suit: c(hue, 0.72, 0.5),
-      trim: c(hue + 0.09, 0.8, 0.66),
-      pants: c(hue, 0.3, 0.16),
-      glove: c(0.12, 0.12, 0.9),
-      boot: c(hue + 0.03, 0.25, 0.12),
-      hair: [c(0.08, 0.5, 0.12), c(0.1, 0.65, 0.55), c(0.0, 0.0, 0.08), c(hue + 0.5, 0.6, 0.45)][index % 4],
-      metal: c(0.1, 0.55, 0.55),
-      eye: c(0, 0, 0.96),
-      iris: c(hue + 0.45, 0.6, 0.35),
-      brow: c(0.08, 0.4, 0.1),
-      // a deep, dusty cloth tone: a bright cape reads as a board behind the hero
-      cape: c(hue + 0.5, 0.42, 0.24),
+      ...(Object.fromEntries(Object.entries(colors).map(([region, hex]) => [region, hexColor(hex)])) as Record<LookColor, THREE.Color>),
+      eye: new THREE.Color().setHSL(0, 0, 0.96, THREE.SRGBColorSpace),
     },
   }
+  if (look?.face) out.face = look.face
+  return out
 }
 
 export type Gltf = { scene: THREE.Group; animations: THREE.AnimationClip[] }
@@ -162,7 +154,8 @@ export function paintGeometry(source: THREE.BufferGeometry, look: CharacterLook)
     const region = REGIONS[Math.min(REGIONS.length - 1, Math.floor(meta.getX(i)))]
     // glTF flips v on export (its texture origin is the top-left), so the part index comes back as 1 - v
     const part = PARTS[Math.min(PARTS.length - 1, Math.max(0, Math.floor(1 - meta.getY(i))))]
-    const col = region in look.colors ? look.colors[region as TintRegion] : WHITE
+    // with a photo face the skin colour is baked into the hero's own atlas, so the skin region stays untinted here
+    const col = region === 'skin' && look.face ? WHITE : region in look.colors ? look.colors[region as TintRegion] : WHITE
     colors[i * 3] = col.r
     colors[i * 3 + 1] = col.g
     colors[i * 3 + 2] = col.b
@@ -201,11 +194,12 @@ export function characterNormalMap(mesh: THREE.Mesh): THREE.Texture | null {
  * material `material(map, normalMap)` makes from the file's atlas and relief. Renderer-agnostic: the arena passes
  * node materials, the previews and busts classic ones.
  */
-export function paintModel(model: THREE.Object3D, look: CharacterLook, material: (map: THREE.Texture | null, normalMap: THREE.Texture | null) => THREE.Material): void {
+export function paintModel(model: THREE.Object3D, look: CharacterLook, material: (map: THREE.Texture | null, normalMap: THREE.Texture | null) => THREE.Material, atlas?: THREE.Texture | null): void {
   model.traverse((o) => {
     const mesh = o as THREE.SkinnedMesh
     if (!mesh.isSkinnedMesh) return
-    const map = characterMap(mesh)
+    // a hero with a photo face brings its own atlas (face/hero-face.ts); everyone else shares the file's
+    const map = atlas ?? characterMap(mesh)
     const normalMap = characterNormalMap(mesh)
     const source = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial
     mesh.geometry = paintGeometry(mesh.geometry, look)

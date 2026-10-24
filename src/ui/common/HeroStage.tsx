@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look'
+import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
+import { heroAtlas } from '../../arena/client/face/hero-face.js'
+import type { HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
 import type { Build } from '../../charter/build'
 import { SIZES, type SizeClass } from '../../charter/sizes'
@@ -17,8 +19,8 @@ import { ROLE_RGB, type StageClip } from './hero-look'
  */
 
 export interface HeroStageProps {
-  /** The hero to show. Without one, a dark stand-in figure waits on the plinth. */
-  look?: { heroName: string; roleId: RoleId }
+  /** The hero to show: its name, role, size and look pick the body and dress it. Without one, a dark stand-in waits. */
+  look?: { heroName: string; roleId: RoleId; sizeClass?: SizeClass; look?: HeroLook }
   hue?: number
   /** Plays one clip, then back to idle. A new `at` replays the same clip. */
   cue?: { clip: StageClip; at: number }
@@ -68,7 +70,7 @@ const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2)
 
 /** A neutral figure for the empty stage: a generic body, no cape or armour, short hair. */
 function standInLook(): CharacterLook {
-  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'athletic', hair: 'crop', armour: false, cape: false }
+  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', hair: 'crop', armour: false, cape: false }
 }
 
 function disposeModel(model: THREE.Object3D) {
@@ -259,23 +261,25 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     }
   }, [])
 
-  // the hero itself: rebuilt when its build, parts or colours change
-  const lookKey = look ? `${look.roleId}|${look.heroName}|${hue.toFixed(3)}` : 'stand-in'
+  // the hero itself: rebuilt when its body (size, gender), parts, colours or face change
+  const lookKey = look ? `${look.roleId}|${look.heroName}|${look.sizeClass ?? 'medium'}|${hue.toFixed(3)}|${JSON.stringify(look.look ?? null)}` : 'stand-in'
   useEffect(() => {
     const state = live.current
     if (!state) return
     let cancelled = false
-    const painted = look ? characterLook({ heroName: look.heroName, roleId: look.roleId } as Build, hue) : standInLook()
+    const painted = look ? characterLook({ heroName: look.heroName, roleId: look.roleId, sizeClass: look.sizeClass, look: look.look } as Build, hue) : standInLook()
     const [r, g, b] = look ? ROLE_RGB[look.roleId] : [255, 207, 90]
     state.glow.material.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
     state.glow.material.opacity = look ? 0.5 : 0.22
-    characterFile(painted.build).then(
-      (file: Gltf) => {
+    characterFile(painted.build)
+      .then(async (file: Gltf) => ({ file, atlas: look ? await heroAtlas(file, painted) : null }))
+      .then(
+      ({ file, atlas }) => {
         if (cancelled || live.current !== state) return
         const model = cloneSkinned(file.scene)
         // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-        paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty))
+        paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty), atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

@@ -1,4 +1,5 @@
 import { TEXT_LIMITS } from '../charter/build.js'
+import type { Gender, HairStyle, LookColor } from '../charter/look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import type { BuildSlot } from '../charter/types.js'
 import { findCulture } from './director/culture.js'
@@ -93,4 +94,82 @@ export function skillsFromPrompt(prompt: string): Partial<Record<BuildSlot, { na
     picks[slot] = { name: title(theme.split(/\s+/)).slice(0, TEXT_LIMITS.name), flavour: theme.slice(0, TEXT_LIMITS.flavour) }
   }
   return picks
+}
+
+// ------------------------------------------------------------------------------------------------ the look a prompt asks for
+
+const COLOUR_WORDS: Record<string, string> = {
+  red: '#c8242c', crimson: '#a3122a', scarlet: '#d4231e', maroon: '#6e1423', orange: '#e8741c', amber: '#f0a020',
+  gold: '#d4a531', golden: '#d4a531', yellow: '#f2cf2e', lime: '#9ccf2c', green: '#2f9a48', emerald: '#18905e', jade: '#3a9a7a',
+  olive: '#6e7a2c', teal: '#178a8a', cyan: '#22b8d6', turquoise: '#2ec4b6', blue: '#2a5bd7', azure: '#3b8fe8', navy: '#1c2a5e',
+  indigo: '#3b2a8a', purple: '#7a3ab0', violet: '#8a4ad0', magenta: '#c72a9a', pink: '#f07ab4', white: '#eeeeea', ivory: '#ece4cc',
+  silver: '#b8bcc4', grey: '#7a7c82', gray: '#7a7c82', black: '#1a1a1e', brown: '#6a4228', bronze: '#a8743a', copper: '#b8642e',
+  blonde: '#d8b46a', blond: '#d8b46a', ginger: '#c0602a', auburn: '#8a3a22', platinum: '#e4e0d4',
+}
+/** Phrases worth more than their words: the culture table's brand colours and the like. */
+const COLOUR_PHRASES: [RegExp, string][] = [
+  [/nvidia green/i, '#76b900'],
+  [/jet black/i, '#0e0e10'],
+  [/storm white/i, '#e6ecf2'],
+  [/electric blue/i, '#2c7bff'],
+  [/blood red/i, '#8a0a12'],
+]
+const COLOUR_NOUNS: [RegExp, LookColor][] = [
+  [/^(cape|cloak|mantle)s?$/, 'cape'],
+  [/^(armou?r|plate|plates|helmet|pauldrons?|metal)$/, 'metal'],
+  [/^(jacket|suit|coat|robes?|shirt|tee|outfit|uniform|gi|tunic|hoodie|top|costume|clothes)$/, 'suit'],
+  [/^(trim|accents?|stripes?|belt|sash)$/, 'trim'],
+  [/^(pants|trousers|jeans|legs|shorts)$/, 'pants'],
+  [/^(boots?|shoes?)$/, 'boot'],
+  [/^(gloves?|gauntlets?)$/, 'glove'],
+  [/^(hair|mane|beard)$/, 'hair'],
+  [/^(eyes?)$/, 'iris'],
+  [/^(skin)$/, 'skin'],
+]
+
+/** Colours the prompt asks for by name and noun: "a red cape", "gold armour", "a black leather jacket", "NVIDIA green". */
+export function coloursFromPrompt(prompt: string): Partial<Record<LookColor, string>> {
+  const out: Partial<Record<LookColor, string>> = {}
+  const words = prompt.toLowerCase().replace(/[^\p{L}\s-]/gu, ' ').split(/\s+/).filter(Boolean)
+  for (let i = 0; i < words.length; i++) {
+    const hex = COLOUR_WORDS[words[i]]
+    if (!hex) continue
+    // the noun a colour describes is the next noun-like word within a few words: "a red leather cape"
+    for (let j = i + 1; j < Math.min(words.length, i + 4); j++) {
+      const region = COLOUR_NOUNS.find(([re]) => re.test(words[j]))?.[1]
+      if (region) {
+        out[region] ??= hex
+        break
+      }
+    }
+  }
+  for (const [re, hex] of COLOUR_PHRASES) {
+    const at = prompt.search(re)
+    if (at < 0) continue
+    const after = prompt.slice(at).toLowerCase().split(/\s+/).slice(2, 5)
+    const region = after.map((w) => COLOUR_NOUNS.find(([r]) => r.test(w.replace(/[^\p{L}]/gu, '')))?.[1]).find(Boolean)
+    out[region ?? 'suit'] ??= hex
+  }
+  return out
+}
+
+/** A gender the prompt states (she, a woman, a queen), or undefined when it doesn't. */
+export function genderFromPrompt(prompt: string): Gender | undefined {
+  if (/\b(she|her|hers|woman|women|female|girl|lady|queen|princess|goddess|empress|witch|heroine|mother|sister|daughter|wife)\b/i.test(prompt)) return 'f'
+  if (/\b(he|him|his|man|men|male|boy|guy|king|prince|god|emperor|wizard|father|brother|son|husband|lord)\b/i.test(prompt)) return 'm'
+  return undefined
+}
+
+/** The hair, armour and cape a prompt asks for, where it asks. */
+export function partsFromPrompt(prompt: string): { hair?: HairStyle; armour?: boolean; cape?: boolean } {
+  const out: { hair?: HairStyle; armour?: boolean; cape?: boolean } = {}
+  if (/\b(bald|shaved head|shaven head|hairless)\b/i.test(prompt)) out.hair = 'none'
+  else if (/\b(helmet|helm|knight|spartan|centurion|legionnaire)\b/i.test(prompt)) out.hair = 'helmet'
+  else if (/\b(long hair|ponytail|braids?|flowing hair|mane)\b/i.test(prompt)) out.hair = 'long'
+  else if (/\b(spiky|spiked hair|super saiyan|anime hair|mohawk)\b/i.test(prompt)) out.hair = 'spiky'
+  else if (/\b(short hair|crew cut|buzz cut|buzzcut|crop)\b/i.test(prompt)) out.hair = 'crop'
+  if (/\b(armou?r|armou?red|plate|knight|paladin|spartan|mech|cyborg|power suit)\b/i.test(prompt)) out.armour = true
+  if (/\b(no armou?r|unarmou?red|light clothes)\b/i.test(prompt)) out.armour = false
+  if (/\b(cape|cloak|caped|mantle)\b/i.test(prompt)) out.cape = true
+  return out
 }

@@ -51,6 +51,18 @@ describe('personal loadout', () => {
   })
 })
 
+describe('photo faces', () => {
+  it('a face must come from this deployment\'s own uploads, like any other photo', async () => {
+    const owner = await issueDeviceId(db)
+    const points = new Array(956).fill(50)
+    const look = (url: string) => ({ gender: 'm', hair: 'crop', armour: false, cape: false, colors: {}, face: { url, width: 512, height: 512, points } })
+    const build = (url: string) => ({ ...defaultBuild('fighter', 'Faced'), heroName: 'Faced', look: look(url) })
+    await expect(createHero(db, owner, build('https://evil.example/face.webp'), [], quickGate)).rejects.toThrow(/face photo/)
+    const ok = await createHero(db, owner, build('https://teststore.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'), [], quickGate)
+    expect((await getBuild(db, owner, ok.buildId)).build.look?.face?.points).toHaveLength(956)
+  })
+})
+
 describe('device IDs', () => {
   it('issues unguessable 128-bit IDs', async () => {
     const a = await issueDeviceId(db)

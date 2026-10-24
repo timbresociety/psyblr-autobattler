@@ -55,8 +55,8 @@ export interface CharacterView {
   pose: (state: AnimState, dt: number, moving: boolean) => void
 }
 
-/** A posed, animated clone of a build for one hero. */
-export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build): CharacterView {
+/** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face. */
+export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   let meta: 'uv' | 'uv1' = 'uv'
@@ -64,7 +64,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     const mesh = o as THREE.SkinnedMesh
     if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
   })
-  paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap))
+  paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap), atlas)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

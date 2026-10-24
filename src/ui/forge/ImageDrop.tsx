@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent } from 'react'
+import type { FaceFinding } from './face/find'
 
 /** One reference image on its way in: shrunk in the browser, then uploaded. */
 export interface RefImage {
@@ -8,6 +9,8 @@ export interface RefImage {
   preview?: string
   status: 'preparing' | 'uploading' | 'ready'
   url?: string
+  /** The face on it, null when there is none, undefined until it has been looked for. */
+  face?: FaceFinding | null
 }
 
 interface Props {
@@ -70,6 +73,17 @@ export function ImageDrop({ images, max, onFiles, onRemove, error }: Props) {
           <figure key={img.id} className={`ref ${img.status}`} title={`${img.name}: ${STATUS_LABEL[img.status]}`}>
             {img.preview ? <img src={img.preview} alt={img.name} /> : <span className="ref-wait" aria-hidden="true" />}
             {img.status !== 'ready' && <span className="sr-only">{STATUS_LABEL[img.status]}</span>}
+            {img.face && (
+              <span className="ref-face" title="Face found: your hero can wear it">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <circle cx="9" cy="10.5" r="1.3" fill="currentColor" />
+                  <circle cx="15" cy="10.5" r="1.3" fill="currentColor" />
+                  <path d="M8.5 14.5c1.9 1.9 5.1 1.9 7 0" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+                <span className="sr-only">Face found</span>
+              </span>
+            )}
             <button type="button" className="ref-remove" aria-label={`Remove ${img.name}`} onClick={() => onRemove(img.id)}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />

@@ -52,6 +52,8 @@ export async function issueDeviceId(db: Db): Promise<string> {
 function validated(raw: unknown): Build {
   const result = hydrateBuild(raw)
   if (!result.ok) throw new StoreInputError(`invalid build: ${result.errors.map((e) => e.field).join(', ')}`)
+  // a face is a photo like any other: it must have come through the upload endpoint
+  if (result.build.look?.face && !isOwnPhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
   return result.build
 }
 

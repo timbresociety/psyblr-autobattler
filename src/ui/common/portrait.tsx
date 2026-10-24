@@ -1,5 +1,6 @@
 import { memo, useEffect, useReducer } from 'react'
-import type { RoleId } from '../../charter/types'
+import type { Build } from '../../charter/build.js'
+import type { RoleId } from '../../charter/types.js'
 import { initials } from '../arena/hud/format'
 import { webglAvailable } from './hero-look'
 
@@ -20,6 +21,8 @@ function load() {
     .then(async (m) => {
       busts = m
       notify()
+      // a body or a photo face that finishes later redraws every portrait that showed a stand-in
+      m.onCharacters(notify)
       // stand-ins draw at once; the real characters replace them when their files arrive
       if (await m.preloadBusts()) notify()
     })
@@ -31,6 +34,8 @@ export interface PortraitHero {
   heroName: string
   roleId: RoleId
   hue?: number
+  /** The whole build, so the bust wears the hero's own body, look and photo face. */
+  build?: Build
 }
 
 export function usePortrait(hero: PortraitHero | undefined): string | undefined {

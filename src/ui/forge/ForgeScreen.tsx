@@ -6,6 +6,7 @@ import {
   editSkillText,
   proposedSpread,
   allocate,
+  setLook,
   setSize,
   setStatTarget,
   swapTemplate,
@@ -19,6 +20,7 @@ import { SIZES, type SizeClass } from '../../charter/sizes'
 import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
+import type { HeroLook } from '../../charter/look'
 import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
 import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps, type HeroResult } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
@@ -28,6 +30,8 @@ import { SkillIcon } from '../common/SkillIcon'
 import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
+import { LookPanel } from './LookPanel'
+import { facePhoto, firstLook, photoColours, resolvedLook, type FaceCandidate } from './look'
 import { LoadoutSearch } from './LoadoutSearch'
 import { RoleSwitcher } from './RoleSwitcher'
 import { SizePicker } from './SizePicker'
@@ -39,17 +43,34 @@ import './forge.css'
 // the live 3D preview brings three.js, so it loads after the screen is up
 const HeroStage = lazy(() => import('../common/HeroStage'))
 
+type Subject = Pick<Build, 'heroName' | 'roleId' | 'sizeClass' | 'look'>
+
 /** The plinth: the hero in 3D where WebGL runs, its initials where it does not. */
-function Stage({ build, cue }: { build?: Build; cue?: { clip: StageClip; at: number } }) {
-  const name = build?.heroName ?? ''
+function Stage({ subject, cue }: { subject?: Subject; cue?: { clip: StageClip; at: number } }) {
+  const name = subject?.heroName ?? ''
   const label = name || 'your hero'
-  const backdrop = <div className={`hero-stage${build ? ` role-${build.roleId}` : ' is-empty'}`} role="img" aria-label={`3D preview of ${label}`} />
+  const backdrop = <div className={`hero-stage${subject ? ` role-${subject.roleId}` : ' is-empty'}`} role="img" aria-label={`3D preview of ${label}`} />
   if (!webglAvailable()) return backdrop
   return (
     <Suspense fallback={backdrop}>
-      <HeroStage look={build ? { heroName: name, roleId: build.roleId } : undefined} hue={heroHue(name)} cue={cue} size={build?.sizeClass ?? 'medium'} label={label} />
+      <HeroStage look={subject} hue={heroHue(name)} cue={cue} size={subject?.sizeClass ?? 'medium'} label={label} />
     </Suspense>
   )
+}
+
+/** A look to change: the hero's own, or, the first time, what its role gave it (colours stay its defaults until picked). */
+function lookOf(build: Build): HeroLook {
+  if (build.look) return build.look
+  const { colors: _defaults, ...rest } = resolvedLook(undefined, build.roleId, build.heroName, heroHue(build.heroName))
+  return { ...rest, colors: {} }
+}
+
+/** The look with a photo face on, and the photo's colours. */
+const withFace = (look: HeroLook, face: FaceCandidate): HeroLook => ({ ...look, colors: { ...look.colors, ...photoColours(face.finding) }, face: facePhoto(face) })
+
+function withoutFace(look: HeroLook): HeroLook {
+  const { face: _face, ...rest } = look
+  return rest
 }
 
 let nextImage = 0
@@ -106,6 +127,8 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         URL.revokeObjectURL(gone.preview)
         previews.current.delete(gone.preview)
       }
+      // taking away the photo a hero's face came from takes the face off too
+      if (gone?.url) setBuild((b) => (b && b.look && b.look.face?.url === gone.url ? setLook(b, withoutFace(b.look)) : b))
       return list.filter((img) => img.id !== id)
     })
     count.current = Math.max(0, count.current - 1)
@@ -132,13 +155,16 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
           const preview = URL.createObjectURL(prepared.blob)
           previews.current.add(preview)
           patchImage(id, { preview, status: 'uploading' })
-          const uploaded = await deps.uploadPhoto(prepared.blob)
+          // the face is found in the browser while the image uploads
+          const [uploaded, finding] = await Promise.all([deps.uploadPhoto(prepared.blob), deps.findFace(prepared.blob).catch(() => undefined)])
           if (!uploaded.ok) {
             dropImage(id)
             setImageError(UPLOAD_MESSAGES[uploaded.reason])
             return
           }
-          patchImage(id, { status: 'ready', url: uploaded.url })
+          patchImage(id, { status: 'ready', url: uploaded.url, face: finding ?? null })
+          // a face photo added after forging: the hero wears it at once, unless it already wears one
+          if (finding) setBuild((b) => (b && !b.look?.face ? setLook(b, withFace(lookOf(b), { url: uploaded.url, finding })) : b))
         }),
       )
     },
@@ -237,7 +263,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         changed()
         const size = sizeFromPrompt(text)
         const sized = size ? setSize({ ...res.build, heroName: name }, size) : undefined
-        setBuild(sized?.ok ? sized.build : { ...res.build, heroName: name })
+        const forged = sized?.ok ? sized.build : { ...res.build, heroName: name }
+        // the prompt and the photo dress it: "a queen in gold armour" is a woman in gold armour, wearing the photo's face
+        setBuild(setLook(forged, firstLook(text, forged.roleId, name, heroHue(name), candidate)))
         setHeroName(name)
         setOffline(res.offline)
         showLimits(res.limits)
@@ -255,7 +283,8 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         return
       }
       changed()
-      setBuild(res.build)
+      // looks are cosmetic, so a look changed while the engine was thinking is kept
+      setBuild((b) => ({ ...res.build, look: b?.look ?? res.build.look }))
       showLimits(res.limits)
       say(res.limits.length ? `Done, within the limits: ${[...new Set(res.limits.map(describeLimit))].join(' ')}` : 'Done.')
     } catch {
@@ -275,7 +304,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         say('The hero changed during the balance check. Press Ready to check the new version.')
         return
       }
-      setBuild(outcome.build)
+      setBuild((b) => ({ ...outcome.build, look: b?.look ?? outcome.build.look }))
       setAlternatives(outcome.alternatives)
     } catch {
       say("Couldn't run the balance check. Try again.")
@@ -305,6 +334,29 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     preview(slot)
     document.getElementById(`skill-${slot}`)?.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
   }
+
+  /** The first uploaded reference image with a face on it: what the hero can wear. */
+  const candidate = useMemo<FaceCandidate | undefined>(() => {
+    const img = images.find((i) => i.status === 'ready' && i.url && i.face)
+    return img ? { url: img.url!, finding: img.face! } : undefined
+  }, [images])
+  const onLook = (patch: Parameters<typeof LookPanel>[0]['onChange'] extends (p: infer P) => void ? P : never) =>
+    setBuild((b) => {
+      if (!b) return b
+      const base = lookOf(b)
+      const { colors, ...rest } = patch
+      return setLook(b, { ...base, ...rest, colors: { ...base.colors, ...(colors ?? {}) } })
+    })
+  const onFace = (on: boolean) =>
+    setBuild((b) => {
+      if (!b) return b
+      if (!on) return b.look ? setLook(b, withoutFace(b.look)) : b
+      return candidate ? setLook(b, withFace(lookOf(b), candidate)) : b
+    })
+  // before forging, the plinth already wears a found face, so the photo's effect shows at once
+  const facePreview: Subject | undefined = candidate
+    ? { heroName: heroName.trim() || 'Your hero', roleId: 'assassin', look: { gender: 'm', hair: 'crop', armour: false, cape: false, colors: photoColours(candidate.finding), face: facePhoto(candidate) } }
+    : undefined
 
   const facts = useMemo(() => {
     if (!build) return undefined
@@ -362,7 +414,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
           )}
           {!build ? (
             <section className="showcase is-empty">
-              <Stage />
+              <Stage subject={facePreview} />
               <div className="hero-info intro">
                 <h1 className="hero-name">Forge a hero</h1>
                 <p className="lead">Add reference images, give a name if you have one, then describe your hero. You own the look and the names; the engine keeps every fight fair.</p>
@@ -385,7 +437,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
           ) : (
             <>
               <section className="showcase">
-                <Stage build={build} cue={cue} />
+                <Stage subject={build} cue={cue} />
                 <div className="hero-info">
                   <h1 className={`hero-name${build.heroName.length > 16 ? ' long' : ''}`}>{build.heroName}</h1>
                   <RoleSwitcher roleId={build.roleId} onChange={onRole} />
@@ -442,6 +494,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                   )}
                 </div>
               </section>
+              <LookPanel look={resolvedLook(build.look, build.roleId, build.heroName, heroHue(build.heroName))} canFace={!!candidate} onChange={onLook} onFace={onFace} />
               <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
               <section className="kit" aria-label="Kit">
                 <header className="kit-head">

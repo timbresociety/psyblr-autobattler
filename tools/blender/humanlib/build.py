@@ -168,6 +168,7 @@ def main(opts):
         return 1.0
 
     K.layout_atlas(hero, density)
+    face_meta = F.face_meta(head_frame, body.lm, size) if head_frame and body.lm is not None else None
     out = opts.get('out')
     png = (os.path.splitext(out)[0] + '_atlas.png') if opts.get('keep-atlas') and out else None
     log('laid out', f'{time.time() - t0:.1f}s')
@@ -179,6 +180,12 @@ def main(opts):
     if out:
         export(out, size)
         log('wrote', out, os.path.getsize(out), 'bytes', f'{time.time() - t0:.1f}s')
+        if face_meta and spec.get('base'):
+            # where a photo face goes on this body: the game warps a player's photo onto it (src/arena/client/face-fit.ts)
+            meta_path = os.path.splitext(out)[0] + '.face.json'
+            with open(meta_path, 'w') as f:
+                json.dump(face_meta, f, separators=(',', ':'))
+            log('face meta', meta_path, sum(1 for p in face_meta['landmarks'] if p), 'landmarks')
     if opts.get('sheet'):
         sheet(opts['sheet'], rig)
     if opts.get('render'):

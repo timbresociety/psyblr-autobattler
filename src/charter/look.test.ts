@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest'
+import { proposeBuild, hydrateBuild, setLook } from './build.js'
+import { FACE_POINTS, defaultLook, hslHex, hydrateLook, toHex } from './look.js'
+
+const face = { url: '/dev-store/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp', width: 512, height: 512, points: new Array(FACE_POINTS * 2).fill(100.04) }
+
+describe('a hero’s look', () => {
+  it('keeps only what it knows: a known gender, hair and colours, and a well-formed face', () => {
+    const look = hydrateLook({ gender: 'f', hair: 'long', armour: true, cape: 'yes', colors: { suit: '#FF0000', skin: 'red', boot: '#00ff00', wings: '#123456' }, face, power: 9000 })
+    expect(look).toEqual({ gender: 'f', hair: 'long', armour: true, cape: false, colors: { suit: '#ff0000', boot: '#00ff00' }, face: { ...face, points: face.points.map(() => 100) } })
+    expect(hydrateLook({ gender: 'x' })).toBeUndefined()
+    expect(hydrateLook({ gender: 'm', hair: 'mullet', colors: {} })?.hair).toBe('crop')
+    // a face with the wrong number of points, or points off the photo, is dropped; the rest of the look stays
+    expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, points: [1, 2] } })?.face).toBeUndefined()
+    expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, points: face.points.map(() => 9999) } })?.face).toBeUndefined()
+  })
+
+  it('rides on the build through storage, and changing it keeps the balance check', () => {
+    const build = { ...proposeBuild({ heroName: 'Ada', roleId: 'mage', skills: {} }).build, gate: { state: 'ready' as const, winRate: 0.5 } }
+    const dressed = setLook(build, { gender: 'f', hair: 'none', armour: false, cape: true, colors: { cape: '#123456' } })
+    expect(dressed.gate.state).toBe('ready')
+    const back = hydrateBuild(JSON.parse(JSON.stringify(dressed)))
+    expect(back.ok && back.build.look).toEqual(dressed.look)
+  })
+
+  it('defaults follow the role and name, with colours that match three.js HSL', () => {
+    expect(defaultLook('tank', 'T', 0)).toMatchObject({ gender: 'm', hair: 'helmet', armour: true, cape: true })
+    expect(defaultLook('mage', 'M', 0).gender).toBe('f')
+    expect(hslHex(0, 1, 0.5)).toBe('#ff0000')
+    expect(hslHex(1 / 3, 1, 0.5)).toBe('#00ff00')
+    expect(hslHex(0, 0, 0.5)).toBe('#808080')
+    expect(toHex([1, 0.5, 0])).toBe('#ff8000')
+  })
+})

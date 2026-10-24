@@ -1,3 +1,4 @@
+import { hydrateLook, type HeroLook } from './look.js'
 import { matchTemplate, nearestAlternatives, tokenize } from './match.js'
 import { isSizeClass, type SizeClass } from './sizes.js'
 import { ROLE_IDS, getRole, isRoleId } from './roles.js'
@@ -75,6 +76,8 @@ export interface Build {
   spread: Spread
   /** Body size class; medium when absent (R14, KTD8). */
   sizeClass?: SizeClass
+  /** How the hero looks (cosmetic: no number reads it, and the balance gate's key ignores it). */
+  look?: HeroLook
   gate: GateResult
 }
 
@@ -316,6 +319,11 @@ export function setSize(build: Build, sizeClass: SizeClass): OpResult {
   return ok(sizeClass === 'medium' ? rest : { ...rest, sizeClass })
 }
 
+/** Change how the hero looks. Looks are cosmetic, so the balance check keeps its result. */
+export function setLook(build: Build, look: HeroLook): Build {
+  return { ...build, look }
+}
+
 /** The spread the engine proposes for a role. */
 export function proposedSpread(roleId: RoleId): Spread {
   return { ...getRole(roleId).defaultSpread }
@@ -381,9 +389,11 @@ export function hydrateBuild(raw: unknown): OpResult {
   const check = validateSpread(getRole(roleId), spread)
   if (!check.ok || ATTRIBUTES.some((a) => Number.isNaN(spread[a]))) return reject(empty, check.ok ? [invalidField('spread')] : check.errors)
   if (input.sizeClass !== undefined && !isSizeClass(input.sizeClass)) return fail('sizeClass')
+  const look = hydrateLook(input.look)
   const build: Build = {
     ...(typeof input.heroId === 'string' ? { heroId: input.heroId.slice(0, 64) } : {}),
     ...(input.sizeClass !== undefined && input.sizeClass !== 'medium' ? { sizeClass: input.sizeClass as SizeClass } : {}),
+    ...(look ? { look } : {}),
     heroName: str(input.heroName, TEXT_LIMITS.heroName),
     roleId,
     slots,

@@ -22,6 +22,7 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build): Promise<GateOutcome> => ({ state: 'ready', winRate: 0.5, build: { ...build, gate: { state: 'ready', winRate: 0.5 } } })),
     prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
+    findFace: vi.fn(async () => undefined),
     uploadPhoto: vi.fn(async () => ({ ok: true as const, url: 'https://store.public.blob.vercel-storage.com/heroes/a.webp' })),
     search: vi.fn(async () => []),
     addHero: vi.fn(async () => { throw new Error('unused') }),
@@ -280,5 +281,64 @@ describe('forge from a prompt and reference images', () => {
     expect(screen.getByText('In your loadout')).toBeTruthy()
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save changes' })))
     expect(d.saveBuild).toHaveBeenCalledWith('b7', expect.objectContaining({ heroName: 'Ada' }))
+  })
+})
+
+const finding = { points: Array.from({ length: 478 }, (_, i) => [100 + (i % 20) * 10, 100 + Math.floor(i / 20) * 10] as const), width: 512, height: 512, skin: [0.8, 0.6, 0.5] as [number, number, number], hair: [0.1, 0.08, 0.05] as [number, number, number] }
+const URL_A = 'https://store.public.blob.vercel-storage.com/heroes/a.webp'
+
+describe('the look: a face from the photo, the rest from the prompt', () => {
+  it('a face on a reference image is worn by the hero it forges, with the photo’s skin and hair', async () => {
+    const d = deps({ findFace: vi.fn(async () => finding) })
+    render(<ForgeScreen deps={d} />)
+    await addFiles([image()])
+    expect(document.querySelector('.ref-face')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a calm strategist' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    expect(screen.getByRole('button', { name: 'Photo face' }).getAttribute('aria-pressed')).toBe('true')
+    expect((screen.getByLabelText('Skin colour') as HTMLInputElement).value).toBe('#cc9980')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Save to loadout' })))
+    const saved = (d.createHero as ReturnType<typeof vi.fn>).mock.calls[0][0] as Build
+    expect(saved.look?.face?.url).toBe(URL_A)
+    expect(saved.look?.face?.points).toHaveLength(956)
+  })
+
+  it('the prompt dresses the hero: a queen in gold armour with a red cape', async () => {
+    render(<ForgeScreen deps={deps()} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a queen in gold armour with a red cape' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    expect(within(screen.getByRole('radiogroup', { name: 'Body' })).getByRole('radio', { name: 'Woman' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Armour' }).getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByRole('button', { name: 'Cape' }).getAttribute('aria-pressed')).toBe('true')
+    expect((screen.getByLabelText('Cape colour') as HTMLInputElement).value).toBe('#c8242c')
+    expect((screen.getByLabelText('Armour colour') as HTMLInputElement).value).toBe('#d4a531')
+  })
+
+  it('changing the look keeps the balance check, since looks never touch a number', async () => {
+    await forge(deps())
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await screen.findByRole('button', { name: 'Save to loadout' })
+    await act(async () => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Hair' })).getByRole('radio', { name: 'Bald' })))
+    fireEvent.change(screen.getByLabelText('Suit colour'), { target: { value: '#123456' } })
+    expect(screen.getByRole('button', { name: 'Save to loadout' })).toBeTruthy()
+    expect(within(screen.getByRole('radiogroup', { name: 'Hair' })).getByRole('radio', { name: 'Bald' }).getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('a face photo added after forging is worn at once, and removing the photo takes the face off', async () => {
+    await forge(deps({ findFace: vi.fn(async () => finding) }))
+    expect(screen.queryByRole('button', { name: 'Photo face' })).toBeNull()
+    await addFiles([image()])
+    expect(screen.getByRole('button', { name: 'Photo face' }).getAttribute('aria-pressed')).toBe('true')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Remove me.jpg' })))
+    expect(screen.queryByRole('button', { name: 'Photo face' })).toBeNull()
+  })
+
+  it('an image with no face still uploads, and the hero keeps its own face', async () => {
+    await forge(deps({ findFace: vi.fn(async () => undefined) }))
+    await addFiles([image('car.jpg')])
+    expect(document.querySelectorAll('.ref.ready')).toHaveLength(1)
+    expect(document.querySelector('.ref-face')).toBeNull()
+    expect(screen.getByText(/front-on photo and your hero wears that face/)).toBeTruthy()
   })
 })

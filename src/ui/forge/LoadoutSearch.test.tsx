@@ -17,6 +17,7 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build) => ({ state: 'ready' as const, winRate: 0.5, build: { ...build, gate: { state: 'ready' as const, winRate: 0.5 } } })),
     prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
+    findFace: vi.fn(async () => undefined),
     uploadPhoto: vi.fn(async () => ({ ok: false as const, reason: 'server' as const })),
     search: vi.fn(async (q: string) => ('jensen'.startsWith(q.toLowerCase()) ? [jensen] : [])),
     addHero: vi.fn(async () => ({ id: 'build-mine', heroId: jensen.id, build: structuredClone(original) })),
