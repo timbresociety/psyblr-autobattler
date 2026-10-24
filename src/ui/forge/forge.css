@@ -304,3 +304,46 @@
 .free-offer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .free-offer p { margin: 0; }
 .packs { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── the reading: what the Forge understood, before it builds ──────────────── */
+.workbench > .reading-bar { grid-row: 3; }
+.reading-info { gap: 14px; }
+.reading-head { display: grid; gap: 8px; }
+.reading-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font: 700 italic 14px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
+.reading-source { padding: 4px 8px 3px; border-radius: 999px; font: 600 10.5px/1 var(--font); letter-spacing: 0.08em; color: var(--ink-dim); background: rgba(var(--ink-rgb), 0.07); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.reading-source.src-claude-code, .reading-source.src-claude { color: var(--primary-ink); background: var(--iri); box-shadow: none; }
+.reading-summary { max-width: 62ch; font-size: 15px; line-height: 1.5; color: var(--ink-dim); }
+.reading-questions { display: grid; gap: 10px; padding: 12px 14px; border-radius: var(--r-lg); background: rgba(var(--accent-rgb), 0.08); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.4); }
+.reading-questions .section-title { font-size: 17px; }
+.question { display: grid; gap: 7px; }
+.question-ask { font-weight: 600; }
+.answers { display: flex; flex-wrap: wrap; gap: 6px; }
+.answer { min-height: 32px; padding: 6px 12px; border: 0; border-radius: 6px; text-align: left; background: rgba(var(--surface-rgb), 0.85); box-shadow: inset 0 0 0 1px var(--glass-line-hi); color: var(--ink); font: 500 13px/1.3 var(--font); cursor: pointer; transition: box-shadow 0.15s, background 0.15s; }
+.answer:hover { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.8); }
+.answer.best { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.6), inset 0 -2px 0 var(--accent); }
+.reading-size { max-width: 520px; }
+.wishes { display: grid; gap: 6px; }
+.wish { display: grid; grid-template-columns: 72px minmax(120px, auto) minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 8px 12px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.wish:not(.on) { opacity: 0.6; }
+.wish-kind { font: 600 10px/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.wish-phrase { font: 700 italic 15px/1.1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
+.wish-status { font-size: 12.5px; color: var(--ink-dim); }
+.wish.found .wish-status { color: var(--ok); }
+.wish-toggle { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--font); color: var(--ink-dim); cursor: pointer; white-space: nowrap; }
+.read-skills { display: grid; gap: 8px; }
+.read-skill { display: grid; grid-template-columns: 30px minmax(130px, 0.8fr) minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: 'icon slot slot mech' 'icon name does mech'; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.read-skill .ab-icon { grid-area: icon; }
+.read-skill .kit-slot { grid-area: slot; }
+.read-name { grid-area: name; min-height: 34px; font: 700 italic 15px/1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
+.read-name::placeholder { text-transform: uppercase; color: var(--ink-faint); }
+.read-does { grid-area: does; min-height: 34px; font-size: 13px; }
+.read-mechanic { grid-area: mech; font-size: 12px; line-height: 1.35; color: var(--ink-faint); }
+.reading-bar { grid-template-columns: minmax(0, 1fr) auto; }
+.reading-bar .correct { display: flex; gap: 8px; min-width: 0; }
+.reading-bar .correct input { flex: 1; min-width: 0; min-height: 40px; }
+@media (max-width: 980px) {
+  .wish { grid-template-columns: 64px minmax(0, 1fr) auto; }
+  .wish-status { grid-column: 2 / -1; }
+  .read-skill { grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: 'icon slot' 'icon name' 'icon does' 'icon mech'; }
+  .reading-bar { grid-template-columns: 1fr; }
+}

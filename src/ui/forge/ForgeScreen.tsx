@@ -20,10 +20,10 @@ import { SIZES, type SizeClass } from '../../charter/sizes'
 import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
-import type { GearPiece, GearSlot, HeroLook } from '../../charter/look'
-import { BUILT_IN, wearing, type PieceEntry } from '../../kit/pieces'
-import { resolveGear, type GearGap } from '../../kit/resolve'
-import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
+import type { GearPiece, GearSlot, HeroLook, LookColor } from '../../charter/look'
+import { BUILT_IN, type PieceEntry } from '../../kit/pieces'
+import type { GearGap } from '../../kit/resolve'
+import { buildFromReading, type GearWish, type Reading } from '../../forge/reading'
 import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
 import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
@@ -34,7 +34,8 @@ import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
 import { LookPanel } from './LookPanel'
 import { GearPanel } from './GearPanel'
-import { facePhoto, firstLook, photoColours, resolvedLook, type FaceCandidate } from './look'
+import { facePhoto, gapsOf, matchWishes, photoColours, readingLook, resolvedLook, wornGear, type FaceCandidate, type GearChoice } from './look'
+import { ReadingBar, ReadingCard } from './ReadingCard'
 import { RoleSwitcher } from './RoleSwitcher'
 import { SizePicker } from './SizePicker'
 import { SkillCard } from './SkillCard'
@@ -103,6 +104,10 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   const [community, setCommunity] = useState<PieceEntry[]>([])
   const [gaps, setGaps] = useState<GearGap[]>([])
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
+  // the Forge reads before it builds: the reading of the first prompt, that prompt, and the gear it asked for
+  const [reading, setReading] = useState<Reading>()
+  const [prompt, setPrompt] = useState('')
+  const [choices, setChoices] = useState<GearChoice[]>([])
   // bumped on every change the player makes; an async result started before a change is discarded
   const edits = useRef(0)
   const changed = () => {
@@ -166,7 +171,8 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
             setImageError(UPLOAD_MESSAGES[uploaded.reason])
             return
           }
-          patchImage(id, { status: 'ready', url: uploaded.url, face: finding ?? null })
+          const outfit = await deps.outfitColours(prepared.blob, finding).catch(() => ({}))
+          patchImage(id, { status: 'ready', url: uploaded.url, face: finding ?? null, outfit })
           // a face photo added after forging: the hero wears it at once, unless it already wears one
           if (finding) setBuild((b) => (b && !b.look?.face ? setLook(b, withFace(lookOf(b), { url: uploaded.url, finding })) : b))
         }),
@@ -193,29 +199,11 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     deps.pieces.searchPieces('').then(addCommunity, () => undefined)
   }, [deps, addCommunity])
 
-  /**
-   * The prompt's gear against the whole repository: what the built-ins didn't cover is looked up among the community's
-   * pieces, worn where the hero's slot is still free, and whatever is still missing is offered for generating.
-   */
-  async function lookUpGaps(text: string) {
-    const first = resolveGear(text, BUILT_IN)
-    setGaps(first.gaps)
-    if (!first.gaps.length) return
-    const found = (await Promise.all(first.gaps.slice(0, 3).map((g) => deps.pieces.searchPieces(g.phrase, g.kind).catch(() => [] as PieceEntry[])))).flat()
-    if (!found.length) return
-    addCommunity(found)
-    const second = resolveGear(text, [...BUILT_IN, ...found])
-    setGaps(second.gaps)
-    setBuild((b) => {
-      if (!b) return b
-      const { gear: worn, ...rest } = lookOf(b)
-      const gear = { ...worn }
-      for (const slot of Object.keys(second.gear) as GearSlot[]) {
-        const entry = second.gear[slot]!
-        if (entry.source === 'community' && !gear[slot]) gear[slot] = wearing(entry)
-      }
-      return Object.keys(gear).length ? setLook(b, { ...rest, gear }) : b
-    })
+  /** A reading's gear the built-ins lack, looked up among the community's pieces; a match is worn like any other. */
+  async function findNear(wishes: GearWish[]) {
+    const missing = matchWishes(wishes, catalog).filter((c) => !c.entry)
+    const found = (await Promise.all(missing.slice(0, 3).map((c) => deps.pieces.searchPieces(c.wish.phrase, c.wish.kind).catch(() => [] as PieceEntry[])))).flat()
+    if (found.length) addCommunity(found)
   }
 
   /** A blank slate for the next hero; saved heroes stay in the Loadout. */
@@ -233,6 +221,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     setNotice(undefined)
     setOffline(false)
     setMessages([])
+    setReading(undefined)
+    setPrompt('')
+    setChoices([])
   }
 
   async function save() {
@@ -266,30 +257,60 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     return result
   }
 
+  /** Read the hero from a prompt, or read it again with a correction on top of the last reading. */
+  async function read(text: string, note?: string) {
+    setBusy(true)
+    const started = edits.current
+    try {
+      const res = await deps.read({ prompt: text, ...(heroName.trim() ? { heroName: heroName.trim() } : {}), photoUrls, faceFound: !!candidate, ...(note && reading ? { note, previous: reading } : {}) })
+      if (edits.current !== started) return
+      const next = res.reading
+      if (!next) {
+        say(`${res.refused} Change the prompt and I'll read it again.`)
+        return
+      }
+      changed()
+      setPrompt(text)
+      setReading(next)
+      void findNear(next.gear)
+      const asks = next.questions.length
+      say(
+        note
+          ? `Read again with your note.${asks ? ` ${asks === 1 ? 'One question is' : `${asks} questions are`} still open.` : ''} Build when it looks right.`
+          : `Here's how I read ${next.heroName}. ${asks ? `I have ${asks === 1 ? 'one question' : `${asks} questions`}, then ` : ''}check the look, the gear and the kit, change anything, and press Build hero.`,
+      )
+    } catch {
+      say('Something went wrong on my side. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** The hero the reading describes, dressed in its look: from here the editor takes over. */
+  function buildHero() {
+    if (!reading) return
+    changed()
+    const forged = buildFromReading(reading)
+    setBuild(setLook(forged, readingLook(reading, candidate, outfit, wornGear(choices))))
+    setGaps(gapsOf(choices))
+    setHeroName(reading.heroName)
+    setOffline(reading.source === 'offline')
+    setAlternatives(undefined)
+    setReading(undefined)
+    say(`Built ${reading.heroName} as a ${getRole(forged.roleId).name.toLowerCase()}. Change anything on the right, then press Ready for the balance check.`)
+  }
+
   async function send(text: string) {
     setMessages((m) => [...m, { from: 'you', text }])
+    if (!build) {
+      // the first message is read back before anything is built; while a reading is open, a message corrects it
+      await read(reading ? prompt : text, reading ? text : undefined)
+      return
+    }
     setBusy(true)
     const started = edits.current
     const stale = () => edits.current !== started
     try {
-      if (!build) {
-        // the prompt names the hero when the name is blank, themes the skills it lists and sets a size it asks for
-        const name = heroName.trim() || nameFromPrompt(text)
-        const res = await deps.propose({ heroName: name, description: text, skills: skillsFromPrompt(text), photoUrls })
-        if (stale()) return
-        changed()
-        const size = sizeFromPrompt(text)
-        const sized = size ? setSize({ ...res.build, heroName: name }, size) : undefined
-        const forged = sized?.ok ? sized.build : { ...res.build, heroName: name }
-        // the prompt and the photo dress it: "a queen in gold armour" is a woman in gold armour, wearing the photo's face
-        setBuild(setLook(forged, firstLook(text, forged.roleId, name, heroHue(name), candidate)))
-        void lookUpGaps(text)
-        setHeroName(name)
-        setOffline(res.offline)
-        showLimits(res.limits)
-        say(`Forged ${name} as a ${res.build.roleId}${size ? `, ${SIZES[size].label.toLowerCase()} sized` : ''}. Rename and describe each skill, change the size or the stats, or ask me for changes. The engine sets every number.`)
-        return
-      }
       const res = await deps.chat(build, text)
       if (stale()) {
         say('You changed the hero while I was thinking, so I left your edits as they are. Ask again if you still want that change.')
@@ -358,6 +379,16 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     const img = images.find((i) => i.status === 'ready' && i.url && i.face)
     return img ? { url: img.url!, finding: img.face! } : undefined
   }, [images])
+  /** The outfit colours off the first image that has any, for an offline reading. */
+  const outfit = useMemo<Partial<Record<LookColor, string>>>(() => images.find((i) => i.status === 'ready' && i.outfit && Object.keys(i.outfit).length)?.outfit ?? {}, [images])
+  // the reading's gear against the repository as it grows, keeping what the player switched off
+  const wishes = reading?.gear
+  useEffect(() => {
+    setChoices((before) => (wishes ? matchWishes(wishes, catalog, before) : []))
+  }, [wishes, catalog])
+  const onGearChoice = (index: number, wear: boolean) => setChoices((list) => list.map((c, i) => (i === index ? { ...c, wear } : c)))
+  const readingSubject: Subject | undefined = reading ? { heroName: reading.heroName, roleId: reading.roleId, sizeClass: reading.look.size, look: readingLook(reading, candidate, outfit, wornGear(choices)) } : undefined
+
   const onLook = (patch: Parameters<typeof LookPanel>[0]['onChange'] extends (p: infer P) => void ? P : never) =>
     setBuild((b) => {
       if (!b) return b
@@ -407,6 +438,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     >
       <ChatPanel
         started={!!build}
+        reading={!!reading}
         heroName={heroName}
         messages={messages}
         busy={busy}
@@ -438,7 +470,20 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
               Offline mode: the engine is matching skills by keywords until the AI is back.
             </p>
           )}
-          {!build ? (
+          {!build && reading ? (
+            <ReadingCard
+              reading={reading}
+              stage={<Stage subject={readingSubject} />}
+              gear={choices}
+              look={resolvedLook(readingSubject!.look, reading.roleId, reading.heroName, heroHue(reading.heroName))}
+              canFace={!!candidate}
+              onChange={(next) => {
+                changed()
+                setReading(next)
+              }}
+              onGear={onGearChoice}
+            />
+          ) : !build ? (
             <section className="showcase is-empty">
               <Stage subject={facePreview} />
               <div className="hero-info intro">
@@ -455,7 +500,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                   </li>
                   <li className="now">
                     <b>Describe it</b>
-                    <span>One sentence in the chat. The engine drafts a role, six skills, a size and a stat split.</span>
+                    <span>In the chat, as much as you like. I read it back, ask what I can't tell, and build when you say so.</span>
                   </li>
                 </ol>
               </div>
@@ -537,6 +582,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
             </>
           )}
         </div>
+        {!build && reading && <ReadingBar busy={busy} questions={reading.questions.length} onCorrect={send} onBuild={buildHero} />}
         {build && (
           <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))}>
             {build.gate.state === 'ready' && (

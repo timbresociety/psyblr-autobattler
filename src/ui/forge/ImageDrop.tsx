@@ -1,4 +1,5 @@
 import { useRef, useState, type DragEvent } from 'react'
+import type { LookColor } from '../../charter/look'
 import type { FaceFinding } from './face/find'
 
 /** One reference image on its way in: shrunk in the browser, then uploaded. */
@@ -11,6 +12,8 @@ export interface RefImage {
   url?: string
   /** The face on it, null when there is none, undefined until it has been looked for. */
   face?: FaceFinding | null
+  /** The outfit's colours on it, for an offline reading. */
+  outfit?: Partial<Record<LookColor, string>>
 }
 
 interface Props {

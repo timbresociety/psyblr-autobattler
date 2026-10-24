@@ -29,7 +29,8 @@ import { parseStatWishes } from '../charter/chat.js'
  * the offline matcher answers whenever the model is unavailable, slow, or over the rate limit.
  */
 
-export const MODEL = 'claude-opus-5-5'
+/** Claude Haiku 5.5: $0.10 in and $0.50 out per million tokens, the Forge's model for every AI call. */
+export const MODEL = 'claude-haiku-5-5'
 const TIMEOUT_MS = 15_000
 
 export class InputError extends Error {}
@@ -52,14 +53,13 @@ const defaultLimiter = new RateLimiter({ limit: 20, windowMs: 60 * 60 * 1000 })
 
 let client: Anthropic | undefined
 
-/** The real model call: structured JSON output, low effort, server-side refusal fallbacks. */
+/** The real model call: structured JSON output at low effort. Haiku has no server-side refusal fallback, so a refusal goes offline. */
 export const anthropicCall: ModelCall = async ({ system, content, schema }) => {
   client ??= new Anthropic({ timeout: TIMEOUT_MS, maxRetries: 1 })
   const response = await client.beta.messages.create({
     model: MODEL,
-    max_tokens: 2000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
+    // room for adaptive thinking ahead of the answer
+    max_tokens: 4000,
     output_config: { effort: 'low', format: { type: 'json_schema', schema } },
     system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
     messages: [{ role: 'user', content }],

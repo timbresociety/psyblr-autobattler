@@ -98,7 +98,7 @@ describe('OpenAI-compatible adapters (U4)', () => {
 describe('Anthropic adapters (U4)', () => {
   const env = { ANTHROPIC_API_KEY: 'k' }
   const message = (stop: string, text: string) =>
-    json(200, { id: 'm', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: stop, content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } })
+    json(200, { id: 'm', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: stop, content: [{ type: 'text', text }], usage: { input_tokens: 1, output_tokens: 1 } })
 
   it('a refusal is a decline', async () => {
     const f = mockFetch(message('refusal', ''))

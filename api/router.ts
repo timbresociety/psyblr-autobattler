@@ -20,6 +20,7 @@ export const ROUTES: Record<string, () => Promise<RouteModule>> = {
   'auth/verify': () => import('../routes/auth/verify.js'),
   builds: () => import('../routes/builds/index.js'),
   'charter/propose': () => import('../routes/charter/propose.js'),
+  'charter/read': () => import('../routes/charter/read.js'),
   credits: () => import('../routes/credits/index.js'),
   'credits/purchase': () => import('../routes/credits/purchase.js'),
   device: () => import('../routes/device.js'),

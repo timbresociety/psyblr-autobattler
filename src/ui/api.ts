@@ -1,6 +1,7 @@
-import { proposeBuild, requestStats, type Build, type ProposalInput } from '../charter/build.js'
+import { requestStats, type Build } from '../charter/build.js'
 import { parseStatWishes } from '../charter/chat.js'
-import type { PieceKind } from '../charter/look.js'
+import type { LookColor, PieceKind } from '../charter/look.js'
+import { floorBreach, offlineReading, readingText, type Reading, type ReadInput } from '../forge/reading.js'
 import type { LimitHit } from '../charter/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
 import type { GateOutcome } from '../sim/gate.js'
@@ -10,9 +11,16 @@ import type { FaceFinding } from './forge/face/find.js'
 
 /**
  * Forge and Loadout I/O. Every Forge call has an offline path, so making a hero keeps working without the API (R13):
- * proposals fall back to the Charter's matcher, chat falls back to the keyword parser, and the balance gate always
- * runs locally in workers.
+ * a reading falls back to the offline parser, chat falls back to the keyword parser, and the balance gate always runs
+ * locally in workers.
  */
+
+export interface ReadRequest extends ReadInput {
+  photoUrls?: string[]
+}
+
+/** A reading, or the content floor's reason for refusing one. */
+export type ReadResponse = { reading: Reading; refused?: undefined } | { refused: string; reading?: undefined }
 
 export interface ProposeResponse {
   build: Build
@@ -94,7 +102,10 @@ export interface PieceDeps {
 }
 
 export interface ForgeDeps {
-  propose(hero: ProposalInput & { photoUrls?: string[] }): Promise<ProposeResponse>
+  /** The Forge's reading of a hero before it builds: its look, gear, kit and questions (src/forge/reading.ts). */
+  read(input: ReadRequest): Promise<ReadResponse>
+  /** The outfit's colours on a prepared image, read away from the face; empty when it can't be read. */
+  outfitColours(image: Blob, face?: FaceFinding): Promise<Partial<Record<LookColor, string>>>
   chat(build: Build, message: string): Promise<ChatResponse>
   runGate(build: Build): Promise<GateOutcome>
   /** Decode, shrink and re-encode a reference image before it is uploaded. */
@@ -282,13 +293,22 @@ async function searchHeroes(path: string): Promise<HeroResult[]> {
 
 export const liveDeps: ForgeDeps & LoadoutDeps = {
   pieces: livePieceDeps,
-  async propose(hero) {
+  async read(input) {
     try {
-      return await post<ProposeResponse>('/api/charter/propose', { kind: 'propose', hero })
+      const res = await withDevice((id) => fetch('/api/charter/read', { method: 'POST', headers: { 'content-type': 'application/json', ...deviceHeader(id) }, body: JSON.stringify(input) }))
+      if (res.status === 422) return { refused: ((await res.json()) as { error: string }).error }
+      if (!res.ok) throw new Error(`read ${res.status}`)
+      return (await res.json()) as { reading: Reading }
     } catch {
-      const result = proposeBuild(hero)
-      return { build: result.build, offline: true, limits: result.ok ? result.limits : [] }
+      // the server can't be reached: read offline, behind the same floor
+      const reading = offlineReading(input)
+      const breach = floorBreach(`${input.prompt}\n${input.note ?? ''}\n${readingText(reading)}`, false)
+      return breach ? { refused: breach } : { reading }
     }
+  },
+  async outfitColours(image, face) {
+    const { outfitColours } = await import('./forge/outfit.js')
+    return outfitColours(image, face).catch(() => ({}))
   },
   async chat(build, message) {
     try {

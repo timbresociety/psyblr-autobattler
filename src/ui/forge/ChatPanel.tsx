@@ -8,12 +8,13 @@ export interface ChatMessage {
 
 interface Props {
   started: boolean
+  /** True while the Forge's reading of the hero is open: a message corrects it. */
+  reading?: boolean
   heroName: string
   messages: ChatMessage[]
   busy: boolean
   onName: (name: string) => void
   onSend: (text: string) => void
-  /** Global loadout matches for the typed name. */
   /** The reference image drop zone. */
   refs?: ReactNode
 }
@@ -25,7 +26,7 @@ const EXAMPLES = ['a time-bending samurai who rewinds fights', 'a GPU god who ra
  * Making a hero is conversational first (R13): reference images, a name if you have one, then the hero in plain words.
  * The prompt names the hero when the name is left blank.
  */
-export function ChatPanel({ started, heroName, messages, busy, onName, onSend, refs }: Props) {
+export function ChatPanel({ started, reading = false, heroName, messages, busy, onName, onSend, refs }: Props) {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLOListElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -52,7 +53,7 @@ export function ChatPanel({ started, heroName, messages, busy, onName, onSend, r
       </label>
       {refs}
       <ol className="log" ref={log} aria-live="polite">
-        {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is. A sentence is enough: I name it if you haven't, draft the role, the kit and the stats, and you change anything you like.</li>}
+        {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is: who they are, how they look, what their skills are called and what they do. I read it back to you, ask what I can't tell, and build only when you say so.</li>}
         {messages.map((m, i) => (
           <li key={i} className={m.from}>
             {m.text}
@@ -66,7 +67,7 @@ export function ChatPanel({ started, heroName, messages, busy, onName, onSend, r
           </li>
         )}
       </ol>
-      {!started && messages.length === 0 && (
+      {!started && !reading && messages.length === 0 && (
         <div className="examples">
           <p className="field-label">Describe your hero in a sentence, or start from one of these:</p>
           <ul>
@@ -87,7 +88,7 @@ export function ChatPanel({ started, heroName, messages, busy, onName, onSend, r
           value={draft}
           rows={3}
           maxLength={MAX_CHAT}
-          placeholder={started ? 'Ask for changes: "more agile, less armor"' : 'Describe your hero: "a time-bending samurai who rewinds fights"'}
+          placeholder={started ? 'Ask for changes: "more agile, less armor"' : reading ? 'Tell me what I got wrong: "no hat, give him a red jacket"' : 'Describe your hero: "a time-bending samurai who rewinds fights"'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             // Enter while an input method is composing confirms the candidate; it must not send
@@ -95,9 +96,9 @@ export function ChatPanel({ started, heroName, messages, busy, onName, onSend, r
           }}
         />
         <div className="composer-row">
-          {!started && !heroName.trim() && <span className="composer-hint">The prompt can name it.</span>}
-          <button type="submit" className={`btn primary${started ? '' : ' big'}`} disabled={busy || !draft.trim()}>
-            {started ? 'Send' : 'Forge hero'}
+          {!started && !reading && !heroName.trim() && <span className="composer-hint">The prompt can name it.</span>}
+          <button type="submit" className={`btn primary${started || reading ? '' : ' big'}`} disabled={busy || !draft.trim()}>
+            {started ? 'Send' : reading ? 'Correct' : 'Read my hero'}
           </button>
         </div>
       </form>

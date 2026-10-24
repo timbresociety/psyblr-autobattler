@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { proposeBuild, requestStats, swapAlternatives, type Build } from '../../charter/build'
 import { getRole } from '../../charter/roles'
 import type { GateOutcome } from '../../sim/gate'
-import type { ForgeDeps } from '../api'
+import { offlineReading, withRole } from '../../forge/reading'
+import type { ForgeDeps, ReadRequest } from '../api'
 import { offlineChat } from '../api'
 import { ForgeScreen } from './ForgeScreen'
 import { pieceDeps } from './pieces.fixture'
@@ -19,7 +20,9 @@ beforeEach(() => {
 
 function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
   return {
-    propose: vi.fn(async (hero) => ({ build: proposeBuild({ ...hero, roleId: 'mage' }).build, offline: false, limits: [] })),
+    // an AI reading, standing in for Claude: the offline reader's, as a mage
+    read: vi.fn(async (input: ReadRequest) => ({ reading: { ...withRole(offlineReading(input), 'mage'), source: 'claude' as const } })),
+    outfitColours: vi.fn(async () => ({})),
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build): Promise<GateOutcome> => ({ state: 'ready', winRate: 0.5, build: { ...build, gate: { state: 'ready', winRate: 0.5 } } })),
     prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
@@ -35,11 +38,17 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
   }
 }
 
+/** The Forge reads the prompt back, then builds from the reading. */
+async function readAndBuild(message: string) {
+  fireEvent.change(screen.getByLabelText('Message'), { target: { value: message } })
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+  await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Build hero' })))
+}
+
 async function forge(d: ForgeDeps) {
   render(<ForgeScreen deps={d} />)
   fireEvent.change(screen.getByLabelText('Hero name'), { target: { value: 'Dario' } })
-  fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a genius who rewinds time and fires beams' } })
-  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+  await readAndBuild('a genius who rewinds time and fires beams')
   await screen.findByRole('heading', { name: 'Dario' })
 }
 
@@ -134,9 +143,9 @@ describe('forge (U11)', () => {
     expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('with the API offline, the creator still proposes a kit and shows an offline notice', async () => {
-    const propose = vi.fn(async (hero: Parameters<ForgeDeps['propose']>[0]) => ({ build: proposeBuild(hero).build, offline: true, limits: [] }))
-    await forge(deps({ propose }))
+  it('with the API offline, the creator still reads and builds a kit and shows an offline notice', async () => {
+    const read = vi.fn(async (input: ReadRequest) => ({ reading: offlineReading(input) }))
+    await forge(deps({ read }))
     expect(screen.getByText(/Offline mode/)).toBeTruthy()
     expect(screen.getAllByRole('article')).toHaveLength(6)
   })
@@ -209,9 +218,13 @@ describe('forge from a prompt and reference images', () => {
     const d = deps()
     render(<ForgeScreen deps={d} />)
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a giant samurai with skills around Moon Slash and Tide Turn' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    // read back first: the name, the skills by slot and the size, all before anything is built
     expect(await screen.findByRole('heading', { name: 'Giant Samurai' })).toBeTruthy()
-    expect(d.propose).toHaveBeenCalledWith(expect.objectContaining({ heroName: 'Giant Samurai', skills: expect.objectContaining({ active1: expect.objectContaining({ name: 'Moon Slash' }) }) }))
+    expect(d.read).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'a giant samurai with skills around Moon Slash and Tide Turn' }))
+    expect((screen.getByLabelText('Active 1 name') as HTMLInputElement).value).toBe('Moon Slash')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
+    expect(await screen.findByRole('heading', { name: 'Giant Samurai' })).toBeTruthy()
     const size = within(screen.getByRole('radiogroup', { name: 'Size' })).getByRole('radio', { checked: true })
     expect(size.getAttribute('aria-label')).toMatch(/^Huge/)
   })
@@ -223,9 +236,8 @@ describe('forge from a prompt and reference images', () => {
     expect(d.prepareImage).toHaveBeenCalledTimes(1)
     expect(document.querySelectorAll('.ref.ready')).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Hero name'), { target: { value: 'Dario' } })
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a genius who fires beams' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
-    expect(d.propose).toHaveBeenCalledWith(expect.objectContaining({ photoUrls: ['https://store.public.blob.vercel-storage.com/heroes/a.webp'] }))
+    await readAndBuild('a genius who fires beams')
+    expect(d.read).toHaveBeenCalledWith(expect.objectContaining({ photoUrls: ['https://store.public.blob.vercel-storage.com/heroes/a.webp'] }))
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
     await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Save to loadout' })))
     expect(d.createHero).toHaveBeenCalledWith(expect.objectContaining({ heroName: 'Dario' }), ['https://store.public.blob.vercel-storage.com/heroes/a.webp'])
@@ -261,7 +273,12 @@ describe('forge from a prompt and reference images', () => {
     const d = deps()
     render(<ForgeScreen deps={d} />)
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana and a straw hat' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    // the reading lists the gear: the katana is in the repository, the straw hat isn't yet
+    const wishes = within(await screen.findByRole('region', { name: 'Gear as read' }))
+    expect(wishes.getByText(/Katana, free from the repository/)).toBeTruthy()
+    expect(wishes.getByText(/Not in the repository yet/)).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
     await screen.findByRole('heading', { name: 'Samurai' })
     const row = (name: string) => within(screen.getByRole('radiogroup', { name }))
     expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Katana')
@@ -316,8 +333,8 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     render(<ForgeScreen deps={d} />)
     await addFiles([image()])
     expect(document.querySelector('.ref-face')).toBeTruthy()
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a calm strategist' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    await readAndBuild('a calm strategist')
+    expect(d.read).toHaveBeenCalledWith(expect.objectContaining({ faceFound: true }))
     expect(screen.getByRole('button', { name: 'Photo face' }).getAttribute('aria-pressed')).toBe('true')
     expect((screen.getByLabelText('Skin colour') as HTMLInputElement).value).toBe('#cc9980')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
@@ -329,8 +346,7 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
 
   it('the prompt dresses the hero: a queen in gold armour with a red cape', async () => {
     render(<ForgeScreen deps={deps()} />)
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a queen in gold armour with a red cape' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    await readAndBuild('a queen in gold armour with a red cape')
     expect(within(screen.getByRole('radiogroup', { name: 'Body' })).getByRole('radio', { name: 'Woman' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('button', { name: 'Armour' }).getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByRole('button', { name: 'Cape' }).getAttribute('aria-pressed')).toBe('true')
@@ -363,5 +379,47 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     expect(document.querySelectorAll('.ref.ready')).toHaveLength(1)
     expect(document.querySelector('.ref-face')).toBeNull()
     expect(screen.getByText(/front-on photo and your hero wears that face/)).toBeTruthy()
+  })
+})
+
+const ENCORE = 'ENCORE ABJ from Seedhe Maut as he appears on lunch break cover. Skill 1 "encore kha ja" skill 2 "bhussi bar de" and ultimate is a transformation "kendrick se bhi upar"'
+
+describe('the Forge reads before it builds', () => {
+  it('reads Encore ABJ back with his three skills, asks what it can’t tell, and builds what was confirmed', async () => {
+    const read = vi.fn(async (input: ReadRequest) => ({ reading: offlineReading(input) }))
+    render(<ForgeScreen deps={deps({ read })} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: ENCORE } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    expect(await screen.findByRole('heading', { name: 'ENCORE ABJ' })).toBeTruthy()
+    expect(screen.getByText('Read offline')).toBeTruthy()
+    expect((screen.getByLabelText('Active 1 name') as HTMLInputElement).value).toBe('Encore Kha Ja')
+    expect((screen.getByLabelText('Active 2 name') as HTMLInputElement).value).toBe('Bhussi Bar De')
+    expect((screen.getByLabelText('Ultimate name') as HTMLInputElement).value).toBe('Kendrick Se Bhi Upar')
+    expect(screen.getByText(/Engine: (Super|Titan) Form/)).toBeTruthy()
+    // one tap answers a question, and the kit takes the mechanic picked
+    const ask = screen.getByRole('group', { name: 'What should Encore Kha Ja do?' })
+    const pick = within(ask).getAllByRole('button')[1]
+    const mechanic = pick.textContent!.split(':')[0]
+    await act(async () => fireEvent.click(pick))
+    expect(screen.queryByRole('group', { name: 'What should Encore Kha Ja do?' })).toBeNull()
+    // a correction reads again on top of the last reading
+    fireEvent.change(screen.getByLabelText('Correction'), { target: { value: 'give him long hair and a blue robe' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read again' })))
+    expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: ENCORE, note: 'give him long hair and a blue robe', previous: expect.objectContaining({ heroName: 'ENCORE ABJ' }) }))
+    expect(within(screen.getByRole('radiogroup', { name: 'Hair' })).getByRole('radio', { name: 'Long' }).getAttribute('aria-checked')).toBe('true')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
+    expect(await screen.findByRole('heading', { name: 'ENCORE ABJ' })).toBeTruthy()
+    const glance = within(screen.getByRole('list', { name: 'Kit at a glance' }))
+    expect(glance.getByText('Encore Kha Ja')).toBeTruthy()
+    expect(glance.getByText('Kendrick Se Bhi Upar')).toBeTruthy()
+    expect(screen.getAllByText(new RegExp(mechanic)).length).toBeGreaterThan(0)
+  })
+
+  it('a reading the content floor refuses says why and builds nothing', async () => {
+    render(<ForgeScreen deps={deps({ read: vi.fn(async () => ({ refused: "Heroes can't involve children." })) })} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a kid wizard' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    expect(await screen.findByText(/can't involve children/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Build hero' })).toBeNull()
   })
 })

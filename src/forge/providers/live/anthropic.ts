@@ -5,9 +5,10 @@ import type { FetchLike } from './http.js'
 
 /**
  * Anthropic adapters (KTD3, KTD10): a director option, and the separate moderation check that never sees the
- * chat history. Structured output; a refusal stop is a decline so the router can fall through.
+ * chat history. Structured output; a refusal stop is a decline so the router can fall through. Claude Haiku 5.5 by
+ * default ($0.10 in, $0.50 out per million tokens), which has no server-side refusal fallback to ask for.
  */
-const DEFAULT_MODEL = 'claude-opus-5-5'
+const DEFAULT_MODEL = 'claude-haiku-5-5'
 
 function client(env: Env, fetchImpl?: FetchLike): Anthropic {
   return new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, timeout: 30_000, maxRetries: 1, ...(fetchImpl ? { fetch: fetchImpl as never } : {}) })
@@ -17,8 +18,6 @@ async function structured(env: Env, fetchImpl: FetchLike | undefined, system: st
   const response = await client(env, fetchImpl).beta.messages.create({
     model: env.FORGE_ANTHROPIC_MODEL || DEFAULT_MODEL,
     max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
     output_config: { effort: 'low', format: { type: 'json_schema', schema } },
     system,
     messages: [{ role: 'user', content }],
