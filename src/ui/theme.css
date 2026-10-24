@@ -385,7 +385,7 @@ button:disabled { cursor: not-allowed; }
 .tier-2 .trait-badge, .trait-badge.tier-2 { background: var(--iri); color: #2a2540; }
 :root[data-theme='light'] .tier-0 .trait-badge, :root[data-theme='light'] .trait-badge.tier-0 { color: color-mix(in srgb, rgb(var(--role-rgb)) 52%, #2a2540); }
 .trait-name { grid-area: name; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 16px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
-.trait-name small { margin-left: 6px; font: 600 10.5px/1 var(--font); font-style: normal; letter-spacing: 0.08em; color: var(--ink-faint); }
+.trait-name small { display: block; margin-top: 3px; font: 600 10px/1 var(--font); font-style: normal; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint); }
 .trait.tier--1 .trait-name { color: var(--ink-dim); }
 .trait-track { grid-area: track; display: flex; gap: 3px; }
 .trait-track b { min-width: 18px; padding: 3px 4px 2px; border-radius: 3px; text-align: center; font: 700 11px/1 var(--font); color: var(--ink-faint); background: rgba(var(--ink-rgb), 0.07); }

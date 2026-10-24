@@ -396,7 +396,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         </div>
       </div>
 
-      <DetailsPanel view3d={!flat} build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} />
+      <DetailsPanel view3d={!flat} build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} army={sideBuilds} />
 
       <div className={`bust-row${dragging ? ' drop-off' : ''}`} role="list" aria-label="Loadout">
         {dragging && (

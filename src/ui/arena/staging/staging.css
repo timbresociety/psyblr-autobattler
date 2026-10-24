@@ -46,6 +46,7 @@
 .plate-who { grid-column: 1 / -1; font: 700 10px/1.4 var(--font); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-dim); }
 .team-plate.mine .plate-who { color: var(--accent); }
 .plate-army { font: 800 italic 22px/1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; color: color-mix(in srgb, var(--team) 35%, white); white-space: nowrap; }
+:root[data-theme='light'] .plate-army, :root[data-theme='light'] .side-card-name { color: color-mix(in srgb, var(--team) 72%, #2a2540); text-shadow: none; }
 .plate-count { font: 700 italic 15px/1 var(--display); color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .vs { z-index: 1; display: grid; place-items: center; margin: 0 -8px; padding: 0 18px; background: linear-gradient(180deg, rgba(var(--surface-hi-rgb), 0.95), rgba(var(--surface-rgb), 0.95)); box-shadow: inset 0 2px 0 rgba(var(--accent-rgb), 0.85); clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%); font: 800 italic 20px/1 var(--display); text-transform: uppercase; color: var(--accent); }
 
@@ -75,11 +76,42 @@
 .details-who h3 { font: 800 italic 23px/0.95 var(--display); letter-spacing: 0.02em; text-transform: uppercase; overflow-wrap: anywhere; }
 .details-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .details-tags small { color: var(--ink-faint); font-size: 11.5px; }
-.details-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border-radius: 6px; background: var(--glass-line); }
-.details-facts div { display: grid; gap: 3px; padding: 8px 10px; background: rgba(var(--surface-rgb), 0.9); }
-.details-facts dt { font: 600 9.5px/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
-.details-facts dd { font: 800 italic 19px/1 var(--display); font-variant-numeric: tabular-nums; }
-.details-facts dd small { margin-left: 2px; font: 600 10px/1 var(--font); font-style: normal; color: var(--ink-faint); }
+/* the hero card: a unit card the way TFT and Underlords show one, its trait, health, stats and attribute split */
+/* the card scrolls as a whole: its parts keep their height instead of shrinking into the flex column */
+.hero-card > * { flex-shrink: 0; }
+.hero-card .trait-chip { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: 'badge name count' 'badge effect effect'; align-items: center; gap: 2px 8px; margin: 0; padding: 7px 10px 7px 7px; border-radius: 6px; background: rgba(var(--role-rgb), 0.1); box-shadow: inset 0 0 0 1px rgba(var(--role-rgb), 0.28); }
+.hero-card .trait-chip.tier--1 { background: rgba(var(--surface-lo-rgb), 0.35); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.hero-card .trait-chip .trait-badge { grid-area: badge; width: 30px; }
+.hero-card .trait-chip b { grid-area: name; font: 700 italic 15px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
+.hero-card .trait-count { grid-area: count; justify-self: start; padding: 2px 6px 1px; border-radius: 3px; font: 700 11px/1 var(--font); font-variant-numeric: tabular-nums; color: var(--ink-dim); background: rgba(var(--ink-rgb), 0.08); }
+.hero-card .trait-chip:not(.tier--1) .trait-count { color: var(--primary-ink); background: var(--iri); }
+.hero-card .trait-chip em { grid-area: effect; font-style: normal; font-size: 11.5px; line-height: 1.35; color: var(--ink-dim); }
+.hero-card .hp-bar { position: relative; display: grid; place-items: center; height: 22px; overflow: hidden; border-radius: 4px; background: rgba(var(--surface-lo-rgb), 0.75); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.hero-card .hp-bar > i { position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--ok) 70%, white), var(--ok)); }
+.hero-card .hp-bar > i::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(var(--seg, 10%) - 1px), rgba(var(--surface-lo-rgb), 0.55) calc(var(--seg, 10%) - 1px) var(--seg, 10%)); }
+.hero-card .hp-bar span { position: relative; font: 600 10.5px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: #10241a; }
+:root[data-theme='light'] .hero-card .hp-bar span { color: #fff; }
+.hero-card .hp-bar b { font: 800 italic 15px/1 var(--display); letter-spacing: 0.02em; }
+.card-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; border-radius: 6px; background: var(--glass-line); }
+.stat-tile { display: grid; grid-template-columns: 14px minmax(0, 1fr); grid-template-areas: 'label label' 'icon value' 'sub sub'; align-content: start; align-items: center; gap: 5px 5px; padding: 7px 8px 8px; background: rgba(var(--surface-rgb), 0.92); cursor: help; }
+.stat-tile svg { grid-area: icon; width: 14px; height: 14px; color: var(--accent); }
+.stat-label { grid-area: label; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 9px/1 var(--font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-faint); }
+.stat-value { grid-area: value; font: 800 italic 18px/1 var(--display); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-value small { margin-left: 2px; font: 600 9.5px/1 var(--font); font-style: normal; color: var(--ink-faint); }
+.stat-sub { grid-area: sub; font-size: 10.5px; line-height: 1; color: var(--ok); }
+.stat-tile:hover { background: rgba(var(--surface-hi-rgb), 0.92); }
+.card-attrs { display: grid; gap: 5px; }
+.card-attrs .attr { display: grid; grid-template-columns: 26px minmax(0, 1fr) 20px; align-items: center; gap: 8px; }
+.card-attrs .attr span { font: 700 10px/1 var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+.card-attrs .attr i { position: relative; height: 6px; overflow: hidden; border-radius: 3px; background: rgba(var(--ink-rgb), 0.09); }
+.card-attrs .attr i::before { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--v, 0%); border-radius: 3px; background: var(--attr); }
+.card-attrs .attr b { text-align: right; font: 800 italic 14px/1 var(--display); font-variant-numeric: tabular-nums; }
+.card-attrs .attr-strength { --attr: var(--attr-strength); }
+.card-attrs .attr-agility { --attr: var(--attr-agility); }
+.card-attrs .attr-intellect { --attr: var(--attr-intellect); }
+.card-attrs .attr-strength span { color: var(--attr-strength); }
+.card-attrs .attr-agility span { color: var(--attr-agility); }
+.card-attrs .attr-intellect span { color: var(--attr-intellect); }
 .details-kit { display: grid; gap: 8px; }
 .details-kit li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; }
 .kit-text { display: grid; gap: 3px; min-width: 0; }

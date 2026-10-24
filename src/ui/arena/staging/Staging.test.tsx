@@ -97,6 +97,28 @@ describe('staging (U16)', () => {
     expect(details.textContent).toContain('Ultimate')
   })
 
+  it('shows a unit card like TFT: the trait it counts toward, its health, a stats grid and the attribute split', async () => {
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
+    await placeAt(/Bezos/, -12, -10)
+    fireEvent.click(bustOf(/Bezos/))
+    const card = () => screen.getByRole('region', { name: 'Hero details' })
+    const value = (stat: string) => Number(card().querySelector(`.stat-${stat} .stat-value`)!.firstChild!.textContent)
+    // one tank on the side: Bulwark shows 1 of the 2 it needs
+    expect(within(card()).getByText('Bulwark')).toBeTruthy()
+    expect(within(card()).getByText('1/2')).toBeTruthy()
+    for (const label of ['Attack', 'Range', 'DPS', 'Armor', 'Spirit res', 'Regen', 'Move', 'Cooldowns']) expect(within(card()).getByText(label)).toBeTruthy()
+    expect(within(card()).getAllByText(/% less$/)).toHaveLength(2)
+    expect(within(within(card()).getByLabelText('Attribute split')).getAllByText(/^(Str|Agi|Int)$/)).toHaveLength(3)
+    const armor = value('armor')
+    // a second tank lights Bulwark, and the card shows the armor it fights with
+    fireEvent.click(bustOf(/Bezos/))
+    await placeAt(/Bezos/, -6, -10)
+    fireEvent.click(bustOf(/Bezos/))
+    expect(within(card()).getByText('2/4')).toBeTruthy()
+    expect(value('armor') / armor).toBeCloseTo(1.2, 1)
+  })
+
   it('offers the Forge, the Loadout and the demo roster when the loadout is empty', async () => {
     await open({ demo: false })
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
