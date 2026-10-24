@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { ARCH, LETTERS, SHINE, TOKEN_SHINE, TOKEN_SHINE_AT } from './marks'
+import { ARCH, CHROME_STOPS, LETTERS, SHINE, TOKEN_SHINE, TOKEN_SHINE_AT } from './marks'
 
 /**
  * A still chrome fill for the SVG marks (where the live 3D chrome can't run): a bright sky, a dark horizon band just
@@ -9,13 +9,9 @@ function ChromeFill({ id }: { id: string }) {
   return (
     <defs>
       <linearGradient id={id} x1="0" y1="0" x2="0.18" y2="1">
-        <stop offset="0" stopColor="#fdfdff" />
-        <stop offset="0.3" stopColor="#d9dceb" />
-        <stop offset="0.47" stopColor="#8d8aa8" />
-        <stop offset="0.53" stopColor="#3e3868" />
-        <stop offset="0.6" stopColor="#f2efff" />
-        <stop offset="0.78" stopColor="#cdf4e8" />
-        <stop offset="1" stopColor="#9a96bd" />
+        {CHROME_STOPS.map(([offset, color]) => (
+          <stop key={offset} offset={offset} stopColor={color} />
+        ))}
       </linearGradient>
     </defs>
   )

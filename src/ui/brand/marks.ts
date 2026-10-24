@@ -20,3 +20,14 @@ export const TOKEN_SHINE_AT = 'translate(14.35 27.2) scale(0.7325)'
 /** The marks' SVG frames. */
 export const WORDMARK_BOX = [-112, -760, 2313, 990] as const
 export const TOKEN_BOX = [0, 0, 200, 226] as const
+
+/** The still chrome the SVG marks wear where the live 3D chrome can't run, top to bottom: offset and colour. */
+export const CHROME_STOPS: readonly (readonly [offset: number, color: string])[] = [
+  [0, '#fdfdff'],
+  [0.3, '#d9dceb'],
+  [0.47, '#8d8aa8'],
+  [0.53, '#3e3868'],
+  [0.6, '#f2efff'],
+  [0.78, '#cdf4e8'],
+  [1, '#9a96bd'],
+]

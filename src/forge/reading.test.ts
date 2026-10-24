@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { BUILD_SLOTS, SLOT_KIND } from '../charter/build'
 import { poolFor } from '../charter/templates/catalog'
+import { ENCORE_COVER_ANSWER, ENCORE_PROMPT } from './examples'
 import { answerQuestion, buildFromReading, hydrateReading, namedSkills, offlineReading, readingSchema, withForm, withRole } from './reading'
 import { atRung, canReach, physiqueFromPrompt, wearFromPrompt } from './wardrobe-read'
 
-const ENCORE = 'ENCORE ABJ from Seedhe Maut as he appears on lunch break cover. Skill 1 "encore kha ja" skill 2 "bhussi bar de" and ultimate is a transformation "kendrick se bhi upar"'
+const ENCORE = ENCORE_PROMPT
 const none = { colors: [], finishes: [], print: '', knobs: [] }
 
 describe('the offline reader', () => {
@@ -144,29 +145,7 @@ describe('the offline wardrobe', () => {
 
 describe('an AI reader’s answer', () => {
   it('reads Encore ABJ off the cover: the kasa as made, the kimono recoloured, twin swords, a full beard, and what it couldn’t tell', () => {
-    const raw = {
-      heroName: 'Encore',
-      summary: 'Encore ABJ as on the Lunch Break cover: a wandering swordsman in a wide straw hat and a blue kimono.',
-      realPerson: true,
-      roleId: 'fighter',
-      look: { gender: 'm', size: 'medium', physique: { weight: 0.45, muscle: 0.6, age: 0.1 }, colors: [{ region: 'hair', hex: '#1A1A1A' }], wearFace: true },
-      wear: [
-        { slot: 'head', phrase: 'Wide straw hat', item: 'kasa', rung: 'wear', ...none },
-        { slot: 'full', phrase: 'blue kimono, gold obi', item: 'kimono', rung: 'recolour', ...none, colors: ['#2A4B8D', '#D4A531', ''], finishes: ['silk', '', ''] },
-        { slot: 'back', phrase: 'twin swords', item: 'twin_swords', rung: 'wear', ...none },
-        { slot: 'beard', phrase: 'full beard', item: 'beard_full', rung: 'wear', ...none },
-      ],
-      kit: {
-        ...Object.fromEntries(BUILD_SLOTS.map((s) => [s, { name: '', does: '', template: '', look: { element: '', form: '', palette: [], pose: '', charge: '', impact: '', trail: '', motif: '', callout: false } }])),
-        ultimate: { name: 'Kendrick Se Bhi Upar', does: 'Transforms into a bigger, stronger self', template: 'fighter-super-form', look: { element: 'energy', form: '', palette: ['#FFFFFF', '#FFD23A', '#FF7400'], pose: '', charge: 'gather', impact: '', trail: '', motif: '', callout: true } },
-      },
-      form: { entry: 'burst', aura: 'flame', growth: 'swell', trail: '', avatar: '', hair: 'hair_spiky', hairColor: '#FFD23A', eyes: '#3AD2FF', marks: '', wear: [] },
-      questions: [
-        { about: 'active1', ask: 'What should Encore Kha Ja do?', options: ['A devouring combo', 'A sound blast'] },
-        { about: 'active2', ask: 'What should Bhussi Bar De do?', options: ['A taunt', 'A stun'] },
-        { about: 'form', ask: 'Does he grow, shrink, or keep his size?', options: ['Grows large', 'Keeps his size', 'Shrinks to tiny'] },
-      ],
-    }
+    const raw = structuredClone(ENCORE_COVER_ANSWER)
     const reading = hydrateReading(raw, { prompt: ENCORE, heroName: 'Encore ABJ', faceFound: true }, 'claude')
     expect(reading.wear).toEqual([
       { slot: 'head', phrase: 'wide straw hat', item: 'kasa', rung: 'wear' },
