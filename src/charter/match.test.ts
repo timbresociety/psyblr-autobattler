@@ -13,7 +13,7 @@ describe('description matcher', () => {
     expect(matchTemplate('mage', 'ultimate', 'a giant kamehameha wave').template.id).toBe('mage-mega-beam')
     expect(matchTemplate('tank', 'active', 'throws a chain and drags them in').template.id).toBe('tank-chain-hook')
     expect(matchTemplate('assassin', 'active', 'turns invisible and slips away').template.id).toBe('assassin-vanish')
-    expect(matchTemplate('fighter', 'ultimate', 'goes super saiyan').template.id).toBe('fighter-super-form')
+    expect(matchTemplate('fighter', 'ultimate', 'goes super saiyan').template.id).toBe('fighter-ascended-form')
   })
 
   it('an empty description returns the role default for that slot, flagged as a fallback', () => {

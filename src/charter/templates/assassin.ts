@@ -1,4 +1,4 @@
-import { active, ai, at, basic, blind, breakPassive, buff, cripple, execute, field, heal, invulnerable, mark, movement, move, passive, phys, refresh, root, silence, slow, spirit, stealth, stun, trap, ultimate, vulnerable, wound } from './dsl.js'
+import { active, ai, at, basic, blind, breakPassive, buff, cripple, execute, field, heal, invulnerable, mark, movement, move, passive, phys, refresh, resize, root, silence, slow, spirit, stealth, stun, trap, ultimate, vulnerable, wound } from './dsl.js'
 
 /** Assassin: bursts down isolated or hurt targets, then gets out. Stealth, marks, executes, silences and evasion. */
 export const ASSASSIN = [
@@ -39,6 +39,8 @@ export const ASSASSIN = [
   ultimate({ id: 'assassin-assassinate', name: 'Assassinate', roles: ['assassin'], tags: ['assassinate', 'snipe', 'execute', 'contract', 'hitman', 'one-shot'], delivery: at.proj(35, undefined, 60), effects: [execute(50, 100), phys(120, 1.2)], cooldown: 65, ai: ai('finisher', 9, { targetHealthBelow: 0.45 }) }),
   ultimate({ id: 'assassin-vendetta', name: 'Vendetta', roles: ['assassin'], tags: ['vendetta', 'mark', 'hunt', 'revenge', 'curse', 'vulnerable'], delivery: at.proj(20), effects: [mark(30, 6), vulnerable(15, 6), phys(60, 0.5)], cooldown: 70, ai: ai('open', 8) }),
   ultimate({ id: 'assassin-shadow-dance', name: 'Shadow Dance', roles: ['assassin'], tags: ['shadow-dance', 'stealth', 'invisible', 'phantom', 'evasion', 'ghost'], delivery: at.self(), effects: [stealth(6), buff('evasion', 50, 6), buff('damage', 30, 6)], cooldown: 70, ai: ai('engage', 8) }),
+  // shrinks to tiny: a smaller hitbox and quicker feet, with dodging and damage carrying the rest (R23)
+  ultimate({ id: 'assassin-shrink-form', name: 'Shrink Form', roles: ['assassin'], tags: ['transform', 'shrink', 'tiny', 'small', 'ant', 'miniature', 'form'], delivery: at.self(), effects: [resize('tiny', 8), buff('evasion', 35, 8), buff('moveSpeed', 30, 8), buff('damage', 25, 8)], cooldown: 70, ai: ai('engage', 9) }),
   ultimate({ id: 'assassin-toxic-cloud', name: 'Toxic Cloud', roles: ['assassin'], tags: ['toxic', 'cloud', 'poison', 'gas', 'plague', 'miasma'], delivery: at.zone(14, 5), effects: [field(5, 1), wound(40, 1.5), silence(0.6), phys(30, 0.3)], cooldown: 70, ai: ai('engage', 8, { minTargets: 2 }) }),
 
   movement({ id: 'assassin-wall-run', name: 'Wall Run', roles: ['assassin'], tags: ['wall-run', 'parkour', 'run', 'climb'], delivery: at.dash(8), effects: [move(8), buff('moveSpeed', 30, 2)], cooldown: 9, ai: ai('escape', 4) }),

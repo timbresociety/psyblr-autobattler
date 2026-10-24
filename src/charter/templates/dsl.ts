@@ -25,6 +25,7 @@ export const buff = (stat: BuffStat, pct: number, duration: number, target: 'sel
 export const execute = (thresholdPct: number, bonusPct: number): Effect => ({ kind: 'execute', thresholdPct, bonusPct })
 /** Transform into another size class for `duration` seconds (KTD14). */
 export const resize = (sizeClass: SizeClass, duration: number): Effect => ({ kind: 'resize', sizeClass, duration })
+export const form = (duration: number): Effect => ({ kind: 'form', duration })
 
 // the skill library's control, debuffs, states and world effects (see docs/charter/skill-library.html)
 export const cripple = (pct: number, duration: number): Effect => ({ kind: 'slow', pct, duration, stat: 'attack' })

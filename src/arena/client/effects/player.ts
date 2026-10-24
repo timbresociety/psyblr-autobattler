@@ -5,6 +5,7 @@ import { clone as cloneRig } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS } from '../../../charter/build.js'
 import { FAMILY_OF } from '../../../charter/skill-look.js'
 import type { BuildSlot } from '../../../charter/types.js'
+import { transformOf } from '../../../forge/form.js'
 import type { HeroPackage } from '../../../forge/package.js'
 import { ENGINE } from '../../engine/calibration.js'
 import { capsule } from '../../engine/state.js'
@@ -12,11 +13,12 @@ import { atLeast } from '../quality.js'
 import { chest } from '../../engine/deliveries.js'
 import type { MatchEvent } from '../../engine/events.js'
 import { composeRecipe } from '../../recipes/defaults.js'
-import { skillLookOf } from '../../recipes/looks.js'
+import { formLookOf, skillLookOf } from '../../recipes/looks.js'
 import type { EffectRecipe, RecipeLayer } from '../../recipes/schema.js'
 import type { ArenaController } from '../match-view.js'
 import { skyFlashOf } from '../map.js'
-import { bandGeometry, color, coneGeometry, createDraw, hot, setOpacity, v3, vivid, type MeshKind } from './draw.js'
+import { bandGeometry, color, coneGeometry, createDraw, hot, setOpacity, v3, vivid, type Kit, type MeshKind } from './draw.js'
+import { createForms } from './forms.js'
 import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing.js'
 import { playCast, playHit } from './sound.js'
 import { createWorldFx } from './world-fx.js'
@@ -51,7 +53,7 @@ import {
  */
 
 /** Effect budgets (KTD11): sprites, ribbons and pooled meshes recycle oldest-first, and nothing grows past these. */
-export const BUDGET = { glow: 16_000, smoke: 3_000, motifs: 1_500, meshes: 96, trails: 48, ribbons: 64, ghosts: 8, tasks: 2_000 }
+export const BUDGET = { glow: 16_000, smoke: 3_000, motifs: 1_500, meshes: 96, trails: 48, ribbons: 64, tails: 36, ghosts: 8, tasks: 2_000 }
 
 interface Live {
   mesh: THREE.Mesh
@@ -149,7 +151,10 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   // coins, notes, leaves and code read as shapes, so they are drawn solid rather than as light
   const motifs = new SpritePool(BUDGET.motifs, motifAtlas(), THREE.NormalBlending, 4)
   const ribbons = new RibbonPool(BUDGET.ribbons)
-  scene.add(smoke.mesh, glow.mesh, motifs.mesh, ribbons.mesh)
+  // a form's tails get a pool of their own, so a busy fight's ribbons never take one mid-form, and are drawn solid, so
+  // an orange tail stays orange over a sunlit floor instead of washing out to white
+  const tailRibbons = new RibbonPool(BUDGET.tails, 16, THREE.NormalBlending)
+  scene.add(smoke.mesh, glow.mesh, motifs.mesh, ribbons.mesh, tailRibbons.mesh)
   // the frame-rate guard's third step halves every spawn (U18, R26)
   const thin = (spec: SpriteSpec): SpriteSpec => (atLeast(ctrl.quality(), 'fewer-particles') ? { ...spec, count: Math.ceil(spec.count / 2) } : spec)
   let clock = 0
@@ -306,7 +311,6 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   haloMap.needsUpdate = true
   haloMap.repeat.set(0.5, 0.5)
   haloMap.offset.set(0, 0.5)
-  const forms = new Map<number, THREE.Mesh>()
   const background = (scene.background as THREE.Color).clone()
   let hitStop = 0
   let shake = 0
@@ -321,7 +325,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   })
   const recipe = (hero: number, slot: BuildSlot): EffectRecipe => recipes[hero][slot]
 
-  const draw = createDraw({
+  const kit: Kit = {
     camera: () => ctrl.camera,
     show,
     sparkle,
@@ -335,17 +339,27 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       skyColor = c
     },
     ghost,
-  })
+  }
+  const draw = createDraw(kit)
   const { flash, sparks } = draw
+  // transformations: how each arrives, what surrounds it, what it leaves behind and what it wears (forms.ts)
+  const forms = createForms({
+    ...kit,
+    flash,
+    sparks,
+    tail: (path, c, width, life) => tailRibbons.spawn(path, c, width, life, clock, { taper: true, steady: true }),
+    endTail: (ribbon) => tailRibbons.end(ribbon, clock),
+  })
+  // the skill that transforms a hero: a form event names no slot, and a kit holds one transformation at most
+  const formOf = (hero: number) => {
+    const skills = arena.setups[hero].kit
+    const slot = BUILD_SLOTS.find((s) => transformOf(skills[s])) ?? 'ultimate'
+    return { slot, duration: transformOf(skills[slot])?.duration ?? 8 }
+  }
 
   // walls, turrets, fields, traps and stealth: what skills leave in the world
   const world = createWorldFx(ctrl, { sparkle, puff, flash, tint: (hero, slot = 'active1') => vivid(recipe(hero, slot), 0) })
 
-  const dropForm = (hero: number) => {
-    const m = forms.get(hero)
-    if (m) m.visible = false
-    forms.delete(hero)
-  }
   const aimOf = (hero: number) => {
     const h = arena.match.heroes[hero]
     return new THREE.Vector3(Math.sin(h.yaw) * Math.cos(h.pitch), Math.sin(h.pitch), Math.cos(h.yaw) * Math.cos(h.pitch))
@@ -440,8 +454,9 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           const dir = aimOf(e.hero)
           const family = FAMILY_OF[r.delivery]
           for (const l of r.layers) if (l.phase === 'charge') draw.layer(l, r, at, 1, { dir })
-          // a self-cast has no area and sends no impact: its look plays on the caster as it casts
-          if (family === 'self') for (const l of r.layers) if (l.phase === 'impact' || l.phase === 'linger') draw.layer(l, r, at, capsule(hero).height / 2, { dir, caster: at })
+          // a self-cast has no area and sends no impact: its look plays on the caster as it casts (a transformation's
+          // arrival is the form's own, from its event)
+          if (family === 'self' && !transformOf(arena.setups[e.hero].kit[e.slot])) for (const l of r.layers) if (l.phase === 'impact' || l.phase === 'linger') draw.layer(l, r, at, capsule(hero).height / 2, { dir, caster: at })
           // a movement skill has already moved the hero; its way runs from where the hero was last drawn
           if (family === 'movement') {
             const was = ctrl.positions()[e.hero]
@@ -496,17 +511,18 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           hitStop = Math.max(hitStop, feel.hitStop)
           shake = Math.max(shake, feel.shake)
           playHit(e.heavy)
-        } else if (e.type === 'resize') {
-          const hero = arena.match.heroes[e.hero]
-          if (e.phase === 'start') {
-            const r = recipe(e.hero, 'ultimate')
-            const m = forms.get(e.hero) ?? mesh('form', vivid(r, 0), 0.6)
-            // the form fills the hero's new capsule exactly: what the audience sees is what can be hit (R23, AE6)
-            const c = capsule(hero)
-            m.scale.set(c.radius, c.height / 2, c.radius)
-            forms.set(e.hero, m)
-            flash(v3(chest(hero)), vivid(r, 0), 2.5)
-          } else dropForm(e.hero)
+        } else if (e.type === 'form') {
+          if (e.phase === 'end') forms.end(e.hero)
+          else {
+            const { slot, duration } = formOf(e.hero)
+            const id = e.hero
+            // read fresh each frame: the form hugs the capsule the engine gives it, so what's seen is what can be hit (R23)
+            forms.start(id, formLookOf(skillLookOf(arena.setups[id].build, slot)), recipe(id, slot), duration, {
+              feet: () => v3(ctrl.positions()[id] ?? arena.match.heroes[id].position),
+              capsule: () => capsule(arena.match.heroes[id]),
+              yaw: () => arena.match.heroes[id].yaw,
+            })
+          }
         } else if (e.type === 'cover-hit') {
           // stone chips and a puff of dust where a shot meets cover
           const at = v3(e.at)
@@ -520,8 +536,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           show('shock', new THREE.Color(1, 0.9, 0.7), 0.5, (m) => m.position.set(at.x, 0.06, at.z), (p, m) => (m.scale.setScalar(1 + 4 * p), setOpacity(m, 0.8 * (1 - p))))
           shake = Math.max(shake, 0.4)
         } else if (e.type === 'death') {
-          // the engine sends no resize end for a hero that dies transformed
-          dropForm(e.hero)
+          // the engine sends no form end for a hero that dies transformed; the death has its own flash
+          forms.end(e.hero, true)
           const hero = arena.match.heroes[e.hero]
           const at = v3(chest(hero))
           const team = hero.team === 0 ? new THREE.Color(0.31, 0.64, 1) : new THREE.Color(1, 0.42, 0.29)
@@ -543,10 +559,13 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
         tasks.pop()
         task.fn()
       }
+      // the forms step their tails before the ribbons are drawn down them
+      forms.frame(dt)
       glow.update(clock)
       smoke.update(clock)
       motifs.update(clock)
       ribbons.update(clock, ctrl.camera)
+      tailRibbons.update(clock, ctrl.camera)
       hitStop = Math.max(0, hitStop - dt)
       shake = Math.max(0, shake - dt * 1.6)
       for (let i = live.length - 1; i >= 0; i--) {
@@ -565,16 +584,11 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           ghosts.splice(i, 1)
         } else g.material.fade.value = 0.7 * (1 - p) ** 1.3
       }
-      const positions = ctrl.positions()
       const flying = new Map(arena.match.projectiles.map((p) => [p.id, p]))
       for (const [id, fx] of projectiles) {
         const p = flying.get(id)
         if (p) fly(fx, v3(p.position), dt)
         else land(id, fx)
-      }
-      for (const [id, m] of forms) {
-        const at = positions[id]
-        m.position.set(at.x, at.y + capsule(arena.match.heroes[id]).height * 0.55, at.z)
       }
       sky = Math.max(0, sky - dt)
       const flashSky = skyFlashOf(scene)
@@ -585,6 +599,6 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     },
     timeScale: () => (hitStop > 0 ? 0.05 : 1),
     shake: () => new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake),
-    stats: () => ({ meshes: live.length + projectiles.size + forms.size + ghosts.length, particles: BUDGET.glow + BUDGET.smoke + BUDGET.motifs }),
+    stats: () => ({ meshes: live.length + projectiles.size + forms.live() + ghosts.length, particles: BUDGET.glow + BUDGET.smoke + BUDGET.motifs }),
   }
 }

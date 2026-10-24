@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import { defaultLook, outfitOf, ROLE_GENDER, type FacePhoto, type Gender, type LookSlot, type Worn } from '../../charter/look.js'
+import { defaultLook, outfitOf, ROLE_GENDER, WEAR_SLOTS, wearUrl, type FacePhoto, type Gender, type LookSlot, type WearSlot, type Worn } from '../../charter/look.js'
+import type { FormBody, FormMark } from '../../charter/skill-look.js'
+import { libraryItem } from '../../kit/wear/library.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 import { DEMO_HEROES } from '../demo/roster.js'
@@ -27,6 +29,31 @@ export interface CharacterLook {
   colors: { skin: THREE.Color; eye: THREE.Color }
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
   face?: FacePhoto
+  /** Marks painted on the face, as a form wears them (face/composite). */
+  marks?: FormMark
+}
+
+/**
+ * The look a form wears: the hero's own, with the form's hair, eyes, marks and items put on over its outfit. A
+ * full-body item covers the upper and lower ones, as in the wardrobe.
+ */
+export function formCharacterLook(look: CharacterLook, body: FormBody | undefined): CharacterLook {
+  if (!body) return look
+  const outfit = { ...look.outfit }
+  if (body.hair) outfit.hair = { id: body.hair, url: wearUrl(body.hair), ...(body.hairColor ? { colors: [body.hairColor] } : {}) }
+  else if (body.hairColor && outfit.hair) outfit.hair = { ...outfit.hair, colors: [body.hairColor] }
+  for (const item of body.wear ?? []) {
+    const slot = libraryItem(item.id)?.slot as WearSlot | undefined
+    if (!slot || !WEAR_SLOTS.includes(slot)) continue
+    outfit[slot] = { id: item.id, url: wearUrl(item.id), ...(item.colors ? { colors: item.colors } : {}), ...(item.finishes ? { finishes: item.finishes } : {}) }
+    if (slot === 'full') {
+      delete outfit.upper
+      delete outfit.lower
+    } else if (slot === 'upper' || slot === 'lower') delete outfit.full
+  }
+  // the eyes take the form's colour, a little lifted so the iris still reads against it
+  const eye = body.eyes ? new THREE.Color().setStyle(body.eyes, THREE.SRGBColorSpace).lerp(new THREE.Color(1, 1, 1), 0.25) : look.colors.eye
+  return { ...look, outfit, colors: { ...look.colors, eye }, ...(body.marks ? { marks: body.marks } : {}) }
 }
 
 /** The body a hero wears: its size class (colossal while transformed) in its look's gender, or its role's without one. */

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { characterMap, type CharacterLook, type Gltf } from '../character-look.js'
 import { bodyKit } from '../body-kit.js'
-import { compositeFace } from './composite.js'
+import { compositeFace, paintMarks, surface, type Surface } from './composite.js'
 import { buildFacePatch, type FaceMeta, type Rgba } from './patch.js'
 import { faceBasisFile } from './shape.js'
 import type { Pt } from './warp.js'
@@ -67,28 +67,40 @@ export function fileMesh(file: Gltf): THREE.SkinnedMesh | undefined {
 const atlases = new Map<string, Promise<THREE.Texture | null>>()
 const ready = new Map<string, THREE.Texture | null>()
 
-const keyOf = (look: CharacterLook) => (look.face ? `${look.build}|${look.face.url}|${look.colors.skin.getHexString()}` : '')
+const keyOf = (look: CharacterLook) => (look.face || look.marks ? `${look.build}|${look.face ? `${look.face.url}|${look.colors.skin.getHexString()}` : ''}|${look.marks ?? ''}` : '')
 
-/** The hero's own atlas with its photo face; null when it has no face or the face could not be made. */
+/**
+ * The hero's own atlas: its photo face, and any marks its form paints on the face. Null when it has neither, or when
+ * its face could not be made.
+ */
 export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Texture | null> {
   const face = look.face
   const mesh = fileMesh(file)
   const atlas = mesh ? characterMap(mesh) : null
-  if (!face || !mesh || !atlas?.image) return Promise.resolve(null)
+  if ((!face && !look.marks) || !mesh || !atlas?.image) return Promise.resolve(null)
   const key = keyOf(look)
   let made = atlases.get(key)
   if (!made) {
     made = (async () => {
+      const image = atlas.image as CanvasImageSource & { width: number; height: number }
       // the face basis comes in with the atlas, so the face's shape is fitted (shape.ts) when the hero is dressed in it
-      const [meta, photo] = await Promise.all([faceMeta(look.build), photoPixels(face.url), faceBasisFile()])
-      if (!meta || !photo) return null
-      // the landmarks were found on the image as uploaded; scale them if the stored file came back another size
-      const sx = photo.width / face.width
-      const sy = photo.height / face.height
-      const points: Pt[] = []
-      for (let i = 0; i < face.points.length; i += 2) points.push([face.points[i] * sx, face.points[i + 1] * sy])
-      const { patch } = buildFacePatch(photo, points, meta, 512)
-      const canvas = compositeFace(mesh.geometry, atlas.image as CanvasImageSource & { width: number; height: number }, meta.frame, toCanvas(patch), look.colors.skin)
+      const [meta, photo] = await Promise.all([faceMeta(look.build), face ? photoPixels(face.url) : undefined, face ? faceBasisFile() : undefined])
+      if (!meta || (face && !photo)) return null
+      let canvas: Surface
+      if (face && photo) {
+        // the landmarks were found on the image as uploaded; scale them if the stored file came back another size
+        const sx = photo.width / face.width
+        const sy = photo.height / face.height
+        const points: Pt[] = []
+        for (let i = 0; i < face.points.length; i += 2) points.push([face.points[i] * sx, face.points[i + 1] * sy])
+        const { patch } = buildFacePatch(photo, points, meta, 512)
+        canvas = compositeFace(mesh.geometry, image, meta.frame, toCanvas(patch), look.colors.skin)
+      } else {
+        // marks alone go on a plain copy: without a photo the skin is still tinted per vertex, so nothing is baked
+        canvas = surface(image.width, image.height)
+        ;(canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(image, 0, 0)
+      }
+      if (look.marks) paintMarks(canvas, mesh.geometry, meta, look.marks)
       const texture = new THREE.CanvasTexture(canvas as HTMLCanvasElement)
       texture.flipY = false
       texture.colorSpace = THREE.SRGBColorSpace
@@ -108,7 +120,7 @@ export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Textur
  * undefined while it is being made, with `onReady` called once it is.
  */
 export function heroAtlasNow(file: Gltf, look: CharacterLook, onReady: () => void): THREE.Texture | null | undefined {
-  if (!look.face) return null
+  if (!look.face && !look.marks) return null
   const key = keyOf(look)
   if (ready.has(key)) return ready.get(key)!
   void heroAtlas(file, look).then(onReady)

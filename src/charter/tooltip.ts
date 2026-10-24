@@ -48,6 +48,8 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
       return `+${num(effect.bonusPct * factor)}% damage to targets under ${num(effect.thresholdPct)}% health`
     case 'resize':
       return `Becomes ${SIZES[effect.sizeClass].label} for ${num(effect.duration)} s`
+    case 'form':
+      return `Transforms for ${num(effect.duration)} s, keeping its size`
     case 'control':
       return `${CONTROL_LINE[effect.type]} ${num(effect.duration)} s${CONTROL_NOTE[effect.type] ?? ''}`
     case 'knockup':

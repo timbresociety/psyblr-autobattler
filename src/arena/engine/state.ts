@@ -83,9 +83,10 @@ export interface HeroState {
   cooldowns: Record<BuildSlot, number>
   nextAttackAt: number
   chosenSize: SizeClass
-  /** The current class, which a transformation can change until `resizeUntil` (KTD14). */
+  /** The current class, which a transformation can change until `formUntil` (KTD14). */
   size: SizeClass
-  resizeUntil: number
+  /** The tick a transformation ends, whether it changed the hero's size or kept it; 0 when untransformed. */
+  formUntil: number
   /** An engine-computed displacement in progress (KTD3): metres per tick until `until`. */
   /** `grounded`: the hero was on the ground when hit, so it lands again when the knockback ends. */
   knockback?: { step: Vec3; until: number; grounded?: boolean }
@@ -222,7 +223,7 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
   return {
     id, team, alive: true, position: { ...position }, airborne: position.y > 0, yaw: team === 0 ? 0 : Math.PI, pitch: 0,
     hp: setup.sheet.maxHealth, maxHp: setup.sheet.maxHealth, shield: 0, shieldUntil: 0, stunnedUntil: 0, invulnerableUntil: 0,
-    slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, resizeUntil: 0,
+    slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, formUntil: 0,
     cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }

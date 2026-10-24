@@ -52,6 +52,7 @@ export function familyOf(effect: Effect): Family {
     case 'turret':
       return 'construct'
     case 'resize':
+    case 'form':
       return 'transform'
     case 'mobility':
       return 'mobility'

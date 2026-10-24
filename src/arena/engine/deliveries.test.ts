@@ -3,7 +3,7 @@ import { BUILD_SLOTS } from '../../charter/build.js'
 import { GEOMETRY_DEFAULTS } from '../../charter/geometry.js'
 import { SIZES, type SizeClass } from '../../charter/sizes.js'
 import { CATALOG } from '../../charter/templates/catalog.js'
-import { ai, at, phys, push, resize, active, ultimate } from '../../charter/templates/dsl.js'
+import { ai, at, form, phys, push, resize, active, ultimate } from '../../charter/templates/dsl.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE, ticks } from './calibration.js'
@@ -131,10 +131,24 @@ describe('3D deliveries (U4)', () => {
     a.fire('ultimate')
     expect(capsule(a.m.heroes[0]).radius).toBeCloseTo(ENGINE.capsule.radius + SIZES.colossal.hitRadius)
     expect(capsule(a.m.heroes[0]).radius).toBeGreaterThan(before)
-    expect(a.events).toContainEqual({ type: 'resize', hero: 0, phase: 'start', size: 'colossal' })
+    expect(a.events).toContainEqual({ type: 'form', hero: 0, phase: 'start', size: 'colossal' })
     a.run(2 * ENGINE.tickHz + 1)
     expect(capsule(a.m.heroes[0]).radius).toBeCloseTo(before)
-    expect(a.events).toContainEqual({ type: 'resize', hero: 0, phase: 'end', size: 'medium' })
+    expect(a.events).toContainEqual({ type: 'form', hero: 0, phase: 'end', size: 'medium' })
+  })
+
+  it("a same-size form begins and ends at the hero's own class, and never touches its capsule", () => {
+    const a = arena(ultimate({ ...base, id: 'u', delivery: at.self(), effects: [form(2), phys(1)] }), [{ z: 30 }])
+    a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, ultimate: a.setups[0].kit.active1 } }
+    const before = capsule(a.m.heroes[0])
+    a.fire('ultimate')
+    expect(a.m.heroes[0].formUntil).toBeGreaterThan(0)
+    expect(capsule(a.m.heroes[0])).toEqual(before)
+    expect(a.events).toContainEqual({ type: 'form', hero: 0, phase: 'start', size: 'medium' })
+    a.run(2 * ENGINE.tickHz + 1)
+    expect(a.m.heroes[0].formUntil).toBe(0)
+    expect(capsule(a.m.heroes[0])).toEqual(before)
+    expect(a.events).toContainEqual({ type: 'form', hero: 0, phase: 'end', size: 'medium' })
   })
 
   it('a 6 m knockback moves the target 6 m in exactly its ticks, lands it, and a wall stops it', () => {

@@ -360,7 +360,7 @@ function drawHeroes(
     const at = { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
     const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
     const view = views[i]
-    view.setSize?.(h.size)
+    view.setForm?.(h.formUntil > 0, h.size)
     // under load, heroes far from the camera animate every other frame
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
     const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)

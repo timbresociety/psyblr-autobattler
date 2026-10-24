@@ -405,7 +405,7 @@ export function namedSkills(prompt: string): Partial<Record<BuildSlot, Named>> {
 
 const VERB: Partial<Record<Effect['kind'], string>> = {
   damage: 'hits', heal: 'heals', shield: 'shields', stun: 'stuns', slow: 'slows', displace: 'knocks back', mobility: 'moves', buff: 'powers up',
-  execute: 'finishes the wounded', resize: 'changes size', control: 'locks down', knockup: 'knocks up', pull: 'pulls in', debuff: 'weakens',
+  execute: 'finishes the wounded', resize: 'changes size', form: 'transforms', control: 'locks down', knockup: 'knocks up', pull: 'pulls in', debuff: 'weakens',
   state: 'protects', refresh: 'resets cooldowns', field: 'leaves a zone', wall: 'raises a wall', trap: 'sets a trap', turret: 'builds a turret',
 }
 const WHERE: Partial<Record<Template['delivery']['kind'], string>> = { melee: 'up close', projectile: 'at range', beam: 'with a beam', cone: 'in a cone', zone: 'in an area', aura: 'around it', dash: 'on the move', blink: 'on the move', leap: 'on the move', grapple: 'on the move' }

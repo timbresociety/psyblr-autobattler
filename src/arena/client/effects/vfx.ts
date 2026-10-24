@@ -751,7 +751,7 @@ export function rockGeometry(): THREE.BufferGeometry {
  */
 export type RibbonPath = ((i: number, n: number, age: number, out: THREE.Vector3) => void) & { points?: number }
 
-interface Ribbon {
+export interface Ribbon {
   path: RibbonPath
   color: THREE.Color
   width: number
@@ -761,8 +761,13 @@ interface Ribbon {
   /** Thin to nothing at the far end, like a streak. */
   taper: boolean
   flicker: boolean
+  /** Full strength until its last moment, instead of fading over its whole life (tails that last a form). */
+  steady: boolean
   live: boolean
 }
+
+/** How long a steady ribbon takes to fade out at the end of its life. */
+const STEADY_FADE = 0.3
 
 /**
  * Camera-facing ribbons along paths that move: lightning arcs struck again many times a second, spirals turning
@@ -784,6 +789,7 @@ export class RibbonPool {
   constructor(
     private readonly capacity: number,
     private readonly points = 64,
+    blending: THREE.Blending = THREE.AdditiveBlending,
   ) {
     const verts = capacity * points * 2
     this.positions = new Float32Array(verts * 3)
@@ -797,17 +803,23 @@ export class RibbonPool {
     this.geo.setIndex(index)
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage))
     this.geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 4).setUsage(THREE.DynamicDrawUsage))
-    this.mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }))
+    this.mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending, depthWrite: false, side: THREE.DoubleSide }))
     this.mesh.frustumCulled = false
     this.mesh.renderOrder = 3
   }
 
-  spawn(path: RibbonPath, color: THREE.Color, width: number, life: number, now: number, options: { taper?: boolean; flicker?: boolean } = {}) {
+  spawn(path: RibbonPath, color: THREE.Color, width: number, life: number, now: number, options: { taper?: boolean; flicker?: boolean; steady?: boolean } = {}): Ribbon {
     const points = Math.min(this.points, Math.max(2, path.points ?? this.points))
-    const ribbon: Ribbon = { path, color: color.clone(), width, born: now, life, points, taper: !!options.taper, flicker: !!options.flicker, live: true }
+    const ribbon: Ribbon = { path, color: color.clone(), width, born: now, life, points, taper: !!options.taper, flicker: !!options.flicker, steady: !!options.steady, live: true }
     if (this.ribbons.length < this.capacity) this.ribbons.push(ribbon)
     else this.ribbons[this.next] = ribbon
     this.next = (this.next + 1) % this.capacity
+    return ribbon
+  }
+
+  /** End a ribbon early: a steady one fades out over its last moment. Harmless if its slot was already given away. */
+  end(ribbon: Ribbon, now: number) {
+    ribbon.life = Math.min(ribbon.life, now - ribbon.born + STEADY_FADE)
   }
 
   live() {
@@ -829,7 +841,7 @@ export class RibbonPool {
         continue
       }
       const m = ribbon.points
-      const fade = (1 - age / ribbon.life) * (ribbon.flicker ? 0.55 + 0.45 * Math.sin(age * 90 + r) ** 2 : 1)
+      const fade = (ribbon.steady ? Math.min(1, (ribbon.life - age) / STEADY_FADE) : 1 - age / ribbon.life) * (ribbon.flicker ? 0.55 + 0.45 * Math.sin(age * 90 + r) ** 2 : 1)
       const { r: cr, g: cg, b: cb } = ribbon.color
       for (let i = 0; i < n; i++) {
         const v = (base + i * 2) * 3

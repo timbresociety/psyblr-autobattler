@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { CHARGES, ELEMENTS, FAMILY_OF, IMPACTS, MOTIFS, TRAILS, elementLook, formsFor, hydrateSkillLook, type SkillLook } from '../../charter/skill-look.js'
+import { CHARGES, ELEMENTS, ELEMENT_FORM, FAMILY_OF, IMPACTS, MOTIFS, TRAILS, elementLook, formsFor, hydrateSkillLook, type SkillLook } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { Delivery } from '../../charter/types.js'
 import { baseSize, layerSize } from '../client/effects/sizing.js'
 import { composeRecipe } from './defaults.js'
-import { lookFor, lookFromWords, templateWords } from './looks.js'
+import { formLookOf, lookFor, lookFromWords, templateWords } from './looks.js'
 import { validateRecipe } from './validate.js'
 
 const KINDS: Delivery['kind'][] = ['melee', 'projectile', 'beam', 'cone', 'zone', 'self', 'aura', 'dash', 'blink', 'leap', 'grapple']
@@ -97,5 +97,38 @@ describe('skill looks (R33)', () => {
     expect(l).toEqual({ element: 'fire', palette: elementLook('fire').palette, pose: 'palms', charge: 'sky', trail: 'motif', motif: 'coin' })
     const kame = lookFor('Kamehameha', 'beam')!
     expect(hydrateSkillLook(JSON.parse(JSON.stringify(kame)))).toEqual(kame)
+  })
+})
+
+describe('transformation looks (R23)', () => {
+  it('reads the famous transformations whole: how each arrives, what it wears and what it leaves behind', () => {
+    expect(lookFor('Super Saiyan')!.transformation).toEqual({ entry: 'burst', aura: 'flame', body: { hair: 'hair_spiky', hairColor: '#ffd84a', eyes: '#2fd6c8' } })
+    expect(lookFor('Nine-Tails Chakra Mode')!.transformation).toMatchObject({ entry: 'swirl', aura: 'chakra', avatar: 'tails', body: { eyes: '#e0301b', marks: 'whiskers' } })
+    expect(lookFor('Ant-Man')!.transformation).toEqual({ entry: 'implode', growth: 'snap', trail: 'streak' })
+    expect(lookFor('Titan')!.transformation).toEqual({ entry: 'strike', aura: 'steam', growth: 'swell' })
+    expect(lookFor('Susanoo')!.transformation).toMatchObject({ avatar: 'spirit' })
+    // Giant-Man grows: he is not Ant-Man
+    expect(lookFor('Giant Man')?.transformation).toBeUndefined()
+  })
+
+  it('stores a transformation look field by field, dropping anything it does not know', () => {
+    for (const name of ['Super Saiyan', 'Nine-Tails', 'Ant-Man', 'Titan', 'Susanoo']) {
+      const look = lookFor(name)!
+      expect(hydrateSkillLook(JSON.parse(JSON.stringify(look))), name).toEqual(look)
+    }
+    const wear = [{ id: 'kimono', colors: ['#112233', '#445566', '#778899', '#aabbcc', '#ddeeff'] }, { id: 'long_coat' }, { id: 'nope' }, { id: 'hair_spiky' }]
+    const look = hydrateSkillLook({ element: 'fire', transformation: { entry: 'explode', aura: 'flame', growth: 'swell', avatar: 'dragon', body: { hair: 'beanie', hairColor: 'GOLD', eyes: '#FF0000', marks: 'tattoos', wear } } })!
+    // five channels is one too many, a second full-body item gives way to the first, and hair is not wear
+    expect(look.transformation).toEqual({ aura: 'flame', growth: 'swell', body: { eyes: '#ff0000', wear: [{ id: 'kimono' }] } })
+    expect(hydrateSkillLook({ element: 'fire', transformation: { entry: 'explode' } })!.transformation).toBeUndefined()
+  })
+
+  it("transforms a look's own way when it has one, else its element's, swelling unless told to snap", () => {
+    expect(formLookOf(undefined)).toEqual({ growth: 'swell', ...ELEMENT_FORM.energy })
+    expect(formLookOf(lookFor('Frost shards', 'cone'))).toEqual({ growth: 'swell', entry: 'burst', aura: 'steam' })
+    // Ant-Man sets his own, so he gets no aura from his element; a form with only an aura arrives its element's way
+    expect(formLookOf(lookFor('Ant-Man'))).toEqual({ entry: 'implode', growth: 'snap', trail: 'streak' })
+    expect(formLookOf({ ...elementLook('lightning'), transformation: { aura: 'flame' } })).toEqual({ entry: 'strike', aura: 'flame', growth: 'swell' })
+    expect(formLookOf(lookFor('Super Saiyan'))).toMatchObject({ entry: 'burst', aura: 'flame', growth: 'swell' })
   })
 })

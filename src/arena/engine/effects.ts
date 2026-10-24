@@ -257,9 +257,10 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
       break
     }
     case 'resize':
-      setSize(ctx, caster, e.sizeClass)
-      caster.resizeUntil = now + ticks(e.duration)
-      ctx.events.push({ type: 'resize', hero: caster.id, phase: 'start', size: e.sizeClass })
+    case 'form':
+      if (e.kind === 'resize') setSize(ctx, caster, e.sizeClass)
+      caster.formUntil = now + ticks(e.duration)
+      ctx.events.push({ type: 'form', hero: caster.id, phase: 'start', size: caster.size })
       break
     case 'displace':
     case 'pull':
@@ -374,9 +375,10 @@ export function tickStatuses(ctx: Ctx) {
     hero.debuffs = hero.debuffs.filter((d) => d.until > now)
     if (hero.cc.fear <= now) hero.fearFrom = -1
     if (hero.cc.taunt <= now) hero.tauntBy = -1
-    if (hero.size !== hero.chosenSize && hero.resizeUntil <= now) {
-      setSize(ctx, hero, hero.chosenSize)
-      ctx.events.push({ type: 'resize', hero: hero.id, phase: 'end', size: hero.chosenSize })
+    if (hero.formUntil > 0 && hero.formUntil <= now) {
+      if (hero.size !== hero.chosenSize) setSize(ctx, hero, hero.chosenSize)
+      hero.formUntil = 0
+      ctx.events.push({ type: 'form', hero: hero.id, phase: 'end', size: hero.size })
     }
     if (hero.shieldUntil <= now) hero.shield = 0
     for (const dot of hero.dots) dealDamage(ctx, match.heroes[dot.source], hero, dot.perSecond * DT, dot.type, 'dot')

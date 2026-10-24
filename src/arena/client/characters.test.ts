@@ -3,7 +3,8 @@ import { remixBuild } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { DEMO_HEROES, demoBuild } from '../demo/roster.js'
-import { BODIES, bodyFor, characterLook } from './character-look.js'
+import { BODIES, bodyFor, characterLook, formCharacterLook } from './character-look.js'
+import { lookFor } from '../recipes/looks.js'
 import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
 import { castClip as stageClip } from '../../ui/common/hero-look.js'
 import { castClip } from './characters.js'
@@ -99,5 +100,35 @@ describe('which clip a cast plays', () => {
     expect(castClip(named('Mass Retaliation'), 'ultimate')).toEqual({ clip: 'ultimate', from: 0 })
     // the Forge preview plays the same pose, wind-up and all
     expect(stageClip(getTemplate(build.slots.active1.templateId), 'active1', { pose: 'clap' })).toBe('cast_clap')
+  })
+})
+
+describe('the body a form changes (R23)', () => {
+  const base = characterLook(defaultBuild('fighter', 'Kit'), 0.1)
+  const bodyOf = (move: string) => lookFor(move)!.transformation!.body
+
+  it('gives a Super Saiyan spiky gold hair and teal eyes, and leaves the outfit alone', () => {
+    const ssj = formCharacterLook(base, bodyOf('Super Saiyan'))
+    expect(ssj.outfit.hair).toMatchObject({ id: 'hair_spiky', colors: ['#ffd84a'] })
+    expect({ ...ids(ssj.outfit), hair: undefined }).toEqual({ ...ids(base.outfit), hair: undefined })
+    expect(ssj.colors.eye.g).toBeGreaterThan(ssj.colors.eye.r * 2)
+    expect(ssj.colors.eye.b).toBeGreaterThan(ssj.colors.eye.r * 2)
+    expect(ssj.marks).toBeUndefined()
+  })
+
+  it('wraps a Nine-Tails form in a cloak over the whole body, with red eyes and whisker marks, keeping hair and cape', () => {
+    const fox = formCharacterLook(base, bodyOf('Nine-Tails'))
+    expect(fox.outfit.full).toMatchObject({ id: 'long_coat', colors: ['#ff7400', '#3a1a08'], finishes: ['glow', 'cotton'] })
+    expect(fox.outfit.upper).toBeUndefined()
+    expect(fox.outfit.lower).toBeUndefined()
+    expect(fox.outfit.back).toEqual(base.outfit.back)
+    expect(fox.outfit.hair).toEqual(base.outfit.hair)
+    expect(fox.colors.eye.r).toBeGreaterThan(fox.colors.eye.g * 2)
+    expect(fox.marks).toBe('whiskers')
+  })
+
+  it("recolours the hero's own hair when a form names only a colour, and changes nothing without a body", () => {
+    expect(formCharacterLook(base, { hairColor: '#ffffff' }).outfit.hair).toEqual({ ...base.outfit.hair, colors: ['#ffffff'] })
+    expect(formCharacterLook(base, undefined)).toBe(base)
   })
 })

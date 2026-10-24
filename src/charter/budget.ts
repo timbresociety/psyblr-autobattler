@@ -111,6 +111,9 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
     case 'trap':
       // priced in scoreTemplate: they change what the template's other effects are worth
       return 0
+    case 'form':
+      // a same-size form only says the power-up is a transformation, so the form look plays: it changes no number
+      return 0
   }
 }
 
@@ -200,6 +203,9 @@ export function validateTemplate(template: Template): Validation {
   if (template.override && !template.override.reason?.trim()) fail('override.reason')
   if (template.override && !(template.override.budget > 0)) fail('override.budget')
   for (const field of missingGeometry(template.delivery)) fail(`delivery.${field}`)
+  // a transformation is something the caster does to itself, once per skill
+  const shapes = (template.effects ?? []).filter((e) => e.kind === 'resize' || e.kind === 'form')
+  if (shapes.length > 1 || (shapes.length && template.delivery?.kind !== 'self')) fail('effects.transformation')
   for (const effect of template.effects ?? []) {
     for (const [key, value] of Object.entries(effect)) {
       if (typeof value === 'number' && (!Number.isFinite(value) || value < 0)) fail(`effects.${effect.kind}.${key}`)
