@@ -1,9 +1,9 @@
-import { matchTemplate, nearestAlternatives, tokenize } from './match'
-import { isSizeClass, type SizeClass } from './sizes'
-import { ROLE_IDS, getRole, isRoleId } from './roles'
-import { ATTRIBUTES, ATTRIBUTE_GAINS, POOL_SIZE, deriveSheet, spentPoints, validateSpread } from './stats'
-import { currentTemplate, poolFor } from './templates/catalog'
-import type { Attribute, BuildSlot, LimitHit, RoleId, SecondaryStat, SlotKind, Spread, Template } from './types'
+import { matchTemplate, nearestAlternatives, tokenize } from './match.js'
+import { isSizeClass, type SizeClass } from './sizes.js'
+import { ROLE_IDS, getRole, isRoleId } from './roles.js'
+import { ATTRIBUTES, ATTRIBUTE_GAINS, POOL_SIZE, deriveSheet, spentPoints, validateSpread } from './stats.js'
+import { currentTemplate, poolFor } from './templates/catalog.js'
+import type { Attribute, BuildSlot, LimitHit, RoleId, SecondaryStat, SlotKind, Spread, Template } from './types.js'
 
 /**
  * Build operations (U5). Every edit goes through these functions and returns a new valid Build or a typed
@@ -303,6 +303,17 @@ export function changeRole(build: Build, roleId: RoleId): OpResult {
   const slots = {} as Record<BuildSlot, SkillSpec>
   for (const slot of BUILD_SLOTS) slots[slot] = { ...build.slots[slot], templateId: picks[slot].id, swapped: false, retuneSteps: 0 }
   return ok({ ...build, roleId, slots, spread: { strength: 0, agility: 0, intellect: 0 } })
+}
+
+/**
+ * Choose a body size (R14, KTD8): bigger reaches further and is easier to hit, smaller the reverse, and the balance gate
+ * prices the choice. Only the five choosable classes are allowed; colossal is reached by transforming.
+ */
+export function setSize(build: Build, sizeClass: SizeClass): OpResult {
+  if (!isSizeClass(sizeClass)) return reject(build, [invalidField('sizeClass')])
+  if (sizeClass === (build.sizeClass ?? 'medium')) return ok(build)
+  const { sizeClass: _old, ...rest } = build
+  return ok(sizeClass === 'medium' ? rest : { ...rest, sizeClass })
 }
 
 /** The spread the engine proposes for a role. */

@@ -6,7 +6,7 @@ import { devApi } from './scripts/dev-api'
 export default defineConfig({
   plugins: [react(), devApi()],
   test: {
-    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**'],
+    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**', '.vercel/**', '.dev-store/**'],
     setupFiles: ['./vitest.setup.ts'],
     passWithNoTests: true,
     // balance tests run thousands of simulated fights
@@ -15,5 +15,7 @@ export default defineConfig({
   server: {
     port: 3110,
     host: true,
+    // the dev API's database and uploads (scripts/dev-api.ts) change constantly and are never source
+    watch: { ignored: ['**/.dev-store/**'] },
   },
 })

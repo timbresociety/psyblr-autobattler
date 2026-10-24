@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { effectScale, effectWindow, pickAnimation, viewerSource } from './viewer'
+import { effectScale, effectWindow, pickAnimation, viewerSource } from './viewer.js'
 
 describe('hero viewer logic (U12)', () => {
   it('picks the clip by its file, and falls back to the preset name', () => {

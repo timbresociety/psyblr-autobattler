@@ -1,4 +1,4 @@
-import type { BuildSlot, LimitHit, SecondaryStat } from '../../charter/types'
+import type { BuildSlot, LimitHit, SecondaryStat } from '../../charter/types.js'
 
 export const STAT_LABEL: Record<SecondaryStat, string> = {
   maxHealth: 'Health',

@@ -13,15 +13,15 @@ import {
   type Build,
   type ProposalInput,
   type StatGoal,
-} from '../charter/build'
-import { ROLES, ROLE_IDS, isRoleId } from '../charter/roles'
-import { ATTRIBUTES, SECONDARY_STATS } from '../charter/stats'
-import { CATALOG, poolFor } from '../charter/templates/catalog'
-import { matchTemplate } from '../charter/match'
-import { isOwnPhotoUrl } from './photo-url'
-import type { BuildSlot, LimitHit, SecondaryStat, Spread } from '../charter/types'
-import { RateLimiter } from './rate-limit'
-import { parseStatWishes } from '../charter/chat'
+} from '../charter/build.js'
+import { ROLES, ROLE_IDS, isRoleId } from '../charter/roles.js'
+import { ATTRIBUTES, SECONDARY_STATS } from '../charter/stats.js'
+import { CATALOG, poolFor } from '../charter/templates/catalog.js'
+import { matchTemplate } from '../charter/match.js'
+import { isOwnPhotoUrl } from './photo-url.js'
+import type { BuildSlot, LimitHit, SecondaryStat, Spread } from '../charter/types.js'
+import { RateLimiter } from './rate-limit.js'
+import { parseStatWishes } from '../charter/chat.js'
 
 /**
  * Claude proposes, the catalogue disposes (KTD5). Claude may only return a role ID, template IDs and a
@@ -106,6 +106,7 @@ ${ROLES.map((r) => `- ${r.id}: ${r.description}`).join('\n')}
 
 Then pick one template ID per slot from that role's options (slot kinds: basic, active, passive, ultimate, movement; active1 and active2 are two different active templates). Choose the template whose mechanic best matches the player's description of that skill; when a slot has no description, pick what suits the hero.
 Then split exactly 30 points across strength, agility and intellect to suit the hero.
+Finally, name each slot the player left unnamed: two or three evocative words that fit the hero (at most 40 characters). Never put numbers in a name.
 
 Catalogue (id | slot | roles | name: tags):
 ${CATALOG_TEXT}`
@@ -130,6 +131,11 @@ const proposalSchema = (): Record<string, unknown> => ({
       required: [...ATTRIBUTES],
       properties: Object.fromEntries(ATTRIBUTES.map((a) => [a, { type: 'integer' }])),
     },
+    names: {
+      type: 'object',
+      additionalProperties: false,
+      properties: Object.fromEntries(BUILD_SLOTS.map((slot) => [slot, { type: 'string' }])),
+    },
   },
 })
 
@@ -152,15 +158,19 @@ export interface ProposeResult {
 }
 
 /** Read only the fields the schema allows; anything else in the model's answer is ignored (R4). */
-function readProposal(raw: unknown): { roleId?: string; templates: Partial<Record<BuildSlot, string>>; spread?: Spread } {
+function readProposal(raw: unknown): { roleId?: string; templates: Partial<Record<BuildSlot, string>>; spread?: Spread; names: Partial<Record<BuildSlot, string>> } {
   const value = (raw ?? {}) as Record<string, unknown>
   const templates = (value.templates ?? {}) as Record<string, unknown>
   const spreadRaw = (value.spread ?? {}) as Record<string, unknown>
+  const namesRaw = (value.names ?? {}) as Record<string, unknown>
   const spread = ATTRIBUTES.every((a) => Number.isInteger(spreadRaw[a])) ? (Object.fromEntries(ATTRIBUTES.map((a) => [a, spreadRaw[a]])) as Spread) : undefined
+  // a name is text the player sees: trimmed, capped, and never carrying a number that could read as a stat
+  const name = (v: unknown) => (typeof v === 'string' ? v.replace(/\d+/g, '').replace(/\s+/g, ' ').trim().slice(0, TEXT_LIMITS.name) : '')
   return {
     roleId: typeof value.roleId === 'string' ? value.roleId : undefined,
     templates: Object.fromEntries(BUILD_SLOTS.filter((s) => typeof templates[s] === 'string').map((s) => [s, templates[s] as string])),
     spread,
+    names: Object.fromEntries(BUILD_SLOTS.filter((s) => name(namesRaw[s])).map((s) => [s, name(namesRaw[s])])),
   }
 }
 
@@ -189,6 +199,8 @@ export async function proposeHero(input: HeroRequest, deps: ProposeDeps = {}): P
     const inPool = id && poolFor(base.roleId, SLOT_KIND[slot]).some((t) => t.id === id)
     const clash = slot === 'active2' && id === slots.active1.templateId
     if (inPool && !clash) slots[slot] = { ...slots[slot], templateId: id }
+    // the model names only what the player left unnamed
+    if (!slots[slot].name.trim() && answer.names[slot]) slots[slot] = { ...slots[slot], name: answer.names[slot]! }
   }
   // the model may give active1 the template the matcher put in active2; the two actives must differ (R1)
   if (slots.active1.templateId === slots.active2.templateId) {

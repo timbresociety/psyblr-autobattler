@@ -1,0 +1,35 @@
+/* The Loadout: your heroes as cards, then the global loadout to search and add from. */
+
+.loadout { display: grid; gap: 16px; max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+.loadout-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.loadout-head .lead { margin-top: 6px; }
+.loadout .panel { display: grid; gap: 12px; padding: 16px; }
+.loadout .section-title .count { margin-left: 6px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+.loadout .empty { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.card { display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; gap: 10px 12px; padding: 12px; border-radius: var(--r); background: rgba(20, 13, 34, 0.7); box-shadow: inset 0 0 0 1px var(--glass-line), inset 3px 0 0 rgba(var(--role-rgb), 0.85); }
+.card .portrait { width: 64px; grid-row: span 1; }
+.card-who { display: grid; gap: 5px; align-content: start; min-width: 0; }
+.card-who strong, .result-who strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 19px/1.05 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
+.card-meta { display: flex; align-items: center; gap: 8px; color: var(--ink-dim); font-size: 12px; }
+.gate-chip { justify-self: start; padding: 2px 8px; border-radius: 999px; font: 600 11px/1.4 var(--font); background: rgba(255, 236, 214, 0.08); color: var(--ink-dim); }
+.gate-chip.ready { background: rgba(134, 240, 168, 0.14); color: #b9f7cb; }
+.gate-chip.blocked { background: rgba(255, 110, 110, 0.14); color: #ffc2c2; }
+.card-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.confirm-text { margin-right: auto; font-size: 13px; color: var(--ink); }
+.btn.danger::before { background: linear-gradient(180deg, rgba(150, 40, 48, 0.95), rgba(96, 22, 30, 0.95)); box-shadow: inset 0 0 0 1px rgba(255, 140, 140, 0.55); }
+
+.global-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.global-head .search-field { flex: 1 1 280px; max-width: 420px; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; }
+.result { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r); background: rgba(20, 13, 34, 0.55); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.result .portrait { width: 48px; }
+.result-who { display: grid; gap: 4px; min-width: 0; }
+.result-who strong { font-size: 16px; }
+.owned { font: 600 12px/1 var(--font); color: #b9f7cb; }
+
+@media (max-width: 560px) {
+  .loadout { padding: 12px 16px 32px; }
+  .cards, .results { grid-template-columns: 1fr; }
+}

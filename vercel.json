@@ -7,7 +7,7 @@
   "functions": {
     "api/**/*.ts": {
       "includeFiles": "db/schema.sql",
-      "maxDuration": 60
+      "maxDuration": 300
     }
   }
 }

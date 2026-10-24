@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { BASE_BUILDS, characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look'
-import type { Build } from '../../../charter/build'
-import type { RoleId } from '../../../charter/types'
-import type { HeroPackage } from '../../../forge/package'
-import { DEMO_HEROES, demoBuild, type DemoFaction } from '../../../arena/demo/roster'
-import { benchHero } from '../../../arena/demo/procedural-hero'
-import { liveDeps } from '../../api'
+import { BASE_BUILDS, characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
+import type { Build } from '../../../charter/build.js'
+import type { RoleId } from '../../../charter/types.js'
+import type { HeroPackage } from '../../../forge/package.js'
+import { DEMO_HEROES, demoBuild, type DemoFaction } from '../../../arena/demo/roster.js'
+import { benchHero } from '../../../arena/demo/procedural-hero.js'
+import { liveDeps } from '../../api.js'
 
 /** One hero the streamer can place: a build, plus its package when it was forged. */
 export interface LoadoutEntry {
@@ -41,7 +41,7 @@ async function packageOf(heroId: string): Promise<HeroPackage | undefined> {
 
 export const liveLoadout: LoadoutDeps = {
   search: async (q) => {
-    // the player's own heroes: everything this device saved in the Creator or forged (a forged one also has a package)
+    // the player's own heroes: everything this device made in the Forge or added in the Loadout (a staged-forge one also has a package)
     if (!q.trim()) {
       const builds = await liveDeps.listBuilds()
       return Promise.all(

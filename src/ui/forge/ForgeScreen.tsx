@@ -1,361 +1,472 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { stagePrice } from '../../forge/pricing'
-import type { RoleId } from '../../charter/types'
-import type { HeroResult } from '../api'
-import { HeroPortrait } from '../common/portrait'
-import { RoleBadge } from '../common/RoleIcon'
-import { ChatColumn } from './ChatColumn'
-import { CreditChip, Credits } from './Credits'
-import { ApiError, liveForgeDeps, type ForgeAction, type ForgeDeps, type ForgeView, type SessionView } from './forge-api'
-import { SignIn } from './SignIn'
-import { StagePanel, StageTrack } from './StagePanel'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  BUILD_SLOTS,
+  MAX_PHOTOS,
+  changeRole,
+  editSkillText,
+  proposedSpread,
+  allocate,
+  setSize,
+  setStatTarget,
+  swapTemplate,
+  type Build,
+  type OpResult,
+  type SkillText,
+} from '../../charter/build'
+import { locomotion } from '../../charter/locomotion'
+import { getRole } from '../../charter/roles'
+import { SIZES, type SizeClass } from '../../charter/sizes'
+import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
+import { getTemplate } from '../../charter/templates/catalog'
+import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
+import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
+import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps, type HeroResult } from '../api'
+import { prefersReducedMotion } from '../arena/hud/format'
+import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
+import { PREP_MESSAGES } from '../common/image-prep'
+import { SkillIcon } from '../common/SkillIcon'
+import { ChatPanel, type ChatMessage } from './ChatPanel'
+import { GateStatus } from './GateStatus'
+import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
+import { LoadoutSearch } from './LoadoutSearch'
+import { RoleSwitcher } from './RoleSwitcher'
+import { SizePicker } from './SizePicker'
+import { SkillCard } from './SkillCard'
+import { StatSplit } from './StatSplit'
+import { describeLimit } from './labels'
 import './forge.css'
 
-/** The suggested opening prompt (R7): shows the player how much the director can run with. */
-export const EXAMPLE_PROMPT = 'Jensen Huang in a Raiden-like avatar as a GPU god, with skills around CUDA, Circle Jerk, Stonks and other memes'
+// the live 3D preview brings three.js, so it loads after the screen is up
+const HeroStage = lazy(() => import('../common/HeroStage'))
 
-const FORGE_KEY = 'psyblr.forgeId'
-export const POLL_MS = 2_000
-const MAX_REFERENCES = 3
-
-const remember = (id: string | null) => {
-  try {
-    if (id) localStorage.setItem(FORGE_KEY, id)
-    else localStorage.removeItem(FORGE_KEY)
-  } catch {
-    // storage blocked: reload just won't reopen the forge
-  }
-}
-const remembered = () => {
-  try {
-    return localStorage.getItem(FORGE_KEY)
-  } catch {
-    return null
-  }
+/** The plinth: the hero in 3D where WebGL runs, its initials where it does not. */
+function Stage({ build, cue }: { build?: Build; cue?: { clip: StageClip; at: number } }) {
+  const name = build?.heroName ?? ''
+  const label = name || 'your hero'
+  const backdrop = <div className={`hero-stage${build ? ` role-${build.roleId}` : ' is-empty'}`} role="img" aria-label={`3D preview of ${label}`} />
+  if (!webglAvailable()) return backdrop
+  return (
+    <Suspense fallback={backdrop}>
+      <HeroStage look={build ? { heroName: name, roleId: build.roleId } : undefined} hue={heroHue(name)} cue={cue} size={build?.sizeClass ?? 'medium'} label={label} />
+    </Suspense>
+  )
 }
 
-type Mode = 'entry' | 'sign-in' | 'prompt'
+let nextImage = 0
+
+const dragsFiles = (e: { dataTransfer: DataTransfer }) => [...e.dataTransfer.types].includes('Files')
 
 /**
- * Sign-in links land here with ?signin=<token>. The token is single-use, so it is verified once per page load and
- * every mount (StrictMode mounts twice) awaits the same verification before asking for the session.
+ * The Forge (R13): reference images, a name and a prompt go in, a hero comes out, and every part of it can be tweaked by
+ * hand. Chat on the left, the hero on its plinth with its size, stats, kit and balance check. `record` opens a hero
+ * from the Loadout for editing; `initial` starts from a build that isn't saved yet, such as a remix.
  */
-let verifying: Promise<void> | undefined
-function verifyFromUrl(deps: ForgeDeps): Promise<void> {
-  if (!verifying) {
-    const params = new URLSearchParams(window.location.search)
-    const token = params.get('signin')
-    if (token) {
-      params.delete('signin')
-      const search = params.toString().replace(/=(?=&|$)/g, '')
-      window.history.replaceState(window.history.state, '', `${window.location.pathname}${search ? `?${search}` : ''}`)
-    }
-    verifying = token ? deps.verifySignIn(token) : Promise.resolve()
-  }
-  return verifying
-}
-
-const STEPS = [
-  ['Describe it', 'A prompt and up to three reference images.'],
-  ['Confirm the spec', 'The director drafts it; change anything first.'],
-  ['Generate it', 'Sheet, mesh, motion and skills, each one confirmed before it is paid for.'],
-  ['Publish it', 'Set the stat split; the balance check signs it off.'],
-] as const
-
-/** Loadout first; forge new only when nothing fits (R1, R2, KTD11). */
-export function ForgeScreen({ deps = liveForgeDeps }: { deps?: ForgeDeps }) {
-  const [session, setSession] = useState<SessionView>()
-  const [mode, setMode] = useState<Mode>('entry')
-  const [view, setView] = useState<ForgeView>()
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<HeroResult[]>([])
-  const [searched, setSearched] = useState('')
-  const [prompt, setPrompt] = useState(EXAMPLE_PROMPT)
-  const [refs, setRefs] = useState<{ preview: string; url?: string }[]>([])
+export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: ForgeDeps; initial?: Build; record?: BuildRecord }) {
+  const start = record?.build ?? initial
+  const [heroName, setHeroName] = useState(start?.heroName ?? '')
+  const [images, setImages] = useState<RefImage[]>([])
+  const [imageError, setImageError] = useState<string>()
+  const [build, setBuild] = useState<Build | undefined>(start)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  // only the latest request may update the screen (the creator's stale-result guard)
-  const seq = useRef(0)
+  const [offline, setOffline] = useState(false)
+  const [notice, setNotice] = useState<string>()
+  const [checking, setChecking] = useState(false)
+  const [alternatives, setAlternatives] = useState<Template[]>()
+  const [buildId, setBuildId] = useState<string | undefined>(record?.id)
+  const [saving, setSaving] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
+  // bumped on every change the player makes; an async result started before a change is discarded
+  const edits = useRef(0)
+  const changed = () => {
+    edits.current++
+  }
+  const photoUrls = images.flatMap((img) => (img.status === 'ready' && img.url ? [img.url] : []))
+  const search = useCallback((q: string) => deps.search(q), [deps])
+  const say = (text: string) => setMessages((m) => [...m, { from: 'engine', text }])
 
-  const run = useCallback(async (work: () => Promise<ForgeView | void>) => {
-    const mine = ++seq.current
-    setBusy(true)
-    setError('')
-    try {
-      const next = await work()
-      if (mine !== seq.current) return
-      if (next) {
-        setView(next)
-        // a published forge is finished: the next visit opens on the loadout again
-        remember(next.forge.current === 'published' ? null : next.forge.id)
+  // previews are object URLs, released when their image goes or the screen does
+  const previews = useRef(new Set<string>())
+  useEffect(() => {
+    const live = previews.current
+    return () => live.forEach((url) => URL.revokeObjectURL(url))
+  }, [])
+  // how many images are in, read synchronously, so a burst of drops or pastes never passes the cap
+  const count = useRef(0)
+  useEffect(() => {
+    count.current = images.length
+  }, [images])
+
+  const patchImage = (id: string, patch: Partial<RefImage>) => setImages((list) => list.map((img) => (img.id === id ? { ...img, ...patch } : img)))
+  const dropImage = useCallback((id: string) => {
+    setImages((list) => {
+      const gone = list.find((img) => img.id === id)
+      if (gone?.preview) {
+        URL.revokeObjectURL(gone.preview)
+        previews.current.delete(gone.preview)
       }
-    } catch (e) {
-      if (mine !== seq.current) return
-      if (e instanceof ApiError && e.status === 401) setSession({ signedIn: false })
-      if (e instanceof ApiError && e.status === 404) remember(null)
-      setError(e instanceof Error ? e.message : 'something went wrong')
-    } finally {
-      if (mine === seq.current) setBusy(false)
-    }
+      return list.filter((img) => img.id !== id)
+    })
+    count.current = Math.max(0, count.current - 1)
   }, [])
 
-  // finish any sign-in link, then reopen the forge the player left
+  /** Shrink each image in the browser, then upload it; one that can't be used is removed, and the drop zone says why. */
+  const addImages = useCallback(
+    async (files: File[]) => {
+      setImageError(undefined)
+      const taken = files.slice(0, Math.max(0, MAX_PHOTOS - count.current))
+      if (files.length > taken.length) setImageError(`Up to ${MAX_PHOTOS} reference images. Remove one to add another.`)
+      if (!taken.length) return
+      count.current += taken.length
+      const queued = taken.map((file) => ({ file, id: `img${++nextImage}` }))
+      setImages((list) => [...list, ...queued.map(({ file, id }) => ({ id, name: file.name || 'Pasted image', status: 'preparing' as const }))])
+      await Promise.all(
+        queued.map(async ({ file, id }) => {
+          const prepared = await deps.prepareImage(file)
+          if (!prepared.ok) {
+            dropImage(id)
+            setImageError(PREP_MESSAGES[prepared.reason])
+            return
+          }
+          const preview = URL.createObjectURL(prepared.blob)
+          previews.current.add(preview)
+          patchImage(id, { preview, status: 'uploading' })
+          const uploaded = await deps.uploadPhoto(prepared.blob)
+          if (!uploaded.ok) {
+            dropImage(id)
+            setImageError(UPLOAD_MESSAGES[uploaded.reason])
+            return
+          }
+          patchImage(id, { status: 'ready', url: uploaded.url })
+        }),
+      )
+    },
+    [deps, dropImage],
+  )
+
+  // a pasted image lands in the drop zone wherever the page has focus; pasted text stays where it was pasted
   useEffect(() => {
-    let live = true
-    ;(async () => {
-      try {
-        await verifyFromUrl(deps)
-      } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : 'that sign-in link did not work')
+    const onPaste = (e: ClipboardEvent) => {
+      const files = imageFiles(e.clipboardData?.files ?? [])
+      if (!files.length) return
+      e.preventDefault()
+      addImages(files)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [addImages])
+
+  /** A blank slate for the next hero; saved heroes stay in the Loadout. */
+  function newHero() {
+    changed()
+    images.forEach((img) => img.preview && URL.revokeObjectURL(img.preview))
+    count.current = 0
+    setImages([])
+    setImageError(undefined)
+    setBuild(undefined)
+    setBuildId(undefined)
+    setHeroName('')
+    setAlternatives(undefined)
+    setNotice(undefined)
+    setOffline(false)
+    setMessages([])
+  }
+
+  async function addFromLoadout(hero: HeroResult) {
+    if (adding) return
+    setAdding(true)
+    try {
+      const added = await deps.addHero(hero.id)
+      changed()
+      setBuild(added.build)
+      setBuildId(added.id)
+      setHeroName(added.build.heroName)
+      setAlternatives(undefined)
+      setNotice(undefined)
+      say(`Added ${hero.name} to your loadout for free. The look is shared; this build is yours to tune.`)
+    } catch {
+      say(`Couldn't add ${hero.name} right now. Try again in a moment.`)
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  async function save() {
+    if (!build) return
+    setSaving(true)
+    try {
+      if (buildId) {
+        const saved = await deps.saveBuild(buildId, build)
+        setBuild(saved.build)
+      } else {
+        const created = await deps.createHero(build, photoUrls)
+        setBuildId(created.buildId)
       }
-      const s = await deps.session().catch(() => ({ signedIn: false }))
-      if (!live) return
-      setSession(s)
-      const id = remembered()
-      if (s.signedIn && id) run(() => deps.get(id))
-    })()
-    return () => {
-      live = false
+      say('Saved to your loadout. Find it in the Loadout tab, or place it in the Arena.')
+    } catch {
+      say("Couldn't save right now. Your hero stays here; try again in a moment.")
+    } finally {
+      setSaving(false)
     }
-  }, [deps, run])
+  }
 
-  useEffect(() => {
-    const q = query.trim()
-    if (q.length < 2) {
-      setResults([])
-      setSearched('')
-      return
+  const showLimits = (limits: LimitHit[]) => setNotice(limits.length ? [...new Set(limits.map(describeLimit))].join(' ') : undefined)
+
+  const apply = (result: OpResult) => {
+    if (result.ok) {
+      changed()
+      setBuild(result.build)
+      setAlternatives(undefined)
+      showLimits(result.limits)
+    } else showLimits(result.errors)
+    return result
+  }
+
+  async function send(text: string) {
+    setMessages((m) => [...m, { from: 'you', text }])
+    setBusy(true)
+    const started = edits.current
+    const stale = () => edits.current !== started
+    try {
+      if (!build) {
+        // the prompt names the hero when the name is blank, themes the skills it lists and sets a size it asks for
+        const name = heroName.trim() || nameFromPrompt(text)
+        const res = await deps.propose({ heroName: name, description: text, skills: skillsFromPrompt(text), photoUrls })
+        if (stale()) return
+        changed()
+        const size = sizeFromPrompt(text)
+        const sized = size ? setSize({ ...res.build, heroName: name }, size) : undefined
+        setBuild(sized?.ok ? sized.build : { ...res.build, heroName: name })
+        setHeroName(name)
+        setOffline(res.offline)
+        showLimits(res.limits)
+        say(`Forged ${name} as a ${res.build.roleId}${size ? `, ${SIZES[size].label.toLowerCase()} sized` : ''}. Rename and describe each skill, change the size or the stats, or ask me for changes. The engine sets every number.`)
+        return
+      }
+      const res = await deps.chat(build, text)
+      if (stale()) {
+        say('You changed the hero while I was thinking, so I left your edits as they are. Ask again if you still want that change.')
+        return
+      }
+      setOffline(res.offline)
+      if (!res.understood) {
+        say(res.offline ? 'Offline: I can only read simple stat requests right now. Use the controls on the right.' : "I couldn't turn that into a change. Try naming a stat.")
+        return
+      }
+      changed()
+      setBuild(res.build)
+      showLimits(res.limits)
+      say(res.limits.length ? `Done, within the limits: ${[...new Set(res.limits.map(describeLimit))].join(' ')}` : 'Done.')
+    } catch {
+      say('Something went wrong on my side. Your hero is unchanged; try again.')
+    } finally {
+      setBusy(false)
     }
-    let live = true
-    const timer = setTimeout(
-      () =>
-        deps.search(q).then(
-          (r) => live && (setResults(r), setSearched(q)),
-          () => live && (setResults([]), setSearched(q)),
-        ),
-      250,
-    )
-    return () => {
-      live = false
-      clearTimeout(timer)
+  }
+
+  async function ready() {
+    if (!build) return
+    setChecking(true)
+    const started = edits.current
+    try {
+      const outcome = await deps.runGate(build)
+      if (edits.current !== started) {
+        say('The hero changed during the balance check. Press Ready to check the new version.')
+        return
+      }
+      setBuild(outcome.build)
+      setAlternatives(outcome.alternatives)
+    } catch {
+      say("Couldn't run the balance check. Try again.")
+    } finally {
+      setChecking(false)
     }
-  }, [query, deps])
-
-  // while a stage generates, poll; each poll also advances the provider work (KTD1)
-  const generating = view && view.forge.current !== 'published' && view.forge.stages[view.forge.current].status === 'generating'
-  const [pollTick, setPollTick] = useState(0)
-  const forgeId = view?.forge.id
-  useEffect(() => {
-    if (!generating || !forgeId) return
-    const timer = setTimeout(() => {
-      const next = () => setPollTick((t) => t + 1)
-      // a hidden tab waits; the forge keeps going server-side and catches up on the next visible poll
-      if (document.hidden) return next()
-      const mine = seq.current
-      deps
-        .get(forgeId)
-        .then(
-          (fresh) => mine === seq.current && setView((prev) => (prev && prev.forge.version === fresh.forge.version && prev.balance === fresh.balance ? prev : fresh)),
-          () => undefined,
-        )
-        .finally(next)
-    }, POLL_MS)
-    return () => clearTimeout(timer)
-  }, [generating, forgeId, pollTick, deps])
-
-  const act = (action: ForgeAction) => view && run(() => deps.act(view.forge.id, action))
-
-  function forgeNew(referenceHeroId?: string) {
-    if (!session?.signedIn) return setMode('sign-in')
-    if (referenceHeroId) return run(() => deps.create({ referenceHeroId }))
-    setMode('prompt')
   }
 
-  async function signedIn() {
-    const s = await deps.session().catch(() => ({ signedIn: false }))
-    setSession(s)
-    setMode(s.signedIn ? 'prompt' : 'sign-in')
+  const onRole = (role: RoleId) => {
+    if (!build) return
+    const result = changeRole(build, role)
+    if (!result.ok) return
+    apply(result)
+    setNotice(`All ${POOL_SIZE} points are back in the pool. Drag the stats, or use the suggested split.`)
+  }
+  const onSize = (size: SizeClass) => build && apply(setSize(build, size))
+  const onEdit = (slot: BuildSlot, text: SkillText, replace = false) => {
+    if (!build) return {}
+    const result = editSkillText(build, slot, text, replace)
+    if (result.ok && result.needsConfirm) return { needsConfirm: true }
+    apply(result)
+    return {}
+  }
+  const preview = (slot: BuildSlot) => build && setCue({ clip: castClip(getTemplate(build.slots[slot].templateId), slot), at: performance.now() })
+  /** From the kit row: the hero performs the skill and its card comes into view. */
+  const showSkill = (slot: BuildSlot) => {
+    preview(slot)
+    document.getElementById(`skill-${slot}`)?.scrollIntoView?.({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' })
   }
 
-  async function signOut() {
-    await deps.signOut().catch(() => undefined)
-    remember(null)
-    setSession({ signedIn: false })
-    setMode('entry')
-  }
+  const facts = useMemo(() => {
+    if (!build) return undefined
+    const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
+    const move = locomotion(sheet.moveSpeed)
+    return { health: Math.round(sheet.maxHealth), ground: move.ground, flight: move.flight, size: SIZES[build.sizeClass ?? 'medium'].label }
+  }, [build])
 
-  async function addRef(file: File) {
-    if (!deps.uploadPhoto || refs.length >= MAX_REFERENCES) return
-    const preview = URL.createObjectURL(file)
-    setRefs((r) => [...r, { preview }])
-    const url = await deps.uploadPhoto(file)
-    if (url) return setRefs((r) => r.map((x) => (x.preview === preview ? { preview, url } : x)))
-    setRefs((r) => r.filter((x) => x.preview !== preview))
-    URL.revokeObjectURL(preview)
-    setError("Couldn't upload that image. Try again in a moment.")
-  }
-
-  async function begin() {
-    const referenceUrls = refs.flatMap((r) => (r.url ? [r.url] : []))
-    await run(async () => {
-      const created = await deps.create(referenceUrls.length ? { prompt, referenceUrls } : { prompt })
-      return deps.act(created.forge.id, { type: 'chat', text: prompt })
-    })
-  }
-
-  const closeForge = () => {
-    remember(null)
-    setView(undefined)
-    setMode('entry')
-  }
-
-  if (view) {
-    const stage = view.forge.current
-    const need = stage === 'published' ? undefined : stagePrice(stage) || undefined
-    return (
-      <div className="forge forge-run">
-        <header className="run-head">
-          <div className="run-title">
-            <p className="kicker">{stage === 'published' ? 'Forged' : 'Forging'}</p>
-            <h1 className="title">{view.forge.spec?.heroName ?? 'New hero'}</h1>
-          </div>
-          <CreditChip balance={view.balance} />
-          <button className="btn ghost" onClick={closeForge}>
-            Close forge
-          </button>
-        </header>
-        <StageTrack forge={view.forge} />
-        {error && (
-          <p className="inline-error banner" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="run-grid">
-          <ChatColumn forge={view.forge} busy={busy} onSend={(text, answers) => act({ type: 'chat', text, answers })} />
-          <div className="run-main">
-            {stage !== 'published' && <Credits deps={deps} balance={view.balance} need={need} onBalance={(balance) => setView((v) => v && { ...v, balance })} />}
-            <StagePanel forge={view.forge} balance={view.balance} busy={busy} act={act} sizeCost={(size) => deps.sizeCost(view.forge.build!, size)} onDone={closeForge} />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const uploading = images.some((img) => img.status !== 'ready')
 
   return (
-    <div className="forge forge-entry">
-      <header className="lobby-head">
-        <div>
-          <h1 className="title">Hero Forge</h1>
-          <p className="lead">Look for your hero in the global loadout first. Forge a new one when nothing fits.</p>
-        </div>
-        {session?.signedIn && (
-          <div className="account">
-            <span className="muted">Signed in{session.email ? ` as ${session.email}` : ''}</span>
-            <button className="btn quiet sm" onClick={signOut}>
-              Sign out
+    <main
+      className="creator"
+      onDragOver={(e) => dragsFiles(e) && e.preventDefault()}
+      onDrop={(e) => {
+        if (!dragsFiles(e)) return
+        e.preventDefault()
+        const files = imageFiles(e.dataTransfer.files)
+        if (files.length) addImages(files)
+      }}
+    >
+      <ChatPanel
+        started={!!build}
+        heroName={heroName}
+        messages={messages}
+        busy={busy}
+        onName={(n) => {
+          setHeroName(n)
+          if (build) {
+            changed()
+            setBuild({ ...build, heroName: n })
+          }
+        }}
+        onSend={send}
+        search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} adding={adding} />}
+        refs={<ImageDrop images={images} max={MAX_PHOTOS} onFiles={addImages} onRemove={dropImage} error={imageError} />}
+      />
+      <section className="workbench">
+        {build && (
+          <header className="bench-head">
+            <span className="bench-title">{buildId ? 'In your loadout' : 'Not saved yet'}</span>
+            <button className="btn sm ghost new-hero" onClick={newHero}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+              </svg>
+              New hero
             </button>
-          </div>
+          </header>
         )}
-      </header>
-      {error && (
-        <p className="inline-error banner" role="alert">
-          {error}
-        </p>
-      )}
-      {notice && <p className="notice">{notice}</p>}
-      {mode === 'sign-in' ? (
-        <div className="lobby-center">
-          <SignIn deps={deps} onCancel={() => setMode('entry')} onSignedIn={signedIn} />
-        </div>
-      ) : mode === 'prompt' ? (
-        <section className="panel prompt-card" aria-label="New hero">
-          <h2 className="section-title">New hero</h2>
-          <label className="field">
-            <span>Describe your hero</span>
-            <textarea rows={5} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-          </label>
-          {deps.uploadPhoto && (
-            <div className="refs">
-              <span className="field-label">
-                Reference images <span className="count">{refs.length}/{MAX_REFERENCES}</span>
-              </span>
-              <div className="photo-slots">
-                {refs.map((r) => (
-                  <img key={r.preview} src={r.preview} alt="" className={r.url ? '' : 'uploading'} />
-                ))}
-                {refs.length < MAX_REFERENCES && (
-                  <label className="photo-add" title="Add a reference image">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                    </svg>
-                    <input className="sr-only" aria-label="Reference images" type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => e.target.files?.[0] && addRef(e.target.files[0])} />
-                  </label>
-                )}
-              </div>
-            </div>
+        <div className="bench-scroll">
+          {offline && (
+            <p className="offline" role="status">
+              Offline mode: the engine is matching skills by keywords until the AI is back.
+            </p>
           )}
-          <p className="muted">The director reads your prompt, asks what it needs and drafts a spec sheet. Nothing is generated or charged until you confirm it.</p>
-          <div className="row">
-            <button className="btn primary big" disabled={busy || !prompt.trim() || refs.some((r) => !r.url)} onClick={begin}>
-              Start forging
-            </button>
-            <button className="btn quiet" onClick={() => setMode('entry')}>
-              Back
-            </button>
-          </div>
-        </section>
-      ) : (
-        <div className="lobby-grid">
-          <section className="panel search-panel" aria-label="Global loadout">
-            <label className="field search-field">
-              <span>Search the global loadout</span>
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Goku, Jensen, Luffy…" />
-            </label>
-            {results.length > 0 ? (
-              <ul className="loadout-results">
-                {results.map((hero) => (
-                  <li key={hero.id} className="result-card">
-                    <HeroPortrait hero={{ key: `hero:${hero.id}`, heroName: hero.name, roleId: hero.roleId as RoleId }} photo={hero.photo} />
-                    <span className="result-who">
-                      <strong>{hero.name}</strong>
-                      <span className="result-meta">
-                        <RoleBadge role={hero.roleId as RoleId} />
-                        <small>used {hero.useCount}×</small>
-                      </span>
-                    </span>
-                    <span className="result-actions">
-                      <button className="btn sm primary" disabled={busy} onClick={() => run(async () => (await deps.addHero(hero.id), setNotice(`${hero.name} was added to your heroes in the Creator.`)))}>
-                        Add free
-                      </button>
-                      <button className="btn sm ghost" disabled={busy} onClick={() => forgeNew(hero.id)}>
-                        Remix in forge
-                      </button>
-                    </span>
+          {!build ? (
+            <section className="showcase is-empty">
+              <Stage />
+              <div className="hero-info intro">
+                <h1 className="hero-name">Forge a hero</h1>
+                <p className="lead">Add reference images, give a name if you have one, then describe your hero. You own the look and the names; the engine keeps every fight fair.</p>
+                <ol className="steps">
+                  <li className={images.length ? 'done' : ''}>
+                    <b>Add images</b>
+                    <span>Up to three. Drop, paste or browse. Optional.</span>
                   </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="search-empty muted">{searched ? `No hero called “${searched}” yet. Forge it.` : 'Type a name to see who is already here. Adding a hero is free.'}</p>
-            )}
-          </section>
-          <aside className="panel forge-new-card">
-            <h2 className="section-title">Forge a new hero</h2>
-            <ol className="steps">
-              {STEPS.map(([title, text]) => (
-                <li key={title}>
-                  <b>{title}</b>
-                  <span>{text}</span>
-                </li>
-              ))}
-            </ol>
-            <p className="muted">Your first hero is free, retries included.</p>
-            <button className="btn primary big" disabled={!session} onClick={() => forgeNew()}>
-              Forge new
-            </button>
-          </aside>
+                  <li className={heroName.trim() ? 'done' : ''}>
+                    <b>Name it</b>
+                    <span>Anyone: Jensen, Goku, a superintelligence. Or let the prompt name it.</span>
+                  </li>
+                  <li className="now">
+                    <b>Describe it</b>
+                    <span>One sentence in the chat. The engine drafts a role, six skills, a size and a stat split.</span>
+                  </li>
+                </ol>
+              </div>
+            </section>
+          ) : (
+            <>
+              <section className="showcase">
+                <Stage build={build} cue={cue} />
+                <div className="hero-info">
+                  <h1 className={`hero-name${build.heroName.length > 16 ? ' long' : ''}`}>{build.heroName}</h1>
+                  <RoleSwitcher roleId={build.roleId} onChange={onRole} />
+                  <SizePicker build={build} onChange={onSize} />
+                  {facts && (
+                    <dl className="facts">
+                      <div>
+                        <dt>Health</dt>
+                        <dd>{facts.health}</dd>
+                      </div>
+                      <div>
+                        <dt>Speed</dt>
+                        <dd>
+                          {facts.ground.toFixed(1)}
+                          <small>m/s</small>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Flight</dt>
+                        <dd>
+                          {facts.flight.toFixed(1)}
+                          <small>m/s</small>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Size</dt>
+                        <dd>{facts.size}</dd>
+                      </div>
+                    </dl>
+                  )}
+                  <ul className="kit-glance" aria-label="Kit at a glance">
+                    {BUILD_SLOTS.map((slot) => {
+                      const spec = build.slots[slot]
+                      const template = getTemplate(spec.templateId)
+                      return (
+                        <li key={slot}>
+                          <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
+                            <SkillIcon template={template} slot={slot} />
+                            <span>{spec.name.trim() || template.name}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {notice && (
+                    <p className="notice" role="status">
+                      {notice}
+                    </p>
+                  )}
+                  {spentPoints(build.spread) === 0 && (
+                    <button className="btn primary suggest" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
+                      Use suggested split
+                    </button>
+                  )}
+                </div>
+              </section>
+              <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
+              <section className="kit" aria-label="Kit">
+                <header className="kit-head">
+                  <h2 className="section-title">Kit</h2>
+                  <p className="muted">Your names and looks on the engine’s mechanics. Point at a skill to see the hero use it.</p>
+                </header>
+                <div className="skills">
+                  {BUILD_SLOTS.map((slot) => (
+                    <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} />
+                  ))}
+                </div>
+              </section>
+            </>
+          )}
         </div>
-      )}
-    </div>
+        {build && (
+          <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))}>
+            {build.gate.state === 'ready' && (
+              <button className="btn primary big save" onClick={save} disabled={saving || uploading} title={uploading ? 'Waiting for your images to finish uploading' : undefined}>
+                {buildId ? 'Save changes' : 'Save to loadout'}
+              </button>
+            )}
+          </GateStatus>
+        )}
+      </section>
+    </main>
   )
 }

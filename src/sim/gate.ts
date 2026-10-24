@@ -1,10 +1,10 @@
-import { BUILD_SLOTS, SLOT_KIND, swapAlternatives, type Build } from '../charter/build'
-import { MAX_RETUNE_STEPS } from '../charter/budget'
-import { CATALOG_VERSION, defaultTemplate } from '../charter/templates/catalog'
-import type { BuildSlot, Template } from '../charter/types'
-import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from './calibration'
-import { simulate, type BattleResult, type Combatant } from './engine'
-import { referenceField } from './field'
+import { BUILD_SLOTS, SLOT_KIND, swapAlternatives, type Build } from '../charter/build.js'
+import { MAX_RETUNE_STEPS } from '../charter/budget.js'
+import { CATALOG_VERSION, defaultTemplate } from '../charter/templates/catalog.js'
+import type { BuildSlot, Template } from '../charter/types.js'
+import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from './calibration.js'
+import { simulate, type BattleResult, type Combatant } from './engine.js'
+import { referenceField } from './field.js'
 
 /** The R15 ceiling: no build may beat the reference field more often than this. */
 export const GATE_CEILING = 0.55
@@ -193,6 +193,25 @@ export function runGate(input: Build, options: GateOptions = {}): GateOutcome {
   let step = steps.next()
   while (!step.done) step = steps.next(step.value.map((b) => winRateVsField(b, options)))
   return step.value
+}
+
+/** Steps the gate can produce: lifts down to -MAX_LIFT_STEPS in half steps, retunes up to MAX_RETUNE_STEPS. */
+export function validSteps(steps: number): boolean {
+  return Number.isFinite(steps) && steps >= -MAX_LIFT_STEPS && steps <= MAX_RETUNE_STEPS && Number.isInteger(steps * 2)
+}
+
+/**
+ * Check a gate result found elsewhere (the browser's worker pool) with one measurement at its steps, instead of running
+ * the whole search again, so a save fits a serverless function's time limit. The engine is deterministic, so an honest
+ * result measures the same here. A build whose rate lands in the fair band passes; anything else returns undefined and
+ * the caller runs the full gate.
+ */
+export function verifyGate(input: Build, steps: number, options: GateOptions = {}): GateOutcome | undefined {
+  if (!validSteps(steps)) return undefined
+  const build = withSteps(input, steps)
+  const winRate = winRateVsField(build, options)
+  if (winRate > PASS_LINE || winRate < GATE_HOPELESS) return undefined
+  return { state: 'ready', winRate, build: { ...build, gate: { state: 'ready', ...gateStamp(winRate) } } }
 }
 
 /** Run the gate with measurements done elsewhere (the browser's worker pool), several builds at a time. */

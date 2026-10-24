@@ -1,4 +1,4 @@
-import type { AnyProvider, Capability, Env, Outcome } from './types'
+import type { AnyProvider, Capability, Env, Outcome } from './types.js'
 
 /** The default provider order per capability (KTD3). Override with FORGE_PROVIDERS_<CAPABILITY>=id,id. */
 export const DEFAULT_ORDER: Record<Capability, string[]> = {
@@ -14,9 +14,13 @@ export function isProduction(env: Env): boolean {
   return env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production'
 }
 
-/** Fakes are a development and offline path only; production ignores the switch (KTD3). */
+/**
+ * Fakes are a development and offline path (KTD3). A preview deployment may opt in too, so the paid flows can be clicked
+ * through without paying a provider (Vercel runs previews with NODE_ENV=production); production ignores the switch.
+ */
 export function fakeMode(env: Env): boolean {
-  return !isProduction(env) && env.FORGE_FAKE_PROVIDERS === '1'
+  if (env.FORGE_FAKE_PROVIDERS !== '1' || env.VERCEL_ENV === 'production') return false
+  return env.VERCEL_ENV === 'preview' || !isProduction(env)
 }
 
 export function providerOrder(capability: Capability, env: Env): string[] {

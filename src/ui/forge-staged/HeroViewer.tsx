@@ -10,7 +10,7 @@ import type { EffectShape } from '../../forge/package'
 import { characterFile } from '../arena/staging/loadout'
 import { prefersReducedMotion } from '../arena/hud/format'
 import { heroHue, type StageClip } from '../common/hero-look'
-import { effectScale, effectWindow, pickAnimation, viewerSource, type MotionPlay } from './viewer'
+import { effectScale, effectWindow, pickAnimation, viewerSource, type MotionPlay } from '../common/viewer'
 
 export interface HeroViewerProps {
   /** The rigged GLB (or the motion GLB that carries the retargeted animations). */

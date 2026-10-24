@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { setStatTarget, type Build } from '../../../charter/build'
 import type { Forge } from '../../../forge/types'
-import { StatSplit } from '../../creator/StatSplit'
+import { StatSplit } from '../../forge/StatSplit'
 
 /** The final stat split, then the balance gate and publish (R20, R21). */
 export function StatsStage({ forge, busy, onCheck, onPublish }: { forge: Forge; busy: boolean; onCheck: (spread: Build['spread']) => void; onPublish: () => void }) {

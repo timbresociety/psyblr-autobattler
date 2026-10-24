@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { MAX_CHAT, MAX_PHOTOS, TEXT_LIMITS } from '../../charter/build'
+import { MAX_CHAT, TEXT_LIMITS } from '../../charter/build'
 
 export interface ChatMessage {
   from: 'you' | 'engine'
@@ -9,25 +9,27 @@ export interface ChatMessage {
 interface Props {
   started: boolean
   heroName: string
-  photos: string[]
   messages: ChatMessage[]
   busy: boolean
   onName: (name: string) => void
-  onPhoto: (file: File) => void
   onSend: (text: string) => void
   /** Global loadout matches for the typed name. */
   search?: ReactNode
+  /** The reference image drop zone. */
+  refs?: ReactNode
 }
 
 /** Openers that show how much a sentence can carry; picking one fills the message box. */
 const EXAMPLES = ['a time-bending samurai who rewinds fights', 'a GPU god who rains tensor beams from orbit', 'an armoured giant who shields the whole team']
 
-/** Creation is conversational first (R13): name, photos, then describe the hero in plain words. */
-export function ChatPanel({ started, heroName, photos, messages, busy, onName, onPhoto, onSend, search }: Props) {
+/**
+ * Making a hero is conversational first (R13): reference images, a name if you have one, then the hero in plain words.
+ * The prompt names the hero when the name is left blank.
+ */
+export function ChatPanel({ started, heroName, messages, busy, onName, onSend, search, refs }: Props) {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLOListElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
-  const needsName = !started && !heroName.trim()
 
   // keep the newest line in view
   useEffect(() => {
@@ -38,7 +40,7 @@ export function ChatPanel({ started, heroName, photos, messages, busy, onName, o
   const submit = (e: FormEvent) => {
     e.preventDefault()
     const text = draft.trim()
-    if (!text || busy || needsName) return
+    if (!text || busy) return
     onSend(text)
     setDraft('')
   }
@@ -47,34 +49,12 @@ export function ChatPanel({ started, heroName, photos, messages, busy, onName, o
     <section className="panel chat" aria-label="Chat">
       <label className="name-field">
         <span className="field-label">Hero name</span>
-        <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder="Jensen, Goku, Unit 7…" onChange={(e) => onName(e.target.value)} />
+        <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder={started ? 'Jensen, Goku, Unit 7…' : 'Optional: Jensen, Goku…'} onChange={(e) => onName(e.target.value)} />
       </label>
       {search}
-      <div className="photos">
-        <span className="field-label">
-          Reference photos <span className="count">{photos.length}/{MAX_PHOTOS}</span>
-        </span>
-        <div className="photo-slots">
-          <div className="thumbs">
-            {photos.map((src) => (
-              <img key={src} src={src} alt="" />
-            ))}
-          </div>
-          {photos.length < MAX_PHOTOS && (
-            <label className="photo-add" title="Add a reference photo">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-              </svg>
-              <input className="sr-only" aria-label="Reference photos" type="file" accept="image/jpeg,image/png,image/webp" disabled={photos.length >= MAX_PHOTOS} onChange={(e) => e.target.files?.[0] && onPhoto(e.target.files[0])} />
-            </label>
-          )}
-          {Array.from({ length: Math.max(0, MAX_PHOTOS - photos.length - 1) }, (_, i) => (
-            <span key={i} className="photo-empty" aria-hidden="true" />
-          ))}
-        </div>
-      </div>
+      {refs}
       <ol className="log" ref={log} aria-live="polite">
-        {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is. A sentence is enough: I draft the role, the kit and the stats, and you change anything you like.</li>}
+        {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is. A sentence is enough: I name it if you haven't, draft the role, the kit and the stats, and you change anything you like.</li>}
         {messages.map((m, i) => (
           <li key={i} className={m.from}>
             {m.text}
@@ -117,8 +97,8 @@ export function ChatPanel({ started, heroName, photos, messages, busy, onName, o
           }}
         />
         <div className="composer-row">
-          {needsName && <span className="composer-hint">Name your hero to start.</span>}
-          <button type="submit" className={`btn primary${started ? '' : ' big'}`} disabled={busy || needsName}>
+          {!started && !heroName.trim() && <span className="composer-hint">The prompt can name it.</span>}
+          <button type="submit" className={`btn primary${started ? '' : ' big'}`} disabled={busy || !draft.trim()}>
             {started ? 'Send' : 'Forge hero'}
           </button>
         </div>

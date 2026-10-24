@@ -10,7 +10,7 @@ import type { RoleId } from '../../../charter/types'
 import { RoleBadge, RoleIcon } from '../../common/RoleIcon'
 import { headline } from '../../common/skill-numbers'
 import { SkillIcon } from '../../common/SkillIcon'
-import { SLOT_LABEL } from '../../creator/labels'
+import { SLOT_LABEL } from '../../forge/labels'
 import { FACTION_NAME } from './presets'
 import type { LoadoutEntry } from './loadout'
 

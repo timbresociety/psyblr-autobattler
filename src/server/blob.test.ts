@@ -1,9 +1,14 @@
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_PHOTO_BYTES, PhotoError, detectImageType, devPut, pickPut, uploadPhoto } from './blob'
+import sharp from 'sharp'
+import { MAX_PHOTO_BYTES, PhotoError, detectImageType, devPut, pickPut, reencode, uploadPhoto } from './blob.js'
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])
 const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50])
+const same = async (b: Uint8Array) => b
 
 describe('photo upload', () => {
   it('detects real image types from content bytes', () => {
@@ -27,19 +32,36 @@ describe('photo upload', () => {
 
   it('stores a re-encoded image under a random server-made name', async () => {
     const put = vi.fn(async (path: string) => ({ url: `https://x.public.blob.vercel-storage.com/${path}` }))
-    const a = await uploadPhoto(png, { put })
-    const b = await uploadPhoto(png, { put })
+    const a = await uploadPhoto(png, { put, encode: same })
+    const b = await uploadPhoto(png, { put, encode: same })
     expect(a.url).not.toBe(b.url)
     expect(put.mock.calls[0][0]).toMatch(/^heroes\/[0-9a-f-]{36}\.webp$/)
   })
 
-  it('keeps photos working on the local dev server: a data URL with fakes on and no Blob token, never in production', async () => {
-    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1' })).toBe(devPut)
+  it('keeps photos working on the local dev server: a file in the dev store, never on Vercel or in production', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'psyblr-store-'))
+    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1' }, dir)).toBeTypeOf('function')
     expect(pickPut({ FORGE_FAKE_PROVIDERS: '1', BLOB_READ_WRITE_TOKEN: 'set' })).toBeUndefined()
     expect(pickPut({ FORGE_FAKE_PROVIDERS: '1', VERCEL_ENV: 'production' })).toBeUndefined()
+    // a preview may run fakes, but Vercel's disk is read-only, so its photos still go to Blob
+    expect(pickPut({ FORGE_FAKE_PROVIDERS: '1', VERCEL: '1', VERCEL_ENV: 'preview' })).toBeUndefined()
     expect(pickPut({})).toBeUndefined()
     const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])
-    const { url } = await uploadPhoto(png, { put: devPut })
-    expect(url).toBe(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)
+    const { url } = await uploadPhoto(png, { put: devPut(dir), encode: same })
+    expect(url).toMatch(/^\/dev-store\/heroes\/[0-9a-f-]{36}\.webp$/)
+    expect(new Uint8Array(readFileSync(join(dir, url.slice('/dev-store/'.length))))).toEqual(png)
+  })
+
+  it('re-encodes on the server: shrunk to 1,024 px, WebP, and the camera metadata gone', async () => {
+    const photo = await sharp({ create: { width: 3000, height: 2000, channels: 3, background: { r: 200, g: 120, b: 40 } } })
+      .jpeg()
+      .withExif({ IFD0: { Make: 'TestCam', Model: 'Secret Location' } })
+      .toBuffer()
+    const out = await reencode(new Uint8Array(photo))
+    const meta = await sharp(out).metadata()
+    expect(meta.format).toBe('webp')
+    expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBe(1024)
+    expect(meta.exif).toBeUndefined()
+    await expect(reencode(png)).rejects.toBeInstanceOf(PhotoError)
   })
 })

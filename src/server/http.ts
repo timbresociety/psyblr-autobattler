@@ -1,7 +1,8 @@
-import type { Db } from './db'
-import { NotFoundError, OwnershipError, StoreInputError, isKnownDevice } from './store'
-import { PhotoError } from './blob'
-import { RateLimiter, requestKeys } from './rate-limit'
+import type { Db } from './db.js'
+import { localDev } from './dev-store.js'
+import { NotFoundError, OwnershipError, StoreInputError, isKnownDevice } from './store.js'
+import { PhotoError } from './blob.js'
+import { RateLimiter, requestKeys } from './rate-limit.js'
 
 /** Shared helpers for the API routes. */
 
@@ -29,6 +30,8 @@ export async function readJson(request: Request, maxBytes = 50_000): Promise<Rec
 const writeLimiter = new RateLimiter({ limit: 60, windowMs: 60 * 60 * 1000 })
 
 export function overLimit(request: Request, limiter = writeLimiter): boolean {
+  // every request to the local dev server comes from 127.0.0.1, so one person testing would trip a per-address limit
+  if (localDev(process.env)) return false
   return !limiter.take(requestKeys(request))
 }
 

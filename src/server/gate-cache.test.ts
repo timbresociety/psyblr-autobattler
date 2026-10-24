@@ -1,9 +1,11 @@
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { editSkillText } from '../charter/build'
-import { defaultBuild } from '../sim/fixtures'
-import { SCHEMA_SQL, type Db } from './db'
-import { cachedGate, gateKey } from './gate-cache'
+import { editSkillText } from '../charter/build.js'
+import { defaultBuild } from '../sim/fixtures.js'
+import { runGate, verifyGate } from '../sim/gate.js'
+import { SCHEMA_SQL, type Db } from './db.js'
+import { cachedGate, gateKey } from './gate-cache.js'
+import { claimedSteps } from './store.js'
 
 let db: Db
 beforeEach(async () => {
@@ -49,6 +51,37 @@ describe('gate cache (U6, KTD6)', () => {
     const down = { query: async () => Promise.reject(new Error('connection refused')) } as unknown as Db
     const outcome = await cachedGate(down, defaultBuild('fighter'), quick)
     expect(outcome.state).toBe('ready')
+  })
+
+  it("a browser's result is confirmed with one measurement; a false claim falls back to the full search", async () => {
+    // two full searches, so the lightest field that still decides: the test compares results under identical settings
+    const quick = { duelsPerMember: 2 }
+    const build = defaultBuild('mage')
+    const honest = runGate(build, quick)
+    const steps = honest.build.slots.basic.retuneSteps
+    const confirmed = await cachedGate(db, build, quick, steps)
+    expect(confirmed.state).toBe(honest.state)
+    expect(confirmed.winRate).toBe(honest.winRate)
+    // a full lift on a fair build measures far over the pass line, so the server runs the real search instead
+    const pg = new PGlite()
+    await pg.exec(SCHEMA_SQL)
+    const forced = await cachedGate(pg as unknown as Db, build, quick, -12)
+    expect(forced.build.slots.basic.retuneSteps).toBe(steps)
+    expect(forced.winRate).toBe(honest.winRate)
+  }, 120_000)
+
+  it('only steps the gate can make are worth measuring', () => {
+    const build = defaultBuild('fighter')
+    for (const bad of [Number.NaN, Infinity, -12.5, 6.5, 0.3]) expect(verifyGate(build, bad, quick)).toBeUndefined()
+  })
+
+  it('reads the claimed steps only from a build that claims a pass with one number on every slot', () => {
+    const build = defaultBuild('tank')
+    const at = (steps: number[]) => ({ ...build, gate: { state: 'ready' }, slots: Object.fromEntries(Object.entries(build.slots).map(([k, v], i) => [k, { ...v, retuneSteps: steps[i] ?? steps[0] }])) })
+    expect(claimedSteps(at([-2.5]))).toBe(-2.5)
+    expect(claimedSteps(at([0, 1]))).toBeUndefined()
+    expect(claimedSteps({ ...at([1]), gate: { state: 'draft' } })).toBeUndefined()
+    expect(claimedSteps(undefined)).toBeUndefined()
   })
 
   it('the key changes when the gate itself is run differently', () => {

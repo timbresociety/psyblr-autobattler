@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { blobStoreId, isOwnPhotoUrl } from './photo-url'
-import { RateLimiter, requestKeys } from './rate-limit'
-import { deviceId, errorResponse, readJson } from './http'
-import { NotFoundError, OwnershipError, StoreInputError } from './store'
+import { blobStoreId, isOwnPhotoUrl } from './photo-url.js'
+import { RateLimiter, requestKeys } from './rate-limit.js'
+import { deviceId, errorResponse, readJson } from './http.js'
+import { NotFoundError, OwnershipError, StoreInputError } from './store.js'
 
 const req = (headers: Record<string, string> = {}, body = '') => new Request('https://x.test/api', { method: 'POST', headers, body })
 
@@ -14,6 +14,15 @@ describe('photo URL allowlist', () => {
     expect(isOwnPhotoUrl('https://mystore1.public.blob.vercel-storage.com/evil.html', env)).toBe(false)
     expect(isOwnPhotoUrl('http://mystore1.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp', env)).toBe(false)
     expect(isOwnPhotoUrl('not a url', env)).toBe(false)
+  })
+  it("accepts the dev store's own uploads only on the local dev server", () => {
+    const url = '/dev-store/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'
+    expect(isOwnPhotoUrl(url, { FORGE_FAKE_PROVIDERS: '1' })).toBe(true)
+    expect(isOwnPhotoUrl(url, {})).toBe(false)
+    expect(isOwnPhotoUrl(url, { FORGE_FAKE_PROVIDERS: '1', BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_AbC123_x' })).toBe(false)
+    expect(isOwnPhotoUrl(url, { FORGE_FAKE_PROVIDERS: '1', VERCEL: '1', VERCEL_ENV: 'preview' })).toBe(false)
+    expect(isOwnPhotoUrl(url, { FORGE_FAKE_PROVIDERS: '1', NODE_ENV: 'production' })).toBe(false)
+    expect(isOwnPhotoUrl('/dev-store/heroes/../../../etc/passwd.webp', { FORGE_FAKE_PROVIDERS: '1' })).toBe(false)
   })
   it('reads the store ID from the read-write token when BLOB_STORE_ID is unset', () => {
     expect(blobStoreId({ BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_AbC123_secretpart' })).toBe('abc123')

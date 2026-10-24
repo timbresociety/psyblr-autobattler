@@ -1,3 +1,5 @@
+import { devStoreActive } from './dev-store.js'
+
 /**
  * Photos must come from this deployment's own Blob store, through the upload endpoint (size cap, type check,
  * re-encode, rate limit). The store ID comes from BLOB_STORE_ID, or from the read-write token
@@ -23,7 +25,11 @@ function isStoreUrl(url: string, path: RegExp, env: Record<string, string | unde
   }
 }
 
+/** A photo the local dev server stored itself (see dev-store.ts); only the local dev server accepts these. */
+const DEV_UPLOADED = /^\/dev-store\/heroes\/[0-9a-f-]{36}\.webp$/
+
 export function isOwnPhotoUrl(url: string, env: Record<string, string | undefined> = process.env): boolean {
+  if (devStoreActive(env) && DEV_UPLOADED.test(url)) return true
   return isStoreUrl(url, UPLOADED, env)
 }
 

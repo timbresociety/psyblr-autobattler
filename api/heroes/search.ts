@@ -1,12 +1,14 @@
-import { getDb } from '../../src/server/db'
-import { errorResponse } from '../../src/server/http'
-import { searchHeroes } from '../../src/server/store'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse } from '../../src/server/http.js'
+import { popularHeroes, searchHeroes } from '../../src/server/store.js'
 
-/** GET /api/heroes/search?q=jen -> { heroes: [{ id, name, roleId, photo, useCount }] } */
+/** GET /api/heroes/search?q=jen -> { heroes: [{ id, name, roleId, photo, useCount }] }; ?popular=1 -> the most used. */
 export async function GET(request: Request): Promise<Response> {
   try {
-    const q = new URL(request.url).searchParams.get('q') ?? ''
-    return Response.json({ heroes: await searchHeroes(await getDb(), q) })
+    const params = new URL(request.url).searchParams
+    const db = await getDb()
+    if (params.has('popular')) return Response.json({ heroes: await popularHeroes(db) })
+    return Response.json({ heroes: await searchHeroes(db, params.get('q') ?? '') })
   } catch (error) {
     return errorResponse(error)
   }

@@ -2,21 +2,22 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { proposeBuild, type Build } from '../../charter/build'
-import type { CreatorDeps, HeroResult } from '../api'
+import type { ForgeDeps, HeroResult } from '../api'
 import { offlineChat } from '../api'
-import { CreatorScreen } from './CreatorScreen'
+import { ForgeScreen } from './ForgeScreen'
 
 afterEach(cleanup)
 
 const jensen: HeroResult = { id: 'hero-jensen', name: 'Jensen', roleId: 'marksman', photo: null, useCount: 12 }
 const original = proposeBuild({ heroName: 'Jensen', roleId: 'marksman', skills: {} }).build
 
-function deps(over: Partial<CreatorDeps> = {}): CreatorDeps {
+function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
   return {
     propose: vi.fn(async (hero) => ({ build: proposeBuild(hero).build, offline: false, limits: [] })),
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build) => ({ state: 'ready' as const, winRate: 0.5, build: { ...build, gate: { state: 'ready' as const, winRate: 0.5 } } })),
-    uploadPhoto: vi.fn(async () => undefined),
+    prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
+    uploadPhoto: vi.fn(async () => ({ ok: false as const, reason: 'server' as const })),
     search: vi.fn(async (q: string) => ('jensen'.startsWith(q.toLowerCase()) ? [jensen] : [])),
     addHero: vi.fn(async () => ({ id: 'build-mine', heroId: jensen.id, build: structuredClone(original) })),
     createHero: vi.fn(async () => ({ heroId: 'h', buildId: 'b' })),
@@ -29,10 +30,10 @@ function deps(over: Partial<CreatorDeps> = {}): CreatorDeps {
 const typeName = (value: string) => fireEvent.change(screen.getByLabelText('Hero name'), { target: { value } })
 const roleGroup = () => screen.getByRole('radiogroup', { name: 'Role' })
 
-describe('global loadout (U12)', () => {
+describe('global loadout in the Forge (U12)', () => {
   it('typing "Jen" lists matching heroes within the debounce window', async () => {
     const d = deps()
-    render(<CreatorScreen deps={d} />)
+    render(<ForgeScreen deps={d} />)
     typeName('Jen')
     expect(await screen.findByText('Jensen', {}, { timeout: 1000 })).toBeTruthy()
     expect(d.search).toHaveBeenCalledTimes(1)
@@ -40,7 +41,7 @@ describe('global loadout (U12)', () => {
 
   it('"Add free" creates a build and opens it with the shared look (F2)', async () => {
     const d = deps()
-    render(<CreatorScreen deps={d} />)
+    render(<ForgeScreen deps={d} />)
     typeName('Jen')
     const add = await screen.findByRole('button', { name: 'Add free' })
     await act(async () => fireEvent.click(add))
@@ -51,7 +52,7 @@ describe('global loadout (U12)', () => {
 
   it("editing the added build saves to the player's own copy, not the shared original (AE7)", async () => {
     const d = deps()
-    render(<CreatorScreen deps={d} />)
+    render(<ForgeScreen deps={d} />)
     typeName('Jen')
     const add = await screen.findByRole('button', { name: 'Add free' })
     await act(async () => fireEvent.click(add))
@@ -65,7 +66,7 @@ describe('global loadout (U12)', () => {
   })
 
   it('with no matches, only "Build my own" shows', async () => {
-    render(<CreatorScreen deps={deps()} />)
+    render(<ForgeScreen deps={deps()} />)
     typeName('Zorblax')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Build my own' })).toBeTruthy())
     await new Promise((r) => setTimeout(r, 300))
@@ -78,24 +79,19 @@ describe('global loadout (U12)', () => {
       if (fail) throw new Error('offline')
       return [jensen]
     })
-    render(<CreatorScreen deps={deps({ search })} />)
+    render(<ForgeScreen deps={deps({ search })} />)
     typeName('Jen')
     const retry = await screen.findByRole('button', { name: 'Retry' }, { timeout: 1000 })
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a keynote showman' } })
     expect((screen.getByRole('button', { name: 'Forge hero' }) as HTMLButtonElement).disabled).toBe(false)
     fail = false
     await act(async () => fireEvent.click(retry))
     expect(await screen.findByText('Jensen', {}, { timeout: 1000 })).toBeTruthy()
   })
 
-  it('the loadout lists every hero the device has added or built', async () => {
-    const listBuilds = vi.fn(async () => [{ id: 'b1', heroId: 'h1', build: original }])
-    render(<CreatorScreen deps={deps({ listBuilds })} />)
-    expect(await screen.findByRole('button', { name: /Jensen/ })).toBeTruthy()
-  })
-
   it('a new hero that passed the gate is saved as a new shared hero', async () => {
     const d = deps()
-    render(<CreatorScreen deps={d} />)
+    render(<ForgeScreen deps={d} />)
     typeName('Liang')
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a quiet strategist' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
@@ -110,7 +106,7 @@ describe('loadout add safety', () => {
   it('"Add free" is disabled while an add is in flight, so one click adds once', async () => {
     let finish: () => void = () => undefined
     const addHero = vi.fn(() => new Promise<{ id: string; heroId: string; build: Build }>((resolve) => { finish = () => resolve({ id: 'b', heroId: jensen.id, build: structuredClone(original) }) }))
-    render(<CreatorScreen deps={deps({ addHero })} />)
+    render(<ForgeScreen deps={deps({ addHero })} />)
     typeName('Jen')
     const add = await screen.findByRole('button', { name: 'Add free' })
     await act(async () => fireEvent.click(add))

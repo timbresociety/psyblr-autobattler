@@ -6,7 +6,7 @@ import type { SizeCost } from '../../../forge/sizes'
 import type { Forge } from '../../../forge/types'
 import { webglAvailable } from '../../common/hero-look'
 import { SkillIcon } from '../../common/SkillIcon'
-import { SLOT_LABEL } from '../../creator/labels'
+import { SLOT_LABEL } from '../../forge/labels'
 
 const HeroStage = lazy(() => import('../../common/HeroStage'))
 

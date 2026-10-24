@@ -89,10 +89,11 @@ describe('staging (U16)', () => {
     expect(details.textContent).toContain('Ultimate')
   })
 
-  it('offers the Creator and the demo roster when the loadout is empty', async () => {
+  it('offers the Forge, the Loadout and the demo roster when the loadout is empty', async () => {
     await open({ demo: false })
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    expect(screen.getByRole('link', { name: /Make one in the Creator/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /Make one in the Forge/ })).toBeTruthy()
+    expect(screen.getByRole('link', { name: /add some in the Loadout/ }).getAttribute('href')).toBe('?loadout')
     fireEvent.click(screen.getByRole('button', { name: 'use the demo roster' }))
     // the row of heroes (the army panel and the map key are lists too)
     expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(demoLoadout().length)

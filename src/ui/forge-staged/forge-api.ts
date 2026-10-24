@@ -1,10 +1,10 @@
-import type { Build } from '../../charter/build'
-import type { SizeClass } from '../../charter/sizes'
-import { sizeCost, type SizeCost } from '../../forge/sizes'
-import type { Forge } from '../../forge/types'
-import type { ForgeAction } from '../../server/forge-runner'
-import type { ForgeSummary } from '../../server/forge-store'
-import { deviceId, liveDeps, type BuildRecord, type HeroResult } from '../api'
+import type { Build } from '../../charter/build.js'
+import type { SizeClass } from '../../charter/sizes.js'
+import { sizeCost, type SizeCost } from '../../forge/sizes.js'
+import type { Forge } from '../../forge/types.js'
+import type { ForgeAction } from '../../server/forge-runner.js'
+import type { ForgeSummary } from '../../server/forge-store.js'
+import { deviceId, liveDeps, type BuildRecord, type HeroResult } from '../api.js'
 
 /** Forge I/O (U11). Every call goes to the forge API; sizing runs locally because it is pure. */
 
@@ -91,7 +91,10 @@ export const liveForgeDeps: ForgeDeps = {
   act: (id, action) => post<ForgeView>('/api/forge/stage', wire(id, action)),
   search: liveDeps.search,
   addHero: liveDeps.addHero,
-  uploadPhoto: liveDeps.uploadPhoto,
+  uploadPhoto: async (file) => {
+    const uploaded = await liveDeps.uploadPhoto(file)
+    return uploaded.ok ? uploaded.url : undefined
+  },
   // a quick estimate for the size picker; the server gate prices the final build at publish
   sizeCost: async (build, size) => sizeCost(build, size, { duelsPerMember: 2 }),
 }

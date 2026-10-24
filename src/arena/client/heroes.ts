@@ -1,12 +1,12 @@
 import * as THREE from 'three'
-import type { Build } from '../../charter/build'
-import type { HeroPackage } from '../../forge/package'
-import type { Preset } from '../../forge/motion/library'
-import { pickAnimation, viewerSource } from '../../ui/forge/viewer'
-import { SIZE_SCALE, benchHero } from '../demo/procedural-hero'
-import type { AnimState } from './animation'
-import { characterLook, characterView, heroHue, loadBuild } from './characters'
-import { TEAM_COLORS } from './map'
+import type { Build } from '../../charter/build.js'
+import type { HeroPackage } from '../../forge/package.js'
+import type { Preset } from '../../forge/motion/library.js'
+import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
+import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
+import type { AnimState } from './animation.js'
+import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
+import { TEAM_COLORS } from './map.js'
 
 /**
  * Hero views (U13, KTD9): the arena GLB when the package has one (2K for heroes in focus, 1K for the rest), then the

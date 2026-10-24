@@ -7,3 +7,5 @@ coverage/
 *.log
 .DS_Store
 tools/balance/out/
+.vercel
+.dev-store/

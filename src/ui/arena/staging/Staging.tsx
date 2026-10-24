@@ -78,7 +78,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
     }
   }, [])
 
-  // the player's own heroes (made in the Creator or forged) join the demo roster (R2); appended, so a formation
+  // the player's own heroes (made in the Forge or added in the Loadout) join the demo roster (R2); appended, so a formation
   // already on the board keeps pointing at the same heroes, and shown first in the row
   useEffect(() => {
     if (initial) return
@@ -403,7 +403,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         )}
         {loadout.length === 0 && (
           <p className="muted">
-            No heroes yet. <a href="?">Make one in the Creator</a> or{' '}
+            No heroes yet. <a href="?">Make one in the Forge</a>, <a href="?loadout">add some in the Loadout</a> or{' '}
             <button className="link-btn" onClick={() => setLoadout(demoLoadout())}>
               use the demo roster
             </button>

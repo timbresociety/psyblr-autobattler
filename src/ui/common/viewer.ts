@@ -1,6 +1,6 @@
-import type { Delivery } from '../../charter/types'
-import type { Preset } from '../../forge/motion/library'
-import type { EffectShape } from '../../forge/package'
+import type { Delivery } from '../../charter/types.js'
+import type { Preset } from '../../forge/motion/library.js'
+import type { EffectShape } from '../../forge/package.js'
 
 /**
  * Viewer decisions, kept free of three.js so they test without WebGL (U12). The viewer loads the rigged GLB when

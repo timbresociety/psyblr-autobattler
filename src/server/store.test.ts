@@ -1,10 +1,10 @@
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { SCHEMA_SQL, type Db } from './db'
-import { NotFoundError, OwnershipError, addHero, clearHeroPhotos, createHero, getBuild, hideHero, isKnownDevice, issueDeviceId, listBuilds, saveBuild, searchHeroes } from './store'
-import { CATALOG_VERSION } from '../charter/templates/catalog'
-import { defaultBuild } from '../sim/fixtures'
-import { setAttribute } from '../charter/build'
+import { SCHEMA_SQL, type Db } from './db.js'
+import { NotFoundError, OwnershipError, addHero, clearHeroPhotos, createHero, deleteBuild, getBuild, hideHero, isKnownDevice, issueDeviceId, listBuilds, popularHeroes, saveBuild, searchHeroes } from './store.js'
+import { CATALOG_VERSION } from '../charter/templates/catalog.js'
+import { defaultBuild } from '../sim/fixtures.js'
+import { setAttribute } from '../charter/build.js'
 
 let db: Db
 
@@ -21,6 +21,35 @@ async function newHero(name: string, device: string) {
   const build = { ...defaultBuild('fighter', name), heroName: name }
   return createHero(db, device, build, ['https://teststore.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'], quickGate)
 }
+
+describe('personal loadout', () => {
+  it('removing a hero takes it out of your loadout only; an added copy gives back its use', async () => {
+    const owner = await issueDeviceId(db)
+    const fan = await issueDeviceId(db)
+    const hero = await newHero('Jensen', owner)
+    const copy = await addHero(db, fan, hero.heroId)
+    expect((await searchHeroes(db, 'jensen'))[0].useCount).toBe(1)
+    await expect(deleteBuild(db, owner, copy.id)).rejects.toBeInstanceOf(OwnershipError)
+    await deleteBuild(db, fan, copy.id)
+    expect(await listBuilds(db, fan)).toEqual([])
+    expect((await searchHeroes(db, 'jensen'))[0].useCount).toBe(0)
+    // the creator's own copy can go too; the shared hero stays for everyone else
+    await deleteBuild(db, owner, hero.buildId)
+    expect(await listBuilds(db, owner)).toEqual([])
+    expect((await searchHeroes(db, 'jensen')).map((h) => h.name)).toEqual(['Jensen'])
+    await expect(deleteBuild(db, owner, hero.buildId)).rejects.toBeInstanceOf(NotFoundError)
+  })
+
+  it('the most used heroes come first when browsing, and hidden ones never show', async () => {
+    const owner = await issueDeviceId(db)
+    const a = await newHero('Ada', owner)
+    const b = await newHero('Bo', owner)
+    await addHero(db, await issueDeviceId(db), b.heroId)
+    expect((await popularHeroes(db)).map((h) => h.name)).toEqual(['Bo', 'Ada'])
+    await hideHero(db, b.heroId)
+    expect((await popularHeroes(db)).map((h) => h.id)).toEqual([a.heroId])
+  })
+})
 
 describe('device IDs', () => {
   it('issues unguessable 128-bit IDs', async () => {

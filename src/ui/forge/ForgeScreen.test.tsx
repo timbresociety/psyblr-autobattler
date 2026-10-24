@@ -1,225 +1,284 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SIZES, type SizeClass } from '../../charter/sizes'
-import { buildSpec } from '../../forge/director/director'
-import { fakeDirectorBrain } from '../../forge/director/fake'
-import { stagePrice } from '../../forge/pricing'
-import { begin, choose, confirm, createForge, editInputs, retry, succeed, skip } from '../../forge/stages'
-import type { Forge, StageId, Transition } from '../../forge/types'
-import type { ForgeAction, ForgeDeps } from './forge-api'
-import { EXAMPLE_PROMPT, ForgeScreen } from './ForgeScreen'
-import { signInToken } from './SignIn'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { proposeBuild, requestStats, swapAlternatives, type Build } from '../../charter/build'
+import { getRole } from '../../charter/roles'
+import type { GateOutcome } from '../../sim/gate'
+import type { ForgeDeps } from '../api'
+import { offlineChat } from '../api'
+import { ForgeScreen } from './ForgeScreen'
 
-afterEach(() => {
-  cleanup()
-  localStorage.clear()
+afterEach(cleanup)
+
+// jsdom has no object URLs; the Forge makes one per image preview
+beforeEach(() => {
+  URL.createObjectURL = vi.fn(() => 'blob:preview')
+  URL.revokeObjectURL = vi.fn()
 })
 
-const img = (label: string) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg"><text>${label}</text></svg>`)}`
-const ok = (t: Transition) => {
-  if (!t.ok) throw new Error(t.reason)
-  return t.forge
-}
-const ARTIFACTS: Partial<Record<StageId, Record<string, string>>> = {
-  concept: { 'sheet-0': img('a'), 'sheet-1': img('b') },
-  mesh: { mesh: 'fake://mesh/x.fbx' },
-  motion: { rig: 'fake://rig/x.glb', 'retarget-0': 'fake://motion/x.glb' },
-  active1: { 'effect-0': img('e1') },
-  active2: { 'effect-0': img('e2') },
-  ultimate: { 'effect-0': img('u'), 'passive-0': img('p') },
-  stats: {},
-}
-
-/** An in-memory forge server built on the real state machine and offline director. */
-function memoryDeps(options: { signedIn?: boolean; balance?: number } = {}) {
-  let signedIn = options.signedIn ?? true
-  let balance = options.balance ?? 1000
-  let forge: Forge | undefined
-  const view = () => ({ forge: structuredClone(forge!), balance })
-  function apply(f: Forge, action: ForgeAction): Forge {
-    switch (action.type) {
-      case 'chat': {
-        const chat = [...f.chat, { from: 'player' as const, text: action.text }]
-        const output = fakeDirectorBrain({ prompt: f.prompt || action.text, referenceCaptions: [], chat, answers: action.answers })
-        let next = ok(editInputs({ ...f, chat }, 'spec', { director: output }))
-        if (output.spec) {
-          const { spec, build } = buildSpec(output.spec)
-          next = ok(succeed(ok(begin({ ...next, spec: { ...spec, tone: output.tone }, build }, 'spec')), 'spec', {}))
-        }
-        return { ...next, chat: [...next.chat, { from: 'director', text: output.spec ? 'Here is the spec.' : output.questions[0]?.text ?? '?' }] }
-      }
-      case 'edit': {
-        if (action.stage === 'spec') return { ...f, spec: { ...f.spec!, ...(action.inputs as object) } }
-        return ok(succeed(ok(begin(ok(editInputs(f, action.stage, {})), action.stage)), action.stage, {}))
-      }
-      case 'choose':
-        return ok(choose(f, action.stage, action.choice))
-      case 'start':
-      case 'retry': {
-        const price = stagePrice(action.stage)
-        if (balance < price) throw Object.assign(new Error('not enough credits for this step'), { status: 402 })
-        balance -= price
-        const started = ok(action.type === 'start' ? begin(f, action.stage) : retry(f, action.stage))
-        return ok(succeed(started, action.stage, ARTIFACTS[action.stage] ?? {}))
-      }
-      case 'confirm': {
-        const next = ok(confirm(f, action.stage))
-        return action.stage === 'stats' ? { ...next, publishedHeroId: 'hero-new' } : next
-      }
-      case 'skip':
-        return ok(skip(f, action.stage))
-    }
+function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
+  return {
+    propose: vi.fn(async (hero) => ({ build: proposeBuild({ ...hero, roleId: 'mage' }).build, offline: false, limits: [] })),
+    chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
+    runGate: vi.fn(async (build: Build): Promise<GateOutcome> => ({ state: 'ready', winRate: 0.5, build: { ...build, gate: { state: 'ready', winRate: 0.5 } } })),
+    prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
+    uploadPhoto: vi.fn(async () => ({ ok: true as const, url: 'https://store.public.blob.vercel-storage.com/heroes/a.webp' })),
+    search: vi.fn(async () => []),
+    addHero: vi.fn(async () => { throw new Error('unused') }),
+    createHero: vi.fn(async () => ({ heroId: 'h1', buildId: 'b1' })),
+    saveBuild: vi.fn(async (id: string, build: Build) => ({ id, heroId: 'h1', build })),
+    listBuilds: vi.fn(async () => []),
+    ...over,
   }
-  const deps: ForgeDeps = {
-    session: vi.fn(async () => ({ signedIn })),
-    startSignIn: vi.fn(async () => undefined),
-    verifySignIn: vi.fn(async () => {
-      signedIn = true
-    }),
-    signOut: vi.fn(async () => undefined),
-    credits: vi.fn(async () => ({ balance, freeGrant: 680, freeClaimed: true, packs: [{ id: 'small', credits: 300, amountCents: 399, currency: 'usd' }] })),
-    claimFree: vi.fn(async () => balance),
-    purchase: vi.fn(async () => ({ url: '#bought' })),
-    create: vi.fn(async ({ prompt }) => ((forge = createForge('forge-1', 'acct', prompt ?? '')), view())),
-    get: vi.fn(async () => view()),
-    list: vi.fn(async () => []),
-    act: vi.fn(async (_id: string, action: ForgeAction) => ((forge = apply(forge!, action)), view())),
-    search: vi.fn(async () => [{ id: 'hero-goku', name: 'Goku', roleId: 'fighter', photo: null, useCount: 3 }]),
-    addHero: vi.fn(async () => ({ id: 'b', heroId: 'hero-goku', build: forge!.build! })),
-    sizeCost: vi.fn(async (_b: unknown, size: SizeClass) => ({ sizeClass: size, healthDelta: size === 'huge' ? 9 : 0, speedDelta: size === 'huge' ? -0.9 : 0, hitRadius: SIZES[size].hitRadius, winRate: 0.51, retuneSteps: 0, state: 'ready' as const })),
-  }
-  return { deps, current: () => forge }
 }
 
-const click = async (name: string | RegExp) => act(async () => fireEvent.click(await screen.findByRole('button', { name })))
-
-/** "Forge new" waits for the session check. */
-async function forgeNew() {
-  const button = (await screen.findByRole('button', { name: 'Forge new' })) as HTMLButtonElement
-  await waitFor(() => expect(button.disabled).toBe(false))
-  await act(async () => fireEvent.click(button))
-}
-
-async function openSpec(d: ForgeDeps) {
+async function forge(d: ForgeDeps) {
   render(<ForgeScreen deps={d} />)
-  await forgeNew()
-  await click('Start forging')
-  await screen.findByRole('button', { name: 'Confirm spec' })
+  fireEvent.change(screen.getByLabelText('Hero name'), { target: { value: 'Dario' } })
+  fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a genius who rewinds time and fires beams' } })
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+  await screen.findByRole('heading', { name: 'Dario' })
 }
 
-describe('Forge screen (U11)', () => {
-  it('opens on loadout search, and "Forge new" asks for sign-in when signed out', async () => {
-    const { deps } = memoryDeps({ signedIn: false })
-    render(<ForgeScreen deps={deps} />)
-    expect(screen.getByLabelText('Search the global loadout')).toBeTruthy()
-    await forgeNew()
-    expect(screen.getByRole('form', { name: 'Sign in' })).toBeTruthy()
+/** The role is a radio group of tiles (R10). */
+const roleNow = () => (screen.getByRole('radiogroup', { name: 'Role' }).querySelector('[aria-checked="true"]') as HTMLElement).dataset.roleId
+const pickRole = (name: string) => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Role' })).getByRole('radio', { name }))
+
+describe('forge (U11)', () => {
+  it('name and first message produce a role, six skill cards and a stat split (F1)', async () => {
+    await forge(deps())
+    expect(roleNow()).toBe('mage')
+    expect(screen.getAllByRole('article')).toHaveLength(6)
+    expect(screen.getByLabelText('Stat split')).toBeTruthy()
+    expect(screen.getByText(/of 30 points free/)).toBeTruthy()
   })
 
-  it('prefills a suggested example prompt', async () => {
-    const { deps } = memoryDeps()
-    render(<ForgeScreen deps={deps} />)
-    await forgeNew()
-    expect((screen.getByLabelText('Describe your hero') as HTMLTextAreaElement).value).toBe(EXAMPLE_PROMPT)
+  it('dragging a stat past its cap stops at the closest value and shows the limit (AE4)', async () => {
+    await forge(deps())
+    const armor = screen.getByLabelText('Armor') as HTMLInputElement
+    const cap = getRole('mage').caps.armor
+    await act(async () => fireEvent.change(armor, { target: { value: String(cap * 3) } }))
+    expect(Number(armor.value)).toBeLessThanOrEqual(cap)
+    expect(screen.getByText(/Armor (tops out|can reach)/)).toBeTruthy()
   })
 
-  it('the spec lets the player drop and add suggestions before confirming (AE1)', async () => {
-    const { deps, current } = memoryDeps()
-    await openSpec(deps)
-    const before = current()!.spec!.signatureElements
-    const suggestion = within(screen.getByRole('list', { name: 'Director suggestions' })).getAllByRole('button', { name: 'Add' })[0]
-    await act(async () => fireEvent.click(suggestion))
-    expect(current()!.spec!.signatureElements.length).toBe(before.length + 1)
-    const added = current()!.spec!.signatureElements.at(-1)!
-    await click(`Drop ${added}`)
-    expect(current()!.spec!.signatureElements).toEqual(before)
+  it('"make him unkillable" shows the limits that were hit (AE2)', async () => {
+    const chat = vi.fn(async (build: Build) => {
+      const r = requestStats(build, { maxHealth: 'max', armor: 'max', regen: 'max' })
+      return r.ok ? { build: r.build, offline: false, understood: true, limits: r.limits } : { build, offline: false, understood: false, limits: [] }
+    })
+    await forge(deps({ chat }))
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'make him unkillable' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })))
+    expect(await screen.findByText(/Done, within the limits/)).toBeTruthy()
   })
 
-  it('choosing a size shows its hitbox and stat cost (AE3)', async () => {
-    const { deps } = memoryDeps()
-    await openSpec(deps)
-    await act(async () => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Size class' })).getByRole('radio', { name: 'huge' })))
-    // the hitbox comes from the Charter's size table, which is tuned separately
-    const hitbox = String(SIZES.huge.hitRadius).replace('.', '\\.')
-    expect(await screen.findByText(new RegExp(`Hitbox \\+${hitbox} m · health \\+9 · speed -0\\.9 · 51% vs field`))).toBeTruthy()
+  it('switching role to Tank keeps skill names, shows new tooltips and refills the pool (AE3)', async () => {
+    await forge(deps())
+    fireEvent.change(screen.getByLabelText('Active 1 name'), { target: { value: 'Rewind' } })
+    const before = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
+    await act(async () => pickRole('Tank'))
+    expect((screen.getByLabelText('Active 1 name') as HTMLInputElement).value).toBe('Rewind')
+    expect(screen.getByText(/30 of 30 points free/)).toBeTruthy()
+    const after = within(screen.getByLabelText('Active 1 tooltip')).getByText(/./, { selector: '.mechanic' }).textContent
+    expect(after).not.toBe(before)
   })
 
-  it('the passive offers an aura or a body element (AE4)', async () => {
-    const { deps, current } = memoryDeps()
-    await openSpec(deps)
-    const group = screen.getByRole('radiogroup', { name: 'Passive visual' })
-    expect(within(group).getByRole('radio', { name: 'Aura' })).toBeTruthy()
-    await act(async () => fireEvent.click(within(group).getByRole('radio', { name: 'Body element' })))
-    expect(current()!.spec!.passiveVisual).toBe('body-element')
-    expect(screen.getByLabelText('Which element')).toBeTruthy()
+  it('the swap menu offers the closest 2 to 3 first, then the whole library by family, and swapping updates the tooltip live', async () => {
+    await forge(deps())
+    const select = screen.getByLabelText('Ultimate mechanic') as HTMLSelectElement
+    const groups = [...select.querySelectorAll('optgroup')]
+    expect(groups[0].label).toBe('Closest to your words')
+    expect(groups[0].querySelectorAll('option').length).toBeGreaterThanOrEqual(2)
+    expect(groups[0].querySelectorAll('option').length).toBeLessThanOrEqual(3)
+    expect(select.options.length).toBeGreaterThanOrEqual(7)
+    const target = select.options[select.options.length - 1]
+    await act(async () => fireEvent.change(select, { target: { value: target.value } }))
+    expect(within(screen.getByLabelText('Ultimate tooltip')).getByText(target.textContent as string)).toBeTruthy()
   })
 
-  it('without enough credits, the stage offers a purchase (AE2)', async () => {
-    const { deps } = memoryDeps({ balance: 5 })
-    const concept = stagePrice('concept')
-    await openSpec(deps)
-    await click('Confirm spec')
-    expect((await screen.findByRole('button', { name: new RegExp(`Generate · ${concept} credits`) }) as HTMLButtonElement).disabled).toBe(true)
-    await click(/Buy 300 credits/)
-    expect(deps.purchase).toHaveBeenCalledWith('small')
+  it('a blocked result names the strongest slot, offers alternatives and keeps Ready disabled (AE5)', async () => {
+    const runGate = vi.fn(async (build: Build): Promise<GateOutcome> => ({
+      state: 'blocked',
+      winRate: 0.8,
+      strongestSlot: 'ultimate',
+      alternatives: swapAlternatives(build, 'ultimate'),
+      build: { ...build, gate: { state: 'blocked', winRate: 0.8, strongestSlot: 'ultimate' } },
+    }))
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/Ultimate is carrying it/)
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(true)
+    const alt = within(alert).getAllByRole('button')[0]
+    await act(async () => fireEvent.click(alt))
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('reloading mid-forge reopens at the current stage', async () => {
-    const { deps } = memoryDeps()
-    await openSpec(deps)
-    await click('Confirm spec')
-    cleanup()
-    render(<ForgeScreen deps={deps} />)
-    expect(await screen.findByRole('heading', { name: '2D concept sheet' })).toBeTruthy()
+  it('a kit too weak to hold its own is blocked with the slot holding it back, not sent in hopeless', async () => {
+    const runGate = vi.fn(async (build: Build): Promise<GateOutcome> => ({
+      state: 'blocked',
+      winRate: 0.04,
+      strongestSlot: 'basic',
+      alternatives: swapAlternatives(build, 'basic'),
+      build: { ...build, gate: { state: 'blocked', winRate: 0.04, strongestSlot: 'basic', blockedFor: 'weak' } },
+    }))
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toMatch(/Too weak to hold its own/)
+    expect(alert.textContent).toMatch(/Basic attack is holding it back|holding it back/)
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('a full fake forge completes from prompt to published', async () => {
-    const { deps, current } = memoryDeps()
-    await openSpec(deps)
-    await click('Confirm spec')
-    for (const title of ['2D concept sheet', '3D quad mesh', 'Movement and basic attack', 'Active 1', 'Active 2', 'Passive and ultimate']) {
-      await screen.findByRole('heading', { name: title })
-      await click(/Generate/)
-      await click('Confirm')
-    }
-    // a hero whose ultimate transforms is offered a form, which this flow skips
-    if (current()!.current === 'form') await click('Skip, no form')
-    await screen.findByRole('heading', { name: 'Stat split' })
-    await click('Save split')
-    await click('Publish hero')
-    expect(await screen.findByText(/is published to the global loadout/)).toBeTruthy()
-    expect(current()!.current).toBe('published')
+  it('with the API offline, the creator still proposes a kit and shows an offline notice', async () => {
+    const propose = vi.fn(async (hero: Parameters<ForgeDeps['propose']>[0]) => ({ build: proposeBuild(hero).build, offline: true, limits: [] }))
+    await forge(deps({ propose }))
+    expect(screen.getByText(/Offline mode/)).toBeTruthy()
+    expect(screen.getAllByRole('article')).toHaveLength(6)
+  })
+
+  it('offline, a chat edit the parser cannot read says so and points to the controls', async () => {
+    await forge(deps())
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'make her vibe mysterious' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Send' })))
+    expect(await screen.findByText(/use the controls/i)).toBeTruthy()
+  })
+
+  it('editing an unswapped description re-matches; a hand-swapped one asks first', async () => {
+    await forge(deps())
+    const desc = screen.getByLabelText('Active 2 description')
+    fireEvent.change(desc, { target: { value: 'freezes everyone around' } })
+    await act(async () => fireEvent.blur(desc))
+    expect(within(screen.getByLabelText('Active 2 tooltip')).getByText(/Frost/)).toBeTruthy()
+
+    const select = screen.getByLabelText('Active 2 mechanic') as HTMLSelectElement
+    await act(async () => fireEvent.change(select, { target: { value: select.options[1].value } }))
+    const swappedTo = select.options[0].textContent
+    fireEvent.change(desc, { target: { value: 'hurls a giant fireball' } })
+    await act(async () => fireEvent.blur(desc))
+    expect(screen.getByRole('alertdialog')).toBeTruthy()
+    expect((screen.getByLabelText('Active 2 mechanic') as HTMLSelectElement).options[0].textContent).toBe(swappedTo)
+  })
+
+  it('Ready shows the win rate after the gate passes', async () => {
+    await forge(deps())
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await waitFor(() => expect(screen.getByText(/Ready for battle · wins 50%/)).toBeTruthy())
   })
 })
 
-describe('sign-in on the dev server', () => {
-  async function requestLink(deps: ForgeDeps) {
-    render(<ForgeScreen deps={deps} />)
-    await forgeNew()
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@example.com' } })
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Email me a link' })))
-  }
-
-  it('the dev server hands back the link; following it signs in and opens the prompt', async () => {
-    const { deps } = memoryDeps({ signedIn: false })
-    deps.startSignIn = vi.fn(async () => ({ devLink: 'http://localhost:3110/?signin=tok-123' }))
-    await requestLink(deps)
-    await click('Open sign-in link (dev)')
-    expect(deps.verifySignIn).toHaveBeenCalledWith('tok-123')
-    expect(((await screen.findByLabelText('Describe your hero')) as HTMLTextAreaElement).value).toBe(EXAMPLE_PROMPT)
+describe('forge async safety', () => {
+  it('an edit made during the balance check is kept; the stale result is discarded', async () => {
+    let finish: (o: GateOutcome) => void = () => undefined
+    const runGate = vi.fn((build: Build) => new Promise<GateOutcome>((resolve) => { finish = resolve; void build }))
+    await forge(deps({ runGate }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ready' }))
+    await act(async () => pickRole('Tank'))
+    const stale = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: {} }).build
+    await act(async () => finish({ state: 'ready', winRate: 0.5, build: { ...stale, gate: { state: 'ready', winRate: 0.5 } } }))
+    expect(roleNow()).toBe('tank')
+    expect(await screen.findByText(/changed during the balance check/)).toBeTruthy()
   })
 
-  it('when a real email went out, there is no dev link to follow', async () => {
-    const { deps } = memoryDeps({ signedIn: false })
-    await requestLink(deps)
-    expect(await screen.findByText(/Check a@example.com for a sign-in link/)).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Open sign-in link (dev)' })).toBeNull()
+  it('a failing balance check says so instead of hanging', async () => {
+    const runGate = vi.fn(async () => { throw new Error('worker died') })
+    await forge(deps({ runGate }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    expect(await screen.findByText(/Couldn't run the balance check/)).toBeTruthy()
+    expect((screen.getByRole('button', { name: 'Ready' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('reads the token out of a sign-in link', () => {
-    expect(signInToken('http://localhost:3110/?signin=abc-DEF_1')).toBe('abc-DEF_1')
-    expect(signInToken('/?forge&signin=x')).toBe('x')
-    expect(signInToken('http://localhost:3110/')).toBeUndefined()
+  it('a failed upload removes the image and says why', async () => {
+    render(<ForgeScreen deps={deps({ uploadPhoto: vi.fn(async () => ({ ok: false as const, reason: 'server' as const })) })} />)
+    const file = new File([new Uint8Array([1, 2, 3])], 'me.png', { type: 'image/png' })
+    await act(async () => fireEvent.change(screen.getByLabelText('Reference images'), { target: { files: [file] } }))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Couldn't upload that image/)
+    expect(document.querySelectorAll('.ref')).toHaveLength(0)
+  })
+})
+
+const image = (name = 'me.jpg', type = 'image/jpeg') => new File([new Uint8Array([0xff, 0xd8, 0xff, 1])], name, { type })
+const addFiles = (files: File[]) => act(async () => fireEvent.change(screen.getByLabelText('Reference images'), { target: { files } }))
+
+describe('forge from a prompt and reference images', () => {
+  it('with no name, the prompt names the hero, themes the skills it lists and sets the size it asks for', async () => {
+    const d = deps()
+    render(<ForgeScreen deps={d} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a giant samurai with skills around Moon Slash and Tide Turn' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    expect(await screen.findByRole('heading', { name: 'Giant Samurai' })).toBeTruthy()
+    expect(d.propose).toHaveBeenCalledWith(expect.objectContaining({ heroName: 'Giant Samurai', skills: expect.objectContaining({ active1: expect.objectContaining({ name: 'Moon Slash' }) }) }))
+    const size = within(screen.getByRole('radiogroup', { name: 'Size' })).getByRole('radio', { checked: true })
+    expect(size.getAttribute('aria-label')).toMatch(/^Huge/)
+  })
+
+  it('a reference image is shrunk, uploaded, and sent with the proposal and the saved hero', async () => {
+    const d = deps()
+    render(<ForgeScreen deps={d} />)
+    await addFiles([image()])
+    expect(d.prepareImage).toHaveBeenCalledTimes(1)
+    expect(document.querySelectorAll('.ref.ready')).toHaveLength(1)
+    fireEvent.change(screen.getByLabelText('Hero name'), { target: { value: 'Dario' } })
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a genius who fires beams' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    expect(d.propose).toHaveBeenCalledWith(expect.objectContaining({ photoUrls: ['https://store.public.blob.vercel-storage.com/heroes/a.webp'] }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Save to loadout' })))
+    expect(d.createHero).toHaveBeenCalledWith(expect.objectContaining({ heroName: 'Dario' }), ['https://store.public.blob.vercel-storage.com/heroes/a.webp'])
+  })
+
+  it("an image the browser can't read says why instead of vanishing", async () => {
+    render(<ForgeScreen deps={deps({ prepareImage: vi.fn(async () => ({ ok: false as const, reason: 'heic' as const })) })} />)
+    await addFiles([image('IMG_0042.HEIC', 'image/heic')])
+    expect((await screen.findByRole('alert')).textContent).toMatch(/HEIC/)
+    expect(document.querySelectorAll('.ref')).toHaveLength(0)
+  })
+
+  it('takes three images at most and says so', async () => {
+    render(<ForgeScreen deps={deps()} />)
+    await addFiles([image('a.jpg'), image('b.jpg'), image('c.jpg'), image('d.jpg')])
+    expect(document.querySelectorAll('.ref')).toHaveLength(3)
+    expect(screen.getByRole('alert').textContent).toMatch(/Up to 3 reference images/)
+  })
+
+  it('a pasted image lands in the drop zone wherever the focus is', async () => {
+    const d = deps()
+    render(<ForgeScreen deps={d} />)
+    const paste = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(paste, 'clipboardData', { value: { files: [image('pasted.png', 'image/png')] } })
+    await act(async () => {
+      document.dispatchEvent(paste)
+    })
+    expect(d.uploadPhoto).toHaveBeenCalledTimes(1)
+    expect(paste.defaultPrevented).toBe(true)
+  })
+
+  it('picking a size changes the hero and sends the balance check back to draft', async () => {
+    await forge(deps())
+    await act(async () => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Size' })).getByRole('radio', { name: /^Large/ })))
+    expect(within(screen.getByRole('radiogroup', { name: 'Size' })).getByRole('radio', { checked: true }).getAttribute('aria-label')).toMatch(/^Large/)
+    expect(screen.getByText('Large', { selector: 'dd' })).toBeTruthy()
+  })
+
+  it('saving waits for images still uploading', async () => {
+    let finish: () => void = () => undefined
+    const uploadPhoto = vi.fn(() => new Promise<{ ok: true; url: string }>((resolve) => { finish = () => resolve({ ok: true, url: 'https://store.public.blob.vercel-storage.com/heroes/b.webp' }) }))
+    await forge(deps({ uploadPhoto }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await addFiles([image()])
+    expect((await screen.findByRole('button', { name: 'Save to loadout' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => finish())
+    expect((screen.getByRole('button', { name: 'Save to loadout' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('opens a hero from the Loadout for editing and saves to its own build', async () => {
+    const d = deps()
+    const build = { ...proposeBuild({ heroName: 'Ada', roleId: 'support', skills: {} }).build, gate: { state: 'ready' as const, winRate: 0.5 } }
+    render(<ForgeScreen deps={d} record={{ id: 'b7', heroId: 'h7', build }} />)
+    expect(screen.getByRole('heading', { name: 'Ada' })).toBeTruthy()
+    expect(screen.getByText('In your loadout')).toBeTruthy()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save changes' })))
+    expect(d.saveBuild).toHaveBeenCalledWith('b7', expect.objectContaining({ heroName: 'Ada' }))
   })
 })
