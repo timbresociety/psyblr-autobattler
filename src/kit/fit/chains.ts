@@ -9,13 +9,16 @@ import { weldPositions } from '../wear/weld.js'
  * fit guesses it (a generated item).
  */
 
-/** Particles per hero are budgeted: a whole outfit stays under 64 (see src/kit/physics). */
-export const PARTICLES: Partial<Record<ItemSlot, number>> = { full: 28, lower: 20, upper: 12, back: 20, hair: 14, head: 6, beard: 4, face: 4 }
+/** Particles per hero are budgeted, counting those that move (a root rides the body): a whole outfit stays under 64 (see src/kit/physics). */
+export const PARTICLES: Partial<Record<ItemSlot, number>> = { full: 40, lower: 24, upper: 12, back: 20, hair: 10, head: 6, beard: 4, face: 4 }
 const STIFF: Partial<Record<ItemSlot, number>> = { hair: 0.55, beard: 0.7, head: 0.6, back: 0.25, full: 0.35, lower: 0.35, upper: 0.3, face: 0.5 }
 
 /** How far apart columns and levels sit on the reference body, in metres. */
 const COLUMN = 0.09
 const LEVEL = 0.12
+/** The columns and levels a ring round the legs keeps while anything else in the item can give: with fewer, a stride takes a leg through it. Other pieces keep OPEN. */
+const RING: [number, number] = [8, 3]
+const OPEN: [number, number] = [2, 2]
 
 export interface Chains {
   /** Per vertex: group (-1 for none), column, level. */
@@ -54,7 +57,7 @@ export function chainsOf(positions: Float32Array, index: Uint32Array, hang: Arra
   for (let v = 0; v < n; v++) if (at[id[v]] < 0) at[id[v]] = v
   const P = (w: number, d: number) => positions[at[w] * 3 + d]
   const hips = ref.rest.hips ?? [0, 1, 0]
-  type Piece = { verts: number[]; u: Float32Array; columns: number; levels: number; closed: boolean; drop: number }
+  type Piece = { verts: number[]; u: Float32Array; columns: number; levels: number; closed: boolean; drop: number; floor: [number, number] }
   const found: Piece[] = []
   for (const verts of pieces.values()) {
     let lo = Infinity
@@ -121,13 +124,25 @@ export function chainsOf(positions: Float32Array, index: Uint32Array, hang: Arra
       columns = Math.max(1, Math.round((max - min) / COLUMN) + 1)
       verts.forEach((_, i) => (u[i] = max > min ? (proj[i] - min) / (max - min) : 0.5))
     }
-    found.push({ verts, u, columns: Math.min(32, columns), levels, closed, drop: hi - lo })
+    columns = Math.min(32, columns)
+    const keep = closed ? RING : OPEN
+    found.push({ verts, u, columns, levels, closed, drop: hi - lo, floor: [Math.min(columns, keep[0]), Math.min(levels, keep[1])] })
   }
   if (!found.length) return undefined
-  // fit the budget: fewer columns first (but never fewer than a closed ring needs), then fewer levels
-  const total = () => found.reduce((acc, p) => acc + p.columns * (p.levels + 1), 0)
-  for (let guard = 0; total() > budget && guard < 200; guard++) {
-    const widest = found.reduce((a, b) => (b.columns * (b.levels + 1) > a.columns * (a.levels + 1) ? b : a))
+  // fit the budget: the biggest piece above its floor gives first, columns before levels, and a ring only once nothing
+  // else can; past the floors, the biggest gives down to what a ring needs at all (4 columns) and a level
+  const total = () => found.reduce((acc, p) => acc + p.columns * p.levels, 0)
+  const biggest = (pieces: Piece[]) => pieces.reduce((a, b) => (b.columns * b.levels > a.columns * a.levels ? b : a))
+  for (let guard = 0; total() > budget && guard < 400; guard++) {
+    const above = found.filter((p) => p.columns > p.floor[0] || p.levels > p.floor[1])
+    const open = above.filter((p) => !p.closed)
+    if (above.length) {
+      const p = biggest(open.length ? open : above)
+      if (p.columns > p.floor[0]) p.columns--
+      else p.levels--
+      continue
+    }
+    const widest = biggest(found)
     if (widest.columns > (widest.closed ? 4 : 1)) widest.columns--
     else if (widest.levels > 1) widest.levels--
     else {

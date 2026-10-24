@@ -6,8 +6,8 @@ import type { DressedItem } from '../wear/dress.js'
  * Cloth as chains: what an outfit's loose parts (a skirt, a cape, a kimono's sleeves, long hair) do between frames.
  * The fit (src/kit/fit/chains.ts) gives each loose vertex a place in a grid of columns and levels; here every grid
  * point is a particle. Level 0 rides the body; the levels below swing (Verlet), held to their neighbours by links,
- * pulled gently back toward where the body carries their rest place, and kept out of capsules round the body's
- * bones. Nothing simulates a mesh: each moving particle is a bone, and the outfit's loose vertices are skinned to the
+ * pulled gently back toward where the body carries their rest place, kept out of capsules round the body's bones and
+ * no further in than the body or the layers under them allow. Nothing simulates a mesh: each moving particle is a bone, and the outfit's loose vertices are skinned to the
  * four particles round them, so the GPU does the rest.
  *
  * The rest shape already hangs under gravity, so gravity only acts as far as the body has tipped from its rest pose:
@@ -17,7 +17,7 @@ import type { DressedItem } from '../wear/dress.js'
 
 type V3 = [number, number, number]
 
-/** A hero's particle budget: every loose item of an outfit shares it (chains.ts fits each item's share). */
+/** A hero's budget of particles that move (a root rides the body): every loose item of an outfit shares it (chains.ts fits each item's share). */
 export const MAX_PARTICLES = 64
 /** Steps a second, near the camera; a far or off-screen hero steps at FAR_RATE. */
 export const RATE = 60
@@ -30,9 +30,10 @@ const DRAG = 0.06
 const PULL: [number, number] = [0.012, 0.12]
 /** How far outside a capsule a particle keeps. */
 const MARGIN = 0.012
-/** How far outside a layer worn under it the cloth keeps, and how much of a vertex has to lean on a particle to count. */
+/** How far outside the body or a layer worn under it the cloth keeps, how much of a vertex has to lean on a particle to count, and how far past the body's plane under a vertex its ray looks for the body. */
 const LAYER_MARGIN = 0.002
 const LEAN = 0.1
+const LAYER_REACH = 0.02
 /** How close to that layer cloth lies on it, how much of its slide along it each step takes back, and how far off it the cloth turns freely again. */
 const CONTACT = 0.003
 const GRIP = 0.5
@@ -62,9 +63,8 @@ export interface ClothRig {
   /** The particle a level up (-1 for a root), and the one a level down (-1 at the hem). */
   parent: Int32Array
   child: Int32Array
-  /** Pairs of linked particles, and their rest lengths. */
+  /** Pairs of linked particles. A link keeps the length the body carries its two rest places at, not the rest pose's. */
   links: Uint16Array
-  lengths: Float32Array
   pull: Float32Array
   /** The furthest a particle may stray from its carried rest place. */
   reach: Float32Array
@@ -73,9 +73,14 @@ export interface ClothRig {
   bones: number
   capsules: Capsule[]
   /**
+   * Per particle and capsule (count × capsules), the radius the particle keeps from it: the capsule's own, less where the
+   * particle rests close, so cloth at rest is never pushed and a hem resting by the shin doesn't thin it for the rest.
+   */
+  room: Float32Array
+  /**
    * Per particle, the way out from the body at its rest place (rest space, unit), and how far back in along it the
-   * particle may swing before it meets a layer worn under it: long hair over a robe. Infinity where nothing is worn
-   * under it, and the capsules alone keep it out of the body.
+   * particle may swing before it meets the body or a layer worn under it: a skirt's hem over a shin, long hair over a
+   * robe. Infinity where the cloth hangs clear of both (a cape's tail), and the capsules alone keep it out of the body.
    */
   out: Float32Array
   slack: Float32Array
@@ -200,11 +205,8 @@ function fitSkins(average: Map<number, number>[], pinned: Uint8Array, cells: rea
   return out
 }
 
-/**
- * Capsules round the body's bones, sized from its own skin (so a heavy physique gets thicker ones), then thinned
- * wherever a particle rests close: cloth at rest is never pushed.
- */
-export function capsulesOf(body: BodyShape, bones: readonly string[], rest: (bone: string) => V3 | undefined, particles?: { rest: Float32Array; pinned: Uint8Array }): Capsule[] {
+/** Capsules round the body's bones, sized from its own skin, so a heavy physique gets thicker ones. */
+export function capsulesOf(body: BodyShape, bones: readonly string[], rest: (bone: string) => V3 | undefined): Capsule[] {
   const out: Capsule[] = []
   const V = body.surface.count
   const lead = new Int32Array(V).fill(-1)
@@ -224,9 +226,7 @@ export function capsulesOf(body: BodyShape, bones: readonly string[], rest: (bon
     if (d.length < 6) continue
     d.sort((x, y) => x - y)
     // a quarter of the way up the skin's distances: inside the body all round, even where it's flattest
-    let r = d[Math.floor(d.length * 0.25)]
-    if (particles)
-      for (let k = 0; k < particles.pinned.length; k++) if (!particles.pinned[k]) r = Math.min(r, segmentDistance(particles.rest, k * 3, a, b) - MARGIN - 0.004)
+    const r = d[Math.floor(d.length * 0.25)]
     if (r > 0.01) out.push({ bone, a, b, r })
   }
   return out
@@ -259,11 +259,12 @@ export function buildCloth(input: ClothInput): Cloth | undefined {
   groups.sort((a, b) => b.columns * (b.levels + 1) - a.columns * (a.levels + 1))
   const kept: Group[] = []
   let count = 0
+  let moving = 0
   for (const g of groups) {
-    const n = g.columns * (g.levels + 1)
-    if (count + n > MAX_PARTICLES) continue
+    if (moving + g.columns * g.levels > MAX_PARTICLES) continue
     g.base = count
-    count += n
+    count += g.columns * (g.levels + 1)
+    moving += g.columns * g.levels
     kept.push(g)
   }
   if (!kept.length) return undefined
@@ -377,11 +378,6 @@ export function buildCloth(input: ClothInput): Cloth | undefined {
     joints.set(j, k * 4)
     weights.set(w, k * 4)
   }
-  const lengths = Float32Array.from({ length: links.length / 2 }, (_, i) => {
-    const a = links[i * 2] * 3
-    const b = links[i * 2 + 1] * 3
-    return Math.hypot(rest[a] - rest[b], rest[a + 1] - rest[b + 1], rest[a + 2] - rest[b + 2])
-  })
   // a particle strays at most most of the way its chain hangs from the root
   const reach = new Float32Array(count)
   for (let k = 0; k < count; k++) {
@@ -409,7 +405,10 @@ export function buildCloth(input: ClothInput): Cloth | undefined {
     skinWeight.set(w, v * 4)
   }
 
-  const capsules = capsulesOf(body, input.bones, input.rest, { rest, pinned })
+  const capsules = capsulesOf(body, input.bones, input.rest)
+  const room = new Float32Array(count * capsules.length)
+  for (let k = 0; k < count; k++)
+    if (!pinned[k]) capsules.forEach((c, i) => (room[k * capsules.length + i] = Math.min(c.r, segmentDistance(rest, k * 3, c.a, c.b) - MARGIN - 0.004)))
   const owner = new Int32Array(count)
   for (const g of kept) owner.fill(g.item, g.base, g.base + g.columns * (g.levels + 1))
   const rig: ClothRig = {
@@ -421,12 +420,12 @@ export function buildCloth(input: ClothInput): Cloth | undefined {
     parent,
     child,
     links: Uint16Array.from(links),
-    lengths,
     pull,
     reach,
     bone,
     bones,
     capsules,
+    room,
     ...layersUnder(input, owner, bone, skinIndex, skinWeight, pinned),
   }
   return { rig, skinIndex, skinWeight }
@@ -434,11 +433,11 @@ export function buildCloth(input: ClothInput): Cloth | undefined {
 
 /**
  * The room under each moving particle: how far in, along the body's normal under the cloth it carries, that cloth can
- * go before it meets an item worn under it (one before it in the outfit). Capsules keep cloth out of the body, but not
- * out of a robe: long hair over a kimono. The room is measured from the vertices, not the particle, since a particle is
- * an average of cloth that curves over the body and can sit inside what the cloth itself lies over; and the way out is
- * theirs too, since where the neck meets the shoulders the body under a particle can face another way than the body
- * under the cloth it carries.
+ * go before it meets the body or an item worn under it (one before it in the outfit). The capsules are only round the
+ * bones, and thinned where cloth rests close, so they can't keep a skirt's hem off a striding shin or long hair out of a
+ * kimono. The room is measured from the vertices, not the particle, since a particle is an average of cloth that curves
+ * over the body and can sit inside what the cloth itself lies over; and the way out is theirs too, since where the neck
+ * meets the shoulders the body under a particle can face another way than the body under the cloth it carries.
  */
 function layersUnder(input: ClothInput, owner: Int32Array, bone: Int16Array, skinIndex: Uint16Array, skinWeight: Float32Array, pinned: Uint8Array): { out: Float32Array; slack: Float32Array } {
   const { items, body } = input
@@ -450,16 +449,20 @@ function layersUnder(input: ClothInput, owner: Int32Array, bone: Int16Array, ski
   for (let k = 0; k < count; k++) if (!pinned[k]) particleOf.set(bone[k], k)
   const owners = new Set(owner)
   const nearest = bodyNearest(body)
-  // each item with something worn under it: what leans on which particle, how much, and the body under it
+  const skin: number[] = []
+  const tris = body.surface.triangles
+  for (let t = 0; t < tris.length; t += 3) if (body.skin[tris[t]] && body.skin[tris[t + 1]] && body.skin[tris[t + 2]]) skin.push(tris[t], tris[t + 1], tris[t + 2])
+  // each item with loose cloth: what leans on which particle, how much, and the body under it
   type Lean = { p: V3; under: number; k: number; w: number; layer: TriangleBVH }
   const leans: Lean[] = []
   let offset = 0
   items.forEach((item, i) => {
-    const inner = items.slice(0, i).filter((it) => it.index.length)
-    if (owners.has(i) && inner.length) {
-      const positions = new Float32Array(inner.reduce((n, it) => n + it.count * 3, 0))
-      const index: number[] = []
-      let base = 0
+    if (owners.has(i)) {
+      const inner = items.slice(0, i).filter((it) => it.index.length)
+      const positions = new Float32Array(body.positions.length + inner.reduce((n, it) => n + it.count * 3, 0))
+      positions.set(body.positions)
+      const index = [...skin]
+      let base = body.surface.count
       for (const it of inner) {
         positions.set(it.positions.subarray(0, it.count * 3), base * 3)
         for (const t of it.index) index.push(t + base)
@@ -486,11 +489,11 @@ function layersUnder(input: ClothInput, owner: Int32Array, bone: Int16Array, ski
     const l = Math.hypot(out[k * 3], out[k * 3 + 1], out[k * 3 + 2])
     if (l) for (let d = 0; d < 3; d++) out[k * 3 + d] /= l
   }
-  // and in along it from each vertex, no further than the body under the vertex: past that lies the far side
+  // and in along it from each vertex, to whatever it meets first: the body itself at the furthest, so never its far side
   for (const { p, under, k, layer } of leans) {
     const n: V3 = [out[k * 3], out[k * 3 + 1], out[k * 3 + 2]]
     const depth = (p[0] - body.positions[under * 3]) * n[0] + (p[1] - body.positions[under * 3 + 1]) * n[1] + (p[2] - body.positions[under * 3 + 2]) * n[2]
-    const hit = depth > 0 ? layer.first(p, [-n[0], -n[1], -n[2]], 0, depth + LAYER_MARGIN) : undefined
+    const hit = depth > 0 ? layer.first(p, [-n[0], -n[1], -n[2]], 0, depth + LAYER_REACH) : undefined
     if (hit) slack[k] = Math.min(slack[k], Math.max(0, hit.t - LAYER_MARGIN))
   }
   return { out, slack }
@@ -541,6 +544,8 @@ export interface ClothState {
   frame: Float32Array
   /** Each moving particle's skin matrix (column-major 4x4): the body's rest space to world. */
   matrices: Float32Array
+  /** Each link's length this step, as the body carries it. */
+  span: Float32Array
   /** Time not yet stepped. */
   acc: number
   calm: number
@@ -555,6 +560,7 @@ export function clothState(rig: ClothRig): ClothState {
     target: new Float32Array(rig.count * 3),
     frame: new Float32Array(rig.count * 9),
     matrices: new Float32Array(rig.bones * 16),
+    span: new Float32Array(rig.links.length / 2),
     acc: 0,
     calm: 0,
     started: false,
@@ -647,8 +653,8 @@ export function restCloth(rig: ClothRig, state: ClothState, pose: ArrayLike<numb
 }
 
 function solve(rig: ClothRig, state: ClothState, h: number, pose: ArrayLike<number>, s: number) {
-  const { x, prev, target, frame } = state
-  const { pinned, pull, links, lengths, reach, out, slack } = rig
+  const { x, prev, target, frame, span } = state
+  const { pinned, pull, links, reach, out, slack, room } = rig
   const ticks = h * 60
   const keep = Math.pow(1 - DRAG, ticks)
   for (let k = 0; k < rig.count; k++) {
@@ -667,15 +673,22 @@ function solve(rig: ClothRig, state: ClothState, h: number, pose: ArrayLike<numb
       x[o + d] += (target[o + d] - x[o + d]) * p
     }
   }
+  // links keep the lengths the body carries them at, not the rest pose's: a skirt stretches over a stride as its skin
+  // would carry it, where a ring holding its rest girth lets a leg through
+  for (let i = 0; i < span.length; i++) {
+    const a = links[i * 2] * 3
+    const b = links[i * 2 + 1] * 3
+    span[i] = Math.hypot(target[b] - target[a], target[b + 1] - target[a + 1], target[b + 2] - target[a + 2])
+  }
   for (let pass = 0; pass < PASSES; pass++)
-    for (let i = 0; i < lengths.length; i++) {
+    for (let i = 0; i < span.length; i++) {
       const a = links[i * 2]
       const b = links[i * 2 + 1]
       const dx = x[b * 3] - x[a * 3]
       const dy = x[b * 3 + 1] - x[a * 3 + 1]
       const dz = x[b * 3 + 2] - x[a * 3 + 2]
       const len = Math.hypot(dx, dy, dz) || 1e-9
-      const diff = (len - lengths[i] * s) / len
+      const diff = (len - span[i]) / len
       const wa = pinned[a] ? 0 : pinned[b] ? 1 : 0.5
       const wb = pinned[b] ? 0 : pinned[a] ? 1 : 0.5
       x[a * 3] += dx * diff * wa
@@ -689,20 +702,23 @@ function solve(rig: ClothRig, state: ClothState, h: number, pose: ArrayLike<numb
   const caps = rig.capsules.map((c) => {
     const o = c.bone * 16
     const at = (p: V3): V3 => [0, 1, 2].map((r) => pose[o + r] * p[0] + pose[o + 4 + r] * p[1] + pose[o + 8 + r] * p[2] + pose[o + 12 + r]) as V3
-    return { a: at(c.a), b: at(c.b), r: c.r * s + MARGIN }
+    return { a: at(c.a), b: at(c.b) }
   })
   for (let k = 0; k < rig.count; k++) {
     if (pinned[k]) continue
     const o = k * 3
-    for (const c of caps) {
+    caps.forEach((c, i) => {
+      const keep = room[k * caps.length + i]
+      if (keep <= 0) return
+      const r = keep * s + MARGIN
       const ab = [c.b[0] - c.a[0], c.b[1] - c.a[1], c.b[2] - c.a[2]]
       const ap = [x[o] - c.a[0], x[o + 1] - c.a[1], x[o + 2] - c.a[2]]
       const t = Math.min(1, Math.max(0, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2] || 1)))
       const off = [ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t]
       const d = Math.hypot(off[0], off[1], off[2])
-      if (d >= c.r || d < 1e-6) continue
-      for (let i = 0; i < 3; i++) x[o + i] += (off[i] / d) * (c.r - d)
-    }
+      if (d >= r || d < 1e-6) return
+      for (let j = 0; j < 3; j++) x[o + j] += (off[j] / d) * (r - d)
+    })
     // no further in than the layers worn under it allow, along the way out as the body carries it; and what lies on a
     // layer is held there, not slid off it by gravity or a sway, though it's free to lift away
     if (slack[k] < Infinity) {

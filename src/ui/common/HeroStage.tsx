@@ -31,6 +31,10 @@ export interface HeroStageProps {
   size?: SizeClass
   /** With `size`, rings the plinth with the hit capsule's real radius (the Forge's size picker). */
   hitbox?: boolean
+  /** Holds the hero at this angle (radians, 0 facing the camera) instead of turning it slowly; a drag still turns it. */
+  facing?: number
+  /** Plays everything, clips and cloth, at this fraction of real time: slow motion for a dev bench. */
+  speed?: number
   label: string
   className?: string
 }
@@ -90,9 +94,11 @@ function disposeModel(model: THREE.Object3D) {
   materials.forEach((m) => m.dispose())
 }
 
-export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, className = '' }: HeroStageProps) {
+export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing, speed = 1, label, className = '' }: HeroStageProps) {
   const host = useRef<HTMLDivElement>(null)
   const live = useRef<Live | undefined>(undefined)
+  const pace = useRef({ facing, speed })
+  pace.current = { facing, speed }
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const reduced = useRef(prefersReducedMotion())
@@ -140,7 +146,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     const shadow = new THREE.Mesh(flat(new THREE.CircleGeometry(0.62, 48), 0.006), new THREE.MeshBasicMaterial({ map: radialTexture([[0, 'rgba(0,0,0,0.8)'], [0.55, 'rgba(0,0,0,0.3)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false }))
     const turntable = new THREE.Group()
     const sizer = new THREE.Group()
-    turntable.rotation.y = START_ANGLE
+    turntable.rotation.y = pace.current.facing ?? START_ANGLE
     turntable.add(sizer)
     sizer.add(shadow)
     scene.add(glow, ring, hitbox, turntable)
@@ -222,14 +228,14 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
       if (!visible) return
       acc += dt
       if (acc < 1 / FPS && !dragging) return
-      const step = acc
+      const step = acc * pace.current.speed
       acc = 0
       const calm = reduced.current
       if (!calm) state.mixer?.update(step)
       if (!dragging && Math.abs(spin) > 0.01) {
         turntable.rotation.y += spin * step
         spin *= Math.pow(0.04, step)
-      } else if (!dragging && !calm && performance.now() > resumeAt) {
+      } else if (!dragging && !calm && pace.current.facing === undefined && performance.now() > resumeAt) {
         turntable.rotation.y += step * 0.26
       }
       if (Math.abs(state.scale - state.targetScale) > 0.002) {
@@ -338,7 +344,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     const mixer = state.mixer
     action.reset()
     action.setLoop(THREE.LoopOnce, 1)
-    action.clampWhenFinished = false
+    // held on its last frame while idle fades back in: let go, the body would blend toward its bind pose meanwhile
+    action.clampWhenFinished = true
     action.fadeIn(0.12).play()
     idle.fadeOut(0.12)
     const done = (e: { action: THREE.AnimationAction }) => {

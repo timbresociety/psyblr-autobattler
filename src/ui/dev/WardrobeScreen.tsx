@@ -8,8 +8,9 @@ import type { StageClip } from '../common/hero-look'
 
 /**
  * A dev bench for the wardrobe (?wardrobe, dev builds only): outfits from the library on the shared bodies, to check
- * how items sit and how their loose cloth swings. ?wardrobe=kimono,hair_long,geta wears just the listed items, and
- * &gender=m or f picks the body.
+ * how items sit and how their loose cloth swings. ?wardrobe=kimono,hair_long,geta wears just the listed items,
+ * &gender=m or f picks the body, &facing=3.14 holds it turned (radians; that one shows the back) and &speed=0.25 plays
+ * in slow motion.
  */
 
 const PRESETS: { name: string; role: RoleId; items: string[] }[] = [
@@ -34,6 +35,8 @@ export function WardrobeScreen() {
   const listed = params.get('wardrobe')
   const asked = params.get('gender')
   const gender: Gender | undefined = asked === 'm' || asked === 'f' ? asked : undefined
+  const facing = params.has('facing') ? Number(params.get('facing')) : undefined
+  const speed = Number(params.get('speed') ?? 1) || 1
   const outfits = listed ? [{ name: 'Listed', role: 'fighter' as RoleId, items: listed.split(',').map((s) => s.trim()) }] : PRESETS
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   return (
@@ -51,7 +54,7 @@ export function WardrobeScreen() {
           return (
             <section key={o.name} style={{ height: 560, display: 'grid', gridTemplateRows: 'auto 1fr' }}>
               <h2 style={{ margin: 0, fontSize: 14 }}>{`${o.name}: ${o.items.join(', ')}`}</h2>
-              <HeroStage look={{ heroName: o.name, roleId: o.role, sizeClass: 'medium', look }} hue={heroHue(o.name)} {...(cue ? { cue } : {})} label={o.name} />
+              <HeroStage look={{ heroName: o.name, roleId: o.role, sizeClass: 'medium', look }} hue={heroHue(o.name)} {...(cue ? { cue } : {})} {...(facing === undefined ? {} : { facing })} speed={speed} label={o.name} />
             </section>
           )
         })}
