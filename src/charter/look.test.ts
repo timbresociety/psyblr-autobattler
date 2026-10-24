@@ -62,6 +62,20 @@ describe('a hero’s look', () => {
     expect(hydrateLook({ gender: 'm', colors: {}, physique: { weight: 2, muscle: 0, age: 0 } })).not.toHaveProperty('physique')
   })
 
+  it('keeps a print that is a known pattern or an uploaded picture, never both, and how much of the photo the face takes', () => {
+    const worn = (print: unknown) => hydrateLook({ gender: 'm', colors: {}, wear: { full: { id: 'kimono', url: '/kit/wear/kimono.glb', print } } })?.wear?.full?.print
+    expect(worn({ id: 'seigaiha', ink: '#FFD700', scale: 40, channel: 1 })).toEqual({ id: 'seigaiha', ink: '#ffd700', scale: 12, channel: 1 })
+    expect(worn({ url: face.url, ink: '#ffd700', channel: 0 })).toEqual({ url: face.url })
+    expect(worn({ id: 'paisley' })).toBeUndefined()
+    expect(worn({ id: 'stars', url: face.url })).toBeUndefined()
+    expect(worn({ url: 'https://evil.example/cover.png' })).toBeUndefined()
+    expect(worn({ id: 'stars', channel: 7 })).toEqual({ id: 'stars' })
+    expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, strength: 0.456 } })?.face?.strength).toBe(0.46)
+    // all of the photo is the default, so it isn't written down
+    expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, strength: 1 } })?.face).not.toHaveProperty('strength')
+    expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, strength: -1 } })?.face).not.toHaveProperty('strength')
+  })
+
   it('dresses a look from before the wardrobe in wardrobe items, in its old colours', () => {
     const old = { gender: 'm' as const, hair: 'curly' as const, beard: 'goatee' as const, armour: true, cape: true, colors: { suit: '#112233', metal: '#c0a060', cape: '#330000', hair: '#221100', pants: '#000011', boot: '#100000' }, gear: { hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', color: '#00ff00' } } }
     expect(outfitOf(old)).toEqual({

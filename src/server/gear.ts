@@ -3,7 +3,7 @@ import { builtIn, fits } from '../kit/pieces.js'
 import { libraryItem, slotsFor } from '../kit/wear/library.js'
 import { visibleAssets, type SharedAsset } from './assets.js'
 import type { Db } from './db.js'
-import { isOwnPieceUrl } from './photo-url.js'
+import { isOwnPhotoUrl, isOwnPieceUrl } from './photo-url.js'
 
 /**
  * What's wrong with a look's gear, if anything: every worn piece must be a built-in or a visible community piece, at
@@ -25,7 +25,8 @@ export function gearProblem(look: HeroLook | undefined, community: ReadonlyMap<s
 
 /**
  * What's wrong with a look's wardrobe, if anything: every worn item must be in the library (built in, or a community
- * garment or piece the repository still shows) at its own URL, in a slot it can be worn in.
+ * garment or piece the repository still shows) at its own URL, in a slot it can be worn in, and a picture printed on
+ * it must be one the player uploaded.
  */
 export function wearProblem(look: HeroLook | undefined, community: ReadonlyMap<string, SharedAsset> = new Map()): string | undefined {
   for (const slot of LOOK_SLOTS) {
@@ -37,6 +38,8 @@ export function wearProblem(look: HeroLook | undefined, community: ReadonlyMap<s
     // a piece is worn in the slot of its kind
     const itemSlot = 'slot' in known ? known.slot : known.kind
     if (!slotsFor(itemSlot).includes(slot)) return `a ${itemSlot} item can't go in ${slot}`
+    // a picture worn as a print is a photo like any other
+    if (worn.print?.url && !isOwnPhotoUrl(worn.print.url)) return `the print on ${worn.id} must be uploaded through the photo endpoint`
   }
   return undefined
 }

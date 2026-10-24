@@ -186,9 +186,9 @@ const fits = new Map<string, number[]>()
 /**
  * A photo face's shape on one body, for shapeBody: undefined when the hero has no photo, or the basis or the body's
  * kit hasn't loaded (the atlas waits for both, so a hero dressed with its face has them). Fitted once per body and
- * photo; `positions` are the body's welded rest positions.
+ * photo, and taken at the photo's strength; `positions` are the body's welded rest positions.
  */
-export function photoFaceShape(face: { url: string; points: readonly number[] } | undefined, body: string, kit: BodyKit | undefined, positions: ArrayLike<number>): FaceShape | undefined {
+export function photoFaceShape(face: { url: string; points: readonly number[]; strength?: number } | undefined, body: string, kit: BodyKit | undefined, positions: ArrayLike<number>): FaceShape | undefined {
   if (!face || !loaded || !kit?.fit || !kit.faceScale) return undefined
   const { basis, meta } = loaded
   const scale = kit.faceScale / meta.faceScale
@@ -200,5 +200,5 @@ export function photoFaceShape(face: { url: string; points: readonly number[] } 
     weights = fitFace(faceModel(basis, meta, positions, kit.fit, scale, kit.faceScale), points).weights
     fits.set(key, weights)
   }
-  return { basis, weights, base: kit.fit, scale }
+  return { basis, weights, base: kit.fit, scale, strength: face.strength }
 }

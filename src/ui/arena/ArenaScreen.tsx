@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import type { Build } from '../../charter/build'
 import { armyModifiers } from '../../charter/traits'
 import { attachControls } from '../../arena/client/controls'
 import { createEffects } from '../../arena/client/effects/player'
@@ -6,6 +7,7 @@ import { atLeast } from '../../arena/client/quality'
 import { ControlHud, MatchHud } from './MatchHud'
 import { canRender, startArena, type ArenaController, type HudState, type MatchSetup } from '../../arena/client/match-view'
 import { Staging, type StagingResult } from './staging/Staging'
+import { tryItStaging } from './staging/try-it'
 import { Loading, Unsupported } from './Loading'
 import { Countdown } from './Countdown'
 import { PauseMenu } from './PauseMenu'
@@ -28,15 +30,32 @@ export function ArenaScreen() {
   )
 }
 
+/** A training dummy's health against an ordinary tank's: enough to try every skill on it more than once. */
+const DUMMY_HEALTH = 5
+
 /** Turn a staged formation into the engine's teams, formations and per-hero packages. */
 function matchSetup(staged: StagingResult): MatchSetup {
   const side = (s: 0 | 1) => staged.formation[s].map((p) => staged.loadout[p.hero])
   const teams = ([0, 1] as const).map((s) => armyModifiers(side(s).map((e) => e.build))) as MatchSetup['teams']
   const formations = ([0, 1] as const).map((s) => staged.formation[s].map((p) => ({ x: p.x, y: 0, z: p.z }))) as MatchSetup['formations']
-  return { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: Date.now() % 100_000, side: staged.side }
+  const setup: MatchSetup = { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: Date.now() % 100_000, side: staged.side }
+  if (!staged.dummy) return setup
+  teams[1] = teams[1].map((c) => ({ ...c, mods: { ...c.mods, mul: { ...c.mods?.mul, maxHealth: DUMMY_HEALTH - 1 } } }))
+  return { ...setup, idle: teams[1].map((_, j) => teams[0].length + j) }
 }
 
-function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: () => void; onRestart: () => void }) {
+/**
+ * The Forge's Try it: the hero as it stands, in the real arena, against a training dummy that never fights back. The
+ * AI plays the hero until the player takes control; leaving goes back to the Forge.
+ */
+export function TryIt({ build, onClose }: { build: Build; onClose: () => void }) {
+  const [round, setRound] = useState(0)
+  const staged = useMemo(() => tryItStaging(build), [build])
+  if (!canRender()) return <Unsupported />
+  return <Fight key={round} staged={staged} onBack={onClose} onRestart={() => setRound((r) => r + 1)} back="Back to the Forge" />
+}
+
+function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string }) {
   const host = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -118,23 +137,23 @@ function Fight({ staged, onBack, onRestart }: { staged: StagingResult; onBack: (
         <div className="arena-overlay hud-screen" role="alert">
           <p>The arena failed to start: {error}</p>
           <button className="hud-btn primary big" onClick={onBack}>
-            Back to staging
+            {back}
           </button>
         </div>
       ) : !controller ? (
         <Loading {...progress} />
       ) : (
         <>
-          <Live controller={controller} staged={staged} locked={locked} help={help} onHelp={setHelp} paused={menu || counting} onLeave={onBack} onRematch={onRestart} />
+          <Live controller={controller} staged={staged} locked={locked} help={help} onHelp={setHelp} paused={menu || counting} onLeave={onBack} onRematch={onRestart} back={back} />
           {splash && <Countdown onDone={countdownDone} onFinished={splashDone} />}
-          {menu && <PauseMenu onResume={resume} onRestart={onRestart} onBack={onBack} />}
+          {menu && <PauseMenu onResume={resume} onRestart={onRestart} onBack={onBack} back={back} />}
         </>
       )}
     </div>
   )
 }
 
-function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRematch }: { controller: ArenaController; staged: StagingResult; locked: boolean; help: boolean; onHelp: (on: boolean) => void; paused: boolean; onLeave: () => void; onRematch: () => void }) {
+function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRematch, back }: { controller: ArenaController; staged: StagingResult; locked: boolean; help: boolean; onHelp: (on: boolean) => void; paused: boolean; onLeave: () => void; onRematch: () => void; back: string }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
   const builds = useMemo(() => staged.formation[staged.side].map((p) => staged.loadout[p.hero].build), [staged])
   // names, portraits and each skill's icon never change during a match: built once, not at 10 Hz
@@ -152,7 +171,7 @@ function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRem
       <WorldHud controller={controller} heroes={heroes} />
       <MatchHud state={state} side={staged.side} builds={builds} heroes={heroes} controller={controller} />
       {controlled && <ControlHud hero={controlled} info={heroes[controlled.id]} controller={controller} state={state} heroes={heroes} />}
-      {over && <Result state={state} side={staged.side} heroes={heroes} onRematch={onRematch} onBack={onLeave} />}
+      {over && <Result state={state} side={staged.side} heroes={heroes} onRematch={onRematch} onBack={onLeave} back={back} />}
       {!locked && !over && !paused && !controlled && <CameraHelp open={help} onToggle={toggleHelp} />}
     </div>
   )

@@ -22,6 +22,8 @@ export interface StagingResult {
   side: Team
   formation: Formation
   loadout: LoadoutEntry[]
+  /** The other side is a training dummy: it stands still and takes a long time to fall. */
+  dummy?: true
 }
 
 const TEAM = ['Blue', 'Red'] as const

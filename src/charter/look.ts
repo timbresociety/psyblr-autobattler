@@ -1,4 +1,5 @@
 import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
+import { PRINT_SCALE, isPrintId, type PrintId } from '../kit/wear/prints.js'
 import type { Physique } from '../kit/body/shape.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
 import type { BuildSlot } from './types.js'
@@ -55,6 +56,8 @@ export interface FacePhoto {
   width: number
   height: number
   points: number[]
+  /** 0 to 1: how much of the photo's shape the face takes (the picture itself is always laid on whole); all of it when absent. */
+  strength?: number
 }
 
 export interface HeroLook {
@@ -98,6 +101,22 @@ export interface Worn {
   finishes?: (Finish | null)[]
   /** 0 (shortest) to 1 (as made), for the knobs the item allows. */
   knobs?: Partial<Record<Knob, number>>
+  /** A pattern over one of its channels. */
+  print?: WornPrint
+}
+
+/** A pattern on a worn item: one of the built-in prints, or a picture the player uploaded, repeated over the cloth. */
+export interface WornPrint {
+  /** A built-in print (src/kit/wear/prints.ts); exactly one of this and `url`. */
+  id?: PrintId
+  /** A picture uploaded through the photo endpoint. */
+  url?: string
+  /** '#rrggbb' a built-in print is inked in, over the channel's own colour; a deeper shade of that colour when absent. */
+  ink?: string
+  /** Repeats per metre of cloth (PRINT_SCALE); the print's default when absent. */
+  scale?: number
+  /** The channel it covers; the first when absent. */
+  channel?: number
 }
 
 export const wearUrl = (id: string) => `/kit/wear/${id}.glb`
@@ -109,6 +128,8 @@ const PIECE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/
 const PIECE_URL = /^(\/kit\/pieces\/[a-z0-9_-]+\.glb|\/dev-store\/pieces\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/pieces\/[0-9a-f-]{36}\.glb)$/
 // a wardrobe item: built in, a built-in piece, or one a player generated (the dev server's or a Blob store's)
 const ITEM_URL = /^(\/kit\/(wear|pieces)\/[a-z0-9_-]+\.glb|\/dev-store\/(wear|pieces)\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/(wear|pieces)\/[0-9a-f-]{36}\.glb)$/
+// a picture uploaded through the photo endpoint, at the dev server or in a Blob store; the server checks which
+const PHOTO_URL = /^(\/dev-store\/heroes\/[0-9a-f-]{36}\.webp|https:\/\/[a-z0-9.-]+\/heroes\/[0-9a-f-]{36}(-[A-Za-z0-9]+)?\.webp)$/
 const isFiniteIn = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max
 
 /** Rebuild a look from untrusted input, keeping only what it knows; an invalid face is dropped, not the whole look. */
@@ -130,6 +151,7 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     const limit = Math.max(face.width, face.height)
     if (face.points.every((p) => isFiniteIn(p, limit))) {
       look.face = { url: face.url, width: face.width, height: face.height, points: face.points.map((p) => Math.round((p as number) * 10) / 10) }
+      if (isFiniteIn(face.strength, 1) && face.strength < 1) look.face.strength = Math.round(face.strength * 100) / 100
     }
   }
   const physique = input.physique as Record<string, unknown> | undefined
@@ -163,7 +185,7 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
 // the build's slots (build.ts imports this module, so they're listed here)
 const SKILL_SLOTS: readonly BuildSlot[] = ['basic', 'active1', 'active2', 'passive', 'ultimate', 'movement']
 
-/** A wardrobe from untrusted input: well-formed items in known slots (the server checks they exist). */
+/** A wardrobe from untrusted input: well-formed items in known slots (the server checks they exist), or none at all. */
 function hydrateWear(raw: unknown): HeroLook['wear'] | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const input = raw as Record<string, Record<string, unknown> | undefined>
@@ -180,6 +202,8 @@ function hydrateWear(raw: unknown): HeroLook['wear'] | undefined {
       for (const k of KNOBS) if (isFiniteIn(knobs[k], 1)) kept[k] = Math.round((knobs[k] as number) * 1000) / 1000
       if (Object.keys(kept).length) item.knobs = kept
     }
+    const print = hydratePrint(w.print)
+    if (print) item.print = print
     wear[slot] = item
   }
   // a full-body item replaces the upper and lower ones
@@ -187,7 +211,22 @@ function hydrateWear(raw: unknown): HeroLook['wear'] | undefined {
     delete wear.upper
     delete wear.lower
   }
-  return Object.keys(wear).length ? wear : undefined
+  // an empty wardrobe is kept: a hero who took everything off stays that way
+  return wear
+}
+
+/** A print from untrusted input: a known print or an uploaded picture's URL (not both), on one of four channels. */
+function hydratePrint(raw: unknown): WornPrint | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const p = raw as Record<string, unknown>
+  const id = isPrintId(p.id) ? p.id : undefined
+  const url = typeof p.url === 'string' && PHOTO_URL.test(p.url) ? p.url : undefined
+  if (!id === !url) return undefined
+  const print: WornPrint = id ? { id } : { url }
+  if (id && typeof p.ink === 'string' && HEX.test(p.ink.toLowerCase())) print.ink = p.ink.toLowerCase()
+  if (typeof p.scale === 'number' && Number.isFinite(p.scale)) print.scale = Math.round(Math.min(PRINT_SCALE.max, Math.max(PRINT_SCALE.min, p.scale)) * 10) / 10
+  if (Number.isInteger(p.channel) && (p.channel as number) > 0 && (p.channel as number) < 4) print.channel = p.channel as number
+  return print
 }
 
 /**

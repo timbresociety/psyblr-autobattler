@@ -1,6 +1,6 @@
 import * as THREE from 'three'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { attribute, clamp, distance, dot, float, max, mix, normalView, positionViewDirection, step, texture, uniform, vec3, vertexColor } from 'three/tsl'
+import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
+import { attribute, clamp, distance, dot, float, max, mix, normalGeometry, normalView, positionGeometry, positionViewDirection, step, texture, uniform, vec3, vertexColor } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS, type Build } from '../../charter/build.js'
 import { POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
@@ -10,7 +10,7 @@ import { skillLookOf } from '../recipes/looks.js'
 import type { AnimState } from './animation.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
-import { dressModel } from './wear/dress-model.js'
+import { dressModel, type ClothPrint } from './wear/dress-model.js'
 import type { LoadedWear } from './wear/items.js'
 
 export { characterLook, heroHue, loadBuild } from './character-look.js'
@@ -43,20 +43,35 @@ export function characterMaterial(team: THREE.Color, map: THREE.Texture | null =
  * colour shaded by the texture against the channel's own (_base), as printedColor does for the previews (dress-model.ts).
  */
 export function clothMaterial(team: THREE.Color, map?: THREE.Texture): MeshStandardNodeMaterial {
-  const m = new MeshStandardNodeMaterial({ vertexColors: !map, side: THREE.DoubleSide })
+  const own = vertexColor().rgb
+  if (!map) return finished(new MeshStandardNodeMaterial({ vertexColors: true, side: THREE.DoubleSide }), own, team)
+  const tex = texture(map).rgb
+  const base = attribute('_base', 'vec3')
+  const luma = vec3(0.2126, 0.7152, 0.0722)
+  const shade = clamp(dot(tex, luma).div(max(dot(base, luma), 0.04)), 0, 2)
+  return finished(new MeshStandardNodeMaterial({ side: THREE.DoubleSide }), mix(own.mul(shade), tex, float(1).sub(step(0.002, distance(own, base)))), team)
+}
+
+/**
+ * A print in the arena, as classicPrintMaterial lays it on for the previews (dress-model.ts): its tile by where the
+ * cloth sits on the body at rest, from the axis each face looks along, so it rides the cloth; a built-in print's ink
+ * mixed over the channel's colour by its mask, a picture as it is.
+ */
+export function printMaterial(team: THREE.Color, print: ClothPrint): MeshStandardNodeMaterial {
+  const p = positionGeometry.mul(print.repeat)
+  const n = normalGeometry.normalize().abs().pow(4)
+  const w = n.div(n.x.add(n.y).add(n.z))
+  const tile = texture(print.map, p.zy).mul(w.x).add(texture(print.map, p.xz).mul(w.y)).add(texture(print.map, p.xy).mul(w.z))
+  const color = print.ink ? mix(vertexColor().rgb, uniform(print.ink), tile.r) : tile.rgb
+  return finished(new MeshStandardNodeMaterial({ side: THREE.DoubleSide }), color, team)
+}
+
+/** An outfit material in `color`, with the finish read per vertex (_finish) and the team rim. */
+function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.Color): MeshStandardNodeMaterial {
   const finish = attribute('_finish', 'vec4')
   m.roughnessNode = finish.x
   m.metalnessNode = finish.y
-  const own = vertexColor().rgb
-  let color = own
-  if (map) {
-    const tex = texture(map).rgb
-    const base = attribute('_base', 'vec3')
-    const luma = vec3(0.2126, 0.7152, 0.0722)
-    const shade = clamp(dot(tex, luma).div(max(dot(base, luma), 0.04)), 0, 2)
-    color = mix(own.mul(shade), tex, float(1).sub(step(0.002, distance(own, base))))
-    m.colorNode = color
-  }
+  if (!m.vertexColors) m.colorNode = color
   const grazing = float(1).sub(normalView.dot(positionViewDirection).abs())
   const glow = finish.w.add(finish.z.mul(grazing.pow(2)).mul(0.3))
   m.emissiveNode = color.mul(glow).add(uniform(team).mul(grazing.pow(2.5)).mul(0.6))
@@ -101,7 +116,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
-  dressModel(scene, look, wear, { body, cloth: (map) => clothMaterial(team, map) }, atlas)
+  dressModel(scene, look, wear, { body, cloth: (map) => clothMaterial(team, map), print: (print) => printMaterial(team, print) }, atlas)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

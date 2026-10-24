@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { gearProblem, wearProblem } from './gear.js'
 import { isOwnPieceUrl } from './photo-url.js'
 
@@ -44,6 +44,18 @@ describe('the wardrobe on a saved hero', () => {
     expect(wearProblem(wearing({ feet: { id: 'katana', url: '/kit/pieces/katana.glb' } }))).toMatch(/can't go in feet/)
     // gearProblem checks the wardrobe too, since that's what the store calls
     expect(gearProblem(wearing({ upper: { id: 'mystery_robe', url: '/kit/wear/mystery_robe.glb' } }))).toMatch(/no item/)
+  })
+
+  it('takes a picture as a print only when it came through the photo endpoint', () => {
+    vi.stubEnv('BLOB_STORE_ID', 'abc')
+    try {
+      const printed = (url: string) => wearing({ full: { id: 'kimono', url: '/kit/wear/kimono.glb', print: { url } } })
+      expect(wearProblem(printed('https://abc.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'))).toBeUndefined()
+      expect(wearProblem(printed('https://xyz.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'))).toMatch(/photo endpoint/)
+      expect(wearProblem(wearing({ full: { id: 'kimono', url: '/kit/wear/kimono.glb', print: { id: 'seigaiha' } } }))).toBeUndefined()
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
 

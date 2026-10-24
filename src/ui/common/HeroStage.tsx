@@ -4,7 +4,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { characterLook, classicCharacterMaterial, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
 import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
-import { classicClothMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
+import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
@@ -299,7 +299,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
         // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
         const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
-        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty) }, atlas)
+        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty) }, atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

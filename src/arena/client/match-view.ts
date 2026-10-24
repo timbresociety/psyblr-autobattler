@@ -37,6 +37,8 @@ export interface MatchSetup {
   seed: number
   /** The side the streamer staged first and may control (R2, R14). */
   side: Team
+  /** Heroes the AI leaves standing, by index: a training dummy that only takes hits. */
+  idle?: readonly number[]
 }
 
 export interface HudHero {
@@ -510,6 +512,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
       prev = arena.match.heroes.map((h) => ({ ...h.position }))
       const commands = aiCommands(arena)
+      for (const i of setup.idle ?? []) commands[i] = undefined
       const human = arena.match.human
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)

@@ -4,6 +4,7 @@ import type { LookColor, PieceKind, WearSlot } from '../charter/look.js'
 import { floorBreach, offlineReading, readingText, type Reading, type ReadInput } from '../forge/reading.js'
 import type { LimitHit } from '../charter/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
+import type { ItemSlot } from '../kit/wear/item.js'
 import type { LibraryEntry } from '../kit/wear/library.js'
 import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
@@ -95,6 +96,8 @@ export class ApiError extends Error {
 /** The asset repository from the Forge: search it free, and generate what it lacks (signed in, for credits). */
 export interface PieceDeps {
   searchPieces(query: string, kind?: PieceKind): Promise<PieceEntry[]>
+  /** The wardrobe's items for a search: the built-ins that match, then the community's garments and pieces. */
+  searchItems(query: string, slot?: ItemSlot): Promise<LibraryEntry[]>
   /** Whether generating is switched on for this deployment. */
   generationReady(): Promise<boolean>
   session(): Promise<SessionView>
@@ -280,6 +283,10 @@ export const livePieceDeps: PieceDeps = {
   async searchPieces(query, kind) {
     const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) })
     return (await call<{ pieces: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces
+  },
+  async searchItems(query, slot) {
+    const params = new URLSearchParams({ q: query, ...(slot ? { slot } : {}) })
+    return (await call<{ items: LibraryEntry[] }>(`/api/assets/items?${params}`)).items
   },
   generationReady: async () => (await call<{ ready: boolean }>('/api/pieces')).ready,
   session: () => call<SessionView>('/api/auth/session'),

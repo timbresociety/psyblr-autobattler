@@ -55,4 +55,20 @@ describe("an outfit's one geometry", () => {
     const geo = clothGeometry([kimono], new Map([['kimono', print(kimono.count, [0.2, 0.2, 0.6])]]))!
     expect(geo.groups).toEqual([{ start: 0, count: 6, materialIndex: 1 }])
   })
+
+  it("takes a print's channel out of its item's draw into one of its own, after the textured ones", () => {
+    // the kimono's first two triangles are its body (channel 0), the last its obi (channel 1), which wears the print
+    const kimono = part('kimono', 3, [0.2, 0.2, 0.6])
+    const cloak = part('cloak', 1, [0.1, 0.1, 0.1])
+    const channels = Uint8Array.from({ length: kimono.count }, (_, k) => (k < 6 ? 0 : 1))
+    const pattern = { channels, channel: 1, print: { map: new THREE.Texture(), repeat: 4 } }
+    const geo = clothGeometry([part('tee', 1, [1, 0, 0]), kimono, cloak], new Map([['cloak', print(cloak.count, [0.1, 0.1, 0.1])]]), new Map([['kimono', pattern]]))!
+    expect(geo.groups).toEqual([
+      { start: 0, count: 9, materialIndex: 0 },
+      { start: 9, count: 3, materialIndex: 1 },
+      { start: 12, count: 3, materialIndex: 2 },
+    ])
+    // the print's draw is the obi: the kimono's last three vertices, after the tee's three
+    expect(Array.from(geo.getIndex()!.array.slice(12))).toEqual([3 + 6, 3 + 7, 3 + 8])
+  })
 })

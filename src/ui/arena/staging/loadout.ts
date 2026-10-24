@@ -3,7 +3,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { bodyFor, characterLook, classicCharacterMaterial, heroHue, loadBuild, type BodyName, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
 import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
 import { restClothOn } from '../../../arena/client/wear/cloth-model.js'
-import { classicClothMaterial, dressModel } from '../../../arena/client/wear/dress-model.js'
+import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../../arena/client/wear/dress-model.js'
 import { wearNow, type LoadedWear } from '../../../arena/client/wear/items.js'
 import type { Build } from '../../../charter/build.js'
 import type { RoleId } from '../../../charter/types.js'
@@ -152,7 +152,7 @@ export function preloadBusts(): Promise<boolean> {
 function posed(file: Gltf, look: CharacterLook, atlas: THREE.Texture | null = null, wear?: LoadedWear): THREE.Object3D {
   const model = cloneSkinned(file.scene)
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null)
-  dressModel(model, look, wear, { body, cloth: classicClothMaterial }, atlas)
+  dressModel(model, look, wear, { body, cloth: classicClothMaterial, print: classicPrintMaterial }, atlas)
   const idle = file.animations.find((c) => c.name === 'idle')
   if (idle) {
     const mixer = new THREE.AnimationMixer(model)
