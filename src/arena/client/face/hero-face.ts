@@ -3,6 +3,7 @@ import { characterMap, type CharacterLook, type Gltf } from '../character-look.j
 import { bodyKit } from '../body-kit.js'
 import { compositeFace } from './composite.js'
 import { buildFacePatch, type FaceMeta, type Rgba } from './patch.js'
+import { faceBasisFile } from './shape.js'
 import type { Pt } from './warp.js'
 
 /**
@@ -19,21 +20,25 @@ export function faceMeta(body: string): Promise<FaceMeta | undefined> {
 
 const photos = new Map<string, Promise<Rgba | undefined>>()
 
-/** A stored photo's pixels. Blob serves public files to any origin, so the canvas stays readable. */
+/**
+ * A stored photo's pixels. Blob serves public files to any origin, so the canvas stays readable. Decoded from the
+ * fetched bytes: an image element's decode() never settles in a hidden tab, which kept a hero's face (and the hero, on
+ * the busts) waiting until the player came back.
+ */
 export function photoPixels(url: string): Promise<Rgba | undefined> {
   let photo = photos.get(url)
   if (!photo) {
     photo = (async () => {
-      const img = new Image()
-      img.crossOrigin = 'anonymous'
-      img.src = url
-      await img.decode()
+      const response = await fetch(url)
+      if (!response.ok) return undefined
+      const bitmap = await createImageBitmap(await response.blob())
       const canvas = document.createElement('canvas')
-      canvas.width = img.naturalWidth
-      canvas.height = img.naturalHeight
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
       if (!ctx) return undefined
-      ctx.drawImage(img, 0, 0)
+      ctx.drawImage(bitmap, 0, 0)
+      bitmap.close()
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height)
       return { width: data.width, height: data.height, data: data.data }
     })().catch(() => undefined)
@@ -74,7 +79,8 @@ export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Textur
   let made = atlases.get(key)
   if (!made) {
     made = (async () => {
-      const [meta, photo] = await Promise.all([faceMeta(look.build), photoPixels(face.url)])
+      // the face basis comes in with the atlas, so the face's shape is fitted (shape.ts) when the hero is dressed in it
+      const [meta, photo] = await Promise.all([faceMeta(look.build), photoPixels(face.url), faceBasisFile()])
       if (!meta || !photo) return null
       // the landmarks were found on the image as uploaded; scale them if the stored file came back another size
       const sx = photo.width / face.width

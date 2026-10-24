@@ -201,10 +201,10 @@ def solve_box(J, r, lam, iters=600):
     return w
 
 
-def fit_face(human, portrait, lam=4e-4, rounds=4, log=print):
+def fit_face(human, portrait, lam=4e-4, rounds=4, log=print, full=False):
     """
     Load the candidate face targets and set them so the head's landmarks match the portrait's (front view).
-    Returns the fitted weights by target name.
+    Returns the fitted weights by target name: those above 0.02, or with `full` every group's.
     """
     bind = load_bind()
     fit_ids = [i for i in FIT if bind[i]]
@@ -250,7 +250,9 @@ def fit_face(human, portrait, lam=4e-4, rounds=4, log=print):
     for ks, group, wk in zip(keys, CANDIDATES, w):
         for kb in ks:
             kb.value = float(wk)
-        if wk > 0.02:
+        if full:
+            fitted['+'.join(group)] = round(float(wk), 5)
+        elif wk > 0.02:
             fitted['+'.join(group)] = round(float(wk), 3)
     log(f'face fit: mean landmark error {err0 * 1000:.2f} mm -> {err * 1000:.2f} mm', fitted)
     return fitted

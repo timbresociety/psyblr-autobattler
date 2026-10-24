@@ -32,6 +32,11 @@ export function bodyKit(body: string): Promise<BodyKit | undefined> {
   return kit
 }
 
+/** The sidecar if it has loaded; undefined otherwise, and nothing is fetched. */
+export function bodyKitLoaded(body: string): BodyKit | undefined {
+  return settled.get(body)
+}
+
 /** The sidecar if it has already loaded: null while it is on its way (calling `ready` once it lands). */
 export function bodyKitNow(body: string, ready: () => void): BodyKit | undefined | null {
   if (settled.has(body)) return settled.get(body)

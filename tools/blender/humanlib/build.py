@@ -137,6 +137,8 @@ def main(opts):
     t0 = time.time()
     if opts.get('face-basis'):
         return face_basis(opts)
+    if opts.get('face-fits'):
+        return face_fits(opts)
     spec = heroes.spec(opts.get('hero') or opts.get('base'))
     base = bool(spec.get('base'))
     size = int(opts.get('size', spec.get('atlas', 1024)))
@@ -380,6 +382,30 @@ def face_basis(opts):
     with open(out + '.json', 'w') as f:
         json.dump({'version': 1, 'from': spec['id'], 'vertices': len(p0), 'faceScale': round(scale * spec.get('head_scale', 1.08), 6), 'groups': groups, 'landmarks': marks}, f, separators=(',', ':'))
     log('wrote', out + '.bin', os.path.getsize(out + '.bin'), 'bytes', sum(1 for m in marks if m), 'landmarks', f'{time.time() - t0:.1f}s')
+
+
+def face_fits(opts):
+    """
+    fit_face on the reference body, with no face of its own, for each demo hero's portrait: every group's weight, which
+    the game's port (src/arena/client/face/shape.ts) is tested against. Writes <out>: the groups, then per hero its
+    portrait and weights.
+    """
+    t0 = time.time()
+    spec = heroes.spec(opts.get('base', REFERENCE))
+    topo = load_topology()
+    fits = {}
+    for name in heroes.HEROES:
+        hero = heroes.spec(name)
+        _img, lm = portrait_of(hero)
+        if lm is None:
+            continue
+        got = {}
+        build_body(spec, {}, extra=lambda human: got.update(F.fit_face(human, lm, log=log, full=True)), faces=topo['refine'])
+        fits[name] = {'portrait': hero['portrait'], 'weights': [got.get(g, 0.0) for g in F.group_names()]}
+        log('fit', name, f'{time.time() - t0:.1f}s')
+    with open(opts['face-fits'], 'w') as f:
+        json.dump({'from': spec['id'], 'groups': F.group_names(), 'fits': fits}, f, separators=(',', ':'))
+    log('wrote', opts['face-fits'], len(fits), 'fits')
 
 
 def export(path, size):

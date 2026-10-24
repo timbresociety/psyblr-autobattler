@@ -6,7 +6,9 @@ import { dress, type DressedItem, type Worn as WornItem } from '../../../kit/wea
 import { bodyFields, type BodyFields } from '../../../kit/wear/fields.js'
 import { linearRgb } from '../../../kit/wear/finish.js'
 import { coverOf, type Cover } from '../../../kit/wear/item.js'
+import { bodyKitLoaded } from '../body-kit.js'
 import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from '../character-look.js'
+import { photoFaceShape } from '../face/shape.js'
 import { hangPieces, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
 import { rigCloth } from './cloth-model.js'
@@ -206,7 +208,8 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const mesh = bodyMesh(model)
   if (!mesh || !onSharedSurface(mesh)) return false
   const cache = bodyCache(mesh)
-  const shape = shapeBody(cache.base, cache.morphs, look.physique)
+  const face = photoFaceShape(look.face, look.build, bodyKitLoaded(look.build), cache.base.positions)
+  const shape = shapeBody(cache.base, cache.morphs, look.physique, face)
   const { worn, rigid } = outfitItems(look.outfit, wear)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
   const source = mesh.geometry
