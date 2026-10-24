@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Build } from '../charter/build'
 import type { BuildRecord } from './api'
-import { Token, Wordmark } from './brand/Brand'
+import { BrandMark } from './brand/BrandMark'
 import { ForgeScreen } from './forge/ForgeScreen'
 import { LoadoutScreen } from './loadout/LoadoutScreen'
 import './theme.css'
@@ -151,13 +151,7 @@ function Screens() {
   return (
     <>
       <header className="topbar">
-        <div className="brand">
-          <Token className="brand-token" />
-          <span className="brand-word">
-            <Wordmark className="brand-wordmark" />
-            <small>autobattler</small>
-          </span>
-        </div>
+        <BrandMark label="autobattler" paused={tab === 'arena'} />
         <nav className="tabs" role="tablist" aria-label="Screens" onKeyDown={onKeyDown}>
           {TABS.map((t) => (
             <button key={t.id} id={`tab-${t.id}`} className="tab" role="tab" aria-selected={tab === t.id} aria-controls="screen" tabIndex={tab === t.id ? 0 : -1} onClick={() => open(t.id)}>
