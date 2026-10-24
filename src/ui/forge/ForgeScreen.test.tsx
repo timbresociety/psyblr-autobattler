@@ -255,6 +255,24 @@ describe('forge from a prompt and reference images', () => {
     expect(paste.defaultPrevented).toBe(true)
   })
 
+  it("the prompt's gear words put kit pieces on the hero, and the Gear rows swap or remove them", async () => {
+    const d = deps()
+    render(<ForgeScreen deps={d} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana and a straw hat' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Forge hero' })))
+    await screen.findByRole('heading', { name: 'Samurai' })
+    const row = (name: string) => within(screen.getByRole('radiogroup', { name }))
+    expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Katana')
+    expect(row('Head').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
+    await act(async () => fireEvent.click(row('Head').getByRole('radio', { name: 'Crown' })))
+    await act(async () => fireEvent.click(row('Right hand').getByRole('radio', { name: 'Nothing' })))
+    expect(row('Head').getByRole('radio', { checked: true }).textContent).toBe('Crown')
+    expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
+    // a piece with a colour slot takes the colour picked beside its row
+    fireEvent.change(screen.getByLabelText('Crown colour'), { target: { value: '#3366ff' } })
+    expect((screen.getByLabelText('Crown colour') as HTMLInputElement).value).toBe('#3366ff')
+  })
+
   it('picking a size changes the hero and sends the balance check back to draft', async () => {
     await forge(deps())
     await act(async () => fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Size' })).getByRole('radio', { name: /^Large/ })))

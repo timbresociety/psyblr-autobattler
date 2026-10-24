@@ -3,13 +3,14 @@ import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
+import { loadGear, wearGear } from '../../arena/client/gear.js'
 import type { HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
 import type { Build } from '../../charter/build'
 import { SIZES, type SizeClass } from '../../charter/sizes'
 import type { RoleId } from '../../charter/types'
 import { prefersReducedMotion } from '../arena/hud/format'
-import { characterFile } from '../arena/staging/loadout'
+import { characterFile, modelFile } from '../arena/staging/loadout'
 import { ROLE_RGB, type StageClip } from './hero-look'
 
 /**
@@ -272,14 +273,18 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     state.glow.material.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
-      .then(async (file: Gltf) => ({ file, atlas: look ? await heroAtlas(file, painted) : null }))
+      .then(async (file: Gltf) => {
+        const [atlas, gear] = look ? await Promise.all([heroAtlas(file, painted), loadGear(painted.build, painted.gear, modelFile)]) : [null, undefined]
+        return { file, atlas, gear }
+      })
       .then(
-      ({ file, atlas }) => {
+      ({ file, atlas, gear }) => {
         if (cancelled || live.current !== state) return
         const model = cloneSkinned(file.scene)
         // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
         paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty), atlas)
+        if (gear) wearGear(model, painted.gear, gear)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

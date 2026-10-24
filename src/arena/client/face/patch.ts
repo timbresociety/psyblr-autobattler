@@ -17,7 +17,7 @@ export interface Rgba {
 
 export type Rgb = [number, number, number]
 
-/** A body's face sidecar (public/heroes/<body>.face.json), written by the Blender pipeline. */
+/** A body's face data, from its kit sidecar (public/heroes/<body>.kit.json), written by the Blender pipeline. */
 export interface FaceMeta {
   version: 1
   atlas: number

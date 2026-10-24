@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { characterMap, type CharacterLook, type Gltf } from '../character-look.js'
+import { bodyKit } from '../body-kit.js'
 import { compositeFace } from './composite.js'
 import { buildFacePatch, type FaceMeta, type Rgba } from './patch.js'
 import type { Pt } from './warp.js'
@@ -11,18 +12,9 @@ import type { Pt } from './warp.js'
  * body's shared atlas: a missing face never stops a fight.
  */
 
-const metas = new Map<string, Promise<FaceMeta | undefined>>()
-
-/** A body's face sidecar (public/heroes/<body>.face.json), fetched once. */
+/** A body's face data, from its kit sidecar. */
 export function faceMeta(body: string): Promise<FaceMeta | undefined> {
-  let meta = metas.get(body)
-  if (!meta) {
-    meta = fetch(`/heroes/${body}.face.json`)
-      .then((r) => (r.ok ? (r.json() as Promise<FaceMeta>) : undefined))
-      .catch(() => undefined)
-    metas.set(body, meta)
-  }
-  return meta
+  return bodyKit(body)
 }
 
 const photos = new Map<string, Promise<Rgba | undefined>>()

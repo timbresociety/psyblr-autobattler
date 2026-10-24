@@ -92,6 +92,19 @@ describe('painting a build for one hero', () => {
     const g = paintGeometry(source(), look)
     expect(g.getIndex()!.count / 3).toBe(5)
   })
+
+  it('shows the hair style and beard it chose and none of the others', () => {
+    // parts 7 to 15 came after the first seven, so older models keep their indices: 9 is curly hair, 13 a full beard, 14 a goatee
+    const tris = [triangle(0, 0), triangle(6, 9), triangle(6, 11), triangle(6, 13), triangle(6, 14)]
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(new Array(tris.length * 9).fill(0), 3))
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(tris.flatMap((t) => t.uv), 2))
+    g.setIndex(tris.flatMap((_, i) => [i * 3, i * 3 + 1, i * 3 + 2]))
+    const look = characterLook(defaultBuild('marksman', 'M'), 0.6)
+    const kept = (beard: typeof look.beard) => Array.from(paintGeometry(g, { ...look, hair: 'curly', beard, armour: false, cape: false }).getIndex()!.array)
+    expect(kept('goatee')).toEqual([0, 1, 2, 3, 4, 5, 12, 13, 14])
+    expect(kept('none')).toEqual([0, 1, 2, 3, 4, 5])
+  })
 })
 
 describe('which clip a cast plays', () => {

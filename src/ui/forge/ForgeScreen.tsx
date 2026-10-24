@@ -20,7 +20,8 @@ import { SIZES, type SizeClass } from '../../charter/sizes'
 import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
-import type { HeroLook } from '../../charter/look'
+import type { GearPiece, GearSlot, HeroLook } from '../../charter/look'
+import { BUILT_IN } from '../../kit/pieces'
 import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
 import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps, type HeroResult } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
@@ -31,6 +32,7 @@ import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
 import { LookPanel } from './LookPanel'
+import { GearPanel } from './GearPanel'
 import { facePhoto, firstLook, photoColours, resolvedLook, type FaceCandidate } from './look'
 import { LoadoutSearch } from './LoadoutSearch'
 import { RoleSwitcher } from './RoleSwitcher'
@@ -347,6 +349,15 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
       const { colors, ...rest } = patch
       return setLook(b, { ...base, ...rest, colors: { ...base.colors, ...(colors ?? {}) } })
     })
+  const onWear = (slot: GearSlot, piece: GearPiece | undefined) =>
+    setBuild((b) => {
+      if (!b) return b
+      const { gear: worn, ...rest } = lookOf(b)
+      const gear = { ...worn }
+      if (piece) gear[slot] = piece
+      else delete gear[slot]
+      return setLook(b, Object.keys(gear).length ? { ...rest, gear } : rest)
+    })
   const onFace = (on: boolean) =>
     setBuild((b) => {
       if (!b) return b
@@ -495,6 +506,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                 </div>
               </section>
               <LookPanel look={resolvedLook(build.look, build.roleId, build.heroName, heroHue(build.heroName))} canFace={!!candidate} onChange={onLook} onFace={onFace} />
+              <GearPanel gear={build.look?.gear} catalog={BUILT_IN} onWear={onWear} />
               <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
               <section className="kit" aria-label="Kit">
                 <header className="kit-head">

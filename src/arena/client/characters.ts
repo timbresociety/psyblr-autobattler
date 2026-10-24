@@ -6,6 +6,7 @@ import type { Build } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { AnimState } from './animation.js'
 import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look.js'
+import { wearGear, type LoadedGear } from './gear.js'
 
 export { characterLook, heroHue, loadBuild } from './character-look.js'
 
@@ -55,8 +56,8 @@ export interface CharacterView {
   pose: (state: AnimState, dt: number, moving: boolean) => void
 }
 
-/** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face. */
-export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null): CharacterView {
+/** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face, `gear` its pieces. */
+export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null, gear?: LoadedGear): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   let meta: 'uv' | 'uv1' = 'uv'
@@ -65,6 +66,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
   })
   paintModel(scene, look, (map, normalMap) => characterMaterial(team, map, meta, normalMap), atlas)
+  if (gear) wearGear(scene, look.gear, gear)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

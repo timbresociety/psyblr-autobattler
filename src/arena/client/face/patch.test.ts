@@ -4,7 +4,7 @@ import { WARP } from './landmarks.js'
 import { buildFacePatch, skinColour, type FaceMeta, type Rgba } from './patch.js'
 import { applySimilarity, similarity, tpsFit, type Pt } from './warp.js'
 
-const meta = JSON.parse(readFileSync(new URL('../../../../public/heroes/m-medium.face.json', import.meta.url), 'utf8')) as FaceMeta
+const meta = JSON.parse(readFileSync(new URL('../../../../public/heroes/m-medium.kit.json', import.meta.url), 'utf8')) as FaceMeta
 
 /** A photo whose red channel is its x and green its y, so a patch pixel says where in the photo it came from. */
 function coordinatePhoto(size = 256): Rgba {

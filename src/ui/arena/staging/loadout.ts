@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
 import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
+import { gearNow, wearGear, type LoadedGear } from '../../../arena/client/gear.js'
 import type { Build } from '../../../charter/build.js'
 import type { RoleId } from '../../../charter/types.js'
 import type { HeroPackage } from '../../../forge/package.js'
@@ -118,6 +119,11 @@ export async function characterFile(build: Build3D): Promise<Gltf> {
   return loadBuild(build, await loader())
 }
 
+/** Any other model through the same loader: a piece of gear. */
+export async function modelFile(url: string): Promise<Gltf> {
+  return (await loader())(url)
+}
+
 /**
  * Load the character files the busts are drawn from (once): the generic bodies and every demo hero's model. Resolves
  * false only if none can load, and the busts keep the procedural stand-in; a hero whose own file failed keeps its
@@ -141,9 +147,10 @@ export function preloadBusts(): Promise<boolean> {
  * with its own handle on the atlas, so its GPU copy can be freed once the portrait is taken without touching the
  * arena's or the previews'.
  */
-function posed(file: Gltf, look: CharacterLook, atlas: THREE.Texture | null = null): THREE.Object3D {
+function posed(file: Gltf, look: CharacterLook, atlas: THREE.Texture | null = null, gear?: LoadedGear): THREE.Object3D {
   const model = cloneSkinned(file.scene)
   paintModel(model, look, (map, normalMap) => classicCharacterMaterial(map ? map.clone() : null, normalMap ? normalMap.clone() : null), atlas)
+  if (gear) wearGear(model, look.gear, gear)
   const idle = file.animations.find((c) => c.name === 'idle')
   if (idle) {
     const mixer = new THREE.AnimationMixer(model)
@@ -192,7 +199,9 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   if (!file) want(look.build)
   // a photo face is made off the drawing path; until it is ready the bust shows the body without it, not cached
   const atlas = file ? heroAtlasNow(file, look, changed) : null
-  const final = !!file && atlas !== undefined
+  // gear loads off the drawing path too: until every piece is in, the bust waits and is not cached
+  const gear = file ? gearNow(look.build, look.gear, modelFile, changed) : undefined
+  const final = !!file && atlas !== undefined && gear !== null
   if (!final && standIns.has(cacheKey)) return standIns.get(cacheKey)
   const scene = new THREE.Scene()
   scene.add(new THREE.HemisphereLight(0xfff2e2, 0x3a3048, 1.5))
@@ -204,7 +213,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 10)
   let release: () => void
   if (file) {
-    const model = posed(file, look, atlas ?? null)
+    const model = posed(file, look, atlas ?? null, gear ?? undefined)
     scene.add(model)
     // frame the head and shoulders from the head bone, so every build sits the same way in its frame
     const head = new THREE.Vector3(0, 1.62, 0)

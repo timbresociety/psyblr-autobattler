@@ -1,17 +1,39 @@
 /**
  * A hero's look (cosmetic only: no number in the game reads it). The body comes from the hero's size and this look's
- * gender (public/heroes/<m|f>-<size>.glb); hair, armour, cape and a colour per region dress it; a photo face, with the
- * 478 landmarks the Forge found on it, is warped onto the body's own face wherever the hero is drawn.
+ * gender (public/heroes/<m|f>-<size>.glb); hair, a beard, armour, cape and a colour per region dress it; a photo face,
+ * with the 478 landmarks the Forge found on it, is warped onto the body's own face wherever the hero is drawn; and
+ * gear from the asset repository hangs in the body's sockets.
  */
 
 export type Gender = 'm' | 'f'
 
-export const HAIR_STYLES = ['none', 'crop', 'spiky', 'long', 'helmet'] as const
+export const HAIR_STYLES = ['none', 'buzz', 'crop', 'short', 'curly', 'swept', 'spiky', 'bob', 'long', 'volume', 'helmet'] as const
 export type HairStyle = (typeof HAIR_STYLES)[number]
+
+export const BEARD_STYLES = ['none', 'goatee', 'full', 'chin_curtain'] as const
+export type BeardStyle = (typeof BEARD_STYLES)[number]
 
 /** Regions the look can colour; each takes '#rrggbb'. */
 export const LOOK_COLORS = ['skin', 'suit', 'trim', 'pants', 'glove', 'boot', 'hair', 'iris', 'brow', 'cape', 'metal'] as const
 export type LookColor = (typeof LOOK_COLORS)[number]
+
+/** Where a piece of gear hangs on a body (each body's sockets come from tools/blender/humanlib/sockets.py). */
+export const GEAR_SLOTS = ['head', 'face', 'hand_r', 'hand_l', 'back'] as const
+export type GearSlot = (typeof GEAR_SLOTS)[number]
+
+/** What a piece is made for. A hand piece fits either hand; an off-hand piece (a shield, a bow) only the left. */
+export const PIECE_KINDS = ['head', 'face', 'hand', 'offhand', 'back'] as const
+export type PieceKind = (typeof PIECE_KINDS)[number]
+
+export const SLOT_KINDS: Record<GearSlot, readonly PieceKind[]> = { head: ['head'], face: ['face'], hand_r: ['hand'], hand_l: ['hand', 'offhand'], back: ['back'] }
+
+/** A piece of gear a hero wears: its id in the asset repository, where its model lives, and the colour it takes. */
+export interface GearPiece {
+  id: string
+  url: string
+  /** The colour of the piece's 'primary' material; the piece's own when absent. */
+  color?: string
+}
 
 /** A photo face: where it is stored, its size, and its landmarks as x, y pairs in its own pixels. */
 export interface FacePhoto {
@@ -24,15 +46,22 @@ export interface FacePhoto {
 export interface HeroLook {
   gender: Gender
   hair: HairStyle
+  /** Facial hair; none when absent. */
+  beard?: BeardStyle
   armour: boolean
   cape: boolean
   colors: Partial<Record<LookColor, string>>
   face?: FacePhoto
+  /** Rigid pieces in the body's sockets: a hat, glasses, a weapon in each hand, something on the back. */
+  gear?: Partial<Record<GearSlot, GearPiece>>
 }
 
 export const FACE_POINTS = 478
 
 const HEX = /^#[0-9a-f]{6}$/
+const PIECE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/
+// a built-in piece, one the dev server stored, or one in a Blob store; the server checks which (src/server/gear.ts)
+const PIECE_URL = /^(\/kit\/pieces\/[a-z0-9_-]+\.glb|\/dev-store\/pieces\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/pieces\/[0-9a-f-]{36}\.glb)$/
 const isFiniteIn = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max
 
 /** Rebuild a look from untrusted input, keeping only what it knows; an invalid face is dropped, not the whole look. */
@@ -48,12 +77,23 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     if (typeof v === 'string' && HEX.test(v.toLowerCase())) colors[key] = v.toLowerCase()
   }
   const look: HeroLook = { gender: input.gender, hair, armour: input.armour === true, cape: input.cape === true, colors }
+  if ((BEARD_STYLES as readonly string[]).includes(input.beard as string) && input.beard !== 'none') look.beard = input.beard as BeardStyle
   const face = input.face as Record<string, unknown> | undefined
   if (face && typeof face.url === 'string' && face.url.length <= 300 && isFiniteIn(face.width, 4096) && isFiniteIn(face.height, 4096) && Array.isArray(face.points) && face.points.length === FACE_POINTS * 2) {
     const limit = Math.max(face.width, face.height)
     if (face.points.every((p) => isFiniteIn(p, limit))) {
       look.face = { url: face.url, width: face.width, height: face.height, points: face.points.map((p) => Math.round((p as number) * 10) / 10) }
     }
+  }
+  const gearIn = input.gear as Record<string, Record<string, unknown> | undefined> | undefined
+  if (gearIn && typeof gearIn === 'object') {
+    const gear: NonNullable<HeroLook['gear']> = {}
+    for (const slot of GEAR_SLOTS) {
+      const g = gearIn[slot]
+      if (!g || typeof g.id !== 'string' || !PIECE_ID.test(g.id) || typeof g.url !== 'string' || !PIECE_URL.test(g.url)) continue
+      gear[slot] = { id: g.id, url: g.url, ...(typeof g.color === 'string' && HEX.test(g.color.toLowerCase()) ? { color: g.color.toLowerCase() } : {}) }
+    }
+    if (Object.keys(gear).length) look.gear = gear
   }
   return look
 }

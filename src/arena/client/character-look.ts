@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import { defaultLook, ROLE_GENDER, type FacePhoto, type Gender, type HairStyle, type LookColor } from '../../charter/look.js'
+import { defaultLook, ROLE_GENDER, type BeardStyle, type FacePhoto, type Gender, type HairStyle, type HeroLook, type LookColor } from '../../charter/look.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 import { DEMO_HEROES } from '../demo/roster.js'
 
@@ -45,6 +45,7 @@ export type HeroModel = (typeof HERO_MODELS)[keyof typeof HERO_MODELS]
 /** Which character file a look loads: a body or a demo hero's own model. */
 export type Build3D = BodyName | HeroModel
 export type Hair = HairStyle
+export type Beard = BeardStyle
 
 /**
  * Order matches REGIONS and PARTS in tools/blender/humanlib/bake.py. The first twelve take a colour from the look and
@@ -54,7 +55,8 @@ export type Hair = HairStyle
 const REGIONS = ['skin', 'suit', 'trim', 'pants', 'glove', 'boot', 'hair', 'metal', 'eye', 'iris', 'brow', 'cape', 'baked', 'baked_gloss', 'baked_metal'] as const
 type Region = (typeof REGIONS)[number]
 export type TintRegion = Exclude<Region, 'baked' | 'baked_gloss' | 'baked_metal'>
-const PARTS = ['base', 'hair:crop', 'hair:spiky', 'hair:long', 'hair:helmet', 'armour', 'cape'] as const
+// new parts go on the end, so every model built before them keeps its part indices
+const PARTS = ['base', 'hair:crop', 'hair:spiky', 'hair:long', 'hair:helmet', 'armour', 'cape', 'hair:buzz', 'hair:short', 'hair:curly', 'hair:swept', 'hair:bob', 'hair:volume', 'beard:full', 'beard:goatee', 'beard:chin_curtain'] as const
 
 /** Region indices the materials shade differently (metal and gloss). */
 export const REGION_INDEX = { metal: 7, baked: 12, bakedGloss: 13, bakedMetal: 14 } as const
@@ -62,11 +64,14 @@ export const REGION_INDEX = { metal: 7, baked: 12, bakedGloss: 13, bakedMetal: 1
 export interface CharacterLook {
   build: Build3D
   hair: Hair
+  beard: Beard
   armour: boolean
   cape: boolean
   colors: Record<TintRegion, THREE.Color>
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
   face?: FacePhoto
+  /** Pieces in the body's sockets (gear.ts); a demo hero's model has its own outfit and wears none. */
+  gear?: HeroLook['gear']
 }
 
 /** The body a hero wears: its size class (colossal while transformed) in its look's gender, or its role's without one. */
@@ -107,6 +112,7 @@ export function characterLook(build: Build, hue: number): CharacterLook {
   const out: CharacterLook = {
     build: model ?? bodyFor(build),
     hair: look?.hair ?? base.hair,
+    beard: look?.beard ?? base.beard ?? 'none',
     armour: look ? look.armour : base.armour,
     cape: look ? look.cape : base.cape,
     colors: {
@@ -115,6 +121,7 @@ export function characterLook(build: Build, hue: number): CharacterLook {
     },
   }
   if (look?.face) out.face = look.face
+  if (look?.gear) out.gear = look.gear
   return out
 }
 
@@ -148,7 +155,7 @@ export function paintGeometry(source: THREE.BufferGeometry, look: CharacterLook)
   const meta = source.getAttribute(metaChannel(source))
   const n = meta.count
   const colors = new Float32Array(n * 3)
-  const shown = new Set<string>(['base', `hair:${look.hair}`, ...(look.armour ? ['armour'] : []), ...(look.cape ? ['cape'] : [])])
+  const shown = new Set<string>(['base', `hair:${look.hair}`, `beard:${look.beard}`, ...(look.armour ? ['armour'] : []), ...(look.cape ? ['cape'] : [])])
   const visible = new Uint8Array(n)
   for (let i = 0; i < n; i++) {
     const region = REGIONS[Math.min(REGIONS.length - 1, Math.floor(meta.getX(i)))]

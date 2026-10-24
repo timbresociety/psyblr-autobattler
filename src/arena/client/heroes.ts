@@ -10,6 +10,7 @@ import { formSize } from '../../forge/stages.js'
 import { modelFor } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
+import { loadGear } from './gear.js'
 import { TEAM_COLORS } from './map.js'
 
 /**
@@ -68,7 +69,8 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const dressed = async (shape: Build) => {
     const shapeLook = characterLook(shape, hue)
     const file = await load(shapeLook.build)
-    return characterView(file, shapeLook, color, build, await heroAtlas(file, shapeLook))
+    const [atlas, gear] = await Promise.all([heroAtlas(file, shapeLook), loadGear(shapeLook.build, shapeLook.gear, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
+    return characterView(file, shapeLook, color, build, atlas, gear)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)

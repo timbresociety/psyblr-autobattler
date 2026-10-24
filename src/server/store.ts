@@ -3,6 +3,7 @@ import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/bu
 import { isGateStale, type GateOptions } from '../sim/gate.js'
 import { cachedGate } from './gate-cache.js'
 import { isOwnPhotoUrl } from './photo-url.js'
+import { gearProblem } from './gear.js'
 import type { Db } from './db.js'
 
 /**
@@ -54,6 +55,8 @@ function validated(raw: unknown): Build {
   if (!result.ok) throw new StoreInputError(`invalid build: ${result.errors.map((e) => e.field).join(', ')}`)
   // a face is a photo like any other: it must have come through the upload endpoint
   if (result.build.look?.face && !isOwnPhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
+  const gear = gearProblem(result.build.look)
+  if (gear) throw new StoreInputError(`gear: ${gear}`)
   return result.build
 }
 

@@ -3,7 +3,7 @@ The arena's characters (R24): a MakeHuman (MPFB) body per hero, rigged and anima
 and a face from a generated portrait, baked into one textured mesh and exported as a GLB.
 
     Blender -b --python tools/blender/human.py -- --hero huang --out public/heroes/huang.glb [--sheet dir] [--render png]
-    Blender -b --python tools/blender/human.py -- --base m-medium --out public/heroes/m-medium.glb   (writes m-medium.face.json too)
+    Blender -b --python tools/blender/human.py -- --base m-medium --out public/heroes/m-medium.glb   (writes m-medium.kit.json too)
 
 One-time landmark binding (ties MediaPipe's face landmarks to the MakeHuman mesh; writes humanlib/face_bind.json):
 

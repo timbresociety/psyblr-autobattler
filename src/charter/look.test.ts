@@ -10,6 +10,14 @@ describe('a hero’s look', () => {
     expect(look).toEqual({ gender: 'f', hair: 'long', armour: true, cape: false, colors: { suit: '#ff0000', boot: '#00ff00' }, face: { ...face, points: face.points.map(() => 100) } })
     expect(hydrateLook({ gender: 'x' })).toBeUndefined()
     expect(hydrateLook({ gender: 'm', hair: 'mullet', colors: {} })?.hair).toBe('crop')
+    // a beard is kept when it's one the bodies carry; none and unknown beards leave the field off
+    expect(hydrateLook({ gender: 'm', hair: 'curly', beard: 'goatee', colors: {} })).toMatchObject({ hair: 'curly', beard: 'goatee' })
+    expect(hydrateLook({ gender: 'm', beard: 'none', colors: {} })).not.toHaveProperty('beard')
+    expect(hydrateLook({ gender: 'm', beard: 'handlebar', colors: {} })).not.toHaveProperty('beard')
+    // gear keeps well-formed pieces in known slots; the server checks they exist (src/server/gear.ts)
+    const gear = { hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', color: '#00FF00' }, tail: { id: 'x', url: '/kit/pieces/x.glb' }, head: { id: 'crown', url: 'javascript:alert(1)' }, back: { id: 'Bad Id', url: '/kit/pieces/wings.glb' } }
+    expect(hydrateLook({ gender: 'm', colors: {}, gear })?.gear).toEqual({ hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', color: '#00ff00' } })
+    expect(hydrateLook({ gender: 'm', colors: {}, gear: { head: { id: 'crown', url: 'https://evil.example/x.glb' } } })).not.toHaveProperty('gear')
     // a face with the wrong number of points, or points off the photo, is dropped; the rest of the look stays
     expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, points: [1, 2] } })?.face).toBeUndefined()
     expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, points: face.points.map(() => 9999) } })?.face).toBeUndefined()

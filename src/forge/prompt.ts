@@ -1,5 +1,5 @@
 import { TEXT_LIMITS } from '../charter/build.js'
-import type { Gender, HairStyle, LookColor } from '../charter/look.js'
+import type { BeardStyle, Gender, HairStyle, LookColor } from '../charter/look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import type { BuildSlot } from '../charter/types.js'
 import { findCulture } from './director/culture.js'
@@ -16,6 +16,11 @@ const BREAK = new Set(['who', 'with', 'that', 'which', 'and', 'in', 'of', 'as', 
 
 /** Where a prompt starts listing skills, the same phrasing the director's `namedThemes` reads. */
 const SKILLS_CLAUSE = /\b(?:skills?|abilities|powers?)\s+(?:around|like|based on|about)\b/i
+
+/** The part of a prompt that describes the hero, before any "skills around ..." clause. */
+export function heroPart(prompt: string): string {
+  return prompt.split(SKILLS_CLAUSE)[0]
+}
 
 const title = (words: string[]) => words.map((w) => w.replace(/(^|-)(\p{L})/gu, (_, dash: string, c: string) => dash + c.toUpperCase())).join(' ')
 
@@ -161,13 +166,23 @@ export function genderFromPrompt(prompt: string): Gender | undefined {
 }
 
 /** The hair, armour and cape a prompt asks for, where it asks. */
-export function partsFromPrompt(prompt: string): { hair?: HairStyle; armour?: boolean; cape?: boolean } {
-  const out: { hair?: HairStyle; armour?: boolean; cape?: boolean } = {}
+export function partsFromPrompt(prompt: string): { hair?: HairStyle; beard?: BeardStyle; armour?: boolean; cape?: boolean } {
+  const out: { hair?: HairStyle; beard?: BeardStyle; armour?: boolean; cape?: boolean } = {}
   if (/\b(bald|shaved head|shaven head|hairless)\b/i.test(prompt)) out.hair = 'none'
   else if (/\b(helmet|helm|knight|spartan|centurion|legionnaire)\b/i.test(prompt)) out.hair = 'helmet'
+  else if (/\b(afro|big hair|voluminous hair|huge hair)\b/i.test(prompt)) out.hair = 'volume'
+  else if (/\b(curly|curls|ringlets)\b/i.test(prompt)) out.hair = 'curly'
   else if (/\b(long hair|ponytail|braids?|flowing hair|mane)\b/i.test(prompt)) out.hair = 'long'
+  else if (/\b(bob cut|bobbed|bob hair|a bob)\b/i.test(prompt)) out.hair = 'bob'
   else if (/\b(spiky|spiked hair|super saiyan|anime hair|mohawk)\b/i.test(prompt)) out.hair = 'spiky'
-  else if (/\b(short hair|crew cut|buzz cut|buzzcut|crop)\b/i.test(prompt)) out.hair = 'crop'
+  else if (/\b(slicked back|slicked-back|swept back|swept-back|pompadour|quiff)\b/i.test(prompt)) out.hair = 'swept'
+  else if (/\b(buzz cut|buzzcut|buzzed|crew cut|military cut)\b/i.test(prompt)) out.hair = 'buzz'
+  else if (/\bshort hair\b/i.test(prompt)) out.hair = 'short'
+  else if (/\b(crop|cropped hair)\b/i.test(prompt)) out.hair = 'crop'
+  if (/\b(clean[- ]shaven|beardless|no beard)\b/i.test(prompt)) out.beard = 'none'
+  else if (/\bgoatee\b/i.test(prompt)) out.beard = 'goatee'
+  else if (/\b(chin curtain|chinstrap|chin strap|amish beard)\b/i.test(prompt)) out.beard = 'chin_curtain'
+  else if (/\b(beard|bearded|full beard|stubble)\b/i.test(prompt)) out.beard = 'full'
   if (/\b(armou?r|armou?red|plate|knight|paladin|spartan|mech|cyborg|power suit)\b/i.test(prompt)) out.armour = true
   if (/\b(no armou?r|unarmou?red|light clothes)\b/i.test(prompt)) out.armour = false
   if (/\b(cape|cloak|caped|mantle)\b/i.test(prompt)) out.cape = true

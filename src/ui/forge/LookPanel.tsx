@@ -1,6 +1,19 @@
-import { HAIR_STYLES, type Gender, type HairStyle, type HeroLook, type LookColor } from '../../charter/look.js'
+import { BEARD_STYLES, HAIR_STYLES, type BeardStyle, type Gender, type HairStyle, type HeroLook, type LookColor } from '../../charter/look.js'
 
-const HAIR_LABEL: Record<HairStyle, string> = { none: 'Bald', crop: 'Crop', spiky: 'Spiky', long: 'Long', helmet: 'Helmet' }
+const HAIR_LABEL: Record<HairStyle, string> = {
+  none: 'Bald',
+  buzz: 'Buzz',
+  crop: 'Crop',
+  short: 'Short',
+  curly: 'Curly',
+  swept: 'Swept',
+  spiky: 'Spiky',
+  bob: 'Bob',
+  long: 'Long',
+  volume: 'Volume',
+  helmet: 'Helmet',
+}
+const BEARD_LABEL: Record<BeardStyle, string> = { none: 'None', goatee: 'Goatee', full: 'Full', chin_curtain: 'Chin curtain' }
 const GENDER_LABEL: Record<Gender, string> = { m: 'Man', f: 'Woman' }
 const SWATCHES: [LookColor, string][] = [
   ['skin', 'Skin'],
@@ -23,7 +36,7 @@ interface Props {
 }
 
 /**
- * How the hero looks, all of it cosmetic: the body (its size comes from the size picker), hair, armour and cape, the
+ * How the hero looks, all of it cosmetic: the body (its size comes from the size picker), hair, beard, armour and cape, the
  * photo face, and a colour for each part. Nothing here changes a number, so the balance check keeps its result.
  */
 export function LookPanel({ look, canFace, onChange, onFace }: Props) {
@@ -52,6 +65,19 @@ export function LookPanel({ look, canFace, onChange, onFace }: Props) {
                 {HAIR_LABEL[h]}
               </button>
             ))}
+          </div>
+        </div>
+        <div className="look-row">
+          <span className="field-label">Beard</span>
+          <div className="seg" role="radiogroup" aria-label="Beard">
+            {BEARD_STYLES.map((b) => {
+              const on = (look.beard ?? 'none') === b
+              return (
+                <button key={b} type="button" role="radio" aria-checked={on} className={on ? 'on' : ''} onClick={() => onChange({ beard: b })}>
+                  {BEARD_LABEL[b]}
+                </button>
+              )
+            })}
           </div>
         </div>
         <div className="look-row">

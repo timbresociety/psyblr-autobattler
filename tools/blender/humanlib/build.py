@@ -16,6 +16,7 @@ from . import garments as G
 from . import hair as H
 from . import heroes
 from . import rig as R
+from . import sockets as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORTRAITS = os.path.join(os.path.dirname(HERE), 'portraits')
@@ -112,6 +113,7 @@ def main(opts):
             p.material_index = face_slot
     me.materials[skin_slot]  # keep
     head = H.Head(body, body.mesh)
+    sockets = S.body_sockets(rig, head, body.mesh) if spec.get('base') else None
     for m in mats.mats.values():
         if m.get('paint') == 'hair':
             m['centre'] = tuple(head.centre)
@@ -181,11 +183,12 @@ def main(opts):
         export(out, size)
         log('wrote', out, os.path.getsize(out), 'bytes', f'{time.time() - t0:.1f}s')
         if face_meta and spec.get('base'):
-            # where a photo face goes on this body: the game warps a player's photo onto it (src/arena/client/face-fit.ts)
-            meta_path = os.path.splitext(out)[0] + '.face.json'
+            # the body's kit sidecar: where a photo face goes (src/arena/client/face/) and where gear hangs
+            # (src/arena/client/gear.ts)
+            meta_path = os.path.splitext(out)[0] + '.kit.json'
             with open(meta_path, 'w') as f:
-                json.dump(face_meta, f, separators=(',', ':'))
-            log('face meta', meta_path, sum(1 for p in face_meta['landmarks'] if p), 'landmarks')
+                json.dump(dict(face_meta, sockets=sockets), f, separators=(',', ':'))
+            log('kit meta', meta_path, sum(1 for p in face_meta['landmarks'] if p), 'landmarks', len(sockets or {}), 'sockets')
     if opts.get('sheet'):
         sheet(opts['sheet'], rig)
     if opts.get('render'):
@@ -215,11 +218,22 @@ def export(path, size):
 # ------------------------------------------------------------------------------------------------ generic body parts
 
 
+# every hair style and beard a body carries, switched per hero by its look (PARTS in bake.py and character-look.ts)
+BASE_HAIR = ('crop', 'spiky', 'long', 'buzz', 'short', 'curly', 'swept', 'bob', 'volume')
+BASE_BEARDS = ('full', 'goatee', 'chin_curtain')
+
+
 def base_parts(d, head, body, mats):
-    """The switchable parts of a generic body: three hair styles, a helmet, armour and a cape (see PARTS)."""
+    """The switchable parts of a body: its hair styles and beards, a helmet, armour and a cape (see PARTS)."""
     out = []
     hair_props = dict(heroes.BASE_MATS['hair'])
-    for style in ('crop', 'spiky', 'long'):
+    for style in BASE_BEARDS:
+        mats.get(f'beard_{style}', **dict(hair_props, part=f'beard:{style}', centre=tuple(head.centre)))
+        b = H.make_beard(d, head, style, mat=f'beard_{style}')
+        if b:
+            b.name = f'beard_{style}'
+            out.append(b)
+    for style in BASE_HAIR:
         mats.get(f'hair_{style}', **dict(hair_props, part=f'hair:{style}', centre=tuple(head.centre)))
         h = H.make_hair(d, head, style, mat=f'hair_{style}')
         if h:
