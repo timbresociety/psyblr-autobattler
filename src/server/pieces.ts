@@ -12,6 +12,7 @@ import { PIECE_PRICE } from '../forge/pricing.js'
 import { candidates, pollTask, route, type Registry } from '../forge/providers/router.js'
 import type { Asset, Env, ModerationProvider, PieceProvider } from '../forge/providers/types.js'
 import type { ContentFlags } from '../forge/types.js'
+import { BUDGET } from '../kit/fit/fit.js'
 import { readReference, REFERENCE_BODY, type Reference } from '../kit/fit/reference.js'
 import type { PieceEntry } from '../kit/pieces.js'
 import type { LibraryEntry } from '../kit/wear/library.js'
@@ -214,7 +215,9 @@ export async function startPiece(deps: PieceDeps, accountId: string, input: Piec
   await placeHold(deps.db, accountId, PIECE_PRICE, hold(id))
   // a garment's prompt also tells the generator what the fit needs: the garment alone, upright, open where a body goes
   const request = slot ? { prompt: garmentPrompt(slot, prompt), slot } : { prompt, kind: input.kind }
-  const routed = await route<PieceProvider, Asset>(deps.registry, 'piece', (p) => p.start({ ...request, imageUrl: input.imageUrl, faceLimit: FACE_LIMIT }))
+  // a garment is asked for at its slot's budget, so the provider's own remesh does the cutting and keeps its texture whole
+  const faceLimit = slot ? BUDGET[slot] : FACE_LIMIT
+  const routed = await route<PieceProvider, Asset>(deps.registry, 'piece', (p) => p.start({ ...request, imageUrl: input.imageUrl, faceLimit }))
   if (routed.ok === false) {
     await settleHold(deps.db, hold(id), false)
     if (routed.kind === 'unavailable') throw new PieceError("generating pieces isn't switched on for this deployment yet", 503)

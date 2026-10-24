@@ -3,9 +3,11 @@ import { getJson, httpFailure, postJson, type FetchLike } from './http.js'
 
 /**
  * Tripo (KTD3): mesh, rig and retarget. Asynchronous jobs: create a task, poll its status, read the output.
- * Request shapes follow developers.tripo3d.com as of 2026-10; confirm against the docs on the first live key.
+ * Request shapes follow developers.tripo3d.ai as of 2026-10. A key works in one region only, and the wrong region
+ * answers 401: this is the international API, where keys from developers.tripo3d.ai (and platform.tripo3d.ai before
+ * it) work. A China-mainland key (developers.tripo3d.com) sets TRIPO_BASE_URL=https://openapi.tripo3d.com/v3.
  */
-export const TRIPO_BASE = 'https://openapi.tripo3d.com/v3'
+export const TRIPO_BASE = 'https://openapi.tripo3d.ai/v3'
 
 interface TripoTask {
   data?: { task_id?: string; status?: string; output?: Record<string, string>; error?: string }
@@ -63,7 +65,7 @@ function v3Failure(status: number, json: unknown): Outcome<never> {
   return httpFailure(status, json)
 }
 
-/** The Tripo model version pieces are made with (developers.tripo3d.com, generation, 2026-10). */
+/** The Tripo model version pieces are made with (developers.tripo3d.ai, generation, 2026-10). */
 export const TRIPO_PIECE_MODEL = 'v3.1-20260211'
 
 /**

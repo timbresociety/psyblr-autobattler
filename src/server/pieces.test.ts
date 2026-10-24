@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { PIECE_PRICE } from '../forge/pricing.js'
 import { GARMENT_FROM, placeholderPiece } from '../forge/providers/fakes/piece-model.js'
 import { createRegistry } from '../forge/providers/registry.js'
+import type { PieceProvider, PieceRequest } from '../forge/providers/types.js'
+import { BUDGET } from '../kit/fit/fit.js'
 import { REFERENCE_BODY } from '../kit/fit/reference.js'
 import { searchAssets, searchItems, visibleAssets } from './assets.js'
 import { balance, grantPurchase } from './credits.js'
@@ -126,6 +128,18 @@ describe('generating a garment into the wardrobe', () => {
     expect(done.error).toMatch(/couldn't be made into a garment \(it doesn't fit: covers \d+% of the torso/)
     expect(await balance(db, 'a1')).toBe(100)
     expect(await searchItems(db, '')).toEqual([])
+  })
+
+  it("asks the provider for a garment at its slot's budget, and for a piece at the usual limit", async () => {
+    await grantPurchase(db, 'a1', 100, 'test-grant')
+    const asked: (number | undefined)[] = []
+    const providers = deps.registry.providers.map((p) =>
+      p.capability === 'piece' ? { ...p, start: (r: PieceRequest) => (asked.push(r.faceLimit), (p as PieceProvider).start(r)) } : p,
+    )
+    const spy = { ...deps, registry: { ...deps.registry, providers } }
+    await startPiece(spy, 'a1', { prompt: 'a pair of geta', slot: 'feet' })
+    await startPiece(spy, 'a1', { prompt: 'a jade dagger', kind: 'hand' })
+    expect(asked).toEqual([BUDGET.feet, 20000])
   })
 
   it('asks for a wardrobe slot it knows', async () => {
