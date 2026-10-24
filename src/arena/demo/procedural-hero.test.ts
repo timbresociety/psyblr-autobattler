@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BONE_NAMES, bodyGeometry, triangleCount } from './procedural-hero'
+import { BONE_NAMES, bodyGeometry, triangleCount } from './procedural-hero.js'
 
 describe('procedural bench hero (U1)', () => {
   it('sits inside the 5,000-8,000 triangle arena budget (R24)', () => {

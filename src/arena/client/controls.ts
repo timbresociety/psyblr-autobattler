@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { commandFrom, type InputState } from './input'
-import type { ArenaController } from './match-view'
-import { heroForKey } from './takeover'
+import { commandFrom, type InputState } from './input.js'
+import type { ArenaController } from './match-view.js'
+import { heroForKey } from './takeover.js'
 
 /**
  * Wires the keyboard, mouse and pointer lock to a live match (U17, KTD16). Watching needs no pointer lock: drag to

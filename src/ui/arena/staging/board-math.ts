@@ -1,7 +1,7 @@
 import { PerspectiveCamera, Vector3 } from 'three'
-import { ENGINE } from '../../../arena/engine/calibration'
-import type { Team } from '../../../arena/engine/state'
-import { MAX_PER_SIDE, move, place, type Formation } from './formation'
+import { ENGINE } from '../../../arena/engine/calibration.js'
+import type { Team } from '../../../arena/engine/state.js'
+import { MAX_PER_SIDE, move, place, type Formation } from './formation.js'
 
 /**
  * The 3D staging board's maths, free of the renderer and the DOM so it tests on its own: the camera that orbits a spot on

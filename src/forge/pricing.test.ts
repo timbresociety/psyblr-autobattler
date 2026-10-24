@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { FREE_GRANT, HERO_PRICE, MARKUP, STAGE_COST, STAGE_PRICES, TYPICAL, stagePrice } from './pricing'
-import { STAGE_ORDER, STAGE_TABLE } from './stages'
+import { FREE_GRANT, HERO_PRICE, MARKUP, STAGE_COST, STAGE_PRICES, TYPICAL, stagePrice } from './pricing.js'
+import { STAGE_ORDER, STAGE_TABLE } from './stages.js'
 
 describe('blended forge pricing (R45, KTD18)', () => {
   it('a full forge charges about twice its estimated provider cost', () => {

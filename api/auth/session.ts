@@ -1,7 +1,7 @@
-import { accountEmail, getSession, logout } from '../../src/server/accounts'
-import { getDb } from '../../src/server/db'
-import { errorResponse } from '../../src/server/http'
-import { clearedCookie, readSessionCookie } from '../../src/server/sessions'
+import { accountEmail, getSession, logout } from '../../src/server/accounts.js'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse } from '../../src/server/http.js'
+import { clearedCookie, readSessionCookie } from '../../src/server/sessions.js'
 
 /** GET /api/auth/session -> { signedIn, email }. DELETE logs out. */
 export async function GET(request: Request): Promise<Response> {

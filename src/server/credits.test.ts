@@ -1,10 +1,10 @@
 import { createHmac } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SCHEMA_SQL, type Db } from './db'
-import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, STAGE_PRICES, stagePrice } from '../forge/pricing'
-import { balance, claimFreeGrant, ledgerBalance, placeHold, settleHold } from './credits'
-import { fakePayments, handleStripeEvent, packById, pickPayments, verifyStripeSignature } from './payments'
+import { SCHEMA_SQL, type Db } from './db.js'
+import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, STAGE_PRICES, stagePrice } from '../forge/pricing.js'
+import { balance, claimFreeGrant, ledgerBalance, placeHold, settleHold } from './credits.js'
+import { fakePayments, handleStripeEvent, packById, pickPayments, verifyStripeSignature } from './payments.js'
 
 let db: Db
 let n = 0

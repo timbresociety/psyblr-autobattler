@@ -2,12 +2,12 @@ import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { float, mix, normalView, positionViewDirection, step, uniform, uv } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import type { Build } from '../../charter/build'
-import { getTemplate } from '../../charter/templates/catalog'
-import type { AnimState } from './animation'
-import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look'
+import type { Build } from '../../charter/build.js'
+import { getTemplate } from '../../charter/templates/catalog.js'
+import type { AnimState } from './animation.js'
+import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look.js'
 
-export { characterLook, heroHue, loadBuild } from './character-look'
+export { characterLook, heroHue, loadBuild } from './character-look.js'
 
 /**
  * The arena's own characters (R24): rigged, animated MakeHuman-based models made in Blender (tools/blender/human.py),

@@ -1,8 +1,8 @@
-import type { Build } from '../charter/build'
-import { getRole } from '../charter/roles'
-import { SIZES, type SizeClass } from '../charter/sizes'
-import { deriveSheet } from '../charter/stats'
-import { runGate, type GateOptions } from '../sim/gate'
+import type { Build } from '../charter/build.js'
+import { getRole } from '../charter/roles.js'
+import { SIZES, type SizeClass } from '../charter/sizes.js'
+import { deriveSheet } from '../charter/stats.js'
+import { runGate, type GateOptions } from '../sim/gate.js'
 
 export interface SizeCost {
   sizeClass: SizeClass

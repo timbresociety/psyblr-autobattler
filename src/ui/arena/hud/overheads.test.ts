@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { createOverheads, type OverheadLive } from './overheads'
-import type { ScreenPoint } from './world'
+import { createOverheads, type OverheadLive } from './overheads.js'
+import type { ScreenPoint } from './world.js'
 
 const live: OverheadLive = { alive: true, hp: 800, maxHp: 1000, shield: 0, ultReady: false }
 const at = (x: number, y: number, depth: number): ScreenPoint => ({ x, y, depth, visible: true })

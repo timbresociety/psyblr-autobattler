@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, cleanse, cripple, disarm, field, heal, invulnerable, movement, move, passive, push, refresh, shield, silence, sleep, slow, spirit, ultimate, unstoppable } from './dsl'
+import { active, ai, at, basic, buff, cleanse, cripple, disarm, field, heal, invulnerable, movement, move, passive, push, refresh, shield, silence, sleep, slow, spirit, ultimate, unstoppable } from './dsl.js'
 
 /** Support: keeps allies alive and stronger. Heals, shields, buffs, cleanses, and sleep or hex to stop a dive. */
 export const SUPPORT = [

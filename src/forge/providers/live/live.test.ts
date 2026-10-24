@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { anthropicDirector, anthropicModeration } from './anthropic'
-import type { FetchLike } from './http'
-import { openAICompatibleDirector, openAIImage } from './openai-compatible'
-import { tripoMesh, tripoRetarget, tripoRig } from './tripo'
+import { anthropicDirector, anthropicModeration } from './anthropic.js'
+import type { FetchLike } from './http.js'
+import { openAICompatibleDirector, openAIImage } from './openai-compatible.js'
+import { tripoMesh, tripoRetarget, tripoRig } from './tripo.js'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 

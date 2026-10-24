@@ -1,7 +1,7 @@
-import type { Env } from '../forge/providers/types'
-import { isProduction } from '../forge/providers/router'
-import { LIMITS, getSession, type Session } from './accounts'
-import type { Db } from './db'
+import type { Env } from '../forge/providers/types.js'
+import { isProduction } from '../forge/providers/router.js'
+import { LIMITS, getSession, type Session } from './accounts.js'
+import type { Db } from './db.js'
 
 export const SESSION_COOKIE = 'psyblr_session'
 

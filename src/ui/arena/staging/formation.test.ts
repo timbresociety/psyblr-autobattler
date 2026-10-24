@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PER_SIDE, SPACING, autoDeploy, emptyFormation, move, place, remove } from './formation'
+import { MAX_PER_SIDE, SPACING, autoDeploy, emptyFormation, move, place, remove } from './formation.js'
 
 describe('staging formation (U16)', () => {
   it('refuses a hero dropped on the other half', () => {

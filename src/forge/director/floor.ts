@@ -1,7 +1,7 @@
-import { OFFENDING, keywordFlags } from '../keywords'
-import { route, type Registry } from '../providers/router'
-import type { ModerationProvider } from '../providers/types'
-import type { ContentFlags, SpecSheet } from '../types'
+import { OFFENDING, keywordFlags } from '../keywords.js'
+import { route, type Registry } from '../providers/router.js'
+import type { ModerationProvider } from '../providers/types.js'
+import type { ContentFlags, SpecSheet } from '../types.js'
 
 /**
  * The legal floor (R25, KTD10). Everything legal is allowed, including real people, parody and memes.

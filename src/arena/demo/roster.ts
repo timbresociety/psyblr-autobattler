@@ -1,6 +1,6 @@
-import { BUILD_SLOTS, proposeBuild, type Build } from '../../charter/build'
-import type { SizeClass } from '../../charter/sizes'
-import type { RoleId } from '../../charter/types'
+import { BUILD_SLOTS, proposeBuild, type Build } from '../../charter/build.js'
+import type { SizeClass } from '../../charter/sizes.js'
+import type { RoleId } from '../../charter/types.js'
 
 /**
  * The demo roster (U1): 10 business moguls and 10 political leaders as superhero and anime-inspired parodies.

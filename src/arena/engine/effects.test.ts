@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Build } from '../../charter/build'
-import { defaultBuild } from '../../sim/fixtures'
-import { aiCommands } from '../ai/brain'
-import { ENGINE, ticks } from './calibration'
-import type { MatchEvent } from './events'
-import { GATE_PROFILE, createMatch, matchRules, type Arena } from './match'
-import { tick } from './tick'
+import type { Build } from '../../charter/build.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { aiCommands } from '../ai/brain.js'
+import { ENGINE, ticks } from './calibration.js'
+import type { MatchEvent } from './events.js'
+import { GATE_PROFILE, createMatch, matchRules, type Arena } from './match.js'
+import { tick } from './tick.js'
 
 const withSlot = (build: Build, slot: keyof Build['slots'], templateId: string): Build => ({ ...build, slots: { ...build.slots, [slot]: { ...build.slots[slot], templateId } } })
 

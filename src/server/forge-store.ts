@@ -1,7 +1,7 @@
-import { withAllStages } from '../forge/stages'
-import type { Forge } from '../forge/types'
-import type { Db } from './db'
-import { NotFoundError } from './store'
+import { withAllStages } from '../forge/stages.js'
+import type { Forge } from '../forge/types.js'
+import type { Db } from './db.js'
+import { NotFoundError } from './store.js'
 
 /** Forge persistence (KTD1). Every write is conditional on the version the writer read. */
 

@@ -1,4 +1,4 @@
-import { distanceScale, type ScreenPoint } from './world'
+import { distanceScale, type ScreenPoint } from './world.js'
 
 /**
  * Floating damage numbers (R38): a fixed pool of DOM nodes moved straight from the frame hook, so twenty heroes

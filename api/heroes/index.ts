@@ -1,6 +1,6 @@
-import { getDb } from '../../src/server/db'
-import { errorResponse, knownDeviceId, needDevice, overLimit, readJson, tooMany } from '../../src/server/http'
-import { addHero, createHero } from '../../src/server/store'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse, knownDeviceId, needDevice, overLimit, readJson, tooMany } from '../../src/server/http.js'
+import { addHero, createHero } from '../../src/server/store.js'
 
 /**
  * POST /api/heroes

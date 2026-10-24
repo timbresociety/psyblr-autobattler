@@ -1,11 +1,11 @@
-import type { BuildSlot, Effect, Template } from '../../charter/types'
-import { ENGINE, ticks } from './calibration'
-import type { CoverPiece } from './cover'
-import { coverHit } from './cover'
-import { dealDamage, enemiesOf, resolve, world, type Area, type Ctx } from './effects'
-import { keepOut } from './locomotion'
-import { distance, type Vec3 } from './maths'
-import { capsule, type HeroState, type MatchState } from './state'
+import type { BuildSlot, Effect, Template } from '../../charter/types.js'
+import { ENGINE, ticks } from './calibration.js'
+import type { CoverPiece } from './cover.js'
+import { coverHit } from './cover.js'
+import { dealDamage, enemiesOf, resolve, world, type Area, type Ctx } from './effects.js'
+import { keepOut } from './locomotion.js'
+import { distance, type Vec3 } from './maths.js'
+import { capsule, type HeroState, type MatchState } from './state.js'
 
 /**
  * Things skills raise in the world (the skill library's zones, terrain and constructs): lingering fields, traps,

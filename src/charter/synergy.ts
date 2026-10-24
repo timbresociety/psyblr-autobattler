@@ -1,5 +1,5 @@
-import type { Build } from './build'
-import type { RoleId } from './types'
+import type { Build } from './build.js'
+import type { RoleId } from './types.js'
 
 /**
  * Army synergy (R16, KTD8). Any 10 heroes may form an army. Stacking one role past the threshold

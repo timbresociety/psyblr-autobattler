@@ -1,15 +1,15 @@
 import * as THREE from 'three'
 import type { WebGPURenderer } from 'three/webgpu'
-import type { AnimState } from '../../../arena/client/animation'
-import { loadHeroView, type HeroView } from '../../../arena/client/heroes'
-import { TEAM_COLORS, atmosphere, buildMap, lights } from '../../../arena/client/map'
-import { createRenderer, forceWebGLFlag } from '../../../arena/client/render/renderer'
-import { buildRuins } from '../../../arena/client/ruins'
-import { SIZE_SCALE } from '../../../arena/demo/procedural-hero'
-import { ENGINE } from '../../../arena/engine/calibration'
-import { RUINS } from '../../../arena/engine/cover'
-import type { Team } from '../../../arena/engine/state'
-import { shortName } from '../hud/format'
+import type { AnimState } from '../../../arena/client/animation.js'
+import { loadHeroView, type HeroView } from '../../../arena/client/heroes.js'
+import { TEAM_COLORS, atmosphere, buildMap, lights } from '../../../arena/client/map.js'
+import { createRenderer, forceWebGLFlag } from '../../../arena/client/render/renderer.js'
+import { buildRuins } from '../../../arena/client/ruins.js'
+import { SIZE_SCALE } from '../../../arena/demo/procedural-hero.js'
+import { ENGINE } from '../../../arena/engine/calibration.js'
+import { RUINS } from '../../../arena/engine/cover.js'
+import type { Team } from '../../../arena/engine/state.js'
+import { shortName } from '../hud/format.js'
 import {
   BOARD_FOV,
   applyView,
@@ -36,9 +36,9 @@ import {
   type Standee,
   type Verdict,
   type View,
-} from './board-math'
-import type { Formation } from './formation'
-import type { LoadoutEntry } from './loadout'
+} from './board-math.js'
+import type { Formation } from './formation.js'
+import type { LoadoutEntry } from './loadout.js'
 
 /**
  * The staging board in 3D (U16): the arena itself, built by the match's own builders (sky, island, ruins, characters,

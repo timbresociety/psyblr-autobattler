@@ -1,4 +1,4 @@
-import type { Effect, Template } from './types'
+import type { Effect, Template } from './types.js'
 
 /**
  * The skill library's effect families (docs/charter/skill-library.html). Every effect belongs to exactly one, so the

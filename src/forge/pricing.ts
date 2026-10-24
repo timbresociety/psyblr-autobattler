@@ -1,5 +1,5 @@
-import { STAGE_ORDER, STAGE_TABLE } from './stages'
-import type { StageId } from './types'
+import { STAGE_ORDER, STAGE_TABLE } from './stages.js'
+import type { StageId } from './types.js'
 
 /**
  * Forge pricing (R45, KTD18). One credit is about one US cent of provider spend. The hero is priced as one blended

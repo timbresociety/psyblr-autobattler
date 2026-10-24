@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { DIVERSITY_MIN, STACK_THRESHOLD, armyModifiers, describeSynergy } from './synergy'
-import { defaultBuild } from '../sim/fixtures'
-import type { RoleId } from './types'
+import { DIVERSITY_MIN, STACK_THRESHOLD, armyModifiers, describeSynergy } from './synergy.js'
+import { defaultBuild } from '../sim/fixtures.js'
+import type { RoleId } from './types.js'
 
 const army = (roles: RoleId[]) => roles.map((r, i) => defaultBuild(r, `${r}-${i}`))
 

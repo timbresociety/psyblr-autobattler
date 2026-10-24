@@ -1,4 +1,4 @@
-import type { Delivery } from '../../charter/types'
+import type { Delivery } from '../../charter/types.js'
 
 /**
  * The effect kit as data (KTD11, R21, R33): a versioned recipe per skill. Layers are primitives placed in timed

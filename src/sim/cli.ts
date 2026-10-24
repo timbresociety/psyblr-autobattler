@@ -1,9 +1,9 @@
-import { BUILD_SLOTS, type Build } from '../charter/build'
-import { ROLE_IDS } from '../charter/roles'
-import { armyModifiers } from '../charter/synergy'
-import { referenceArmy, referenceField, randomBuild, sampleBuilds } from './field'
-import { GATE_CEILING, playScored, runGate, winRateVsField } from './gate'
-import { createRng } from './rng'
+import { BUILD_SLOTS, type Build } from '../charter/build.js'
+import { ROLE_IDS } from '../charter/roles.js'
+import { armyModifiers } from '../charter/synergy.js'
+import { referenceArmy, referenceField, randomBuild, sampleBuilds } from './field.js'
+import { GATE_CEILING, playScored, runGate, winRateVsField } from './gate.js'
+import { createRng } from './rng.js'
 
 /**
  * Balance report over the template catalogue (U8). Run with `npm run sim`.

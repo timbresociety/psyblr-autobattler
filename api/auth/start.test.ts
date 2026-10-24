@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { SCHEMA_SQL, useDevDb, type Db } from '../../src/server/db'
-import { POST } from './start'
+import { SCHEMA_SQL, useDevDb, type Db } from '../../src/server/db.js'
+import { POST } from './start.js'
 
 beforeAll(async () => {
   const pg = new PGlite()

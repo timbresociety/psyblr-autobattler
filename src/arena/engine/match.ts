@@ -1,13 +1,13 @@
-import { RUINS, initialCoverHealth, type CoverPiece } from './cover'
-import { keepOut } from './locomotion'
-import type { Build } from '../../charter/build'
-import { ENGINE, ticks } from './calibration'
-import { COMBAT_RULES } from './deliveries'
-import { initHero } from './effects'
-import { clamp, type Vec3 } from './maths'
-import { next } from './rng'
-import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state'
-import { tick, type TickRules } from './tick'
+import { RUINS, initialCoverHealth, type CoverPiece } from './cover.js'
+import { keepOut } from './locomotion.js'
+import type { Build } from '../../charter/build.js'
+import { ENGINE, ticks } from './calibration.js'
+import { COMBAT_RULES } from './deliveries.js'
+import { initHero } from './effects.js'
+import { clamp, type Vec3 } from './maths.js'
+import { next } from './rng.js'
+import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state.js'
+import { tick, type TickRules } from './tick.js'
 
 /**
  * Match setup and rules (U5, KTD5). The profiles share every rule: the live match runs a long timer with an overtime

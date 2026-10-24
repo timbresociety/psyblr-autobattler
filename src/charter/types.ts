@@ -1,4 +1,4 @@
-import type { SizeClass } from './sizes'
+import type { SizeClass } from './sizes.js'
 /** Shared Charter types. Framework-free: used by the creator, the simulation and serverless functions (KTD1). */
 
 /**

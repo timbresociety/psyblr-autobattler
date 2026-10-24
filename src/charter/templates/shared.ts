@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, heal, movement, move, phys, shield, slow, spirit, unstoppable } from './dsl'
+import { active, ai, at, basic, buff, heal, movement, move, phys, shield, slow, spirit, unstoppable } from './dsl.js'
 
 /**
  * Templates several roles draw from. The movement library lives here: every way a hero moves itself (dash, blink,

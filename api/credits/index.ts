@@ -1,8 +1,8 @@
-import { balance, claimFreeGrant, freeClaimed } from '../../src/server/credits'
-import { getDb } from '../../src/server/db'
-import { clientIp, errorResponse } from '../../src/server/http'
-import { requireAccount } from '../../src/server/sessions'
-import { FREE_GRANT, PACKS } from '../../src/forge/pricing'
+import { balance, claimFreeGrant, freeClaimed } from '../../src/server/credits.js'
+import { getDb } from '../../src/server/db.js'
+import { clientIp, errorResponse } from '../../src/server/http.js'
+import { requireAccount } from '../../src/server/sessions.js'
+import { FREE_GRANT, PACKS } from '../../src/forge/pricing.js'
 
 /** GET /api/credits -> { balance, freeGrant, packs }. POST claims the one free hero (R3). */
 export async function GET(request: Request): Promise<Response> {

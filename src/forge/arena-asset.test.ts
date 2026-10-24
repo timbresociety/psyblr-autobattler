@@ -3,7 +3,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { MeshoptDecoder } from 'meshoptimizer'
 import sharp from 'sharp'
 import { describe, expect, it } from 'vitest'
-import { ARENA_BUDGET, arenaAsset } from './arena-asset'
+import { ARENA_BUDGET, arenaAsset } from './arena-asset.js'
 
 const png = async (side: number, rgb: [number, number, number]) =>
   new Uint8Array(await sharp({ create: { width: side, height: side, channels: 3, background: { r: rgb[0], g: rgb[1], b: rgb[2] } } }).png().toBuffer())

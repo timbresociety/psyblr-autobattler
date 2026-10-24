@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS } from '../forge/pricing'
-import { bump, dayBucket } from './accounts'
-import type { Db } from './db'
+import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS } from '../forge/pricing.js'
+import { bump, dayBucket } from './accounts.js'
+import type { Db } from './db.js'
 
 /**
  * Credit ledger with holds (KTD6). A paid step first places a hold, which debits the available balance in one

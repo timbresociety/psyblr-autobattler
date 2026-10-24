@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { ContentFlags } from '../../types'
-import type { DirectorProvider, Env, ModerationProvider, Outcome } from '../types'
-import type { FetchLike } from './http'
+import type { ContentFlags } from '../../types.js'
+import type { DirectorProvider, Env, ModerationProvider, Outcome } from '../types.js'
+import type { FetchLike } from './http.js'
 
 /**
  * Anthropic adapters (KTD3, KTD10): a director option, and the separate moderation check that never sees the

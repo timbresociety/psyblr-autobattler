@@ -1,6 +1,6 @@
-import { GEOMETRY_DEFAULTS, coneArc } from '../geometry'
-import type { SizeClass } from '../sizes'
-import type { AiHint, BuffStat, ControlType, DebuffType, Delivery, Effect, RoleId, ScalingStat, SlotKind, StateType, Template, PassiveTrigger } from '../types'
+import { GEOMETRY_DEFAULTS, coneArc } from '../geometry.js'
+import type { SizeClass } from '../sizes.js'
+import type { AiHint, BuffStat, ControlType, DebuffType, Delivery, Effect, RoleId, ScalingStat, SlotKind, StateType, Template, PassiveTrigger } from '../types.js'
 
 /** Compact authoring helpers. Magnitudes are rough shapes: the catalogue normalizes them to the slot budget (KTD2). */
 

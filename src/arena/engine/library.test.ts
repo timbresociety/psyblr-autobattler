@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import type { BuildSlot, Template } from '../../charter/types'
+import type { BuildSlot, Template } from '../../charter/types.js'
 import {
   active, ai, at, blind, breakPassive, cleanse, disarm, fear, field, ground, heal, knockup, mark, phys, pull, refresh, root, shred, silence, sleep, spirit, stun,
   taunt, trap, turret, unstoppable, vulnerable, wall, wound,
-} from '../../charter/templates/dsl'
-import { defaultBuild } from '../../sim/fixtures'
-import { ENGINE, ticks } from './calibration'
-import { COMBAT_RULES, cast, chest } from './deliveries'
-import { dealDamage, heal as applyHeal } from './effects'
-import type { MatchEvent } from './events'
-import { atan2 } from './maths'
-import { hashState, restore, snapshot } from './snapshot'
-import { createHero, emptyMatch, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state'
-import { tick } from './tick'
+} from '../../charter/templates/dsl.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { ENGINE, ticks } from './calibration.js'
+import { COMBAT_RULES, cast, chest } from './deliveries.js'
+import { dealDamage, heal as applyHeal } from './effects.js'
+import type { MatchEvent } from './events.js'
+import { atan2 } from './maths.js'
+import { hashState, restore, snapshot } from './snapshot.js'
+import { createHero, emptyMatch, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
+import { tick } from './tick.js'
 
 const base = { id: 'lib', name: 'Lib', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const skill = (delivery: Template['delivery'], effects: Template['effects']) => active({ ...base, delivery, effects })

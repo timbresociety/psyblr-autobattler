@@ -1,5 +1,5 @@
-import { keywordFlags } from '../../keywords'
-import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, RetargetProvider, RigProvider } from '../types'
+import { keywordFlags } from '../../keywords.js'
+import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, RetargetProvider, RigProvider } from '../types.js'
 
 /**
  * Deterministic fakes (KTD3): the offline path and every test. Same input, same output. Assets are tiny

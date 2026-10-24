@@ -1,4 +1,4 @@
-import type { ContentFlags } from '../types'
+import type { ContentFlags } from '../types.js'
 
 /**
  * Every external generator sits behind one interface per capability (KTD2). Adapters never throw for

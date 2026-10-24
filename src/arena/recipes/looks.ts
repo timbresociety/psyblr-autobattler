@@ -1,4 +1,4 @@
-import type { Primitive, RecipeLook } from './schema'
+import type { Primitive, RecipeLook } from './schema.js'
 
 /**
  * Looks from words (R33): the offline director and any skill the live director left plain get a look from its theme.

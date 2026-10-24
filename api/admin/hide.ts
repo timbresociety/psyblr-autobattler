@@ -1,8 +1,8 @@
 import { del } from '@vercel/blob'
 import { timingSafeEqual } from 'node:crypto'
-import { getDb } from '../../src/server/db'
-import { errorResponse, readJson } from '../../src/server/http'
-import { clearHeroPhotos, hideHero } from '../../src/server/store'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse, readJson } from '../../src/server/http.js'
+import { clearHeroPhotos, hideHero } from '../../src/server/store.js'
 
 /** POST /api/admin/hide { heroId } with x-admin-secret: the owner's takedown path. Hides the hero and deletes its photos. */
 export async function POST(request: Request): Promise<Response> {

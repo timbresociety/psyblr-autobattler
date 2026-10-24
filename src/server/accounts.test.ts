@@ -1,9 +1,9 @@
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { SCHEMA_SQL, type Db } from './db'
-import { AuthError, getSession, logout, normalizeEmail, startSignIn, verifySignIn } from './accounts'
-import { fakeEmailSender, pickEmailSender } from './email'
-import { readSessionCookie, sessionCookie } from './sessions'
+import { SCHEMA_SQL, type Db } from './db.js'
+import { AuthError, getSession, logout, normalizeEmail, startSignIn, verifySignIn } from './accounts.js'
+import { fakeEmailSender, pickEmailSender } from './email.js'
+import { readSessionCookie, sessionCookie } from './sessions.js'
 
 let db: Db
 let mail: ReturnType<typeof fakeEmailSender>

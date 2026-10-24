@@ -1,5 +1,5 @@
-import { clamp } from '../engine/maths'
-import { setVolume } from './effects/sound'
+import { clamp } from '../engine/maths.js'
+import { setVolume } from './effects/sound.js'
 
 /** Volume and mute (R41), remembered between visits; storage can be unavailable, so every access is guarded. */
 const KEY = 'psyblr.arena.audio'

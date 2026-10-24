@@ -1,4 +1,4 @@
-import type { Template } from '../../charter/types'
+import type { Template } from '../../charter/types.js'
 
 /**
  * The motion library (R16, R17, KTD7). Every mechanic maps to 1-3 motion variants that work on any humanoid rig.

@@ -1,7 +1,7 @@
-import { getDb } from '../../src/server/db'
-import { errorResponse, readJson } from '../../src/server/http'
-import { packById, pickPayments } from '../../src/server/payments'
-import { requireAccount } from '../../src/server/sessions'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse, readJson } from '../../src/server/http.js'
+import { packById, pickPayments } from '../../src/server/payments.js'
+import { requireAccount } from '../../src/server/sessions.js'
 
 /** POST /api/credits/purchase { pack } -> { url } of a checkout. Only a pack ID is accepted (KTD6). */
 export async function POST(request: Request): Promise<Response> {

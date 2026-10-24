@@ -1,10 +1,10 @@
-import { sizeHealth } from '../../charter/sizes'
-import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types'
-import { DT, ENGINE, ticks } from './calibration'
-import type { MatchEvent } from './events'
-import { clamp, distance, normalize, scale, sub, type Vec3 } from './maths'
-import { next } from './rng'
-import type { HeroSetup, HeroState, MatchState, Stat } from './state'
+import { sizeHealth } from '../../charter/sizes.js'
+import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types.js'
+import { DT, ENGINE, ticks } from './calibration.js'
+import type { MatchEvent } from './events.js'
+import { clamp, distance, normalize, scale, sub, type Vec3 } from './maths.js'
+import { next } from './rng.js'
+import type { HeroSetup, HeroState, MatchState, Stat } from './state.js'
 
 /**
  * Effects and statuses (U4), ported from the 2D balance model with the same numbers, in ticks. Damage, healing,

@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { handleGateMessage, handleSliceMessage, type GateRequest, type SliceRequest } from './gate-protocol'
+import { handleGateMessage, handleSliceMessage, type GateRequest, type SliceRequest } from './gate-protocol.js'
 
 // The balance gate runs hundreds of fights; doing it here keeps the creator responsive (KTD7). A pool of these workers
 // shares each measurement: every worker plays some turns of the field and sends back its score.

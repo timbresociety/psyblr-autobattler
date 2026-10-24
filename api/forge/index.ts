@@ -1,10 +1,10 @@
-import { getDb } from '../../src/server/db'
-import { balance } from '../../src/server/credits'
-import { forgeDeps, forgeLimited, forgeUnavailable } from '../../src/server/forge-env'
-import { advance, startForge } from '../../src/server/forge-runner'
-import { listForges, loadForge } from '../../src/server/forge-store'
-import { clientIp, errorResponse, knownDeviceId, readJson, tooMany } from '../../src/server/http'
-import { requireAccount } from '../../src/server/sessions'
+import { getDb } from '../../src/server/db.js'
+import { balance } from '../../src/server/credits.js'
+import { forgeDeps, forgeLimited, forgeUnavailable } from '../../src/server/forge-env.js'
+import { advance, startForge } from '../../src/server/forge-runner.js'
+import { listForges, loadForge } from '../../src/server/forge-store.js'
+import { clientIp, errorResponse, knownDeviceId, readJson, tooMany } from '../../src/server/http.js'
+import { requireAccount } from '../../src/server/sessions.js'
 
 /** GET /api/forge -> your forges; GET /api/forge?id= -> that forge, advanced as far as it can go (KTD1). */
 export async function GET(request: Request): Promise<Response> {

@@ -1,5 +1,5 @@
-import type { MatchEvent } from '../../../arena/engine/events'
-import type { BuildSlot } from '../../../charter/types'
+import type { MatchEvent } from '../../../arena/engine/events.js'
+import type { BuildSlot } from '../../../charter/types.js'
 
 /**
  * Who killed whom (R38). The engine's death event names only the fallen hero, so the feed remembers the last hero

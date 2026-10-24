@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy'
-import { defaultBuild } from '../../sim/fixtures'
-import { referenceArmy } from '../../sim/field'
-import { chest } from './deliveries'
-import { atan2, PI, TAU } from './maths'
-import { GATE_PROFILE, createMatch, endCheck, healthShare, play, type Arena } from './match'
-import { AIM_STEPS, type Command } from './state'
-import { tick } from './tick'
+import { armyModifiers } from '../../charter/synergy.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { referenceArmy } from '../../sim/field.js'
+import { chest } from './deliveries.js'
+import { atan2, PI, TAU } from './maths.js'
+import { GATE_PROFILE, createMatch, endCheck, healthShare, play, type Arena } from './match.js'
+import { AIM_STEPS, type Command } from './state.js'
+import { tick } from './tick.js'
 
 /** A plain test commander: walk at the nearest enemy, aim at its chest and press everything. */
 function brawl(arena: Arena): Command[] {

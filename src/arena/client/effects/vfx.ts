@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { SpriteNodeMaterial } from 'three/webgpu'
 import { float, floor, instancedBufferAttribute, mix, mod, smoothstep, step, texture, uniform, uv, vec2, vec3, vec4 } from 'three/tsl'
-import { ring, take, type Ring } from './ring'
+import { ring, take, type Ring } from './ring.js'
 
 /**
  * Visual effects building blocks (R10, R21): textured, camera-facing sprites animated on the GPU (glows, smoke, star

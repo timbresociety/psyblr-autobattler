@@ -1,6 +1,6 @@
-import { getDb } from '../src/server/db'
-import { errorResponse, overLimit, tooMany } from '../src/server/http'
-import { issueDeviceId } from '../src/server/store'
+import { getDb } from '../src/server/db.js'
+import { errorResponse, overLimit, tooMany } from '../src/server/http.js'
+import { issueDeviceId } from '../src/server/store.js'
 
 /** POST /api/device -> { deviceId }: a server-issued random 128-bit ID the client keeps. */
 export async function POST(request: Request): Promise<Response> {

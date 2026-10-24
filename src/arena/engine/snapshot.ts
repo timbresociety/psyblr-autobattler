@@ -1,4 +1,4 @@
-import type { MatchState } from './state'
+import type { MatchState } from './state.js'
 
 /** A deep copy of the whole match state, so a match can rewind or fork from any tick (KTD1). */
 export const snapshot = (match: MatchState): MatchState => structuredClone(match)

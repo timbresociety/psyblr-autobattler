@@ -1,6 +1,6 @@
-import { retuneFactor } from './budget'
-import { SIZES } from './sizes'
-import type { Effect, SecondarySheet, Template } from './types'
+import { retuneFactor } from './budget.js'
+import { SIZES } from './sizes.js'
+import type { Effect, SecondarySheet, Template } from './types.js'
 
 /** What the player authored for a skill: the name and flavour shown on top of the template (R3, R5). */
 export interface SkillText {

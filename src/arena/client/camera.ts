@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Vec3 } from '../engine/maths'
+import type { Vec3 } from '../engine/maths.js'
 
 /**
  * The two cameras (U17, R13, R42, KTD16): a watching camera that works like a strategy game's (drag to turn around

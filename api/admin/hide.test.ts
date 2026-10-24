@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { POST } from './hide'
+import { POST } from './hide.js'
 
 const call = (secret?: string) =>
   POST(new Request('https://x.test/api/admin/hide', { method: 'POST', headers: secret === undefined ? {} : { 'x-admin-secret': secret }, body: '{"heroId":"h"}' }))

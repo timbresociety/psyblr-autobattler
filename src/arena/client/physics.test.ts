@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy'
-import { referenceArmy } from '../../sim/field'
-import { aiCommands } from '../ai/brain'
-import { LIVE_PROFILE, createMatch, matchRules } from '../engine/match'
-import { hashState } from '../engine/snapshot'
-import { tick } from '../engine/tick'
-import { CosmeticPhysics, PHYSICS } from './physics'
+import { armyModifiers } from '../../charter/synergy.js'
+import { referenceArmy } from '../../sim/field.js'
+import { aiCommands } from '../ai/brain.js'
+import { LIVE_PROFILE, createMatch, matchRules } from '../engine/match.js'
+import { hashState } from '../engine/snapshot.js'
+import { tick } from '../engine/tick.js'
+import { CosmeticPhysics, PHYSICS } from './physics.js'
 
 async function play(withPhysics: boolean, seconds: number) {
   const arena = createMatch(armyModifiers(referenceArmy()), armyModifiers(referenceArmy()), 21, { profile: LIVE_PROFILE })

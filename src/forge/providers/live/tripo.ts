@@ -1,5 +1,5 @@
-import type { Asset, Env, MeshProvider, Outcome, RetargetProvider, RigProvider } from '../types'
-import { getJson, httpFailure, postJson, type FetchLike } from './http'
+import type { Asset, Env, MeshProvider, Outcome, RetargetProvider, RigProvider } from '../types.js'
+import { getJson, httpFailure, postJson, type FetchLike } from './http.js'
 
 /**
  * Tripo (KTD3): mesh, rig and retarget. Asynchronous jobs: create a task, poll its status, read the output.

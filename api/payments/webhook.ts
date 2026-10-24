@@ -1,6 +1,6 @@
-import { getDb } from '../../src/server/db'
-import { errorResponse } from '../../src/server/http'
-import { handleStripeEvent } from '../../src/server/payments'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse } from '../../src/server/http.js'
+import { handleStripeEvent } from '../../src/server/payments.js'
 
 /** POST /api/payments/webhook: Stripe checkout events, verified by signature before any grant. */
 export async function POST(request: Request): Promise<Response> {

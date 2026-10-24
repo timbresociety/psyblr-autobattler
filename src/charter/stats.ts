@@ -1,5 +1,5 @@
-import { SIZES, sizeHealth, type SizeClass } from './sizes'
-import type { Attribute, LimitHit, Role, SecondarySheet, SecondaryStat, Spread, Validation } from './types'
+import { SIZES, sizeHealth, type SizeClass } from './sizes.js'
+import type { Attribute, LimitHit, Role, SecondarySheet, SecondaryStat, Spread, Validation } from './types.js'
 
 export const ATTRIBUTES: readonly Attribute[] = ['strength', 'agility', 'intellect']
 

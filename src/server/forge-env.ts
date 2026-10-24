@@ -1,13 +1,13 @@
 import { put } from '@vercel/blob'
-import { fakeDirectorBrain } from '../forge/director/fake'
-import { createRegistry } from '../forge/providers/registry'
-import { isProduction, type Registry } from '../forge/providers/router'
-import type { FetchLike } from '../forge/providers/live/http'
-import type { Env } from '../forge/providers/types'
-import { bump } from './accounts'
-import type { Db } from './db'
-import { publishForge } from './forge-publish'
-import type { CopyFn, RunnerDeps } from './forge-runner'
+import { fakeDirectorBrain } from '../forge/director/fake.js'
+import { createRegistry } from '../forge/providers/registry.js'
+import { isProduction, type Registry } from '../forge/providers/router.js'
+import type { FetchLike } from '../forge/providers/live/http.js'
+import type { Env } from '../forge/providers/types.js'
+import { bump } from './accounts.js'
+import type { Db } from './db.js'
+import { publishForge } from './forge-publish.js'
+import type { CopyFn, RunnerDeps } from './forge-runner.js'
 
 /** Wiring for the forge API: providers, the Blob copier, and the durable rate limit. */
 

@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { getTemplate } from '../../charter/templates/catalog'
-import { defaultBuild } from '../../sim/fixtures'
-import { DEMO_HEROES, demoBuild } from '../demo/roster'
-import { characterLook, classicCharacterMaterial, HERO_MODELS, modelFor, paintGeometry, paintModel } from './character-look'
-import { castClip } from './characters'
+import { getTemplate } from '../../charter/templates/catalog.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { DEMO_HEROES, demoBuild } from '../demo/roster.js'
+import { characterLook, classicCharacterMaterial, HERO_MODELS, modelFor, paintGeometry, paintModel } from './character-look.js'
+import { castClip } from './characters.js'
 
 describe('a hero’s look', () => {
   it('is the same wherever the hero fights: it follows the name, not the slot or side', () => {

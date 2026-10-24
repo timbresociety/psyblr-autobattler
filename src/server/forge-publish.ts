@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { BUILD_SLOTS, type Build } from '../charter/build'
-import { buildPackage, isLegacyMotion, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package'
-import { confirm } from '../forge/stages'
-import type { Forge } from '../forge/types'
-import type { Db } from './db'
-import { ForgeError, commit, presetBatches, type RunnerDeps } from './forge-runner'
-import { cachedGate } from './gate-cache'
-import { blobStoreId, isOwnForgeAssetUrl } from './photo-url'
-import { NotFoundError } from './store'
+import { BUILD_SLOTS, type Build } from '../charter/build.js'
+import { buildPackage, isLegacyMotion, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package.js'
+import { confirm } from '../forge/stages.js'
+import type { Forge } from '../forge/types.js'
+import type { Db } from './db.js'
+import { ForgeError, commit, presetBatches, type RunnerDeps } from './forge-runner.js'
+import { cachedGate } from './gate-cache.js'
+import { blobStoreId, isOwnForgeAssetUrl } from './photo-url.js'
+import { NotFoundError } from './store.js'
 
 /**
  * Publish a forge at the stats confirm (U10): run the Charter gate on the forged build, write the package,

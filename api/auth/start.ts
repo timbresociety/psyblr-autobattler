@@ -1,7 +1,7 @@
-import { startSignIn } from '../../src/server/accounts'
-import { getDb } from '../../src/server/db'
-import { devSignInLink, pickEmailSender } from '../../src/server/email'
-import { clientIp, errorResponse, readJson } from '../../src/server/http'
+import { startSignIn } from '../../src/server/accounts.js'
+import { getDb } from '../../src/server/db.js'
+import { devSignInLink, pickEmailSender } from '../../src/server/email.js'
+import { clientIp, errorResponse, readJson } from '../../src/server/http.js'
 
 /** POST /api/auth/start { email } -> sends a magic sign-in link (KTD5); the dev server also returns it as devLink. */
 export async function POST(request: Request): Promise<Response> {

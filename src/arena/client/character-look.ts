@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import type { Build } from '../../charter/build'
-import type { RoleId } from '../../charter/types'
-import { DEMO_HEROES } from '../demo/roster'
+import type { Build } from '../../charter/build.js'
+import type { RoleId } from '../../charter/types.js'
+import { DEMO_HEROES } from '../demo/roster.js'
 
 /**
  * What a hero looks like in the arena's own characters (R24), without any renderer: which character file it wears,

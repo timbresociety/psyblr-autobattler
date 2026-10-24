@@ -1,7 +1,7 @@
-import { defaultBuild } from '../sim/fixtures'
+import { defaultBuild } from '../sim/fixtures.js'
 import { describe, expect, it } from 'vitest'
-import { STAGE_ORDER, STAGE_TABLE, begin, confirm, createForge, editInputs, fail, retry, succeed, formAvailable, formSize, skip } from './stages'
-import type { Forge, StageId } from './types'
+import { STAGE_ORDER, STAGE_TABLE, begin, confirm, createForge, editInputs, fail, retry, succeed, formAvailable, formSize, skip } from './stages.js'
+import type { Forge, StageId } from './types.js'
 
 function ok<T extends { ok: boolean }>(r: T): Extract<T, { ok: true }> {
   if (!r.ok) throw new Error(`unexpected rejection: ${JSON.stringify(r)}`)

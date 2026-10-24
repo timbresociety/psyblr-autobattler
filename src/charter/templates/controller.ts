@@ -1,4 +1,4 @@
-import { active, ai, at, basic, blind, breakPassive, cripple, disarm, fear, field, ground, knockup, movement, move, passive, phys, pull, push, refresh, root, shield, silence, sleep, slow, spirit, spiritShred, stun, ultimate, unstoppable, wall } from './dsl'
+import { active, ai, at, basic, blind, breakPassive, cripple, disarm, fear, field, ground, knockup, movement, move, passive, phys, pull, push, refresh, root, shield, silence, sleep, slow, spirit, spiritShred, stun, ultimate, unstoppable, wall } from './dsl.js'
 
 /** Controller: takes enemies out of the fight. Every kind of crowd control, and walls to cut a fight in two. */
 export const CONTROLLER = [

@@ -1,5 +1,5 @@
-import type { DirectorProvider, Env, ImageProvider, Outcome } from '../types'
-import { httpFailure, postJson, type FetchLike } from './http'
+import type { DirectorProvider, Env, ImageProvider, Outcome } from '../types.js'
+import { httpFailure, postJson, type FetchLike } from './http.js'
 
 /**
  * OpenAI-compatible chat and image endpoints (KTD3). One adapter covers any compatible host — including less

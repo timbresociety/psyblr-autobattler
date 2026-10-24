@@ -1,6 +1,6 @@
-import { ENGINE } from '../../../arena/engine/calibration'
-import { RUINS, initialCoverHealth, pushOut } from '../../../arena/engine/cover'
-import type { Team } from '../../../arena/engine/state'
+import { ENGINE } from '../../../arena/engine/calibration.js'
+import { RUINS, initialCoverHealth, pushOut } from '../../../arena/engine/cover.js'
+import type { Team } from '../../../arena/engine/state.js'
 
 /**
  * Staging rules (R2, R6, R7, R37), kept free of React so they test on their own: heroes go on their own half, at

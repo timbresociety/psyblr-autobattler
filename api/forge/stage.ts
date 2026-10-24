@@ -1,12 +1,12 @@
-import { STAGE_ORDER } from '../../src/forge/stages'
-import type { StageId } from '../../src/forge/types'
-import { balance } from '../../src/server/credits'
-import { getDb } from '../../src/server/db'
-import { forgeDeps, forgeLimited, forgeUnavailable } from '../../src/server/forge-env'
-import { act, type ForgeAction } from '../../src/server/forge-runner'
-import { loadForge } from '../../src/server/forge-store'
-import { clientIp, errorResponse, readJson, tooMany } from '../../src/server/http'
-import { requireAccount } from '../../src/server/sessions'
+import { STAGE_ORDER } from '../../src/forge/stages.js'
+import type { StageId } from '../../src/forge/types.js'
+import { balance } from '../../src/server/credits.js'
+import { getDb } from '../../src/server/db.js'
+import { forgeDeps, forgeLimited, forgeUnavailable } from '../../src/server/forge-env.js'
+import { act, type ForgeAction } from '../../src/server/forge-runner.js'
+import { loadForge } from '../../src/server/forge-store.js'
+import { clientIp, errorResponse, readJson, tooMany } from '../../src/server/http.js'
+import { requireAccount } from '../../src/server/sessions.js'
 
 const isStage = (v: unknown): v is StageId => STAGE_ORDER.includes(v as StageId)
 const obj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})

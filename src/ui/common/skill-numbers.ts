@@ -1,6 +1,6 @@
-import { retuneFactor } from '../../charter/budget'
-import { SIZES } from '../../charter/sizes'
-import type { Effect, SecondarySheet, Template } from '../../charter/types'
+import { retuneFactor } from '../../charter/budget.js'
+import { SIZES } from '../../charter/sizes.js'
+import type { Effect, SecondarySheet, Template } from '../../charter/types.js'
 
 /**
  * The few numbers a skill card shows big, read off the same template, sheet and retune as its tooltip (R6): what it

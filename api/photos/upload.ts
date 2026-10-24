@@ -1,7 +1,7 @@
-import { MAX_PHOTO_BYTES, pickPut, uploadPhoto } from '../../src/server/blob'
-import { getDb } from '../../src/server/db'
-import { errorResponse, knownDeviceId, needDevice, overLimit, tooMany } from '../../src/server/http'
-import { RateLimiter } from '../../src/server/rate-limit'
+import { MAX_PHOTO_BYTES, pickPut, uploadPhoto } from '../../src/server/blob.js'
+import { getDb } from '../../src/server/db.js'
+import { errorResponse, knownDeviceId, needDevice, overLimit, tooMany } from '../../src/server/http.js'
+import { RateLimiter } from '../../src/server/rate-limit.js'
 
 const uploads = new RateLimiter({ limit: 15, windowMs: 60 * 60 * 1000 })
 

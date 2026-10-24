@@ -1,7 +1,7 @@
-import type { Build } from '../charter/build'
-import { getTemplate } from '../charter/templates/catalog'
-import type { BuildSlot } from '../charter/types'
-import type { Forge, StageId, StageState, Transition } from './types'
+import type { Build } from '../charter/build.js'
+import { getTemplate } from '../charter/templates/catalog.js'
+import type { BuildSlot } from '../charter/types.js'
+import type { Forge, StageId, StageState, Transition } from './types.js'
 
 /** The forge's stages in order; each is confirmed before the next starts (R11). */
 export const STAGE_ORDER: readonly StageId[] = ['spec', 'concept', 'mesh', 'motion', 'active1', 'active2', 'ultimate', 'form', 'stats']

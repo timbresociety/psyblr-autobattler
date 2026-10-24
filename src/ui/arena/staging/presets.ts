@@ -1,8 +1,8 @@
-import type { DemoFaction } from '../../../arena/demo/roster'
-import type { Team } from '../../../arena/engine/state'
-import type { RoleId } from '../../../charter/types'
-import { MAX_PER_SIDE, deployHeroes, type Formation } from './formation'
-import type { LoadoutEntry } from './loadout'
+import type { DemoFaction } from '../../../arena/demo/roster.js'
+import type { Team } from '../../../arena/engine/state.js'
+import type { RoleId } from '../../../charter/types.js'
+import { MAX_PER_SIDE, deployHeroes, type Formation } from './formation.js'
+import type { LoadoutEntry } from './loadout.js'
 
 /**
  * Who fights whom before anyone drags a hero (U16): the demo roster is two factions, so the default is a faction

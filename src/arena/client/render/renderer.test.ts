@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chooseBackend, forceWebGLFlag } from './renderer'
+import { chooseBackend, forceWebGLFlag } from './renderer.js'
 
 describe('renderer boundary (U1)', () => {
   it('falls back to WebGL2 when WebGPU is unavailable', () => {

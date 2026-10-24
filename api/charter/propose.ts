@@ -1,6 +1,6 @@
-import { InputError, chatEdit, proposeHero } from '../../src/server/propose'
-import { requestKeys } from '../../src/server/rate-limit'
-import { hydrateBuild } from '../../src/charter/build'
+import { InputError, chatEdit, proposeHero } from '../../src/server/propose.js'
+import { requestKeys } from '../../src/server/rate-limit.js'
+import { hydrateBuild } from '../../src/charter/build.js'
 
 /**
  * POST /api/charter/propose

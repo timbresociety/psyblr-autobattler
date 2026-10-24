@@ -1,4 +1,4 @@
-import type { HeroState } from '../../../arena/engine/state'
+import type { HeroState } from '../../../arena/engine/state.js'
 
 /**
  * What is on a hero right now, worst first, read straight from the engine state (no events to miss). The overhead

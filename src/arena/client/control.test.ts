@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy'
-import { defaultBuild } from '../../sim/fixtures'
-import { createMatch } from '../engine/match'
-import { AIM_STEPS } from '../engine/state'
-import { BLEND_SECONDS, Cameras, pullIn } from './camera'
-import { BINDINGS, commandFrom } from './input'
-import { handBack, heroForKey, releaseIfDead, take } from './takeover'
+import { armyModifiers } from '../../charter/synergy.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { createMatch } from '../engine/match.js'
+import { AIM_STEPS } from '../engine/state.js'
+import { BLEND_SECONDS, Cameras, pullIn } from './camera.js'
+import { BINDINGS, commandFrom } from './input.js'
+import { handBack, heroForKey, releaseIfDead, take } from './takeover.js'
 
 const arena = () => createMatch(armyModifiers([defaultBuild('fighter'), defaultBuild('mage')]), armyModifiers([defaultBuild('tank'), defaultBuild('support')]), 1)
 

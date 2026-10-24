@@ -1,10 +1,10 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
-import { PACKS, type CreditPack } from '../forge/pricing'
-import { isProduction } from '../forge/providers/router'
-import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http'
-import type { Env } from '../forge/providers/types'
-import { grantPurchase } from './credits'
-import type { Db } from './db'
+import { PACKS, type CreditPack } from '../forge/pricing.js'
+import { isProduction } from '../forge/providers/router.js'
+import { TIMEOUT_MS, type FetchLike } from '../forge/providers/live/http.js'
+import type { Env } from '../forge/providers/types.js'
+import { grantPurchase } from './credits.js'
+import type { Db } from './db.js'
 
 /**
  * Prepaid credits (KTD6). A purchase takes only a pack ID; credits are granted from the verified payment, never
