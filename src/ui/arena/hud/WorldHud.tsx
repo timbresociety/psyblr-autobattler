@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef } from 'react'
 import { ENGINE } from '../../../arena/engine/calibration'
 import { capsule } from '../../../arena/engine/state'
+import { createCalloutPool } from './callouts'
 import type { HudController } from './controller'
 import { createDamagePool } from './damage'
 import { prefersReducedMotion } from './format'
@@ -10,8 +11,9 @@ import { statusesOf } from './status'
 import { overheadLift, project, screenPoint } from './world'
 
 /**
- * The HUD layer that lives in the 3D world: overhead bars on every hero and floating damage numbers. It mounts once
- * per match and then runs entirely from the frame and event hooks; React never re-renders it.
+ * The HUD layer that lives in the 3D world: overhead bars on every hero, floating damage numbers and the names of
+ * moves called out as they're cast. It mounts once per match and then runs entirely from the frame and event hooks;
+ * React never re-renders it.
  */
 export const WorldHud = memo(function WorldHud({ controller, heroes }: { controller: HudController; heroes: readonly HudHeroInfo[] }) {
   const layer = useRef<HTMLDivElement>(null)
@@ -23,6 +25,7 @@ export const WorldHud = memo(function WorldHud({ controller, heroes }: { control
 export function attachWorldHud(el: HTMLElement, controller: HudController, heroes: readonly HudHeroInfo[]) {
   const overheads = createOverheads(el, heroes)
   const damage = createDamagePool(el, { reducedMotion: prefersReducedMotion() })
+  const callouts = createCalloutPool(el, { reducedMotion: prefersReducedMotion() })
   const heads = heroes.map(screenPoint)
   // the layer covers the canvas exactly; its size is read on resize, never inside a frame
   const size = { w: el.clientWidth, h: el.clientHeight }
@@ -40,6 +43,10 @@ export function attachWorldHud(el: HTMLElement, controller: HudController, heroe
     for (const e of events) {
       // the controlled hero's own health block shows what it takes; numbers over its head would sit in the crosshair
       if (e.type === 'hit' && e.target !== me) damage.spawn(e.target, e.amount, { heavy: e.heavy, own: me !== undefined && e.source === me })
+      else if (e.type === 'cast') {
+        const skill = heroes[e.hero]?.skills[e.slot]
+        if (skill?.callout) callouts.spawn(e.hero, skill.name, skill.callout, { fixed: e.hero === me })
+      }
     }
   })
   const offFrame = controller.hooks.on('frame', (dt) => {
@@ -67,6 +74,7 @@ export function attachWorldHud(el: HTMLElement, controller: HudController, heroe
     }
     overheads.declutter(heads)
     damage.frame(dt, (t) => heads[t])
+    callouts.frame(dt, (h) => heads[h], { x: size.w / 2, y: size.h * 0.74 })
   })
 
   return () => {
@@ -76,5 +84,6 @@ export function attachWorldHud(el: HTMLElement, controller: HudController, heroe
     window.removeEventListener('resize', measure)
     overheads.dispose()
     damage.dispose()
+    callouts.dispose()
   }
 }

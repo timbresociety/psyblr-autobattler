@@ -1,3 +1,4 @@
+import { poseClip, type SkillLook } from '../../charter/skill-look.js'
 import type { BuildSlot, RoleId, Template } from '../../charter/types.js'
 
 export { heroHue } from '../../arena/client/character-look.js'
@@ -19,11 +20,27 @@ export const ROLE_RGB: Record<RoleId, [number, number, number]> = {
   summoner: [64, 224, 196],
 }
 
-/** The arena character's clips (public/heroes/*.glb). */
-export type StageClip = 'idle' | 'run' | 'fly' | 'hover' | 'slash' | 'shoot' | 'cast' | 'ultimate' | 'hurt' | 'stunned' | 'fall'
+/** The arena character's clips (public/heroes/*.glb), with the cast poses a skill's look can pick. */
+export type StageClip =
+  | 'idle'
+  | 'run'
+  | 'fly'
+  | 'hover'
+  | 'slash'
+  | 'shoot'
+  | 'cast'
+  | 'ultimate'
+  | 'hurt'
+  | 'stunned'
+  | 'fall'
+  | `cast_${'palms' | 'palm' | 'fingers' | 'overhead' | 'cross' | 'clap' | 'slam' | 'summon' | 'breath' | 'spin'}`
 
-/** Which clip shows a skill: a swing for close skills, a shot or a two-handed blast for ranged ones (as in the arena). */
-export function castClip(template: Pick<Template, 'delivery'>, slot: BuildSlot): StageClip {
+/**
+ * Which clip shows a skill: the pose its look picks, else a swing for close skills, a shot or a two-handed blast for
+ * ranged ones (as in the arena). The preview plays the whole clip, wind-up and all.
+ */
+export function castClip(template: Pick<Template, 'delivery'>, slot: BuildSlot, look?: Pick<SkillLook, 'pose'>): StageClip {
+  if (look?.pose) return poseClip(look.pose) as StageClip
   if (slot === 'ultimate') return 'ultimate'
   if (slot === 'movement') return 'hover'
   const kind = template.delivery.kind

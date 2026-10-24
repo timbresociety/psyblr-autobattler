@@ -2,8 +2,7 @@ import { BUILD_SLOTS } from '../../charter/build.js'
 import { ROLE_IDS, isRoleId } from '../../charter/roles.js'
 import { SIZE_CLASSES, isSizeClass, type SizeClass } from '../../charter/sizes.js'
 import type { BuildSlot, RoleId } from '../../charter/types.js'
-import { LOOK_PRIMITIVES } from '../../arena/recipes/looks.js'
-import type { RecipeLook } from '../../arena/recipes/schema.js'
+import { CAST_POSES, CHARGES, ELEMENTS, FORMS, IMPACTS, MOTIFS, TRAILS, hydrateSkillLook, type SkillLook } from '../../charter/skill-look.js'
 import type { ChatTurn, ContentFlags, Suggestion, Tone } from '../types.js'
 
 export interface DirectorInput {
@@ -19,8 +18,8 @@ export interface DraftSkill {
   slot: BuildSlot
   name: string
   theme: string
-  /** Colours and effect primitives for the skill's visual (R33); the Forge sizes them to the real hit area. */
-  look?: RecipeLook
+  /** How the skill looks (R33, src/charter/skill-look.ts); the arena sizes it to the real hit area. */
+  look?: SkillLook
 }
 
 export interface DraftSpec {
@@ -85,8 +84,19 @@ export const DIRECTOR_SCHEMA: Record<string, unknown> = {
               look: {
                 type: 'object',
                 additionalProperties: false,
-                required: ['palette', 'feature'],
-                properties: { palette: { type: 'array', items: str }, feature: { type: 'array', items: { type: 'string', enum: [...LOOK_PRIMITIVES] } }, intensity: { type: 'number' }, charged: { type: 'boolean' } },
+                required: ['element', 'palette'],
+                properties: {
+                  element: { type: 'string', enum: [...ELEMENTS] },
+                  palette: { type: 'array', items: str },
+                  form: { type: 'string', enum: [...new Set(Object.values(FORMS).flat())] },
+                  pose: { type: 'string', enum: [...CAST_POSES] },
+                  charge: { type: 'string', enum: [...CHARGES] },
+                  impact: { type: 'string', enum: [...IMPACTS] },
+                  trail: { type: 'string', enum: [...TRAILS] },
+                  motif: { type: 'string', enum: [...MOTIFS] },
+                  callout: { type: 'boolean' },
+                  intensity: { type: 'number' },
+                },
               },
             },
           },
@@ -101,17 +111,6 @@ export const DIRECTOR_SCHEMA: Record<string, unknown> = {
 
 const isStr = (v: unknown, max = 500): v is string => typeof v === 'string' && v.length <= max
 
-/** A look from the model is kept only when its colours are hex and its primitives are known. */
-function parseLook(raw: unknown): RecipeLook | undefined {
-  const l = raw as Record<string, unknown> | undefined
-  if (!l || typeof l !== 'object' || !Array.isArray(l.palette) || !Array.isArray(l.feature)) return undefined
-  const palette = (l.palette as unknown[]).filter((c): c is string => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c))
-  if (palette.length !== 3) return undefined
-  const feature = (l.feature as unknown[]).filter((p): p is RecipeLook['feature'][number] => (LOOK_PRIMITIVES as readonly unknown[]).includes(p)).slice(0, 4)
-  const intensity = typeof l.intensity === 'number' && l.intensity > 0 && l.intensity <= 2 ? l.intensity : undefined
-  return { palette: palette as RecipeLook['palette'], feature, ...(intensity ? { intensity } : {}), ...(l.charged === true ? { charged: true } : {}) }
-}
-
 /** Accept a model's answer only when it fits the contract; anything else falls back to the offline brain. */
 export function parseDirectorOutput(raw: unknown): DirectorOutput | undefined {
   const v = raw as Record<string, unknown>
@@ -124,7 +123,7 @@ export function parseDirectorOutput(raw: unknown): DirectorOutput | undefined {
   if (v.spec) {
     const s = v.spec as Record<string, unknown>
     const skills = Array.isArray(s.skills)
-      ? (s.skills as Record<string, unknown>[]).filter((k) => BUILD_SLOTS.includes(k.slot as BuildSlot) && isStr(k.name, 40) && isStr(k.theme, 280)).map((k) => ({ slot: k.slot, name: k.name, theme: k.theme, ...(parseLook(k.look) ? { look: parseLook(k.look) } : {}) }))
+      ? (s.skills as Record<string, unknown>[]).filter((k) => BUILD_SLOTS.includes(k.slot as BuildSlot) && isStr(k.name, 40) && isStr(k.theme, 280)).map((k) => ({ slot: k.slot, name: k.name, theme: k.theme, ...(hydrateSkillLook(k.look) ? { look: hydrateSkillLook(k.look) } : {}) }))
       : []
     if (!isStr(s.heroName, 60) || !isRoleId(s.roleId) || !isSizeClass(s.sizeClass) || !isStr(s.description, 1000) || skills.length < 3) return undefined
     spec = {

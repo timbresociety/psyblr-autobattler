@@ -1,13 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { BODIES } from '../../arena/client/character-look.js'
+import { CAST_POSES as LOOK_POSES, poseClip } from '../../charter/skill-look.js'
 import { applyFace, landmarkAt, parseFaceBasis, type FaceBasisMeta } from './face-basis.js'
 import { readBody, type BodyFile } from './node.js'
 import { triangleKeys, weldValues } from './surface.js'
 
 const pub = (path: string) => new URL(`../../../public${path}`, import.meta.url)
 const MORPHS = ['weight-', 'weight+', 'muscle-', 'muscle+', 'age']
-const CAST_POSES = ['cast_palms', 'cast_palm', 'cast_fingers', 'cast_overhead', 'cast_cross', 'cast_clap', 'cast_slam', 'cast_summon', 'cast_breath', 'cast_spin']
+// every pose a skill's look can pick plays a clip every body has
+const CAST_POSES = LOOK_POSES.map(poseClip)
 
 interface KitV2 {
   version: number

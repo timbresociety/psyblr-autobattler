@@ -4,6 +4,8 @@ import { getTemplate } from '../../charter/templates/catalog.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { DEMO_HEROES, demoBuild } from '../demo/roster.js'
 import { BODIES, bodyFor, characterLook } from './character-look.js'
+import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
+import { castClip as stageClip } from '../../ui/common/hero-look.js'
 import { castClip } from './characters.js'
 
 const ids = (outfit: ReturnType<typeof characterLook>['outfit']) => Object.fromEntries(Object.entries(outfit).map(([slot, w]) => [slot, w!.id]))
@@ -78,10 +80,24 @@ describe('which clip a cast plays', () => {
   it('swings for close skills, shoots a basic projectile, casts the rest, and plays the ultimate as its own', () => {
     const marksman = defaultBuild('marksman', 'M')
     const fighter = defaultBuild('fighter', 'F')
-    expect(castClip(marksman, 'ultimate')).toBe('ultimate')
+    expect(castClip(marksman, 'ultimate').clip).toBe('ultimate')
     const kindOf = (b: typeof marksman, slot: 'basic' | 'active1') => getTemplate(b.slots[slot].templateId).delivery.kind
-    if (kindOf(marksman, 'basic') === 'projectile') expect(castClip(marksman, 'basic')).toBe('shoot')
-    if (kindOf(fighter, 'basic') === 'melee') expect(castClip(fighter, 'basic')).toBe('slash')
-    expect(['slash', 'shoot', 'cast']).toContain(castClip(fighter, 'active1'))
+    if (kindOf(marksman, 'basic') === 'projectile') expect(castClip(marksman, 'basic').clip).toBe('shoot')
+    if (kindOf(fighter, 'basic') === 'melee') expect(castClip(fighter, 'basic').clip).toBe('slash')
+    expect(['slash', 'shoot', 'cast']).toContain(castClip(fighter, 'active1').clip)
+  })
+
+  it("plays the pose a skill's look picks, from just before its hands let go", () => {
+    const build = demoBuild(DEMO_HEROES[0])
+    const palms = { ...build, look: { ...build.look!, skills: { active1: { ...elementLook('energy'), pose: 'palms' as const } } } }
+    expect(castClip(palms, 'active1')).toEqual({ clip: 'cast_palms', from: POSE_RELEASE.palms - 0.08 })
+    // with no stored look, a famous move's name is enough
+    const named = (name: string) => ({ ...build, look: { ...build.look!, skills: {} }, slots: { ...build.slots, ultimate: { ...build.slots.ultimate, name } } })
+    expect(castClip(named('Kamehameha'), 'ultimate').clip).toBe('cast')
+    expect(castClip(named('Special Beam Cannon'), 'ultimate').clip).toBe('cast_fingers')
+    // an ultimate whose words name no pose keeps its own big clip
+    expect(castClip(named('Mass Retaliation'), 'ultimate')).toEqual({ clip: 'ultimate', from: 0 })
+    // the Forge preview plays the same pose, wind-up and all
+    expect(stageClip(getTemplate(build.slots.active1.templateId), 'active1', { pose: 'clap' })).toBe('cast_clap')
   })
 })

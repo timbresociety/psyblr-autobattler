@@ -1,5 +1,7 @@
 import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
 import type { Physique } from '../kit/body/shape.js'
+import { hydrateSkillLook, type SkillLook } from './skill-look.js'
+import type { BuildSlot } from './types.js'
 
 /**
  * A hero's look (cosmetic only: no number in the game reads it). The body comes from the hero's size and this look's
@@ -70,6 +72,8 @@ export interface HeroLook {
   face?: FacePhoto
   /** Rigid pieces in the body's sockets: a hat, glasses, a weapon in each hand, something on the back. */
   gear?: Partial<Record<GearSlot, GearPiece>>
+  /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
+  skills?: Partial<Record<BuildSlot, SkillLook>>
 }
 
 export const FACE_POINTS = 478
@@ -144,8 +148,20 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     }
     if (Object.keys(gear).length) look.gear = gear
   }
+  const skillsIn = input.skills as Record<string, unknown> | undefined
+  if (skillsIn && typeof skillsIn === 'object') {
+    const skills: NonNullable<HeroLook['skills']> = {}
+    for (const slot of SKILL_SLOTS) {
+      const kept = hydrateSkillLook(skillsIn[slot])
+      if (kept) skills[slot] = kept
+    }
+    if (Object.keys(skills).length) look.skills = skills
+  }
   return look
 }
+
+// the build's slots (build.ts imports this module, so they're listed here)
+const SKILL_SLOTS: readonly BuildSlot[] = ['basic', 'active1', 'active2', 'passive', 'ultimate', 'movement']
 
 /** A wardrobe from untrusted input: well-formed items in known slots (the server checks they exist). */
 function hydrateWear(raw: unknown): HeroLook['wear'] | undefined {

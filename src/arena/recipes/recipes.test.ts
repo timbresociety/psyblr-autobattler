@@ -6,7 +6,7 @@ import { lookFor } from './looks.js'
 import type { EffectRecipe } from './schema.js'
 import { validateRecipe } from './validate.js'
 
-const KINDS: Delivery['kind'][] = ['melee', 'projectile', 'beam', 'cone', 'zone', 'self', 'aura', 'dash', 'blink', 'grapple']
+const KINDS: Delivery['kind'][] = ['melee', 'projectile', 'beam', 'cone', 'zone', 'self', 'aura', 'dash', 'blink', 'leap', 'grapple']
 
 describe('effect recipes (U9)', () => {
   it('every delivery kind and both passive visuals have a default recipe that validates', () => {
@@ -42,7 +42,7 @@ describe('effect recipes (U9)', () => {
   it('the offline director gives a spirit-bomb skill its look', () => {
     const out = fakeDirectorBrain({ prompt: 'Goku with skills around spirit bomb, instant transmission and kamehameha', referenceCaptions: [], chat: [], answers: { tone: 'heroic' } })
     const skill = out.spec?.skills.find((s) => /spirit bomb/i.test(s.theme))
-    expect(skill?.look?.charged).toBe(true)
+    expect(skill?.look?.charge).toBe('sky')
   })
 
   it('a recipe survives a JSON round trip unchanged', () => {

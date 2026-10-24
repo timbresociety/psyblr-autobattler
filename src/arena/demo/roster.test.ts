@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hydrateBuild } from '../../charter/build.js'
+import { BUILD_SLOTS, hydrateBuild, remixBuild } from '../../charter/build.js'
 import { GATE_CEILING, winRateVsField } from '../../sim/gate.js'
 import { DEMO_HEROES, demoRoster } from './roster.js'
 
@@ -16,6 +16,21 @@ describe('demo roster (U1)', () => {
       expect(result.ok, build.heroName).toBe(true)
       expect(result.build.sizeClass ?? 'medium').toBe(build.sizeClass ?? 'medium')
     }
+  })
+
+  it('every skill carries a look of its own, kept through saving and a remix', () => {
+    const elements = new Set<string>()
+    for (const build of demoRoster()) {
+      for (const slot of BUILD_SLOTS) {
+        const look = build.look?.skills?.[slot]
+        expect(look, `${build.heroName} ${slot}`).toBeDefined()
+        elements.add(look!.element)
+      }
+      expect(hydrateBuild(build).build.look?.skills, build.heroName).toEqual(build.look?.skills)
+      expect(remixBuild(build).look?.skills, build.heroName).toEqual(build.look?.skills)
+    }
+    // twenty heroes, not one blue glow: their moves come in many elements
+    expect(elements.size).toBeGreaterThanOrEqual(10)
   })
 
   it('every hero fights under the R15 ceiling at its own size, as any forged build must', () => {

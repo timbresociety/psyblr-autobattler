@@ -1,6 +1,7 @@
 import type { Build } from '../../../charter/build.js'
 import type { BuildSlot, Template } from '../../../charter/types.js'
 import type { Team } from '../../../arena/engine/state.js'
+import { skillLookOf } from '../../../arena/recipes/looks.js'
 import { initials, shortName } from './format.js'
 import { iconFor, toneFor, type IconKey, type Tone } from './icons'
 
@@ -19,6 +20,8 @@ export interface HudSkill {
   mechanic: string
   /** Seconds. */
   cooldown: number
+  /** The look's core and glow colours, when its name is called out as it's cast (callouts.ts). */
+  callout?: [string, string]
 }
 
 export interface HudHeroInfo {
@@ -46,7 +49,8 @@ export function heroInfo(id: number, team: Team, setup: HeroSetupLike, portrait?
   for (const slot of Object.keys(setup.kit) as BuildSlot[]) {
     const t = setup.kit[slot]
     const own = setup.build.slots[slot]?.name?.trim()
-    skills[slot] = { slot, icon: iconFor(t), tone: toneFor(t), name: own || t.name, mechanic: t.name, cooldown: t.cooldown }
+    const look = skillLookOf(setup.build, slot)
+    skills[slot] = { slot, icon: iconFor(t), tone: toneFor(t), name: own || t.name, mechanic: t.name, cooldown: t.cooldown, ...(look?.callout ? { callout: [look.palette[0], look.palette[1]] as [string, string] } : {}) }
   }
   const name = setup.build.heroName
   return { id, team, name, short: shortName(name), initials: initials(name), role: setup.build.roleId, portrait, skills }

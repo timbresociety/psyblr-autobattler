@@ -2,8 +2,11 @@ import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { attribute, clamp, distance, dot, float, max, mix, normalView, positionViewDirection, step, texture, uniform, vec3, vertexColor } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import type { Build } from '../../charter/build.js'
+import { BUILD_SLOTS, type Build } from '../../charter/build.js'
+import { POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
+import type { BuildSlot } from '../../charter/types.js'
+import { skillLookOf } from '../recipes/looks.js'
 import type { AnimState } from './animation.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
@@ -62,14 +65,25 @@ export function clothMaterial(team: THREE.Color, map?: THREE.Texture): MeshStand
 
 const LOCOMOTION = new Set(['idle', 'run', 'fly', 'hover', 'stunned'])
 
-/** Which clip a cast plays: a swing for close skills, a shot or a two-handed blast for ranged ones. */
-export function castClip(build: Build, slot: string): string {
-  if (slot === 'ultimate') return 'ultimate'
+export interface CastClip {
+  clip: string
+  /** Seconds into the clip to start. */
+  from: number
+}
+
+/**
+ * Which clip a cast plays: the pose its look picks, else a swing for close skills, a shot or a two-handed blast for
+ * ranged ones. The engine casts at once, so a pose starts just before its hands let go and the thrust lands with
+ * the effect.
+ */
+export function castClip(build: Build, slot: string): CastClip {
+  const pose = BUILD_SLOTS.includes(slot as BuildSlot) ? skillLookOf(build, slot as BuildSlot)?.pose : undefined
+  if (pose) return { clip: poseClip(pose), from: Math.max(0, POSE_RELEASE[pose] - 0.08) }
+  if (slot === 'ultimate') return { clip: 'ultimate', from: 0 }
   const id = build.slots[slot as keyof Build['slots']]?.templateId
   const kind = id ? getTemplate(id).delivery.kind : 'melee'
-  if (kind === 'melee' || kind === 'cone' || kind === 'dash' || kind === 'grapple') return 'slash'
-  if (kind === 'projectile') return slot === 'basic' ? 'shoot' : 'cast'
-  return 'cast'
+  if (kind === 'melee' || kind === 'cone' || kind === 'dash' || kind === 'grapple') return { clip: 'slash', from: 0 }
+  return { clip: kind === 'projectile' && slot === 'basic' ? 'shoot' : 'cast', from: 0 }
 }
 
 export interface CharacterView {
@@ -102,22 +116,25 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   let current: THREE.AnimationAction | undefined
   let currentName = ''
-  const play = (name: string, fade: number) => {
+  const play = (name: string, fade: number, from = 0) => {
     const next = actions.get(name) ?? actions.get('idle')
     if (!next || next === current) return
     next.reset().setEffectiveWeight(1).fadeIn(fade).play()
+    next.time = from
     current?.fadeOut(fade)
     current = next
     currentName = name
   }
+  // each skill's clip, worked out once: reading a look from its words is too slow to do every frame
+  const casts = new Map(BUILD_SLOTS.map((slot) => [slot as string, castClip(build, slot)]))
   return {
     root,
     pose: (state, dt, moving) => {
-      const wanted =
-        state.kind === 'cast' ? castClip(build, state.slot) : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
+      const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
+      const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
       // a swing or a blast finishes before running or idling takes over; a new cast, a hit or death cuts in at once
       const oneShotPlaying = current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
-      if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, wanted === 'hurt' ? 0.05 : 0.15)
+      if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : 0.15, cast?.from)
       mixer.update(dt)
     },
     settle: (dt, far, still) => {

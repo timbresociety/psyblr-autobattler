@@ -21,6 +21,7 @@ import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
 import type { GearPiece, GearSlot, HeroLook, LookColor } from '../../charter/look'
+import { skillLookOf } from '../../arena/recipes/looks'
 import { BUILT_IN, type PieceEntry } from '../../kit/pieces'
 import type { GearGap } from '../../kit/resolve'
 import { buildFromReading, type GearWish, type Reading } from '../../forge/reading'
@@ -367,7 +368,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     apply(result)
     return {}
   }
-  const preview = (slot: BuildSlot) => build && setCue({ clip: castClip(getTemplate(build.slots[slot].templateId), slot), at: performance.now() })
+  const preview = (slot: BuildSlot) => build && setCue({ clip: castClip(getTemplate(build.slots[slot].templateId), slot, skillLookOf(build, slot)), at: performance.now() })
   /** From the kit row: the hero performs the skill and its card comes into view. */
   const showSkill = (slot: BuildSlot) => {
     preview(slot)

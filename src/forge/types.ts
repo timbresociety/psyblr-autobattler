@@ -1,6 +1,6 @@
-import type { RecipeLook } from '../arena/recipes/schema.js'
 import type { Build } from '../charter/build.js'
 import type { SizeClass } from '../charter/sizes.js'
+import type { SkillLook } from '../charter/skill-look.js'
 import type { BuildSlot } from '../charter/types.js'
 
 /** The stages of a forge, in order (R11). */
@@ -53,8 +53,8 @@ export interface SkillTheme {
   theme: string
   /** The Charter template the theme maps to, so only buildable choices are offered (R10, R20). */
   templateId: string
-  /** The director's colours and effect primitives for this skill (R33). */
-  look?: RecipeLook
+  /** The director's look for this skill (R33, src/charter/skill-look.ts). */
+  look?: SkillLook
 }
 
 export interface ContentFlags {
