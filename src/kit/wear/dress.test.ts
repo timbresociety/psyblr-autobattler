@@ -260,6 +260,43 @@ describe('dressing', () => {
     expect(free).toBeGreaterThan(5)
   })
 
+  it('wears a mask over the beard and under the hair', () => {
+    const f = files.get('m-medium')!
+    const head = leaning(f, ref, ['head'], 0.95)
+    const top = f.rest.head[1] + 0.06
+    const crown = (v: number) => head(v) && ref.positions[v * 3 + 1] > top
+    // thicker than the hair: worn over the mask, the hair has to rise over both
+    const beard = shellItem(ref, { id: 'beard', slot: 'beard', lift: 0.02, hides: false, select: crown })
+    const mask = shellItem(ref, { id: 'mask', slot: 'face', lift: 0.004, select: crown })
+    const out = dress({ body: ref, worn: [worn(hair), worn(mask), worn(beard)] })
+    // over the beard's whole reach: its corners all covered, so the floor there is the beard's (then the mask's)
+    const lifts = (item: SurfaceItem) => {
+      const dressed = out.items.find((i) => i.id === item.meta.id)!
+      const { tri } = item.binding
+      const under = new Set(beard.meta.covers)
+      return Array.from({ length: item.count }, (_, k) => k).filter((k) => [0, 1, 2].every((j) => under.has(tri[k * 3 + j]))).map((k) => liftOf(ref, item, dressed.positions, k))
+    }
+    expect(lifts(mask).length).toBeGreaterThan(5)
+    expect(Math.min(...lifts(mask))).toBeGreaterThanOrEqual(0.02 + GAP - 1e-4)
+    expect(Math.min(...lifts(hair))).toBeGreaterThanOrEqual(0.02 + 2 * GAP - 1e-4)
+  })
+
+  it('carries a hard item on one bone, whole: a helmet down the neck never bends with it', () => {
+    const f = files.get('m-medium')!
+    const helm = shellItem(ref, { id: 'helm', slot: 'head', lift: 0.01, select: leaning(f, ref, ['head', 'neck'], 0.5) })
+    const bonesOf = (item: SurfaceItem) => {
+      const { joints, weights } = dress({ body: ref, worn: [worn(item)] }).items[0]
+      const bones = new Set<number>()
+      for (let k = 0; k < weights.length; k++) if (weights[k] > 0) bones.add(joints[k])
+      return { bones, whole: Array.from({ length: weights.length / 4 }, (_, v) => weights[v * 4]).every((w) => w === 1) }
+    }
+    // bound as usual, it bends where the neck does; hard, it rides the head alone
+    expect(bonesOf(helm).bones.size).toBeGreaterThan(1)
+    const hard = bonesOf({ ...helm, meta: { ...helm.meta, hard: true } })
+    expect(hard.whole).toBe(true)
+    expect([...hard.bones].map((b) => f.bones[b])).toEqual(['head'])
+  })
+
   it('cuts sleeves and legs where the knobs say, and shows the skin again there', () => {
     const fields = fieldsOf.get('m-medium')!
     const full = dress({ body: ref, fields, worn: [worn(tee)] })

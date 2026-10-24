@@ -73,6 +73,11 @@ export interface ItemMeta {
    */
   hidden?: number[]
   chains?: ChainGroup[]
+  /**
+   * Rides one bone whole, the one most of it leans on: a hard hat moves with the head and never bends, though the
+   * skin nearest a kasa's back brim is the shoulders'. It still fits each body through its binding.
+   */
+  hard?: boolean
   /** For a rigid item: the body socket it hangs on. */
   socket?: string
 }
@@ -120,6 +125,7 @@ export function checkMeta(raw: unknown, vertices: number): ItemMeta {
   if (!(ITEM_SLOTS as readonly string[]).includes(m!.slot as string)) fail('bad slot')
   if (m!.mode !== 'surface' && m!.mode !== 'rigid') fail('bad mode')
   if (typeof m!.hides !== 'boolean') fail('bad hides')
+  if (m!.hard !== undefined && typeof m!.hard !== 'boolean') fail('bad hard')
   const channels = m!.channels
   if (!Array.isArray(channels) || channels.length < 1 || channels.length > 4) fail('one to four channels')
   for (const c of channels!) {

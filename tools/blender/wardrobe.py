@@ -986,14 +986,134 @@ def mohawk(w, mat, height=0.07, width=0.018, name='crest'):
     return new_object(name, bm, w.d.mats.mats[mat])
 
 
-def beard(w, style, mat='beard', depth=None):
-    b = H.make_beard(w.d, w.head, style, mat=mat, depth=depth)
-    return [relax_edges(b)] if b else []
+def smooth01(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def cut_shell(w, mat, field, lift, name, ramp=0.006, under=0.0015, least=8):
+    """
+    A shell over the head's skin where `field(p)` (metres, positive inside) is above 0, cut along that line instead
+    of along whole faces, so its edge runs smooth even where the body's faces are coarse (under the jaw). Lifted
+    `lift(p)` off the skin and tapered over its last `ramp` to just under it: the edge grows out of the face (a ramp of 0
+    keeps a thin shell's edge at full lift, exactly on the cut). Pieces of fewer than `least` faces go.
+    """
+    skin_idx = [i for i, m in enumerate(w.obj.data.materials) if m.name in ('skin', 'face')]
+    verts = w.obj.data.vertices
+
+    def pick(poly):
+        return poly.material_index in skin_idx and w.d.face_bone(poly) in ('head', 'neck') and any(field(verts[i].co) > 0 for i in poly.vertices)
+
+    obj = w.d.shell(name, pick, 0.0, 0.0, mat)
+    if obj is None:
+        return None
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    val = {v: field(v.co) for v in bm.verts}
+    _faces, ends = split_along(bm, bm.faces[:], val, 0.0)
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if all(val[v] <= 0 for v in f.verts if v not in ends)], context='FACES')
+    seen, small = set(), []
+    for f in bm.faces:
+        if f in seen:
+            continue
+        seen.add(f)
+        stack, part = [f], []
+        while stack:
+            g = stack.pop()
+            part.append(g)
+            for e in g.edges:
+                for k in e.link_faces:
+                    if k not in seen:
+                        seen.add(k)
+                        stack.append(k)
+        if len(part) < least:
+            small += part
+    bmesh.ops.delete(bm, geom=small, context='FACES')
+    bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+    bm.normal_update()
+    moves = []
+    for v in bm.verts:
+        g = smooth01(val[v] / ramp) if ramp else 1.0
+        moves.append((v, v.normal * (lift(v.co) * g - under * (1 - g))))
+    for v, d in moves:
+        v.co += d
+    bm.to_mesh(obj.data)
+    bm.free()
+    for poly in obj.data.polygons:
+        poly.use_smooth = True
+    return obj
+
+
+def beard_field(h, style, neck=0.04):
+    """
+    Where each beard grows, as a field over the skin (metres, positive inside, its edge at 0). A full beard takes the
+    jaw below a line that drops from the sideburn to the mouth's corner, down the throat `neck` below the chin, and the
+    moustache; a chin curtain the jawline alone; a goatee the chin and the moustache. None grows on the lips or
+    behind the ears.
+    """
+    eyes, mz = h.eyes.z, h.mouth.z
+    corner = abs(h.mouth_l.x) + 0.004
+    lo, hi = mz - 0.011, h.lip_top.z + 0.002
+    lips = ((lo + hi) / 2, (hi - lo) / 2)
+
+    def outside_lips(p):
+        return (math.hypot(p.x / corner, (p.z - lips[0]) / lips[1]) - 1) * min(corner, lips[1])
+
+    def moustache(p):
+        return min(0.03 - abs(p.x), p.z - hi, (h.nose_base.z - 0.003) - p.z)
+
+    def jaw_top(side):
+        return eyes - 0.05 + (mz - 0.012 - (eyes - 0.05)) * (1 - min(1.0, side))
+
+    def cheek_top(side):
+        return eyes - 0.035 + (mz - (eyes - 0.035)) * max(0.0, 1 - side * 1.4)
+
+    def before_ears(p):
+        return h.centre.y + 0.02 - p.y
+
+    if style == 'goatee':
+        top, bottom = mz - 0.012, h.chin.z - 0.02
+        mid, rz = (top + bottom) / 2, (top - bottom) / 2
+
+        def field(p):
+            # under the chin it stops 2.5 cm back: past that the patch would run down the throat
+            chin = min((1 - math.hypot(p.x / 0.03, (p.z - mid) / rz)) * min(0.03, rz), h.chin.y + 0.025 - p.y)
+            return min(max(chin, moustache(p)), outside_lips(p))
+
+    elif style == 'chin_curtain':
+
+        def field(p):
+            side = abs(p.x) / h.half_width
+            # below the lower lip at the front, rising to the sideburns along the jaw
+            top = mz - 0.015 + (jaw_top(side) - (mz - 0.015)) * smooth01((side - 0.35) / 0.4)
+            return min(top - p.z, p.z - (h.chin.z - 0.035), before_ears(p), outside_lips(p))
+
+    else:
+
+        def field(p):
+            side = abs(p.x) / h.half_width
+            jaw = min(max(jaw_top(side), cheek_top(side)) - p.z, p.z - (h.chin.z - neck), before_ears(p))
+            return min(max(jaw, moustache(p)), outside_lips(p))
+
+    return field
+
+
+def beard(w, style, mat='beard', depth=None, neck=0.04, stubble=False):
+    h = w.head
+    thick = depth if depth is not None else (0.012 if style == 'full' else 0.016)
+
+    def lift(p):
+        # fuller toward the chin; stubble lies even
+        return thick if stubble else thick * (0.6 + 0.6 * max(0.0, min(1.3, 1 - (p.z - h.chin.z) / 0.06)))
+
+    # a taper across the neck's coarse faces wanders with them; stubble is thin enough to stop at its cut
+    b = cut_shell(w, mat, beard_field(h, style, neck), lift, 'beard', ramp=0.0 if stubble else 0.004)
+    return [b] if b else []
 
 
 def long_beard(w, mat='beard', length=0.13):
     """A full beard falling past the chin to a point, swinging below the jaw."""
-    parts = beard(w, 'full', mat, depth=0.016)
+    parts = beard(w, 'full', mat, depth=0.016, neck=0.025)
     b = parts[0]
     h = w.head
     bm = bmesh.new()
@@ -1045,7 +1165,7 @@ def moustache(w, mat='beard', depth=0.008):
 
 
 class Item:
-    def __init__(self, id, name, slot, channels, make, knobs=(), tags=(), hides=None, stiff=None):
+    def __init__(self, id, name, slot, channels, make, knobs=(), tags=(), hides=None, stiff=None, hard=False):
         self.id = id
         self.name = name
         self.slot = slot
@@ -1056,14 +1176,16 @@ class Item:
         self.tags = list(tags)
         self.hides = hides
         self.stiff = stiff
+        # rides one bone whole, never bending: a hat moves with the head (ItemMeta.hard in src/kit/wear/item.ts)
+        self.hard = hard
 
 
 ITEMS = []
 
 
-def item(id, name, slot, channels, knobs=(), tags=(), hides=None, stiff=None):
+def item(id, name, slot, channels, knobs=(), tags=(), hides=None, stiff=None, hard=False):
     def wrap(fn):
-        ITEMS.append(Item(id, name, slot, channels, fn, knobs, tags, hides, stiff))
+        ITEMS.append(Item(id, name, slot, channels, fn, knobs, tags, hides, stiff, hard))
         return fn
 
     return wrap
@@ -1121,9 +1243,9 @@ def _mohawk(w):
 
 BEARD_CH = [('beard', HAIR, 'silk')]
 item('beard_full', 'Full beard', 'beard', BEARD_CH, tags=['full beard', 'beard', 'bearded'], hides=False)(lambda w: beard(w, 'full'))
-item('beard_goatee', 'Goatee', 'beard', BEARD_CH, tags=['goatee', 'van dyke'], hides=False)(lambda w: beard(w, 'goatee'))
+item('beard_goatee', 'Goatee', 'beard', BEARD_CH, tags=['goatee', 'van dyke'], hides=False)(lambda w: beard(w, 'goatee', depth=0.011))
 item('beard_chin_curtain', 'Chin curtain', 'beard', BEARD_CH, tags=['chin curtain', 'amish beard', 'lincoln beard'], hides=False)(lambda w: beard(w, 'chin_curtain'))
-item('beard_stubble', 'Stubble', 'beard', [('beard', '#3b3430', 'knit')], tags=['stubble', 'five o clock shadow', 'scruff'], hides=False)(lambda w: beard(w, 'full', depth=0.002))
+item('beard_stubble', 'Stubble', 'beard', [('beard', '#3b3430', 'knit')], tags=['stubble', 'five o clock shadow', 'scruff'], hides=False)(lambda w: beard(w, 'full', depth=0.003, stubble=True))
 item('beard_moustache', 'Moustache', 'beard', BEARD_CH, tags=['moustache', 'mustache', 'tache'], hides=False)(lambda w: moustache(w))
 item('beard_long', 'Long beard', 'beard', BEARD_CH, knobs=['length'], tags=['long beard', 'wizard beard', 'viking beard'], hides=False)(lambda w: long_beard(w))
 
@@ -1146,7 +1268,7 @@ def _headband(w):
     return [band(w, 'band', V((0, h.centre.y, h.brow.z + 0.03)), V((0, 0.18, 1)), 0.03, 0.005, count=28, radius=0.2, name='headband')]
 
 
-@item('cap', 'Baseball cap', 'head', [('crown', '#1f2a44', 'cotton'), ('brim', '#1f2a44', 'cotton')], tags=['cap', 'baseball cap', 'ball cap', 'snapback'])
+@item('cap', 'Baseball cap', 'head', [('crown', '#1f2a44', 'cotton'), ('brim', '#1f2a44', 'cotton')], tags=['cap', 'baseball cap', 'ball cap', 'snapback'], hard=True)
 def _cap(w):
     h = w.head
     line = lambda p: h.brow.z + 0.035 + 0.025 * max(0.0, -math.cos(h.azimuth(p)))
@@ -1187,9 +1309,434 @@ def _hood(w):
     return [head_shell(w, 'hood', lift, region, name='hood', thickness=0.004)]
 
 
-@item('legion_helm', 'Legion helm', 'head', [('helm', '#b07d3c', 'metal'), ('crest', '#a3261f', 'cotton')], tags=['roman helmet', 'galea', 'legion helmet', 'centurion', 'gladiator helmet', 'helmet'])
+@item('legion_helm', 'Legion helm', 'head', [('helm', '#b07d3c', 'metal'), ('crest', '#a3261f', 'cotton')], tags=['roman helmet', 'galea', 'legion helmet', 'centurion', 'gladiator helmet', 'helmet'], hard=True)
 def _legion(w):
     return H.make_helmet(w.d, w.head, mat='helm', crest='crest')
+
+
+# hard hats, turned round the head (each rides the head whole, so a brim never bends with the shoulders it reaches over)
+
+
+def bearing(a):
+    """A bearing folded into -pi to pi: 0 at the front, positive to the hero's left."""
+    return math.atan2(math.sin(a), math.cos(a))
+
+
+class HatFrame:
+    """
+    Where a hat sits: a band round the head, higher at the brow than at the back the way a hat is worn, and at each
+    bearing round it how far out the head's skin is. A hat's rows are laid out from these, so it sits snugly on the
+    reference head (and, through the fit, on every other). Heights are along the band's axis, radii out from it.
+    """
+
+    def __init__(self, w, lift=0.035, tilt=0.18, segs=48, centre=None):
+        h = w.head
+        self.w = w
+        self.c = centre if centre is not None else V((0, h.centre.y, h.brow.z + lift))
+        self.up = V((0, tilt, 1)).normalized()
+        f = V((0, -1, 0))
+        self.fwd = (f - self.up * f.dot(self.up)).normalized()
+        self.left = self.up.cross(self.fwd)
+        self.segs = segs
+        self.bearings = [2 * math.pi * k / segs for k in range(segs)]
+        self._band = {}
+        # the head's highest point above the band, near its axis
+        self.top = max((v.co - self.c).dot(self.up) for v in w.obj.data.vertices if ((v.co - self.c) - self.up * (v.co - self.c).dot(self.up)).length < 0.08)
+
+    def dir(self, a):
+        return self.fwd * math.cos(a) + self.left * math.sin(a)
+
+    def at(self, a, hgt, r):
+        return self.c + self.up * hgt + self.dir(a) * r
+
+    def skin(self, a, hgt):
+        """How far out from the axis the skin is at bearing a, `hgt` above the band (0 above the head)."""
+        d = self.dir(a)
+        p = self.c + self.up * hgt
+        hit = self.w.d._full_bvh().ray_cast(p + d * 0.35, -d, 0.35)
+        if hit[0] is None:
+            return 0.0
+        q = hit[0] - p
+        return (q - self.up * q.dot(self.up)).length
+
+    def rb(self, a):
+        """The skin's radius on the band itself."""
+        k = round(a, 6)
+        if k not in self._band:
+            self._band[k] = self.skin(a, 0.0)
+        return self._band[k]
+
+    def clear(self, a, hgt, r, room=0.01):
+        """A radius at least `room` outside the skin at that height: a crown never sinks into the head."""
+        return max(r, self.skin(a, hgt) + room)
+
+
+def turned(f, rows, mats, name, paint=0, thick=0.004, top=None, arc=None, cut=None):
+    """
+    A surface turned round a hat's band. `rows`, from the outer edge in and up toward the crown, each give a bearing's
+    height above the band and radius from its axis; quads join one row to the next (painted mats[paint(r, a)]), and
+    `top`, a height on the axis, closes the last row to a point. `arc` (from, to) turns only part of the way round (a
+    neck guard, a peak), and `cut(r, a)` leaves a quad out (an eye slit). Given `thick` thickness inward.
+    """
+    if arc is None:
+        bearings, wrap = f.bearings, True
+    else:
+        a0, a1 = arc
+        n = max(2, int(round((a1 - a0) / (2 * math.pi) * f.segs)) + 1)
+        bearings, wrap = [a0 + (a1 - a0) * k / (n - 1) for k in range(n)], False
+    paint_of = paint if callable(paint) else (lambda r, a: paint)
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    grid = [[bm.verts.new(f.at(a, *row(a))) for a in bearings] for row in rows]
+    cols = len(bearings)
+    span = cols if wrap else cols - 1
+    for r in range(len(rows) - 1):
+        for k in range(span):
+            k2 = (k + 1) % cols
+            mid = bearings[k] + (((bearings[k2] + (2 * math.pi if k2 == 0 else 0)) - bearings[k]) / 2)
+            if cut and cut(r, mid):
+                continue
+            face = bm.faces.new((grid[r][k], grid[r][k2], grid[r + 1][k2], grid[r + 1][k]))
+            face.material_index = paint_of(r, mid)
+            for loop, (uu, vv) in zip(face.loops, ((k, r), (k + 1, r), (k + 1, r + 1), (k, r + 1))):
+                loop[uv].uv = (uu / span, vv / max(1, len(rows) - 1))
+    if top is not None:
+        apex = bm.verts.new(f.c + f.up * top)
+        last = grid[-1]
+        for k in range(span):
+            k2 = (k + 1) % cols
+            face = bm.faces.new((last[k], last[k2], apex))
+            face.material_index = paint_of(len(rows) - 1, bearings[k])
+            for loop, (uu, vv) in zip(face.loops, ((k, 1.0), (k + 1, 1.0), (k + 0.5, 1.0))):
+                loop[uv].uv = (uu / span, vv)
+    bm.normal_update()
+    if thick:
+        G.solidify(bm, thick)
+    obj = new_object(name, bm, mats[0])
+    for m in mats[1:]:
+        obj.data.materials.append(m)
+    return obj
+
+
+def plate(w, mat, corners, thick=0.003, name='plate'):
+    """A flat plate through `corners` (a strip of pairs, root to tip), given thickness: a crest's blade, a turned-back flap."""
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    rows = [[bm.verts.new(a), bm.verts.new(b)] for a, b in corners]
+    for i, (r0, r1) in enumerate(zip(rows, rows[1:])):
+        face = bm.faces.new((r0[0], r0[1], r1[1], r1[0]))
+        for loop, (uu, vv) in zip(face.loops, ((0, i), (1, i), (1, i + 1), (0, i + 1))):
+            loop[uv].uv = (uu, vv / max(1, len(rows) - 1))
+    bm.normal_update()
+    G.solidify(bm, thick)
+    return new_object(name, bm, w.d.mats.mats[mat])
+
+
+def cone(w, mat, base, tip, radius, segs=10, bend=None, rings=6, name='cone'):
+    """A tapering spike from `base` to `tip`, bowed toward `bend` at its middle: a horn, a fang."""
+    bm = bmesh.new()
+    axis = (tip - base).normalized()
+    side = axis.orthogonal().normalized()
+    other = axis.cross(side)
+    path = []
+    for i in range(rings + 1):
+        t = i / rings
+        p = base.lerp(tip, t)
+        if bend is not None:
+            p = p + bend * (4 * t * (1 - t))
+        path.append(p)
+    ringv = []
+    for i, p in enumerate(path[:-1]):
+        r = radius * (1 - i / rings) ** 0.8
+        ringv.append([bm.verts.new(p + (side * math.cos(2 * math.pi * k / segs) + other * math.sin(2 * math.pi * k / segs)) * r) for k in range(segs)])
+    tipv = bm.verts.new(path[-1])
+    for r0, r1 in zip(ringv, ringv[1:]):
+        for k in range(segs):
+            bm.faces.new((r0[k], r0[(k + 1) % segs], r1[(k + 1) % segs], r1[k]))
+    for k in range(segs):
+        bm.faces.new((ringv[-1][k], ringv[-1][(k + 1) % segs], tipv))
+    bm.faces.new(list(reversed(ringv[0])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    return new_object(name, bm, w.d.mats.mats[mat])
+
+
+@item('fedora', 'Fedora', 'head', [('felt', '#3a3c43', 'cotton'), ('band', '#121214', 'silk')], tags=['fedora', 'trilby', 'detective hat', 'gangster hat', 'indiana jones', 'noir'], hard=True)
+def _fedora(w):
+    f = HatFrame(w)
+    crown = f.top + 0.05
+    front = lambda a: max(0.0, math.cos(a)) ** 2
+    back = lambda a: max(0.0, -math.cos(a)) ** 2
+    # the brim snapped down at the front, up a little at the back; the crown pinched either side of the front
+    snap = lambda a: -0.016 * front(a) + 0.009 * back(a) + 0.004 * math.sin(a) ** 2
+    pinch = lambda a: math.exp(-(((abs(bearing(a)) - 0.55) / 0.3) ** 2))
+    dent = lambda a: 0.022 * math.cos(a) ** 2 + 0.008
+    rows = [
+        lambda a: (snap(a), f.rb(a) + 0.064),
+        lambda a: (snap(a) * 0.5, f.rb(a) + 0.034),
+        lambda a: (0.0, f.rb(a) + 0.007),
+        lambda a: (0.03, f.rb(a) + 0.006),
+        lambda a: (crown * 0.62, f.clear(a, crown * 0.62, f.rb(a) * 0.96 + 0.004 - 0.014 * pinch(a))),
+        lambda a: (crown * 0.9, f.clear(a, crown * 0.9, f.rb(a) * 0.84 - 0.02 * pinch(a))),
+        lambda a: (crown - 0.004 - dent(a) * 0.5, f.rb(a) * 0.58 - 0.012 * pinch(a)),
+        lambda a: (crown - dent(a), f.rb(a) * 0.3),
+    ]
+    mats = [w.d.mats.mats['felt'], w.d.mats.mats['band']]
+    return [turned(f, rows, mats, 'fedora', paint=lambda r, a: 1 if r == 2 else 0, top=crown - 0.03)]
+
+
+@item('cowboy_hat', 'Cowboy hat', 'head', [('felt', '#7b5a3a', 'cotton'), ('band', '#3a2416', 'leather')], tags=['cowboy hat', 'stetson', 'ten gallon hat', 'western hat', 'cowboy', 'rancher', 'sheriff'], hard=True)
+def _cowboy(w):
+    f = HatFrame(w)
+    crown = f.top + 0.065
+    side = lambda a: math.sin(a) ** 2
+    # the brim rolled up at the sides and down a touch at the front; a crease down the crown's middle, dents at its sides
+    curl = lambda a: 0.05 * side(a) ** 1.6 - 0.012 * max(0.0, math.cos(a)) ** 2
+    crease = lambda a, rho: 0.03 * math.exp(-((rho * math.sin(a) / 0.03) ** 2))
+    dents = lambda a: 0.016 * math.exp(-(((abs(bearing(a)) - 1.57) / 0.5) ** 2))
+    rows = [
+        lambda a: (curl(a), f.rb(a) + 0.092),
+        lambda a: (curl(a) * 0.5, f.rb(a) + 0.062),
+        lambda a: (curl(a) * 0.12, f.rb(a) + 0.03),
+        lambda a: (0.0, f.rb(a) + 0.007),
+        lambda a: (0.026, f.rb(a) + 0.006),
+        lambda a: (crown * 0.6, f.clear(a, crown * 0.6, f.rb(a) * 0.97 + 0.004 - dents(a) * 0.5)),
+        lambda a: (crown * 0.88, f.clear(a, crown * 0.88, f.rb(a) * 0.86 - dents(a))),
+        lambda a: (crown - crease(a, 0.6 * f.rb(a)) * 0.7, f.rb(a) * 0.6 - dents(a) * 0.6),
+        lambda a: (crown - crease(a, 0.3 * f.rb(a)) - 0.004, f.rb(a) * 0.3),
+    ]
+    mats = [w.d.mats.mats['felt'], w.d.mats.mats['band']]
+    return [turned(f, rows, mats, 'cowboy_hat', paint=lambda r, a: 1 if r == 3 else 0, top=crown - 0.034)]
+
+
+@item('bucket_hat', 'Bucket hat', 'head', [('hat', '#5f6b45', 'cotton'), ('band', '#434d30', 'cotton')], tags=['bucket hat', 'fishing hat', 'boonie hat', 'sun hat'], hard=True)
+def _bucket(w):
+    f = HatFrame(w, lift=0.028)
+    crown = f.top + 0.024
+    rows = [
+        lambda a: (-0.04, f.rb(a) + 0.062),
+        lambda a: (-0.026, f.rb(a) + 0.042),
+        lambda a: (-0.01, f.rb(a) + 0.02),
+        lambda a: (0.0, f.rb(a) + 0.008),
+        lambda a: (0.014, f.rb(a) + 0.008),
+        lambda a: (crown * 0.55, f.clear(a, crown * 0.55, f.rb(a) * 0.98 + 0.006)),
+        lambda a: (crown * 0.86, f.clear(a, crown * 0.86, f.rb(a) * 0.88)),
+        lambda a: (crown - 0.004, f.rb(a) * 0.62),
+        lambda a: (crown, f.rb(a) * 0.3),
+    ]
+    mats = [w.d.mats.mats['hat'], w.d.mats.mats['band']]
+    return [turned(f, rows, mats, 'bucket_hat', paint=lambda r, a: 1 if r in (0, 3) else 0, thick=0.003, top=crown + 0.002)]
+
+
+@item('kasa', 'Straw kasa', 'head', [('straw', '#c9a96b', 'knit'), ('band', '#2c2622', 'cotton')], tags=['kasa', 'straw hat', 'conical hat', 'rice hat', 'sugegasa', 'ronin hat', 'farmer hat'], hides=False, hard=True)
+def _kasa(w):
+    f = HatFrame(w, lift=0.028, tilt=0.1)
+    apex = f.top + 0.045
+    edge, R = -0.022, 0.25
+    # a cone, bowed a touch, round the head's axis; it rests on a band round the head under it
+    height = lambda r: apex - (apex - edge) * (r / R) ** 0.9
+    rows = [lambda a, r=r: (height(r) - (0.006 if r == R else 0.0), r) for r in (R, R - 0.012, 0.2, 0.15, 0.11, 0.075, 0.045, 0.02)]
+    mats = [w.d.mats.mats['straw'], w.d.mats.mats['band']]
+    hat = turned(f, rows, mats, 'kasa', paint=lambda r, a: 1 if r == 0 else 0, thick=0.005, top=apex)
+    band_rows = [lambda a: (-0.002, f.rb(a) + 0.006), lambda a: (0.024, f.rb(a) + 0.006)]
+    return [hat, turned(f, band_rows, [mats[1]], 'kasa_band', thick=0.003)]
+
+
+@item('kabuto', 'Kabuto', 'head', [('lacquer', '#1d1d22', 'leather'), ('lacing', '#a3261f', 'silk'), ('crest', '#d9b45a', 'metal')], tags=['kabuto', 'samurai helmet', 'samurai helm', 'shogun helmet', 'japanese helmet'], hard=True)
+def _kabuto(w):
+    f = HatFrame(w, lift=0.02, tilt=0.12, segs=40)
+    room = 0.016
+    mats = [w.d.mats.mats[n] for n in ('lacquer', 'lacing', 'crest')]
+    # the bowl: plates riveted in ridges over the skull
+    ridge = lambda a: 0.0014 * (1 + math.cos(f.segs / 2 * a))
+    heights = [-0.004, 0.016, 0.034, 0.048, f.top - 0.012]
+    rows = [lambda a, hgt=hgt: (hgt, max(f.skin(a, max(hgt, 0.0)), 0.02) + room + ridge(a)) for hgt in heights]
+    parts = [turned(f, rows, mats, 'hachi', paint=lambda r, a: 2 if r == 0 else 0, thick=0.004, top=f.top + room + 0.004)]
+    # the peak over the brow
+    peak = [lambda a: (-0.022, f.rb(a) + room + 0.05), lambda a: (-0.006, f.rb(a) + room + 0.004)]
+    parts.append(turned(f, peak, mats, 'mabizashi', thick=0.003, arc=(-1.15, 1.15)))
+    # the neck guard: three lames stepping down and out round the back, laced in silk
+    for i in range(3):
+        hi, lo = -0.004 - 0.026 * i, -0.036 - 0.026 * i
+        out_hi, out_lo = 0.006 + 0.022 * i, 0.03 + 0.022 * i
+        lame = [lambda a, h=lo, o=out_lo: (h, f.rb(a) + room + o), lambda a, h=lo * 0.8 + hi * 0.2, o=out_lo * 0.8 + out_hi * 0.2: (h, f.rb(a) + room + o), lambda a, h=hi, o=out_hi: (h, f.rb(a) + room + o)]
+        parts.append(turned(f, lame, mats, f'shikoro{i}', paint=lambda r, a: 0 if r == 0 else 1, thick=0.003, arc=(1.05 - 0.05 * i, 2 * math.pi - 1.05 + 0.05 * i)))
+    # its top lame turned back either side of the face
+    for s in (1, -1):
+        a = 1.05 * s
+        r0 = f.rb(a) + room + 0.006
+        p_hi, p_lo = f.at(a, -0.004, r0), f.at(a, -0.036, r0 + 0.024)
+        out = f.dir(a) * 0.03 + f.fwd * 0.022
+        parts.append(plate(w, 'lacquer', [(p_hi, p_lo), (p_hi + out, p_lo + out * 0.85)], name='fukigaeshi'))
+    # the crest: two horns of gilt plate rising from the brow, and a disc between them
+    base = f.at(0.0, 0.022, f.rb(0.0) + room + 0.006)
+    for s in (1, -1):
+        strip = []
+        for i in range(7):
+            t = i / 6
+            p = base + f.up * (0.13 * t) + f.left * (s * (0.012 + 0.075 * t ** 1.4)) + f.fwd * (0.012 * t)
+            half = 0.016 * (1 - 0.55 * t)
+            strip.append((p - f.left * (s * half), p + f.left * (s * half)))
+        parts.append(plate(w, 'crest', strip, name='kuwagata'))
+    parts.append(disc(w, 'crest', base + f.fwd * 0.004, f.fwd, 0.017, name='maedate'))
+    return parts
+
+
+@item('knight_helm', 'Knight helm', 'head', [('steel', '#9aa0a8', 'metal'), ('trim', '#b08d57', 'metal')], tags=['knight helmet', 'knight helm', 'great helm', 'armet', 'full helmet', 'crusader helmet', 'paladin helmet'], hard=True)
+def _knight_helm(w):
+    h = w.head
+    f = HatFrame(w, tilt=0.0, centre=V((0, h.centre.y, h.eyes.z)))
+    room = 0.016
+    chin = h.chin.z - h.eyes.z
+    slit = (-0.006, 0.012)
+    heights = [chin - 0.02, chin, -0.1, -0.075, -0.05, -0.025, slit[0], slit[1], 0.035, 0.065, 0.09, f.top - 0.012]
+
+    # each ring: the head's widest reach a few centimetres either side of it (the nose, the ears; never the neck under
+    # the chin), smoothed into a hull
+    def ring(hgt):
+        reach = [max(f.skin(a, hgt + dz) for dz in (-0.03, -0.015, 0.0, 0.015, 0.03) if chin - 0.012 <= hgt + dz <= f.top - 0.004) + room for a in f.bearings]
+        pts = [(f.c + f.dir(a) * r) for a, r in zip(f.bearings, reach)]
+        hull = hull2d([(p.x, p.y) for p in pts])
+        return {round(a, 6): hull_radius(hull, (f.c.x, f.c.y), a) for a in f.bearings}
+
+    radii = [ring(hgt) for hgt in heights]
+    keel = lambda a: 0.005 * math.exp(-((bearing(a) / 0.08) ** 2))
+    rows = [lambda a, i=i, hgt=hgt: (hgt, radii[i][round(a, 6)] + (keel(a) if hgt < 0.06 else 0.0)) for i, hgt in enumerate(heights)]
+    front = lambda a: abs(bearing(a)) < 0.95
+    mats = [w.d.mats.mats['steel'], w.d.mats.mats['trim']]
+    paint = lambda r, a: 1 if r == 0 or (r in (5, 7) and front(a)) or (r < 6 and abs(bearing(a)) < 0.07) else 0
+    return [turned(f, rows, mats, 'knight_helm', paint=paint, thick=0.004, top=f.top + room + 0.006, cut=lambda r, a: r == 6 and front(a))]
+
+
+# on the face (the eyes stay open) ----------------------------------------------------------------
+
+
+def bump(p, centre, height, width):
+    d = (p - centre).length
+    return height * math.exp(-((d / width) ** 2))
+
+
+def mask_shell(w, mat, lift, region, name, thick, ratio, soften=0):
+    """
+    A shell over the face: its edge relaxed into a clean line, its inside softened `soften` times (cloth over a face
+    doesn't show the lips) and pushed back out of the skin, cut to `ratio` of its triangles (the face is the body's
+    finest part), then given `thick` thickness.
+    """
+    obj = head_shell(w, mat, lift, region, name=name)
+    if soften:
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        inner = [v for v in bm.verts if not v.is_boundary]
+        for _ in range(soften):
+            bmesh.ops.smooth_vert(bm, verts=inner, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+        bm.to_mesh(obj.data)
+        bm.free()
+        clear_body(obj, w, margin=0.004)
+    mod = obj.modifiers.new('fewer', 'DECIMATE')
+    mod.ratio = ratio
+    me = bpy.data.meshes.new_from_object(obj.evaluated_get(bpy.context.evaluated_depsgraph_get()))
+    old = obj.data
+    obj.modifiers.remove(mod)
+    obj.data = me
+    bpy.data.meshes.remove(old)
+    # cutting triangles roughens the edge again
+    relax_edges(obj)
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    G.solidify(bm, thick)
+    bm.to_mesh(me)
+    bm.free()
+    for poly in me.polygons:
+        poly.use_smooth = True
+    return obj
+
+
+@item('oni_mask', 'Oni mask', 'face', [('lacquer', '#b3202b', 'leather'), ('brows', '#151416', 'leather'), ('horns', '#e6dcc4', 'leather')], tags=['oni mask', 'demon mask', 'hannya mask', 'samurai mask', 'kabuki mask'], hard=True)
+def _oni(w):
+    h = w.head
+    brows = [h.eye_l + V((0, -0.006, 0.024)), h.eye_r + V((0, -0.006, 0.024))]
+    cheeks = [h.cheek_l + V((0, -0.01, 0.005)), h.cheek_r + V((0, -0.01, 0.005))]
+
+    def region(poly):
+        c = poly.center
+        if abs(h.azimuth(c)) > 1.2 or c.z < h.chin.z - 0.012 or c.z > h.brow.z + 0.05:
+            return False
+        # the eyes stay open
+        return all(V((c.x - e.x, 0, c.z - e.z)).length > 0.017 for e in (h.eye_l, h.eye_r))
+
+    def lift(p, n):
+        # a scowl: heavy brows, broad cheeks and a flared nose, over a lacquered shell
+        return 0.009 + sum(bump(p, b, 0.012, 0.016) for b in brows) + sum(bump(p, c, 0.008, 0.022) for c in cheeks) + bump(p, h.nose_base, 0.008, 0.018)
+
+    mask = mask_shell(w, 'lacquer', lift, region, 'oni', 0.004, 0.5)
+    me = mask.data
+    me.materials.append(w.d.mats.mats['brows'])
+    for poly in me.polygons:
+        c = poly.center
+        near_brow = any(abs(c.z - b.z) < 0.008 and abs(c.x - b.x) < 0.02 for b in brows)
+        mouth = abs(c.z - h.mouth.z) < 0.006 and abs(c.x) < abs(h.mouth_l.x - h.mouth.x) + 0.006
+        if near_brow or mouth:
+            poly.material_index = 1
+    parts = [mask]
+    for s, corner in ((1, h.mouth_l), (-1, h.mouth_r)):
+        base = corner + V((0, -0.011, 0.004))
+        parts.append(cone(w, 'horns', base, base + V((s * 0.004, -0.008, -0.024)), 0.0055, segs=8, name='fang'))
+        # low on the brow and leaning forward, clear of the scalp: hair over the mask would have to rise over them
+        root, _n = w.snap(V((s * 0.03, h.front + 0.02, h.brow.z + 0.03)), V((0, 1, 0)))
+        root = root + V((0, -0.008, 0))
+        parts.append(cone(w, 'horns', root, root + V((s * 0.022, -0.03, 0.06)), 0.012, segs=12, bend=V((s * 0.01, 0, 0)), name='horn'))
+    return parts
+
+
+@item('ninja_mask', 'Ninja mask', 'face', [('cloth', '#16171b', 'cotton')], tags=['ninja mask', 'face mask', 'shinobi mask', 'bandit mask', 'balaclava'])
+def _ninja_mask(w):
+    h = w.head
+    bridge = h.eyes.z - 0.014
+    drop = h.nose.z - h.chin.z
+
+    def region(poly):
+        c = poly.center
+        if c.z > bridge or c.z < h.chin.z - 0.055:
+            return False
+        # round the back it stays under the hairline: a wrap round the neck
+        return abs(h.azimuth(c)) < 1.9 or c.z < h.eyes.z - 0.075
+
+    def lift(p, n):
+        # cloth falls straight from the nose to the chin rather than following the lips
+        base = 0.005
+        if abs(p.x) > 0.055 or p.z > h.nose.z or p.z < h.chin.z - 0.01 or abs(h.azimuth(p)) > 1.2:
+            return base
+        t = max(0.0, min(1.0, (h.nose.z - p.z) / drop))
+        y_cloth = h.nose.y - 0.002 + (h.chin.y - 0.012 - h.nose.y) * t
+        fall = max(0.0, p.y - y_cloth) * max(0.0, 1 - abs(p.x) / 0.055)
+        return base + fall
+
+    return [mask_shell(w, 'cloth', lift, region, 'ninja_mask', 0.003, 0.4, soften=6)]
+
+
+@item('cigar', 'Cigar', 'face', [('leaf', '#6b4a2e', 'leather'), ('band', '#c9a14a', 'silk'), ('ember', '#ff6a1a', 'glow')], tags=['cigar', 'cigarillo', 'smoking', 'churchill cigar', 'mob boss'], hides=False, hard=True)
+def _cigar(w):
+    h = w.head
+    at = h.mouth_l.lerp(h.mouth, 0.35) + V((0, -0.003, 0.0))
+    d = V((0.28, -1.0, -0.26)).normalized()
+    side = d.cross(V((0, 0, 1))).normalized()
+    other = d.cross(side)
+    length, r, segs = 0.11, 0.0085, 12
+    # stations along it: the mouth end, the band, the body, the ash and the glowing tip
+    stations = [(-0.003, r * 0.9, 0), (0.018, r, 0), (0.019, r * 1.04, 1), (0.031, r * 1.04, 1), (0.032, r, 0), (length - 0.012, r, 0), (length - 0.011, r * 0.97, 2), (length, r * 0.92, 2)]
+    bm = bmesh.new()
+    rings = [[bm.verts.new(at + d * s + (side * math.cos(2 * math.pi * k / segs) + other * math.sin(2 * math.pi * k / segs)) * rad) for k in range(segs)] for s, rad, _m in stations]
+    for i, (r0, r1) in enumerate(zip(rings, rings[1:])):
+        for k in range(segs):
+            face = bm.faces.new((r0[k], r0[(k + 1) % segs], r1[(k + 1) % segs], r1[k]))
+            face.material_index = stations[i + 1][2] if stations[i][2] == stations[i + 1][2] else stations[i][2]
+    end = bm.faces.new(list(reversed(rings[0])))
+    tip = bm.faces.new(rings[-1])
+    tip.material_index = 2
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
+    obj = new_object('cigar', bm, w.d.mats.mats['leaf'])
+    for name in ('band', 'ember'):
+        obj.data.materials.append(w.d.mats.mats[name])
+    return [obj]
 
 
 # upper body --------------------------------------------------------------------------------------------------------
@@ -1792,6 +2339,8 @@ def write_raw(path, it, parts):
         spec['hides'] = it.hides
     if it.stiff is not None:
         spec['stiff'] = it.stiff
+    if it.hard:
+        spec['hard'] = True
     out = dict(spec=spec, positions=pos, normals=nrm, uv=uvs, index=index, channel=chan)
     if has_hang:
         out['hang'] = hang

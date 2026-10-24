@@ -48,10 +48,12 @@ export interface RawSpec {
   tags?: string[]
   /** How well loose parts hold their shape, 0 to 1 (the slot's default otherwise). */
   stiff?: number
+  /** Rides one bone whole (ItemMeta.hard): hats, helmets, a lacquered mask. */
+  hard?: boolean
 }
 
 /** Triangles per item, by slot: a whole outfit stays light enough for twenty heroes. */
-export const BUDGET: Record<ItemSlot, number> = { hair: 3200, beard: 1200, head: 2400, upper: 4200, lower: 3000, full: 6400, back: 3200, feet: 1800, face: 1200, hand: 1200, offhand: 1200 }
+export const BUDGET: Record<ItemSlot, number> = { hair: 3200, beard: 1200, head: 2400, upper: 4200, lower: 3000, full: 6400, back: 3200, feet: 1800, face: 2400, hand: 1200, offhand: 1200 }
 
 /** How far a cover reaches out from the skin, and how close an item must lie to hide what's under it. */
 const REACH = 0.32
@@ -365,6 +367,7 @@ export function fitItem(input: RawItem, ref: Reference): Fitted {
     shell,
     ...(hides && hidden.length < covers.length ? { hidden } : {}),
     ...(chains ? { chains: chains.groups } : {}),
+    ...(spec.hard ? { hard: true } : {}),
   }
   checkMeta(meta, ref.shape.surface.count)
   const item: SurfaceItem = surfaceItem(

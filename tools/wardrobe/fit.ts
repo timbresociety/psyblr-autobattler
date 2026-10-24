@@ -70,7 +70,8 @@ const raw = (f: RawFile): RawItem => ({
 function explain(item: RawItem, fitted: ReturnType<typeof fitItem>['file']) {
   const { binding } = fitted.item
   const back = evaluate(binding, ref.skin)
-  const P = item.positions
+  // what was fitted: the item less any parts it buried under its own
+  const P = fitted.positions
   const bone = (v: number) => ref.bones[ref.shape.joints[binding.tri[v * 3] * 4]]
   const at = (v: number) => `(${[0, 1, 2].map((d) => P[v * 3 + d].toFixed(3)).join(', ')}) on ${bone(v)}, lift ${(binding.lift[v] * 1000).toFixed(1)} mm`
   const err = Array.from({ length: P.length / 3 }, (_, v) => ({ v, e: Math.hypot(back[v * 3] - P[v * 3], back[v * 3 + 1] - P[v * 3 + 1], back[v * 3 + 2] - P[v * 3 + 2]) }))

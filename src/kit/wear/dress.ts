@@ -16,8 +16,8 @@ import { weldPositions } from './weld.js'
  * it goes outside them instead: a skirt over a tucked-in top, a hakama over the gi, wide trousers over shoes.
  */
 
-/** Slots from the skin out. Face and hand gear hang on sockets, outside the layers. */
-export const LAYERS: readonly ItemSlot[] = ['lower', 'feet', 'upper', 'full', 'back', 'beard', 'hair', 'head']
+/** Slots from the skin out: a mask over the beard, under the fringe and the hat. Hand gear hangs on sockets, outside the layers. */
+export const LAYERS: readonly ItemSlot[] = ['lower', 'feet', 'upper', 'full', 'back', 'beard', 'face', 'hair', 'head']
 /** Clearance between one layer and the next, in metres. */
 export const GAP = 0.003
 /** Nothing is pressed closer to the skin than this. */
@@ -329,6 +329,7 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
     finish.set([look.roughness, look.metalness, look.sheen, look.glow], k * 4)
     weave[k] = look.weave
   }
+  if (item.meta.hard) ride(joints, weights)
   drape(item, lift, positions, normals)
   return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index, ...(item.chain ? { chain: Float32Array.from(item.chain) } : {}) }
 }
@@ -351,6 +352,17 @@ function weldOf(item: SurfaceItem, rest: Float32Array): { id: Uint32Array; links
   const weld = { id, links }
   welds.set(item, weld)
   return weld
+}
+
+/** Every vertex onto the one bone the item leans on most, whole (a hard item: ItemMeta.hard). */
+function ride(joints: Uint16Array, weights: Float32Array): void {
+  const total = new Map<number, number>()
+  for (let i = 0; i < weights.length; i++) if (weights[i] > 0) total.set(joints[i], (total.get(joints[i]) ?? 0) + weights[i])
+  const bone = [...total.entries()].sort((p, q) => q[1] - p[1] || p[0] - q[0])[0]?.[0] ?? 0
+  for (let k = 0; k < weights.length; k += 4) {
+    joints.set([bone, 0, 0, 0], k)
+    weights.set([1, 0, 0, 0], k)
+  }
 }
 
 /**
