@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy.js'
+import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { createMatch } from '../engine/match.js'
 import { AIM_STEPS } from '../engine/state.js'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy.js'
+import { armyModifiers } from '../../charter/traits.js'
 import { referenceArmy } from '../../sim/field.js'
 import { aiCommands } from '../ai/brain.js'
 import { LIVE_PROFILE, createMatch, matchRules } from '../engine/match.js'

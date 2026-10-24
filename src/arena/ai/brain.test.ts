@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { armyModifiers } from '../../charter/synergy.js'
+import { armyModifiers } from '../../charter/traits.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import { referenceArmy } from '../../sim/field.js'
 import { defaultBuild } from '../../sim/fixtures.js'

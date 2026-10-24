@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { armyModifiers } from '../../charter/synergy.js'
+import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { createMatch } from '../engine/match.js'
 import { attachControls } from './controls.js'

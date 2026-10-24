@@ -374,6 +374,30 @@ button:disabled { cursor: not-allowed; }
 :root[data-theme='light'] .role-badge { color: color-mix(in srgb, rgb(var(--role-rgb)) 52%, #2a2540); background: rgba(var(--role-rgb), 0.18); }
 .role-badge .role-icon { width: 14px; height: 14px; }
 
+/* role synergies (traits): a hex badge per role, coloured by the tier its count has lit; the top tier wears the pearl */
+.trait-list { display: grid; gap: 6px; }
+.trait { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; grid-template-areas: 'badge name track' 'badge effect effect'; align-items: center; gap: 3px 10px; padding: 7px 9px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.35); box-shadow: inset 0 0 0 1px var(--glass-line); cursor: help; }
+.trait.tier-2 { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.55), 0 0 18px rgba(var(--accent-rgb), 0.16); }
+.trait-badge { grid-area: badge; position: relative; display: grid; place-items: center; width: 34px; aspect-ratio: 1; clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0 50%); background: rgba(var(--ink-rgb), 0.08); color: var(--ink-faint); }
+.trait-badge .role-icon { width: 17px; height: 17px; }
+.tier-0 .trait-badge, .trait-badge.tier-0 { background: rgba(var(--role-rgb), 0.3); color: rgb(var(--role-rgb)); }
+.tier-1 .trait-badge, .trait-badge.tier-1 { background: linear-gradient(160deg, rgb(var(--role-rgb)), rgba(var(--role-rgb), 0.6)); color: #2a2540; }
+.tier-2 .trait-badge, .trait-badge.tier-2 { background: var(--iri); color: #2a2540; }
+:root[data-theme='light'] .tier-0 .trait-badge, :root[data-theme='light'] .trait-badge.tier-0 { color: color-mix(in srgb, rgb(var(--role-rgb)) 52%, #2a2540); }
+.trait-name { grid-area: name; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 16px/1.05 var(--display); letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink); }
+.trait-name small { margin-left: 6px; font: 600 10.5px/1 var(--font); font-style: normal; letter-spacing: 0.08em; color: var(--ink-faint); }
+.trait.tier--1 .trait-name { color: var(--ink-dim); }
+.trait-track { grid-area: track; display: flex; gap: 3px; }
+.trait-track b { min-width: 18px; padding: 3px 4px 2px; border-radius: 3px; text-align: center; font: 700 11px/1 var(--font); color: var(--ink-faint); background: rgba(var(--ink-rgb), 0.07); }
+.trait-track b.on { color: var(--primary-ink); background: var(--iri); }
+.trait-effect { grid-area: effect; margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--ink-dim); }
+.trait.tier--1 .trait-effect { color: var(--ink-faint); }
+.traits.compact .trait { grid-template-columns: 28px minmax(0, 1fr) auto; padding: 5px 7px; }
+.traits.compact .trait-badge { width: 28px; }
+.trait-badge.sm { width: 24px; }
+.trait-badge.sm .role-icon { width: 13px; height: 13px; }
+.trait-badge.sm b { position: absolute; right: 3px; bottom: 1px; font: 800 9px/1 var(--font); font-style: normal; }
+
 /* a hero's face: the arena character's bust, or initials until it is drawn */
 .portrait { position: relative; display: grid; place-items: center; flex: none; width: 48px; aspect-ratio: 1; overflow: hidden; border-radius: 6px; background: radial-gradient(circle at 50% 30%, rgba(var(--role-rgb, 255, 236, 214), 0.42), rgba(var(--surface-rgb), 0.96) 76%); box-shadow: inset 0 0 0 1px rgba(var(--role-rgb, 255, 236, 214), 0.55); }
 .portrait img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 20%; transform: scale(1.12); }

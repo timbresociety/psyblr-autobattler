@@ -1,4 +1,5 @@
 import { RUINS, initialCoverHealth, type CoverPiece } from './cover.js'
+import type { TraitMods } from '../../charter/traits.js'
 import { keepOut } from './locomotion.js'
 import type { Build } from '../../charter/build.js'
 import { ENGINE, ticks } from './calibration.js'
@@ -25,11 +26,12 @@ export const GATE_PROFILE: Profile = { timerSeconds: 60, damageRamp: { fromSecon
 /** Team fights in the balance report need longer to play out than duels. */
 export const GATE_TEAM_PROFILE: Profile = { timerSeconds: 120, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
 
-/** A hero entering a match; army synergy has already set its power scale and damage bonus. */
+/** A hero entering a match, with what its army's traits give it (src/charter/traits.ts) in army fights. */
 export interface Combatant {
   build: Build
   powerScale?: number
   damageBonus?: number
+  mods?: TraitMods
 }
 
 export interface Arena {
@@ -68,7 +70,7 @@ export function createMatch(
   const setups: HeroSetup[] = []
   const add = (team: Combatant[], side: Team) =>
     team.forEach((c, i) => {
-      const setup = prepareHero(c.build, c.powerScale ?? 1, c.damageBonus ?? 0)
+      const setup = prepareHero(c.build, c.powerScale ?? 1, c.damageBonus ?? 0, c.mods)
       const staged = options.formations?.[side]?.[i]
       const spot = staged ? ownHalf(side, staged) : defaultSpot(match, side, i, team.length)
       const hero = createHero(setup, setups.length, side, spot)

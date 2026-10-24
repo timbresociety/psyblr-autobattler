@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { Team } from '../../../arena/engine/state'
 import { shortName } from '../hud/format'
 import { RoleIcon } from '../../common/RoleIcon'
-import { ArmyPanel, DetailsPanel } from './Panels'
+import { DetailsPanel, TraitPanel } from './Panels'
 import { Board2D, initialsOf } from './Board2D'
 import { Board3D, canDraw3D, type Board3DHandle } from './Board3D'
 import { refine, type Reason } from './board-math'
@@ -310,7 +310,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         </button>
       </header>
 
-      <ArmyPanel builds={sideBuilds} title={editing === side ? 'Your army' : 'Enemy army'} />
+      <TraitPanel builds={sideBuilds} title={editing === side ? 'Your army' : 'Enemy army'} />
 
       <div className="staging-board">
         <div className="board-frame">

@@ -166,7 +166,8 @@
 .hud-syn[open] > summary::after { transform: translateY(1px) rotate(-135deg); }
 .hud-syn > summary b { font: 600 12px/1 var(--hud-font); letter-spacing: 0; text-transform: none; color: var(--ink-dim); }
 .hud-syn > summary b.lit { color: var(--ok); }
-.hud-syn > summary b.warn { color: #ffb86b; }
+.hud-syn > summary b.warn { color: var(--warn); }
+.hud-syn-lit { display: inline-flex; align-items: center; gap: 3px; }
 .hud .hud-syn .arena-panel { margin-top: 8px; padding: 10px 12px; border-radius: 6px; font-size: 12px; line-height: 1.45; animation: hud-drop 0.18s ease-out; }
 .hud .hud-syn .arena-panel h3 { display: none; }
 .hud .hud-syn .arena-panel p { margin: 0 0 6px; }

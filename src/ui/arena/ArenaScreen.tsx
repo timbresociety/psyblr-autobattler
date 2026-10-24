@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { armyModifiers } from '../../charter/synergy'
+import { armyModifiers } from '../../charter/traits'
 import { attachControls } from '../../arena/client/controls'
 import { createEffects } from '../../arena/client/effects/player'
 import { atLeast } from '../../arena/client/quality'

@@ -1,4 +1,4 @@
-import { DIVERSITY_MIN, STACK_THRESHOLD, TEAM_BONUS, describeSynergy } from '../../../charter/synergy'
+import { TRAIT_TIERS, armyTraits, type Trait } from '../../../charter/traits'
 import { BUILD_SLOTS, type Build } from '../../../charter/build'
 import { ROLES, getRole } from '../../../charter/roles'
 import { SIZES } from '../../../charter/sizes'
@@ -14,76 +14,45 @@ import { SLOT_LABEL } from '../../forge/labels'
 import { FACTION_NAME } from './presets'
 import type { LoadoutEntry } from './loadout'
 
-/** The left panel (R4): the army's synergies, lit as the deployed heroes meet them. Used in the match HUD too. */
-export function SynergyPanel({ builds }: { builds: Build[] }) {
-  const s = describeSynergy(builds)
-  const counts = new Map<string, number>()
-  for (const b of builds) counts.set(b.roleId, (counts.get(b.roleId) ?? 0) + 1)
-  return (
-    <section className="arena-panel synergy" aria-label="Synergies">
-      <h3>Synergies</h3>
-      <p className={s.teamBonus ? 'lit' : ''} data-testid="team-bonus">
-        Mixed army: {s.distinctRoles} of {DIVERSITY_MIN} roles · +{Math.round(TEAM_BONUS * 100)}% damage {s.teamBonus ? 'active' : 'when met'}
-      </p>
-      <ul>
-        {[...counts].map(([role, n]) => {
-          const penalty = s.penalties.find((p) => p.role === role)
-          return (
-            <li key={role} className={penalty ? 'warn' : n > 1 ? 'lit' : ''}>
-              {getRole(role as Build['roleId']).name} ×{n}
-              {penalty ? ` · stacked past ${STACK_THRESHOLD}: power ×${penalty.scale.toFixed(2)}` : ''}
-            </li>
-          )
-        })}
-      </ul>
-    </section>
-  )
-}
+/** A trait's tiers in one line each, for its tooltip. */
+const tierLines = (trait: Trait) => trait.tiers.map((t, i) => `${TRAIT_TIERS[i]}: ${t.text}`).join('\n')
 
 /**
- * Staging's army panel (R4): every role with its count, the mixed-army bonus as pips toward its four roles, and a
- * warning on any role stacked past the threshold.
+ * Role synergies, the way TFT shows traits: every role the army fields, its badge coloured by the tier it has lit, a
+ * 2 · 4 · 6 track, and what the lit tier does (or how many more heroes light the first). Staging's left panel, and
+ * the panel the match HUD opens; `compact` is the HUD's version.
  */
-export function ArmyPanel({ builds, title }: { builds: Build[]; title: string }) {
-  const s = describeSynergy(builds)
-  const counts = new Map<RoleId, number>()
-  for (const b of builds) counts.set(b.roleId, (counts.get(b.roleId) ?? 0) + 1)
+export function TraitPanel({ builds, title, compact = false }: { builds: Build[]; title?: string; compact?: boolean }) {
+  const traits = armyTraits(builds)
   return (
-    <section className="stage-card army" aria-label="Synergies">
-      <h3 className="card-title">{title}</h3>
-      <div className={`bonus${s.teamBonus ? ' lit' : ''}`}>
-        <div className="bonus-pips" aria-hidden="true">
-          {Array.from({ length: DIVERSITY_MIN }, (_, i) => (
-            <i key={i} className={i < s.distinctRoles ? 'on' : ''} />
-          ))}
-        </div>
-        <p className={s.teamBonus ? 'lit' : ''} data-testid="team-bonus">
-          {s.teamBonus ? `Mixed army: ${s.distinctRoles} roles · +${Math.round(TEAM_BONUS * 100)}% damage active` : `Mixed army: ${s.distinctRoles} of ${DIVERSITY_MIN} roles · +${Math.round(TEAM_BONUS * 100)}% damage when met`}
-        </p>
-      </div>
-      <ul className="role-counts">
-        {ROLES.map((role) => {
-          const n = counts.get(role.id) ?? 0
-          const penalty = s.penalties.find((p) => p.role === role.id)
-          return (
-            <li key={role.id} className={`role-${role.id}${n ? '' : ' none'}${penalty ? ' warn' : ''}`}>
-              <RoleIcon role={role.id} />
-              <span className="role-line">
-                {role.name} ×{n}
-                {penalty ? ` · stacked past ${STACK_THRESHOLD}: power ×${penalty.scale.toFixed(2)}` : ''}
+    <section className={compact ? 'arena-panel traits compact' : 'stage-card army traits'} aria-label="Synergies">
+      {title && <h3 className="card-title">{title}</h3>}
+      {traits.length === 0 ? (
+        <p className="muted trait-empty">Deploy heroes and their roles light up here.</p>
+      ) : (
+        <ul className="trait-list">
+          {traits.map(({ trait, count, tier }) => (
+            <li key={trait.role} className={`trait role-${trait.role} tier-${tier}`} title={`${trait.name}: ${trait.blurb}\n${tierLines(trait)}`}>
+              <span className="trait-badge" aria-hidden="true">
+                <RoleIcon role={trait.role} />
               </span>
-              <span className="role-pips" aria-hidden="true">
-                {Array.from({ length: Math.min(n, 10) }, (_, i) => (
-                  <i key={i} className={i >= STACK_THRESHOLD ? 'over' : ''} />
+              <span className="trait-name">
+                {trait.name}
+                <small>{getRole(trait.role).name}</small>
+              </span>
+              <span className="trait-track" aria-label={`${count} of ${TRAIT_TIERS.join(', ')}`}>
+                {TRAIT_TIERS.map((need) => (
+                  <b key={need} className={count >= need ? 'on' : ''}>
+                    {need}
+                  </b>
                 ))}
               </span>
+              <p className="trait-effect">{tier >= 0 ? trait.tiers[tier].text : `${TRAIT_TIERS[0] - count} more to light it: ${trait.tiers[0].text}`}</p>
             </li>
-          )
-        })}
-      </ul>
-      <p className="card-foot">
-        {DIVERSITY_MIN} different roles light the bonus. More than {STACK_THRESHOLD} of one role weaken each other.
-      </p>
+          ))}
+        </ul>
+      )}
+      {!compact && <p className="card-foot">Every role is a synergy: {TRAIT_TIERS.join(', ')} heroes of one role light its tiers. Hover one to see them all.</p>}
     </section>
   )
 }

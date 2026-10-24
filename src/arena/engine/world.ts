@@ -26,7 +26,8 @@ function inside(m: MatchState, owner: HeroState, area: Area): HeroState[] {
   })
 }
 
-const templateOf = (ctx: Ctx, owner: number, slot: BuildSlot): Template => ctx.setups[owner].kit[slot]
+/** The template a construct uses: its owner's kit, scaled by any construct power its army's traits give. */
+const templateOf = (ctx: Ctx, owner: number, slot: BuildSlot): Template => (ctx.setups[owner].constructKit ?? ctx.setups[owner].kit)[slot]
 
 world.field = (ctx, caster, template, slot, at, e) => {
   const m = ctx.match
@@ -56,9 +57,10 @@ world.wall = (ctx, caster, at, e) => {
   const az = Math.abs(at.z - caster.position.z)
   const acrossX = az >= ax
   const half = e.length / 2
-  const piece: CoverPiece = { shape: { kind: 'block', x: at.x, z: at.z, hx: acrossX ? half : 0.35, hz: acrossX ? 0.35 : half }, base: 0, top: e.height, look: 'barricade', health: e.health }
+  const health = e.health * (1 + (ctx.setups[caster.id].mods?.constructPower ?? 0))
+  const piece: CoverPiece = { shape: { kind: 'block', x: at.x, z: at.z, hx: acrossX ? half : 0.35, hz: acrossX ? 0.35 : half }, base: 0, top: e.height, look: 'barricade', health }
   // a new array, so the cover's cached bounds are rebuilt for it
-  m.cover = { pieces: [...m.cover.pieces, piece], health: [...m.cover.health, e.health] }
+  m.cover = { pieces: [...m.cover.pieces, piece], health: [...m.cover.health, health] }
   const index = m.cover.pieces.length - 1
   ;(m.walls ??= []).push({ index, until: m.tick + ticks(e.duration) })
   // anyone standing where it rose is pushed out to its side

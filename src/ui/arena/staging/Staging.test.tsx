@@ -51,16 +51,24 @@ describe('staging (U16)', () => {
     expect(screen.queryByTestId('token-0-1')).toBeNull()
   })
 
-  it('shows the stacking penalty at a fourth tank, and lights the team bonus at four roles', async () => {
+  it('lights a role synergy tier by tier as heroes of that role deploy, like TFT traits', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    for (const x of [-12, -6, 0, 6]) await placeAt(/Bezos/, x, -10)
-    expect(screen.getByText(/Tank ×4 · stacked past 3/)).toBeTruthy()
-    expect(screen.getByTestId('team-bonus').className).not.toContain('lit')
+    const synergies = () => within(screen.getByRole('region', { name: 'Synergies' }))
+    const bulwark = () => synergies().getByText('Bulwark').closest('li')!
+    await placeAt(/Bezos/, -12, -10)
+    // one tank: the trait shows, unlit, with what lights it
+    expect(bulwark().className).toContain('tier--1')
+    expect(within(bulwark()).getByText(/1 more to light it/)).toBeTruthy()
+    await placeAt(/Bezos/, -6, -10)
+    expect(bulwark().className).toContain('tier-0')
+    for (const x of [0, 6]) await placeAt(/Bezos/, x, -10)
+    // a fourth tank lights the second tier, which reaches the rest of the side
+    expect(bulwark().className).toContain('tier-1')
+    expect(within(bulwark()).getByText(/everyone else \+10%/)).toBeTruthy()
     await placeAt(/Musk/, -12, -14)
-    await placeAt(/Huang/, -4, -14)
-    await placeAt(/Satya/, 3, -14)
-    expect(screen.getByTestId('team-bonus').className).toContain('lit')
+    // the lit trait sorts above the unlit one
+    expect(synergies().getAllByRole('listitem')[0]).toBe(bulwark())
   })
 
   it('keeps Start disabled until both sides have a hero', async () => {

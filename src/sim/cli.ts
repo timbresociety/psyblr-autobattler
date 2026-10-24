@@ -1,6 +1,6 @@
 import { BUILD_SLOTS, type Build } from '../charter/build.js'
 import { ROLE_IDS } from '../charter/roles.js'
-import { armyModifiers } from '../charter/synergy.js'
+import { armyModifiers } from '../charter/traits.js'
 import { referenceArmy, referenceField, randomBuild, sampleBuilds } from './field.js'
 import { GATE_CEILING, playScored, runGate, winRateVsField } from './gate.js'
 import { createRng } from './rng.js'
