@@ -1,30 +1,6 @@
-import { BEARD_STYLES, HAIR_STYLES, type BeardStyle, type Gender, type HairStyle, type HeroLook, type LookColor } from '../../charter/look.js'
+import { BEARD_LABEL, BEARD_STYLES, GENDER_LABEL, HAIR_LABEL, HAIR_STYLES, LOOK_COLOR_LABEL, type HeroLook, type LookColor } from '../../charter/look.js'
 
-const HAIR_LABEL: Record<HairStyle, string> = {
-  none: 'Bald',
-  buzz: 'Buzz',
-  crop: 'Crop',
-  short: 'Short',
-  curly: 'Curly',
-  swept: 'Swept',
-  spiky: 'Spiky',
-  bob: 'Bob',
-  long: 'Long',
-  volume: 'Volume',
-  helmet: 'Helmet',
-}
-const BEARD_LABEL: Record<BeardStyle, string> = { none: 'None', goatee: 'Goatee', full: 'Full', chin_curtain: 'Chin curtain' }
-const GENDER_LABEL: Record<Gender, string> = { m: 'Man', f: 'Woman' }
-const SWATCHES: [LookColor, string][] = [
-  ['skin', 'Skin'],
-  ['hair', 'Hair'],
-  ['iris', 'Eyes'],
-  ['suit', 'Suit'],
-  ['trim', 'Trim'],
-  ['pants', 'Trousers'],
-  ['cape', 'Cape'],
-  ['metal', 'Armour'],
-]
+const SWATCHES: LookColor[] = ['skin', 'hair', 'iris', 'suit', 'trim', 'pants', 'cape', 'metal']
 
 interface Props {
   /** The look as drawn, every colour filled in. */
@@ -105,10 +81,10 @@ export function LookPanel({ look, canFace, onChange, onFace }: Props) {
         </div>
       </div>
       <div className="swatches">
-        {SWATCHES.map(([region, label]) => (
+        {SWATCHES.map((region) => (
           <label key={region} className="swatch">
-            <input type="color" aria-label={`${label} colour`} value={look.colors[region]} onChange={(e) => onChange({ colors: { [region]: e.target.value } })} />
-            <span>{label}</span>
+            <input type="color" aria-label={`${LOOK_COLOR_LABEL[region]} colour`} value={look.colors[region]} onChange={(e) => onChange({ colors: { [region]: e.target.value } })} />
+            <span>{LOOK_COLOR_LABEL[region]}</span>
           </label>
         ))}
       </div>

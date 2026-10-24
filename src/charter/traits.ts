@@ -54,7 +54,7 @@ export const TRAITS: Record<RoleId, Trait> = {
     name: 'Bulwark',
     blurb: 'Tanks harden, then the whole line does',
     tiers: [
-      { members: { mul: both(0.2) }, text: 'Tanks +20% armor and magic resist' },
+      { members: { mul: both(0.2) }, text: 'Tanks +20% armor and spirit resist' },
       { members: { mul: both(0.4) }, others: { mul: both(0.1) }, text: 'Tanks +40%, everyone else +10%' },
       { members: { mul: both(0.7) }, others: { mul: both(0.2) }, text: 'Tanks +70%, everyone else +20%' },
     ],

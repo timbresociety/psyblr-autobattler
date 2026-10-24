@@ -11,7 +11,7 @@ import type { DamageType, SecondarySheet } from '../../charter/types.js'
 /**
  * A hero's fighting numbers the way a unit card shows them (TFT, Underlords): what the engine itself will use, read
  * from the same setup a match builds, with whatever the army's traits add. Damage cuts are the engine's: resist is
- * taken off as a percentage, from its floor up to 75.
+ * taken off as a percentage, from its floor up to its cap.
  */
 export interface HeroStats {
   health: number
@@ -27,7 +27,6 @@ export interface HeroStats {
   /** Basic attacks a second: attack speed for a swing, fire rate for a shot. */
   rate: number
   ranged: boolean
-  ammo: number
   /** How far the basic attack reaches, in metres, the way the engine measures it. */
   reach: number
   /** The basic attack's damage a second before resist. */
@@ -43,7 +42,7 @@ export interface HeroStats {
   sheet: SecondarySheet
 }
 
-const cut = (resist: number) => Math.max(ENGINE.resistFloor, Math.min(75, resist))
+const cut = (resist: number) => Math.max(ENGINE.resistFloor, Math.min(ENGINE.resistCap, resist))
 
 export function heroStats(build: Build, mods: TraitMods = {}): HeroStats {
   const { sheet, kit } = prepareHero(build, 1, 0, mods)
@@ -68,7 +67,6 @@ export function heroStats(build: Build, mods: TraitMods = {}): HeroStats {
     damageType: hit?.type ?? 'physical',
     rate,
     ranged,
-    ammo: sheet.ammo,
     reach,
     dps: perHit * rate,
     spiritPower: sheet.spiritPower,

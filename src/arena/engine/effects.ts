@@ -73,7 +73,7 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   const sheet = ctx.setups[target.id].sheet
   // shreds take flat points off the resist; vulnerability and the attacker's team's marks add damage taken
   const shred = strongest(target, type === 'physical' ? 'armorShred' : 'spiritShred')
-  const resist = clamp((type === 'physical' ? sheet.armor : sheet.magicResist) - shred, ENGINE.resistFloor, 75)
+  const resist = clamp((type === 'physical' ? sheet.armor : sheet.magicResist) - shred, ENGINE.resistFloor, ENGINE.resistCap)
   const marked = target.debuffs.some((d) => d.type === 'mark' && ctx.match.heroes[d.source]?.team === source.team) ? strongest(target, 'mark') : 0
   const exposed = Math.min(ENGINE.vulnerableCap, (strongest(target, 'vulnerable') + marked) / 100)
   amount *= (1 - resist / 100) * (1 - Math.min(0.8, sumBuff(target, 'damageReduction'))) * (1 + exposed)

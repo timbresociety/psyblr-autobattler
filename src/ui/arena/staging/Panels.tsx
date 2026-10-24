@@ -181,7 +181,7 @@ export function DetailsPanel({ build, entry, portrait, view3d = false, army = []
       </div>
       <div className="card-stats" aria-label="Stats">
         <Stat icon="attack" label="Attack" value={n(stats.perHit)} unit={stats.damageType === 'spirit' ? ' spirit' : ''} tip={`Basic attack damage per hit (${stats.damageType})`} />
-        <Stat icon="rate" label={stats.ranged ? 'Fire rate' : 'Atk speed'} value={n(stats.rate, 2)} unit="/s" tip={stats.ranged ? `Fire rate: shots a second, ${n(stats.ammo)} to a magazine` : 'Attack speed: swings a second'} />
+        <Stat icon="rate" label={stats.ranged ? 'Fire rate' : 'Atk speed'} value={n(stats.rate, 2)} unit="/s" tip={stats.ranged ? 'Fire rate: shots a second' : 'Attack speed: swings a second'} />
         <Stat icon="reach" label="Range" value={n(stats.reach, 1)} unit="m" tip={stats.ranged ? 'How far its shots travel' : 'How far its swing reaches, body and size included'} />
         <Stat icon="dps" label="DPS" value={n(stats.dps)} tip="Basic attack damage a second, before resist" />
         <Stat icon="spirit" label="Spirit" value={n(stats.spiritPower)} tip="Spirit power: scales spells, heals and shields" />

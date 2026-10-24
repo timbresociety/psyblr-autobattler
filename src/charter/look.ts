@@ -13,9 +13,14 @@ export type HairStyle = (typeof HAIR_STYLES)[number]
 export const BEARD_STYLES = ['none', 'goatee', 'full', 'chin_curtain'] as const
 export type BeardStyle = (typeof BEARD_STYLES)[number]
 
+export const HAIR_LABEL: Record<HairStyle, string> = { none: 'Bald', buzz: 'Buzz', crop: 'Crop', short: 'Short', curly: 'Curly', swept: 'Swept', spiky: 'Spiky', bob: 'Bob', long: 'Long', volume: 'Volume', helmet: 'Helmet' }
+export const BEARD_LABEL: Record<BeardStyle, string> = { none: 'None', goatee: 'Goatee', full: 'Full', chin_curtain: 'Chin curtain' }
+export const GENDER_LABEL: Record<Gender, string> = { m: 'Man', f: 'Woman' }
+
 /** Regions the look can colour; each takes '#rrggbb'. */
 export const LOOK_COLORS = ['skin', 'suit', 'trim', 'pants', 'glove', 'boot', 'hair', 'iris', 'brow', 'cape', 'metal'] as const
 export type LookColor = (typeof LOOK_COLORS)[number]
+export const LOOK_COLOR_LABEL: Record<LookColor, string> = { skin: 'Skin', suit: 'Suit', trim: 'Trim', pants: 'Trousers', glove: 'Gloves', boot: 'Boots', hair: 'Hair', iris: 'Eyes', brow: 'Brows', cape: 'Cape', metal: 'Armour' }
 
 /** Where a piece of gear hangs on a body (each body's sockets come from tools/blender/humanlib/sockets.py). */
 export const GEAR_SLOTS = ['head', 'face', 'hand_r', 'hand_l', 'back'] as const

@@ -50,7 +50,8 @@ export interface GateOutcome {
   alternatives?: Template[]
 }
 
-const DEFAULTS = { duelsPerMember: 25, seed: 1, team: 3 }
+/** Fights per field member, the seed, and heroes a side: 25 × 8 roles is 200 fights in 3v3 skirmishes. */
+export const GATE_DEFAULTS = { duelsPerMember: 25, seed: 1, team: 3 }
 
 /** One fight scored for side `me`: a win is 1, a draw is half. */
 export function scoreFor(result: BattleResult, me: 0 | 1): number {
@@ -68,7 +69,7 @@ export function playScored(mine: Combatant[], theirs: Combatant[], flip: boolean
  * opponent and as a partner. Workers each take some turns of one measurement (see `runGateAsync`).
  */
 export function scoreVsField(build: Build, options: GateOptions = {}, turns?: readonly number[]): { score: number; fights: number } {
-  const { duelsPerMember, seed, team } = { ...DEFAULTS, ...options }
+  const { duelsPerMember, seed, team } = { ...GATE_DEFAULTS, ...options }
   const field = options.field ?? referenceField()
   const me: Combatant = { build, powerScale: options.candidateScale ?? 1 }
   const member = (k: number): Combatant => ({ build: field[k % field.length] })
