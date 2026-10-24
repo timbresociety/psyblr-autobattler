@@ -53,6 +53,15 @@ describe('the offline reader', () => {
     expect(offlineReading({ prompt: 'Goku. Ultimate goes super saiyan: "Kaioken"' }).kit.ultimate.template).toBe('fighter-ascended-form')
   })
 
+  it('reads what a skill does from the words after its name too, when they name a mechanic', () => {
+    const samurai = offlineReading({ prompt: 'a samurai in a blue kimono. Ultimate "Moon Slash" goes super saiyan' })
+    expect(samurai.kit.ultimate).toMatchObject({ name: 'Moon Slash', template: 'fighter-ascended-form' })
+    expect(samurai.questions.map((q) => q.about)).not.toContain('ultimate')
+    expect(namedSkills('Q "Moon Slash" stuns everyone. E "Zip"').active1?.does).toBe('Stuns an enemy')
+    // words about the hero after a name leave the skill to ask about
+    expect(namedSkills('Skill 1 "Fireball" and he wears a red cape').active1).toMatchObject({ name: 'Fireball', does: '' })
+  })
+
   it('an answer settles its question: the kit takes the mechanic picked, the form its size and role, the face theirs', () => {
     const reading = offlineReading({ prompt: ENCORE, faceFound: true })
     const pick = reading.questions[0].options[1]

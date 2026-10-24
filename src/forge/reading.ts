@@ -456,6 +456,8 @@ const MARKERS: [BuildSlot | 'skill', RegExp][] = [
 const CAPITAL_ONLY = /^[QER]$/i
 
 const FILLER = /\b(?:is|are|was|will be|be|a|an|the|its|his|her|their|called|named|which|that|and|as|it|like|should|would|could)\b|[:=–—-]/gi
+/** A stretch of the player's words without the filler, in single spaces. */
+const plain = (words: string) => words.replace(FILLER, ' ').replace(/\s+/g, ' ').replace(/^[ ,]+|[ ,]+$/g, '')
 
 /** Mechanic words in what a player says a skill is, and the sentence a reading gives them. */
 const HINTS: [RegExp, string][] = [
@@ -479,12 +481,12 @@ export const isTransform = (words: string) => HINTS[0][0].test(words)
 interface Named {
   name: string
   does: string
-  /** The player's own words between the slot and the name, before a hint replaced them: what a form question reads. */
+  /** The player's own words for it, before a hint replaced them: what a form question reads. */
   words: string
 }
 
-/** The first marker in a stretch of text, with where it ends. */
-function firstMarker(context: string): { slot: BuildSlot | 'skill'; end: number } | undefined {
+/** The first marker in a stretch of text, with where it starts and ends. */
+function firstMarker(context: string): { slot: BuildSlot | 'skill'; at: number; end: number } | undefined {
   let best: { slot: BuildSlot | 'skill'; at: number; end: number } | undefined
   for (const [slot, re] of MARKERS) {
     for (const m of context.matchAll(new RegExp(re.source, 'gi'))) {
@@ -493,13 +495,15 @@ function firstMarker(context: string): { slot: BuildSlot | 'skill'; end: number 
       break
     }
   }
-  return best && { slot: best.slot, end: best.end }
+  return best
 }
 
 /**
  * The skills a prompt names, by slot: `Skill 1 "encore kha ja"`, `ultimate is a transformation "kendrick se bhi upar"`,
  * `Q "Moon Slash"`. A quoted name takes the first slot word before it in its sentence, and the words between become what
- * it does. A quote with no slot word near it is a nickname, as in Jeff "Prime" Bezos, unless the sentence is about skills.
+ * it does. With none between, the words after the name do if they name a mechanic, up to the next sentence break, quote
+ * or slot word (`ultimate "Moon Slash" goes super saiyan`). A quote with no slot word near it is a nickname, as in
+ * Jeff "Prime" Bezos, unless the sentence is about skills.
  */
 export function namedSkills(prompt: string): Partial<Record<BuildSlot, Named>> {
   const out: Partial<Record<BuildSlot, Named>> = {}
@@ -512,8 +516,12 @@ export function namedSkills(prompt: string): Partial<Record<BuildSlot, Named>> {
     const context = before.slice(Math.max(0, before.search(/[.!?;](?=[^.!?;]*$)/) + 1))
     const marker = firstMarker(context)
     if (!marker) continue
-    const between = context.slice(marker.end).replace(FILLER, ' ').replace(/\s+/g, ' ').trim()
-    const named = { name: titleCase(m[1].trim()).slice(0, TEXT_LIMITS.name), does: between ? (hintFor(between) ?? between.charAt(0).toUpperCase() + between.slice(1)) : '', words: between }
+    const tail = prompt.slice(from).split(/[.!?;"“”]/)[0]
+    const next = firstMarker(tail)
+    const after = plain(next ? tail.slice(0, next.at) : tail)
+    // "and he wears a red cape" after a name is about the hero, so it still gets asked what the skill does
+    const between = plain(context.slice(marker.end)) || (hintFor(after) ? after : '')
+    const named = { name: titleCase(m[1].trim()).slice(0, TEXT_LIMITS.name), does: between ? (hintFor(between) ?? between.charAt(0).toUpperCase() + between.slice(1)).slice(0, TEXT_LIMITS.flavour) : '', words: between }
     if (marker.slot === 'skill') generic.push(named)
     else out[marker.slot] ??= named
   }
