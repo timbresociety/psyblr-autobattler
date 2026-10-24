@@ -1,4 +1,4 @@
-import { PIECE_KINDS, type PieceKind } from '../../src/charter/look.js'
+import { PIECE_KINDS, type PieceKind, type WearSlot } from '../../src/charter/look.js'
 import { createRegistry } from '../../src/forge/providers/registry.js'
 import { balance } from '../../src/server/credits.js'
 import { getDb } from '../../src/server/db.js'
@@ -14,7 +14,10 @@ function deps(db: Db): PieceDeps | undefined {
 
 const unavailable = () => Response.json({ error: "generating pieces isn't switched on for this deployment yet" }, { status: 503 })
 
-/** POST /api/pieces { prompt, kind, name?, imageUrl? } -> a new piece job and the balance after its hold. */
+/**
+ * POST /api/pieces { prompt, kind, name?, imageUrl? } -> a new piece job and the balance after its hold. With a slot in
+ * place of the kind ({ prompt, slot, ... }), the job makes a garment for that wardrobe slot.
+ */
 export async function POST(request: Request): Promise<Response> {
   try {
     const db = await getDb()
@@ -23,10 +26,12 @@ export async function POST(request: Request): Promise<Response> {
     const d = deps(db)
     if (!d) return unavailable()
     const body = await readJson(request, 4_000)
-    const kind = (PIECE_KINDS as readonly string[]).includes(body.kind as string) ? (body.kind as PieceKind) : ('' as PieceKind)
+    // startPiece turns away a missing kind or an unknown slot
+    const slot = typeof body.slot === 'string' && body.slot ? (body.slot as WearSlot) : undefined
+    const kind = (PIECE_KINDS as readonly string[]).includes(body.kind as string) ? (body.kind as PieceKind) : undefined
     const job = await startPiece(d, accountId, {
       prompt: typeof body.prompt === 'string' ? body.prompt : '',
-      kind,
+      ...(slot ? { slot } : { kind }),
       name: typeof body.name === 'string' ? body.name : undefined,
       imageUrl: typeof body.imageUrl === 'string' && body.imageUrl ? body.imageUrl : undefined,
     })
@@ -38,7 +43,7 @@ export async function POST(request: Request): Promise<Response> {
 
 /**
  * GET /api/pieces -> { ready }: whether generating is switched on here. GET /api/pieces?id= -> that job, moved along as
- * far as it can go, and the piece once it's in the repository.
+ * far as it can go, and the piece or garment once it's in the repository.
  */
 export async function GET(request: Request): Promise<Response> {
   try {

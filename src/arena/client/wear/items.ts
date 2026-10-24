@@ -15,7 +15,8 @@ import type { BodySockets } from '../gear.js'
 /** Welded vertices on the shared body surface; an item bound to anything else is refused. */
 export const BODY_VERTICES = 2595
 
-export type LoadedItem = { kind: 'surface'; item: SurfaceItem } | { kind: 'rigid'; file: Gltf; meta?: ItemMeta }
+/** A surface item, with its own texture when a player generated it; or a rigid piece and its metadata, if it has any. */
+export type LoadedItem = { kind: 'surface'; item: SurfaceItem; texture?: THREE.Texture } | { kind: 'rigid'; file: Gltf; meta?: ItemMeta }
 
 const values = (attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, size: number) => {
   const out = new Float32Array(attr.count * size)
@@ -71,7 +72,8 @@ export function readItem(file: Gltf): LoadedItem {
     },
     BODY_VERTICES,
   )
-  return { kind: 'surface', item }
+  const texture = (mesh.material as THREE.MeshStandardMaterial).map
+  return texture ? { kind: 'surface', item, texture } : { kind: 'surface', item }
 }
 
 const items = new Map<string, Promise<LoadedItem | undefined>>()

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { attribute, float, normalView, positionViewDirection, uniform, vertexColor } from 'three/tsl'
+import { attribute, clamp, distance, dot, float, max, mix, normalView, positionViewDirection, step, texture, uniform, vec3, vertexColor } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import type { Build } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
@@ -35,16 +35,28 @@ export function characterMaterial(team: THREE.Color, map: THREE.Texture | null =
 
 /**
  * A hero's outfit in the arena: colours per vertex, with roughness, metalness, cloth sheen and glow from each channel's
- * finish (_finish), and the same team rim as the body. Two-sided, so a sleeve or hem shows its inside.
+ * finish (_finish), and the same team rim as the body. Two-sided, so a sleeve or hem shows its inside. With a map, a
+ * generated item's: its texture where each channel keeps its own colour, and where the player chose another, that
+ * colour shaded by the texture against the channel's own (_base), as printedColor does for the previews (dress-model.ts).
  */
-export function clothMaterial(team: THREE.Color): MeshStandardNodeMaterial {
-  const m = new MeshStandardNodeMaterial({ vertexColors: true, side: THREE.DoubleSide })
+export function clothMaterial(team: THREE.Color, map?: THREE.Texture): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({ vertexColors: !map, side: THREE.DoubleSide })
   const finish = attribute('_finish', 'vec4')
   m.roughnessNode = finish.x
   m.metalnessNode = finish.y
+  const own = vertexColor().rgb
+  let color = own
+  if (map) {
+    const tex = texture(map).rgb
+    const base = attribute('_base', 'vec3')
+    const luma = vec3(0.2126, 0.7152, 0.0722)
+    const shade = clamp(dot(tex, luma).div(max(dot(base, luma), 0.04)), 0, 2)
+    color = mix(own.mul(shade), tex, float(1).sub(step(0.002, distance(own, base))))
+    m.colorNode = color
+  }
   const grazing = float(1).sub(normalView.dot(positionViewDirection).abs())
   const glow = finish.w.add(finish.z.mul(grazing.pow(2)).mul(0.3))
-  m.emissiveNode = vertexColor().mul(glow).add(uniform(team).mul(grazing.pow(2.5)).mul(0.6))
+  m.emissiveNode = color.mul(glow).add(uniform(team).mul(grazing.pow(2.5)).mul(0.6))
   return m
 }
 
@@ -75,7 +87,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
-  dressModel(scene, look, wear, { body, cloth: () => clothMaterial(team) }, atlas)
+  dressModel(scene, look, wear, { body, cloth: (map) => clothMaterial(team, map) }, atlas)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

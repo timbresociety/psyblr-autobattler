@@ -33,6 +33,8 @@ export interface LibraryEntry {
   /** Up to four channels; a rigid piece has one when its primary material can take a colour. */
   channels: readonly ItemChannel[]
   knobs: readonly Knob[]
+  /** How many saved heroes wear it (community items). */
+  uses?: number
 }
 
 const PIECE_SLOT: Record<PieceEntry['kind'], ItemSlot> = { head: 'head', face: 'face', hand: 'hand', offhand: 'offhand', back: 'back' }

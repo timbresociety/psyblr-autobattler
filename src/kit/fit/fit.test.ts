@@ -177,7 +177,7 @@ describe('fitting', () => {
   it('flags an item that sinks into the skin, misses its slot, or runs over budget', () => {
     const legs = (v: number) => ref.shape.skin[v] === 1 && leanOn(ref, v, ['thigh_L', 'thigh_R', 'shin_L', 'shin_R']) >= 0.5
     expect(fitItem(shell('sunk', 'lower', legs, -0.01), ref).report.problems.join()).toMatch(/under the skin/)
-    expect(fitItem(shell('wrong', 'upper', legs, 0.006), ref).report.problems.join()).toMatch(/covers \d+% of the upper region/)
+    expect(fitItem(shell('wrong', 'upper', legs, 0.006), ref).report.problems.join()).toMatch(/covers \d+% of the torso/)
     const big = skirt(80, 48)
     expect(big.index.length / 3).toBeGreaterThan(BUDGET.lower)
     expect(fitItem(big, ref).report.problems.join()).toMatch(/over the 3000 budget/)

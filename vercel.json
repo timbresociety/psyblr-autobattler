@@ -6,7 +6,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "db/schema.sql",
+      "includeFiles": "{db/schema.sql,public/heroes/m-medium.glb,public/heroes/m-medium.kit.json,public/kit/wear/beanie.glb,public/kit/wear/tee.glb,public/kit/wear/trousers.glb,public/kit/wear/kimono.glb,public/kit/wear/cape.glb,public/kit/wear/sneakers.glb}",
       "maxDuration": 300
     }
   },

@@ -48,11 +48,14 @@ export function isOwnForgeAssetUrl(url: string, env: Record<string, string | und
   return isStoreUrl(url, FORGE_ASSET, env)
 }
 
-const PIECE = /^pieces\/[0-9a-f-]{36}\.(glb|webp)$/
-/** A generated piece's model or thumbnail, stored by the dev server itself (see dev-store.ts). */
-const DEV_PIECE = /^\/dev-store\/pieces\/[0-9a-f-]{36}\.(glb|webp)$/
+const PIECE = /^(pieces|wear)\/[0-9a-f-]{36}\.(glb|webp)$/
+/** A generated piece's or garment's model or thumbnail, stored by the dev server itself (see dev-store.ts). */
+const DEV_PIECE = /^\/dev-store\/(pieces|wear)\/[0-9a-f-]{36}\.(glb|webp)$/
 
-/** Generated pieces live under pieces/ in this deployment's store, published by the piece job (src/server/pieces.ts). */
+/**
+ * Generated pieces live under pieces/ and generated garments under wear/ in this deployment's store, both published by
+ * the piece job (src/server/pieces.ts).
+ */
 export function isOwnPieceUrl(url: string, env: Record<string, string | undefined> = process.env): boolean {
   if (devStoreActive(env) && DEV_PIECE.test(url)) return true
   return isStoreUrl(url, PIECE, env)

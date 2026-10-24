@@ -299,7 +299,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
         // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
         const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
-        dressModel(model, painted, wear, { body, cloth: () => (look ? classicClothMaterial() : empty) }, atlas)
+        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty) }, atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

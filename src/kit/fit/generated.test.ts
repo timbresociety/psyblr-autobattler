@@ -17,7 +17,7 @@ const items = new Map<string, ItemFile>()
 
 beforeAll(async () => {
   ref = await readReference(pub('/heroes/m-medium.glb'), pub('/heroes/m-medium.kit.json'))
-  for (const id of ['tee', 'trousers', 'kimono', 'sneakers', 'cape']) items.set(id, await readItemFile(pub(`/kit/wear/${id}.glb`), ref.shape.surface.count))
+  for (const id of ['tee', 'trousers', 'kimono', 'sneakers', 'cape', 'beanie', 'cowboy_hat']) items.set(id, await readItemFile(pub(`/kit/wear/${id}.glb`), ref.shape.surface.count))
 })
 
 /** A seeded generator, so a jittered fixture is the same every run. */
@@ -160,6 +160,21 @@ describe('placing a generated garment', () => {
     expect(placed.steps.reposed.length).toBeGreaterThan(0)
     expect(report.problems).toEqual([])
     expect(overlap).toBeGreaterThan(0.85)
+  })
+
+  it("keeps a hat's crown: the head ends under it, so only a cap shut underneath goes", () => {
+    // a brim (a cowboy hat's curls up past its crown) is placed by the beanie's rule for now, so only its crown counts here
+    for (const id of ['beanie', 'cowboy_hat']) {
+      const file = items.get(id)!
+      const open = place(id, { positions: displaced(file.positions, 1.7, [0.4, -0.3, 1.2], 0.002), index: file.item.index })
+      expect(open.placed.steps.clipped.caps, id).toBe(0)
+      expect(open.report.problems, id).toEqual([])
+      if (id === 'beanie') expect(open.overlap).toBeGreaterThan(0.95)
+    }
+    const shut = place('beanie', capped(items.get('beanie')!))
+    expect(shut.placed.steps.clipped.caps).toBeGreaterThan(0)
+    expect(shut.report.problems).toEqual([])
+    expect(shut.overlap).toBeGreaterThan(0.95)
   })
 
   it('cuts away the inner wall of a solid, the caps over its openings and the mannequin inside', () => {

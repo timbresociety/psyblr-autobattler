@@ -24,8 +24,12 @@ import { BODY_VERTICES, type LoadedWear } from './items.js'
 export interface WearMaterials {
   /** The body's material, from its atlas (the hero's own when it has a photo face) and relief. */
   body: (map: THREE.Texture | null, normalMap: THREE.Texture | null) => THREE.Material
-  /** The outfit's material: colours and finishes come per vertex (color, _finish). */
-  cloth: () => THREE.Material
+  /**
+   * The outfit's material: colours and finishes come per vertex (color, _finish). With a map, a generated item's own:
+   * its texture where each channel keeps its colour, recoloured where the player chose another (_base holds the
+   * channel's own colour; see printedColor).
+   */
+  cloth: (map?: THREE.Texture) => THREE.Material
 }
 
 interface BodyCache {
@@ -85,10 +89,17 @@ function bodyMesh(model: THREE.Object3D): THREE.SkinnedMesh | undefined {
   return found
 }
 
-/** The surface items a hero wears with its colours and cuts, and the covers its rigid items bring. */
-function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear | undefined): { worn: WornItem[]; rigid: Cover[] } {
+/** A generated item's texture, and per vertex its channel's own colour (linear), which the texture already shows. */
+interface Print {
+  texture: THREE.Texture
+  base: Float32Array
+}
+
+/** The surface items a hero wears with its colours and cuts, the covers its rigid items bring, and the textured items' prints. */
+function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear | undefined): { worn: WornItem[]; rigid: Cover[]; prints: Map<string, Print> } {
   const worn: WornItem[] = []
   const rigid: Cover[] = []
+  const prints = new Map<string, Print>()
   for (const w of Object.values(outfit)) {
     const loaded = w ? wear?.items.get(w.url) : undefined
     if (!w || !loaded) continue
@@ -96,15 +107,21 @@ function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear |
       if (loaded.meta?.covers.length) rigid.push(coverOf(loaded.meta, BODY_VERTICES))
       continue
     }
-    const { item } = loaded
+    const { item, texture } = loaded
     worn.push({
       item,
       colors: item.meta.channels.map((c, i) => linearRgb(w.colors?.[i] ?? c.color)),
       finishes: item.meta.channels.map((c, i) => w.finishes?.[i] ?? c.finish),
       ...(w.knobs ? { knobs: w.knobs } : {}),
     })
+    if (texture) {
+      const own = item.meta.channels.map((c) => linearRgb(c.color))
+      const base = new Float32Array(item.count * 3)
+      for (let k = 0; k < item.count; k++) base.set(own[item.channel[k]] ?? [0.5, 0.5, 0.5], k * 3)
+      prints.set(item.meta.id, { texture, base })
+    }
   }
-  return { worn, rigid }
+  return { worn, rigid, prints }
 }
 
 /** The body's own geometry for this hero: its shape, its colours (skin and eye whites), and only what shows. */
@@ -138,12 +155,21 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   return geo
 }
 
-/** The dressed items that draw anything, in the order the outfit's one geometry merges them. */
-const drawn = (items: DressedItem[]) => items.filter((i) => i.index.length)
+/**
+ * The dressed items that draw anything, in the order the outfit's one geometry merges them: the plain ones, which
+ * share one draw, then each textured one, which draws on its own.
+ */
+function drawn(items: DressedItem[], prints: ReadonlyMap<string, Print>): DressedItem[] {
+  const shown = items.filter((i) => i.index.length)
+  return [...shown.filter((i) => !prints.has(i.id)), ...shown.filter((i) => prints.has(i.id))]
+}
 
-/** Every dressed item in one geometry, so the whole outfit is one draw. */
-export function clothGeometry(items: DressedItem[]): THREE.BufferGeometry | undefined {
-  const parts = drawn(items)
+/**
+ * Every dressed item in one geometry, in drawn's order: one skinned mesh for the whole outfit, so its loose cloth is
+ * one rig. Its first group is every plain item (one draw); each textured item is a group of its own, for its own
+ * material (the mesh's material array in the same order).
+ */
+export function clothGeometry(parts: DressedItem[], prints: ReadonlyMap<string, Print> = new Map()): THREE.BufferGeometry | undefined {
   if (!parts.length) return undefined
   const total = parts.reduce((n, i) => n + i.count, 0)
   const triangles = parts.reduce((n, i) => n + i.index.length, 0)
@@ -151,6 +177,7 @@ export function clothGeometry(items: DressedItem[]): THREE.BufferGeometry | unde
   const normal = new Float32Array(total * 3)
   const uv = new Float32Array(total * 2)
   const color = new Float32Array(total * 3)
+  const base = new Float32Array(total * 3)
   const finish = new Float32Array(total * 4)
   const weave = new Float32Array(total)
   const skinIndex = new Uint16Array(total * 4)
@@ -158,11 +185,20 @@ export function clothGeometry(items: DressedItem[]): THREE.BufferGeometry | unde
   const index = total > 65535 ? new Uint32Array(triangles) : new Uint16Array(triangles)
   let v = 0
   let t = 0
+  const geo = new THREE.BufferGeometry()
+  let printed = 0
   for (const p of parts) {
+    const print = prints.get(p.id)
+    // the plain items share the first group; each textured one after them has its own
+    if (print) {
+      if (!printed && t) geo.addGroup(0, t, 0)
+      geo.addGroup(t, p.index.length, ++printed)
+    }
     position.set(p.positions, v * 3)
     normal.set(p.normals, v * 3)
     uv.set(p.uv, v * 2)
     color.set(p.color, v * 3)
+    base.set(print ? print.base : p.color, v * 3)
     finish.set(p.finish, v * 4)
     weave.set(p.weave, v)
     skinIndex.set(p.joints, v * 4)
@@ -171,11 +207,11 @@ export function clothGeometry(items: DressedItem[]): THREE.BufferGeometry | unde
     v += p.count
     t += p.index.length
   }
-  const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(position, 3))
   geo.setAttribute('normal', new THREE.BufferAttribute(normal, 3))
   geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2))
   geo.setAttribute('color', new THREE.BufferAttribute(color, 3))
+  if (prints.size) geo.setAttribute('_base', new THREE.BufferAttribute(base, 3))
   geo.setAttribute('_finish', new THREE.BufferAttribute(finish, 4))
   geo.setAttribute('_weave', new THREE.BufferAttribute(weave, 1))
   geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndex, 4))
@@ -210,7 +246,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const cache = bodyCache(mesh)
   const face = photoFaceShape(look.face, look.build, bodyKitLoaded(look.build), cache.base.positions)
   const shape = shapeBody(cache.base, cache.morphs, look.physique, face)
-  const { worn, rigid } = outfitItems(look.outfit, wear)
+  const { worn, rigid, prints } = outfitItems(look.outfit, wear)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
   const source = mesh.geometry
   const map = atlas ?? characterMap(mesh)
@@ -225,9 +261,11 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   if (normalMap && fileMaterial?.normalScale && made.normalScale) made.normalScale.copy(fileMaterial.normalScale)
   mesh.material = made
   mesh.frustumCulled = false
-  const cloth = clothGeometry(dressed.items)
+  const parts = drawn(dressed.items, prints)
+  const cloth = clothGeometry(parts, prints)
   if (cloth) {
-    const outfit = new THREE.SkinnedMesh(cloth, materials.cloth())
+    const printed = parts.flatMap((p) => prints.get(p.id) ?? [])
+    const outfit = new THREE.SkinnedMesh(cloth, printed.length ? [materials.cloth(), ...printed.map((p) => materials.cloth(p.texture))] : materials.cloth())
     outfit.name = 'outfit'
     outfit.position.copy(mesh.position)
     outfit.quaternion.copy(mesh.quaternion)
@@ -237,7 +275,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
     outfit.castShadow = true
     mesh.parent!.add(outfit)
     // whatever hangs loose swings on its own bones (settleCloth each frame)
-    rigCloth(model, outfit, drawn(dressed.items), shape, (bone) => cache.rest.get(bone))
+    rigCloth(model, outfit, parts, shape, (bone) => cache.rest.get(bone))
   }
   if (wear) hangRigid(model, look.outfit, wear)
   return true
@@ -245,14 +283,20 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
 
 /**
  * The classic (WebGL) outfit material for the previews and busts: vertex colours, with roughness, metalness, a cloth
- * sheen toward the silhouette and glow read per vertex from _finish.
+ * sheen toward the silhouette and glow read per vertex from _finish. With a map, a generated item's texture in place
+ * of its channels' colours, recoloured where the player chose another (printedColor).
  */
-export function classicClothMaterial(): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide })
+export function classicClothMaterial(map?: THREE.Texture): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide, ...(map ? { map } : {}) })
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;')
+      .replace('#include <common>', `#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;${map ? '\nattribute vec3 _base;\nvarying vec3 vBase;' : ''}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvFinish = _finish;${map ? '\nvBase = _base;' : ''}`)
+    if (map)
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>\nvarying vec3 vBase;\n${PRINTED_GLSL}`)
+        // the map has already been sampled into diffuseColor
+        .replace('#include <color_fragment>', 'diffuseColor.rgb = printedColor(diffuseColor.rgb, vColor.rgb, vBase);')
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec4 vFinish;')
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vFinish.x;')
@@ -262,6 +306,17 @@ export function classicClothMaterial(): THREE.MeshStandardMaterial {
         '#include <emissivemap_fragment>\nfloat grazing = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.0);\ntotalEmissiveRadiance += diffuseColor.rgb * (vFinish.w + vFinish.z * 0.3 * grazing);',
       )
   }
-  m.customProgramCacheKey = () => 'psyblr-cloth'
+  m.customProgramCacheKey = () => (map ? 'psyblr-cloth-printed' : 'psyblr-cloth')
   return m
 }
+
+/**
+ * A generated item's colour at a point: its texture where its channel keeps its own colour, and where the player
+ * chose another, that colour shaded by the texture's light and dark against the channel's own (the pattern survives
+ * a recolour; the hue is the player's). Shared by the classic material (here) and the arena's (characters.ts).
+ */
+const PRINTED_GLSL = `vec3 printedColor(vec3 tex, vec3 color, vec3 base) {
+  vec3 luma = vec3(0.2126, 0.7152, 0.0722);
+  float shade = clamp(dot(tex, luma) / max(dot(base, luma), 0.04), 0.0, 2.0);
+  return mix(color * shade, tex, 1.0 - step(0.002, distance(color, base)));
+}`

@@ -14,6 +14,7 @@ const METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE'])
 /** /api/<key> → its module. Each import is a static string, so Vercel's file tracer bundles every route. */
 export const ROUTES: Record<string, () => Promise<RouteModule>> = {
   'admin/hide': () => import('../routes/admin/hide.js'),
+  'assets/items': () => import('../routes/assets/items.js'),
   'assets/search': () => import('../routes/assets/search.js'),
   'auth/session': () => import('../routes/auth/session.js'),
   'auth/start': () => import('../routes/auth/start.js'),

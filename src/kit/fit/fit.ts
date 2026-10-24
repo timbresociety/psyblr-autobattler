@@ -263,8 +263,8 @@ export function boundaryVertices(positions: ArrayLike<number>, index: ArrayLike<
   return Uint8Array.from(id, (w) => (open.has(w) ? 1 : 0))
 }
 
-/** The body vertices an item in each slot must mostly cover, and how much of them. */
-function core(ref: Reference, slot: ItemSlot): { verts: number[]; need: number }[] {
+/** The body vertices an item in each slot must mostly cover, what to call them, and how much of them. */
+function core(ref: Reference, slot: ItemSlot): { name: string; verts: number[]; need: number }[] {
   const V = ref.shape.surface.count
   const y = (v: number) => ref.shape.positions[v * 3 + 1]
   const z = (v: number) => ref.shape.positions[v * 3 + 2]
@@ -274,23 +274,23 @@ function core(ref: Reference, slot: ItemSlot): { verts: number[]; need: number }
   const crown = () => pick((v) => leanOn(ref, v, ['head']) >= 0.95 && y(v) > (ref.rest.head?.[1] ?? 1.6) + 0.08)
   switch (slot) {
     case 'upper':
-      return [{ verts: torso(), need: 0.6 }]
+      return [{ name: 'torso', verts: torso(), need: 0.6 }]
     case 'lower':
-      return [{ verts: thighs(), need: 0.6 }]
+      return [{ name: 'thighs', verts: thighs(), need: 0.6 }]
     case 'full':
       return [
-        { verts: torso(), need: 0.5 },
-        { verts: thighs(), need: 0.4 },
+        { name: 'torso', verts: torso(), need: 0.5 },
+        { name: 'thighs', verts: thighs(), need: 0.4 },
       ]
     case 'feet':
       // a sandal is a sole and a few straps
-      return [{ verts: pick((v) => leanOn(ref, v, ['foot_L', 'foot_R']) >= 0.6), need: 0.1 }]
+      return [{ name: 'feet', verts: pick((v) => leanOn(ref, v, ['foot_L', 'foot_R']) >= 0.6), need: 0.1 }]
     case 'head':
     case 'hair':
-      return [{ verts: crown(), need: 0.3 }]
+      return [{ name: 'crown of the head', verts: crown(), need: 0.3 }]
     case 'back':
       // a scarf's tails cover less than a cape
-      return [{ verts: pick((v) => leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5 && z(v) < (ref.rest.chest?.[2] ?? 0)), need: 0.15 }]
+      return [{ name: 'back', verts: pick((v) => leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5 && z(v) < (ref.rest.chest?.[2] ?? 0)), need: 0.15 }]
     default:
       return []
   }
@@ -346,13 +346,13 @@ export function fitItem(input: RawItem, ref: Reference): Fitted {
     if (binding.lift[v] < -dip && local[v * 3 + 1] > 0) under++
   }
   const coveredSet = new Set(covers)
-  const coverage = core(ref, spec.slot).map(({ verts, need }) => ({ share: verts.length ? verts.filter((v) => coveredSet.has(v)).length / verts.length : 1, need }))
+  const coverage = core(ref, spec.slot).map(({ name, verts, need }) => ({ name, share: verts.length ? verts.filter((v) => coveredSet.has(v)).length / verts.length : 1, need }))
   const triangles = raw.index.length / 3
   const problems: string[] = []
   if (bindError > 0.001) problems.push(`binding error ${(bindError * 1000).toFixed(1)} mm`)
   if (inner && under / inner > 0.02) problems.push(`${((under / inner) * 100).toFixed(0)}% under the skin`)
   if (triangles > BUDGET[spec.slot]) problems.push(`${triangles} triangles, over the ${BUDGET[spec.slot]} budget`)
-  coverage.forEach((c, i) => c.share < c.need && problems.push(`covers ${(c.share * 100).toFixed(0)}% of the ${spec.slot} region ${i + 1}, needs ${c.need * 100}%`))
+  coverage.forEach((c) => c.share < c.need && problems.push(`covers ${(c.share * 100).toFixed(0)}% of the ${c.name}, needs ${c.need * 100}%`))
   const meta: ItemMeta = {
     format: 'psyblr-wear',
     version: 1,

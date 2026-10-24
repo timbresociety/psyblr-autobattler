@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { gearProblem, wearProblem } from './gear.js'
+import { isOwnPieceUrl } from './photo-url.js'
 
 const look = (gear: object) => ({ gender: 'm' as const, hair: 'crop' as const, armour: false, cape: false, colors: {}, gear })
 
@@ -43,5 +44,16 @@ describe('the wardrobe on a saved hero', () => {
     expect(wearProblem(wearing({ feet: { id: 'katana', url: '/kit/pieces/katana.glb' } }))).toMatch(/can't go in feet/)
     // gearProblem checks the wardrobe too, since that's what the store calls
     expect(gearProblem(wearing({ upper: { id: 'mystery_robe', url: '/kit/wear/mystery_robe.glb' } }))).toMatch(/no item/)
+  })
+})
+
+describe("this deployment's own generated files", () => {
+  const id = '0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e'
+  it('are pieces under pieces/ and garments under wear/, in its own store', () => {
+    const env = { BLOB_STORE_ID: 'abc' }
+    expect(isOwnPieceUrl(`https://abc.public.blob.vercel-storage.com/pieces/${id}.glb`, env)).toBe(true)
+    expect(isOwnPieceUrl(`https://abc.public.blob.vercel-storage.com/wear/${id}.webp`, env)).toBe(true)
+    expect(isOwnPieceUrl(`https://xyz.public.blob.vercel-storage.com/wear/${id}.glb`, env)).toBe(false)
+    expect(isOwnPieceUrl(`https://abc.public.blob.vercel-storage.com/heroes/${id}.glb`, env)).toBe(false)
   })
 })

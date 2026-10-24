@@ -1,9 +1,10 @@
 import { requestStats, type Build } from '../charter/build.js'
 import { parseStatWishes } from '../charter/chat.js'
-import type { LookColor, PieceKind } from '../charter/look.js'
+import type { LookColor, PieceKind, WearSlot } from '../charter/look.js'
 import { floorBreach, offlineReading, readingText, type Reading, type ReadInput } from '../forge/reading.js'
 import type { LimitHit } from '../charter/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
+import type { LibraryEntry } from '../kit/wear/library.js'
 import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
 import { prepareImage, type PreparedImage } from './common/image-prep.js'
@@ -67,14 +68,19 @@ export interface SignInStart {
   devLink?: string
 }
 
-/** A piece being generated into the asset repository, and the piece once it's there. */
+/** A piece or garment being generated into the asset repository, and what it made once it's there. */
 export interface PieceJob {
   id: string
-  kind: PieceKind
+  /** A piece's kind, or a garment's slot. */
+  kind: PieceKind | WearSlot
+  /** Set for a garment job. */
+  slot?: WearSlot
   name: string
   status: 'running' | 'done' | 'failed'
   error?: string
   piece?: PieceEntry
+  /** The finished garment, as the wardrobe lists it. */
+  item?: LibraryEntry
 }
 
 export class ApiError extends Error {
@@ -97,7 +103,8 @@ export interface PieceDeps {
   credits(): Promise<CreditsView>
   claimFree(): Promise<number>
   purchase(pack: string): Promise<{ url: string }>
-  startPiece(input: { prompt: string; kind: PieceKind; name?: string; imageUrl?: string }): Promise<{ job: PieceJob; balance: number }>
+  /** A piece of gear for a kind, or with a slot instead, a garment for that wardrobe slot. */
+  startPiece(input: { prompt: string; kind?: PieceKind; slot?: WearSlot; name?: string; imageUrl?: string }): Promise<{ job: PieceJob; balance: number }>
   pollPiece(id: string): Promise<{ job: PieceJob; balance: number }>
 }
 

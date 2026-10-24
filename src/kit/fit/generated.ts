@@ -263,6 +263,20 @@ function normalise(P: Float32Array, index: Uint32Array, slot: ItemSlot, m: Marks
   }
 }
 
+/** The diagonal of the box round some triangles, in metres. */
+function extent(P: Float32Array, index: ArrayLike<number>, triangles: number[]): number {
+  const lo = [Infinity, Infinity, Infinity]
+  const hi = [-Infinity, -Infinity, -Infinity]
+  for (const t of triangles)
+    for (let k = 0; k < 3; k++)
+      for (let d = 0; d < 3; d++) {
+        const x = P[index[t * 3 + k] * 3 + d]
+        lo[d] = Math.min(lo[d], x)
+        hi[d] = Math.max(hi[d], x)
+      }
+  return Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2])
+}
+
 /** Triangles joined through shared (welded) edges, by piece: for scraps, and for telling trousers from a skirt. */
 function pieces(id: Uint32Array, index: ArrayLike<number>, keep: (t: number) => boolean): number[][] {
   const T = index.length / 3
@@ -405,13 +419,17 @@ function skinNormals(ref: Reference, binding: Binding): Float32Array {
   return out
 }
 
-/** The bones' lines through the body: whatever crosses one closes an opening the body passes through. */
+/**
+ * The bones' lines through the body: whatever crosses one closes an opening the body passes through. Each stops inside
+ * the body where the body ends (3 cm under the crown, short of the fingertips and toes), so a hat's crown or a shoe's
+ * toe isn't taken for a cap.
+ */
 function boneLines(ref: Reference): [V3, V3][] {
   const r = ref.rest
   const along = (a: V3, b: V3, k: number): V3 => [b[0] + (b[0] - a[0]) * k, b[1] + (b[1] - a[1]) * k, b[2] + (b[2] - a[2]) * k]
   const lines: [V3, V3][] = []
   const chain = (...ps: V3[]) => ps.slice(1).forEach((p, i) => lines.push([ps[i], p]))
-  chain(r.hips, r.spine, r.chest, r.upper_chest, r.neck, r.head, [r.head[0], r.head[1] + 0.2, r.head[2]])
+  chain(r.hips, r.spine, r.chest, r.upper_chest, r.neck, r.head, [r.head[0], bounds(ref.skin.positions).hi[1] - 0.03, r.head[2]])
   for (const s of ['L', 'R']) {
     chain(r[`clavicle_${s}`], r[`upper_arm_${s}`], r[`forearm_${s}`], r[`hand_${s}`], along(r[`forearm_${s}`], r[`hand_${s}`], 0.45))
     chain(r.hips, r[`thigh_${s}`], r[`shin_${s}`], r[`foot_${s}`], [r[`foot_${s}`][0], 0.02, r[`foot_${s}`][2] + 0.16])
@@ -436,10 +454,13 @@ function clip(P: Float32Array, index: Uint32Array, binding: Binding, slot: ItemS
   const n = P.length / 3
   const keep = new Uint8Array(T).fill(1)
   const clipped: Record<Clip, number> = { reach: 0, caps: 0, inside: 0, inner: 0, covered: 0, scraps: 0 }
+  // cut, not peeled: what reach, caps and cover take can break a piece in two; an inner wall comes off whole
+  const cut = new Uint8Array(T)
   const drop = (t: number, why: Clip) => {
     if (!keep[t]) return
     keep[t] = 0
     clipped[why]++
+    if (why === 'reach' || why === 'caps' || why === 'covered') cut[t] = 1
   }
   const { id } = weldPositions(P)
   // what the slot doesn't reach: a vertex close on the skin over a bone the slot doesn't cover (a mannequin's head or
@@ -518,30 +539,39 @@ function clip(P: Float32Array, index: Uint32Array, binding: Binding, slot: ItemS
     if (toward < -0.3) drop(t, 'inner')
   }
 
-  // under its own outside: looking out from it, the item again, facing the same way (a mannequin, a lining)
+  // under its own outside: looking out from it, the item again, facing the same way. A piece mostly under the rest (a
+  // mannequin, a lining, a solid's inner wall wound outward) goes where it's covered. A piece the rest covers only in
+  // part (a robe under its obi and its hanging sleeves) stays whole: a sleeve swings away, and an obi is a part too
   const kept: number[] = []
   for (let t = 0; t < T; t++) if (keep[t]) kept.push(t)
   const outer = new Uint32Array(kept.length * 3)
   kept.forEach((t, j) => outer.set([index[t * 3], index[t * 3 + 1], index[t * 3 + 2]], j * 3))
   const shell = new TriangleBVH(P, outer)
-  const covered: number[] = []
+  const covered = new Uint8Array(T)
   for (const t of kept) {
     const f = faceNormal(P, index, t)
     const c = centroid(P, index, t)
     for (const h of shell.hits([c[0] + f[0] * 1e-3, c[1] + f[1] * 1e-3, c[2] + f[2] * 1e-3], f, 0, 0.05)) {
       const u = kept[h.triangle]
       if (u !== t && dot(faceNormal(P, index, u), f) > 0.3) {
-        covered.push(t)
+        covered[t] = 1
         break
       }
     }
   }
-  for (const t of covered) drop(t, 'covered')
+  for (const p of pieces(id, index, (t) => keep[t] === 1)) if (p.filter((t) => covered[t]).length >= p.length * 0.35) for (const t of p) if (covered[t]) drop(t, 'covered')
 
-  // scraps: pieces too small to be the garment
+  // scraps: what a cut broke off a bigger piece, too small to be the garment, and anything too small to see. A piece
+  // made on its own (an obi, a collar, a clasp, a button) stays, even with its inner wall peeled off
+  const whole = new Int32Array(T)
+  const broken: boolean[] = []
+  pieces(id, index, () => true).forEach((p, k) => {
+    for (const t of p) whole[t] = k
+    broken.push(p.some((t) => cut[t]))
+  })
   const left = pieces(id, index, (t) => keep[t] === 1)
   const total = left.reduce((acc, p) => acc + p.length, 0)
-  for (const p of left) if (p.length < total * 0.02) for (const t of p) drop(t, 'scraps')
+  for (const p of left) if ((broken[whole[p[0]]] && p.length < total * 0.02) || extent(P, index, p) < 0.01) for (const t of p) drop(t, 'scraps')
   return { keep, clipped }
 }
 

@@ -14,7 +14,8 @@ import { HeroPortrait } from '../common/portrait'
  * &gender=m or f picks the body, &facing=3.14 holds it turned (radians; that one shows the back), &speed=0.25 plays
  * in slow motion and &face=musk wears a demo hero's portrait (public/kit/faces): its photo and fitted shape.
  * &hero=3 shows the fourth demo hero instead, its bust and its whole body, as the likeness sheet captures them
- * (docs/forge/likeness.html).
+ * (docs/forge/likeness.html). &generated=full:<id>,feet:<id> also wears garments the dev server generated
+ * (.dev-store/wear), and &recolor=#1f2a44,#c9a227 recolours their channels.
  */
 
 const PRESETS: { name: string; role: RoleId; items: string[] }[] = [
@@ -25,11 +26,21 @@ const PRESETS: { name: string; role: RoleId; items: string[] }[] = [
 
 const CLIPS: StageClip[] = ['run', 'slash', 'cast', 'hurt']
 
-function wearing(ids: string[]): Partial<Record<LookSlot, Worn>> {
+function wearing(ids: string[], generated: string | null, recolor: string | null): Partial<Record<LookSlot, Worn>> {
   const out: Partial<Record<LookSlot, Worn>> = {}
   for (const id of ids) {
     const item = BUILT_IN_ITEMS.find((i) => i.id === id)
     if (item) out[item.slot as LookSlot] = { id, url: wearUrl(id) }
+  }
+  for (const pair of generated?.split(',') ?? []) {
+    const [slot, id] = pair.split(':')
+    if (!slot || !id) continue
+    out[slot as LookSlot] = { id, url: `/dev-store/wear/${id}.glb`, ...(recolor ? { colors: recolor.split(',') } : {}) }
+    // a full-body item replaces the upper and lower ones
+    if (slot === 'full') {
+      delete out.upper
+      delete out.lower
+    }
   }
   return out
 }
@@ -43,6 +54,8 @@ export function WardrobeScreen() {
   const speed = Number(params.get('speed') ?? 1) || 1
   const outfits = listed ? [{ name: 'Listed', role: 'fighter' as RoleId, items: listed.split(',').map((s) => s.trim()) }] : PRESETS
   const portrait = params.get('face')
+  const generated = params.get('generated')
+  const recolor = params.get('recolor')
   const [face, setFace] = useState<FacePhoto>()
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   useEffect(() => {
@@ -64,7 +77,7 @@ export function WardrobeScreen() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${outfits.length}, minmax(0, 1fr))`, gap: 12 }}>
         {outfits.map((o) => {
-          const look = { ...defaultLook(o.role, o.name, heroHue(o.name)), ...(gender ? { gender } : {}), wear: wearing(o.items), ...(face ? { face } : {}) }
+          const look = { ...defaultLook(o.role, o.name, heroHue(o.name)), ...(gender ? { gender } : {}), wear: wearing(o.items, generated, recolor), ...(face ? { face } : {}) }
           return (
             <section key={o.name} style={{ height: 560, display: 'grid', gridTemplateRows: 'auto 1fr' }}>
               <h2 style={{ margin: 0, fontSize: 14 }}>{`${o.name}: ${o.items.join(', ')}`}</h2>
