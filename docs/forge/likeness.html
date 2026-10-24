@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starter likeness</title>
+<style>
+:root { --bg: #f6f5f8; --card: #ffffff; --ink: #17161c; --muted: #5d5a66; --line: #e3e0ea; --stage: #101016; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d0c11; --card: #17161d; --ink: #f1eff6; --muted: #a7a3b3; --line: #2a2833; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 40px 16px 64px; }
+h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 12px; }
+.lede { max-width: 720px; color: var(--muted); margin: 0 0 10px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; margin-top: 28px; }
+.hero { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; }
+.hero h2 { font-size: 16px; margin: 0; }
+.hero header p { margin: 2px 0 10px; color: var(--muted); font-size: 12.5px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+figure { margin: 0; background: var(--stage); border-radius: 12px; padding: 8px; display: grid; grid-template-columns: auto auto; gap: 6px; align-items: end; justify-content: center; }
+figure img { display: block; border-radius: 8px; max-width: 100%; height: auto; }
+figure img:first-child { width: 96px; }
+figure img:nth-child(2) { width: 64px; }
+figcaption { grid-column: 1 / -1; color: #c9c5d4; font-size: 12px; text-align: center; }
+.worn { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.worn li { font-size: 12.5px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; display: inline-flex; align-items: center; gap: 6px; }
+.sw { display: inline-flex; gap: 2px; }
+.sw i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(127,127,127,.4); display: inline-block; }
+</style>
+</head>
+<body>
+<main>
+<h1>The 20 starters, rebuilt from the charter</h1>
+<p class="lede">Each starter used to be its own model, built by hand in Blender, and the game found it by the hero's exact name. That's why Remix broke: rename the copy and the model was gone. Now every starter is an ordinary look. Its face is the same portrait, fitted in the browser the way a player's photo is, and its body and physique come from the person's build. Its hair, beard, outfit and glasses are library items anyone can wear.</p>
+<p class="lede">Two things are gone on purpose. The role armour (pauldrons, sashes, capes) was battle gear bolted onto suits, and armour is something you pick from the wardrobe now. The other is each person's own height. The size class sets a hero's height, so what you see is what can be hit. Buffett at 90 and Trump at 79 both cap at the oldest the age slider goes, which is 75.</p>
+<div class="grid">
+
+  <article class="hero">
+    <header><h2>Elon &quot;Starship&quot; Musk</h2><p>Mogul · Large man · weight 0.46, muscle 0.26, age 0.55</p></header>
+    <div class="pair">
+      <figure><img src="likeness/musk-old-bust.webp" alt="Elon &quot;Starship&quot; Musk, old model, bust" width="160" height="160"><img src="likeness/musk-old-body.webp" alt="Elon &quot;Starship&quot; Musk, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/musk-new-bust.webp" alt="Elon &quot;Starship&quot; Musk, standard look, bust" width="160" height="160"><img src="likeness/musk-new-body.webp" alt="Elon &quot;Starship&quot; Musk, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Short <span class="sw"><i style="background:#3c2819"></i></span></li><li>Leather jacket over a tee <span class="sw"><i style="background:#1a1a1f"></i><i style="background:#0d0d0e"></i></span></li><li>Jeans <span class="sw"><i style="background:#17171c"></i></span></li><li>Boots <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Jensen &quot;CUDA Core&quot; Huang</h2><p>Mogul · Medium man · weight 0.50, muscle 0.33, age 0.70</p></header>
+    <div class="pair">
+      <figure><img src="likeness/huang-old-bust.webp" alt="Jensen &quot;CUDA Core&quot; Huang, old model, bust" width="160" height="160"><img src="likeness/huang-old-body.webp" alt="Jensen &quot;CUDA Core&quot; Huang, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/huang-new-bust.webp" alt="Jensen &quot;CUDA Core&quot; Huang, standard look, bust" width="160" height="160"><img src="likeness/huang-new-body.webp" alt="Jensen &quot;CUDA Core&quot; Huang, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Swept back <span class="sw"><i style="background:#4a4a4e"></i></span></li><li>Leather jacket over a tee <span class="sw"><i style="background:#111112"></i><i style="background:#0d0d0e"></i></span></li><li>Jeans <span class="sw"><i style="background:#121214"></i></span></li><li>Boots <span class="sw"><i style="background:#0b0b0c"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Jeff &quot;Prime&quot; Bezos</h2><p>Mogul · Huge man · weight 0.33, muscle 0.40, age 0.70</p></header>
+    <div class="pair">
+      <figure><img src="likeness/bezos-old-bust.webp" alt="Jeff &quot;Prime&quot; Bezos, old model, bust" width="160" height="160"><img src="likeness/bezos-old-body.webp" alt="Jeff &quot;Prime&quot; Bezos, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/bezos-new-bust.webp" alt="Jeff &quot;Prime&quot; Bezos, standard look, bust" width="160" height="160"><img src="likeness/bezos-new-body.webp" alt="Jeff &quot;Prime&quot; Bezos, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Shirt <span class="sw"><i style="background:#9ebde0"></i></span></li><li>Trousers <span class="sw"><i style="background:#171c33"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#4c2e1a"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Mark &quot;Metaverse&quot; Zuckerberg</h2><p>Mogul · Small man · weight 0.53, muscle 0.50, age 0.28</p></header>
+    <div class="pair">
+      <figure><img src="likeness/zuckerberg-old-bust.webp" alt="Mark &quot;Metaverse&quot; Zuckerberg, old model, bust" width="160" height="160"><img src="likeness/zuckerberg-old-body.webp" alt="Mark &quot;Metaverse&quot; Zuckerberg, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/zuckerberg-new-bust.webp" alt="Mark &quot;Metaverse&quot; Zuckerberg, standard look, bust" width="160" height="160"><img src="likeness/zuckerberg-new-body.webp" alt="Mark &quot;Metaverse&quot; Zuckerberg, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Curls <span class="sw"><i style="background:#563720"></i></span></li><li>Tee <span class="sw"><i style="background:#757880"></i></span></li><li>Jeans <span class="sw"><i style="background:#2b3d61"></i></span></li><li>Sneakers <span class="sw"><i style="background:#bfbfc2"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Satya &quot;Copilot&quot; Nadella</h2><p>Mogul · Medium man · weight 0.50, muscle 0.27, age 0.64</p></header>
+    <div class="pair">
+      <figure><img src="likeness/nadella-old-bust.webp" alt="Satya &quot;Copilot&quot; Nadella, old model, bust" width="160" height="160"><img src="likeness/nadella-old-body.webp" alt="Satya &quot;Copilot&quot; Nadella, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/nadella-new-bust.webp" alt="Satya &quot;Copilot&quot; Nadella, standard look, bust" width="160" height="160"><img src="likeness/nadella-new-body.webp" alt="Satya &quot;Copilot&quot; Nadella, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Thinning <span class="sw"><i style="background:#636160"></i></span></li><li>Square glasses <span class="sw"><i style="background:#8c8d93"></i></span></li><li>Blazer over a silk top <span class="sw"><i style="background:#171c33"></i><i style="background:#9ebde0"></i></span></li><li>Trousers <span class="sw"><i style="background:#29292e"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Sam &quot;AGI&quot; Altman</h2><p>Mogul · Small man · weight 0.48, muscle 0.33, age 0.26</p></header>
+    <div class="pair">
+      <figure><img src="likeness/altman-old-bust.webp" alt="Sam &quot;AGI&quot; Altman, old model, bust" width="160" height="160"><img src="likeness/altman-old-body.webp" alt="Sam &quot;AGI&quot; Altman, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/altman-new-bust.webp" alt="Sam &quot;AGI&quot; Altman, standard look, bust" width="160" height="160"><img src="likeness/altman-new-body.webp" alt="Sam &quot;AGI&quot; Altman, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Short <span class="sw"><i style="background:#3b291b"></i></span></li><li>Sweater <span class="sw"><i style="background:#5c616b"></i></span></li><li>Jeans <span class="sw"><i style="background:#2b3d61"></i></span></li><li>Sneakers <span class="sw"><i style="background:#d1d1cc"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Warren &quot;Oracle&quot; Buffett</h2><p>Mogul · Tiny man · weight 0.58, muscle 0.25, age 1.00</p></header>
+    <div class="pair">
+      <figure><img src="likeness/buffett-old-bust.webp" alt="Warren &quot;Oracle&quot; Buffett, old model, bust" width="160" height="160"><img src="likeness/buffett-old-body.webp" alt="Warren &quot;Oracle&quot; Buffett, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/buffett-new-bust.webp" alt="Warren &quot;Oracle&quot; Buffett, standard look, bust" width="160" height="160"><img src="likeness/buffett-new-body.webp" alt="Warren &quot;Oracle&quot; Buffett, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Short fringe <span class="sw"><i style="background:#cfcfcb"></i></span></li><li>Round glasses <span class="sw"><i style="background:#141416"></i></span></li><li>Suit jacket, shirt and tie <span class="sw"><i style="background:#54575e"></i><i style="background:#e6e6eb"></i><i style="background:#801a1f"></i></span></li><li>Trousers <span class="sw"><i style="background:#4c4f57"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Oprah &quot;You Get One&quot; Winfrey</h2><p>Mogul · Medium woman · weight 0.66, muscle 0.27, age 0.91</p></header>
+    <div class="pair">
+      <figure><img src="likeness/winfrey-old-bust.webp" alt="Oprah &quot;You Get One&quot; Winfrey, old model, bust" width="160" height="160"><img src="likeness/winfrey-old-body.webp" alt="Oprah &quot;You Get One&quot; Winfrey, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/winfrey-new-bust.webp" alt="Oprah &quot;You Get One&quot; Winfrey, standard look, bust" width="160" height="160"><img src="likeness/winfrey-new-body.webp" alt="Oprah &quot;You Get One&quot; Winfrey, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Big volume <span class="sw"><i style="background:#291810"></i></span></li><li>Blazer over a silk top <span class="sw"><i style="background:#5c1a5c"></i><i style="background:#1f0d1f"></i></span></li><li>Trousers <span class="sw"><i style="background:#1f0f1f"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Mukesh &quot;Jio&quot; Ambani</h2><p>Mogul · Large man · weight 0.62, muscle 0.20, age 0.83</p></header>
+    <div class="pair">
+      <figure><img src="likeness/ambani-old-bust.webp" alt="Mukesh &quot;Jio&quot; Ambani, old model, bust" width="160" height="160"><img src="likeness/ambani-old-body.webp" alt="Mukesh &quot;Jio&quot; Ambani, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/ambani-new-bust.webp" alt="Mukesh &quot;Jio&quot; Ambani, standard look, bust" width="160" height="160"><img src="likeness/ambani-new-body.webp" alt="Mukesh &quot;Jio&quot; Ambani, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Swept back <span class="sw"><i style="background:#131111"></i></span></li><li>Blazer over a silk top <span class="sw"><i style="background:#1c1f2b"></i><i style="background:#e6e6eb"></i></span></li><li>Trousers <span class="sw"><i style="background:#141416"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Lisa &quot;Zen Core&quot; Su</h2><p>Mogul · Tiny woman · weight 0.41, muscle 0.38, age 0.57</p></header>
+    <div class="pair">
+      <figure><img src="likeness/su-old-bust.webp" alt="Lisa &quot;Zen Core&quot; Su, old model, bust" width="160" height="160"><img src="likeness/su-old-body.webp" alt="Lisa &quot;Zen Core&quot; Su, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/su-new-bust.webp" alt="Lisa &quot;Zen Core&quot; Su, standard look, bust" width="160" height="160"><img src="likeness/su-new-body.webp" alt="Lisa &quot;Zen Core&quot; Su, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Swept back <span class="sw"><i style="background:#161617"></i></span></li><li>Square glasses <span class="sw"><i style="background:#8a8580"></i></span></li><li>Blazer over a silk top <span class="sw"><i style="background:#8c141a"></i><i style="background:#0f0f10"></i></span></li><li>Trousers <span class="sw"><i style="background:#121213"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Abraham &quot;Honest Axe&quot; Lincoln</h2><p>World leader · Huge man · weight 0.18, muscle 0.23, age 0.60</p></header>
+    <div class="pair">
+      <figure><img src="likeness/lincoln-old-bust.webp" alt="Abraham &quot;Honest Axe&quot; Lincoln, old model, bust" width="160" height="160"><img src="likeness/lincoln-old-body.webp" alt="Abraham &quot;Honest Axe&quot; Lincoln, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/lincoln-new-bust.webp" alt="Abraham &quot;Honest Axe&quot; Lincoln, standard look, bust" width="160" height="160"><img src="likeness/lincoln-new-body.webp" alt="Abraham &quot;Honest Axe&quot; Lincoln, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Unkempt <span class="sw"><i style="background:#1a130f"></i></span></li><li>Chin curtain <span class="sw"><i style="background:#1a130f"></i></span></li><li>Top hat <span class="sw"><i style="background:#0d0d0e"></i></span></li><li>Frock coat with bow tie <span class="sw"><i style="background:#0f0f10"></i><i style="background:#e6e6eb"></i><i style="background:#0a0a0b"></i></span></li><li>Trousers <span class="sw"><i style="background:#121213"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Winston &quot;Bulldog&quot; Churchill</h2><p>World leader · Large man · weight 0.81, muscle 0.20, age 0.85</p></header>
+    <div class="pair">
+      <figure><img src="likeness/churchill-old-bust.webp" alt="Winston &quot;Bulldog&quot; Churchill, old model, bust" width="160" height="160"><img src="likeness/churchill-old-body.webp" alt="Winston &quot;Bulldog&quot; Churchill, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/churchill-new-bust.webp" alt="Winston &quot;Bulldog&quot; Churchill, standard look, bust" width="160" height="160"><img src="likeness/churchill-new-body.webp" alt="Winston &quot;Bulldog&quot; Churchill, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Thinning <span class="sw"><i style="background:#ae967b"></i></span></li><li>Cigar</li><li>Three-piece suit <span class="sw"><i style="background:#1a1a1f"></i><i style="background:#e6e6eb"></i><i style="background:#121a4c"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Barack &quot;Hope Beam&quot; Obama</h2><p>World leader · Medium man · weight 0.40, muscle 0.33, age 0.77</p></header>
+    <div class="pair">
+      <figure><img src="likeness/obama-old-bust.webp" alt="Barack &quot;Hope Beam&quot; Obama, old model, bust" width="160" height="160"><img src="likeness/obama-old-body.webp" alt="Barack &quot;Hope Beam&quot; Obama, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/obama-new-bust.webp" alt="Barack &quot;Hope Beam&quot; Obama, standard look, bust" width="160" height="160"><img src="likeness/obama-new-body.webp" alt="Barack &quot;Hope Beam&quot; Obama, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Buzz cut <span class="sw"><i style="background:#343232"></i></span></li><li>Suit jacket, shirt and tie <span class="sw"><i style="background:#141a2e"></i><i style="background:#e6e6eb"></i><i style="background:#5280bf"></i></span></li><li>Trousers <span class="sw"><i style="background:#141a2e"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Donald &quot;Dealmaker&quot; Trump</h2><p>World leader · Large man · weight 0.56, muscle 0.23, age 1.00</p></header>
+    <div class="pair">
+      <figure><img src="likeness/trump-old-bust.webp" alt="Donald &quot;Dealmaker&quot; Trump, old model, bust" width="160" height="160"><img src="likeness/trump-old-body.webp" alt="Donald &quot;Dealmaker&quot; Trump, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/trump-new-bust.webp" alt="Donald &quot;Dealmaker&quot; Trump, standard look, bust" width="160" height="160"><img src="likeness/trump-new-body.webp" alt="Donald &quot;Dealmaker&quot; Trump, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Quiff <span class="sw"><i style="background:#e2c279"></i></span></li><li>Suit jacket, shirt and tie <span class="sw"><i style="background:#12172b"></i><i style="background:#e6e6eb"></i><i style="background:#b80f14"></i></span></li><li>Trousers <span class="sw"><i style="background:#12172b"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Narendra &quot;Saffron Storm&quot; Modi</h2><p>World leader · Medium man · weight 0.60, muscle 0.23, age 1.00</p></header>
+    <div class="pair">
+      <figure><img src="likeness/modi-old-bust.webp" alt="Narendra &quot;Saffron Storm&quot; Modi, old model, bust" width="160" height="160"><img src="likeness/modi-old-body.webp" alt="Narendra &quot;Saffron Storm&quot; Modi, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/modi-new-bust.webp" alt="Narendra &quot;Saffron Storm&quot; Modi, standard look, bust" width="160" height="160"><img src="likeness/modi-new-body.webp" alt="Narendra &quot;Saffron Storm&quot; Modi, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Short fringe <span class="sw"><i style="background:#dadad6"></i></span></li><li>Full beard <span class="sw"><i style="background:#dadad6"></i></span></li><li>Square glasses <span class="sw"><i style="background:#c7a866"></i></span></li><li>Kurta with Nehru vest <span class="sw"><i style="background:#ede6d6"></i></span></li><li>Trousers <span class="sw"><i style="background:#ebe6d9"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#4c2e1a"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Angela &quot;Iron Chancellor&quot; Merkel</h2><p>World leader · Medium woman · weight 0.62, muscle 0.23, age 0.91</p></header>
+    <div class="pair">
+      <figure><img src="likeness/merkel-old-bust.webp" alt="Angela &quot;Iron Chancellor&quot; Merkel, old model, bust" width="160" height="160"><img src="likeness/merkel-old-body.webp" alt="Angela &quot;Iron Chancellor&quot; Merkel, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/merkel-new-bust.webp" alt="Angela &quot;Iron Chancellor&quot; Merkel, standard look, bust" width="160" height="160"><img src="likeness/merkel-new-body.webp" alt="Angela &quot;Iron Chancellor&quot; Merkel, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Bob <span class="sw"><i style="background:#cfb382"></i></span></li><li>Blazer over a silk top <span class="sw"><i style="background:#db245b"></i><i style="background:#0f0f10"></i></span></li><li>Trousers <span class="sw"><i style="background:#121213"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Emmanuel &quot;Jupiter&quot; Macron</h2><p>World leader · Small man · weight 0.48, muscle 0.38, age 0.40</p></header>
+    <div class="pair">
+      <figure><img src="likeness/macron-old-bust.webp" alt="Emmanuel &quot;Jupiter&quot; Macron, old model, bust" width="160" height="160"><img src="likeness/macron-old-body.webp" alt="Emmanuel &quot;Jupiter&quot; Macron, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/macron-new-bust.webp" alt="Emmanuel &quot;Jupiter&quot; Macron, standard look, bust" width="160" height="160"><img src="likeness/macron-new-body.webp" alt="Emmanuel &quot;Jupiter&quot; Macron, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Side part <span class="sw"><i style="background:#3b2f27"></i></span></li><li>Suit jacket, shirt and tie <span class="sw"><i style="background:#0f1429"></i><i style="background:#e6e6eb"></i><i style="background:#0d1224"></i></span></li><li>Trousers <span class="sw"><i style="background:#0f1429"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Volodymyr &quot;Kyiv Shield&quot; Zelenskyy</h2><p>World leader · Medium man · weight 0.55, muscle 0.41, age 0.40</p></header>
+    <div class="pair">
+      <figure><img src="likeness/zelenskyy-old-bust.webp" alt="Volodymyr &quot;Kyiv Shield&quot; Zelenskyy, old model, bust" width="160" height="160"><img src="likeness/zelenskyy-old-body.webp" alt="Volodymyr &quot;Kyiv Shield&quot; Zelenskyy, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/zelenskyy-new-bust.webp" alt="Volodymyr &quot;Kyiv Shield&quot; Zelenskyy, standard look, bust" width="160" height="160"><img src="likeness/zelenskyy-new-body.webp" alt="Volodymyr &quot;Kyiv Shield&quot; Zelenskyy, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Crop <span class="sw"><i style="background:#32271d"></i></span></li><li>Stubble <span class="sw"><i style="background:#5a4030"></i></span></li><li>Long-sleeve tee <span class="sw"><i style="background:#454c33"></i></span></li><li>Cargo trousers <span class="sw"><i style="background:#3b402e"></i></span></li><li>Combat boots <span class="sw"><i style="background:#261f17"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Jacinda &quot;Kindness Wave&quot; Ardern</h2><p>World leader · Small woman · weight 0.57, muscle 0.38, age 0.36</p></header>
+    <div class="pair">
+      <figure><img src="likeness/ardern-old-bust.webp" alt="Jacinda &quot;Kindness Wave&quot; Ardern, old model, bust" width="160" height="160"><img src="likeness/ardern-old-body.webp" alt="Jacinda &quot;Kindness Wave&quot; Ardern, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/ardern-new-bust.webp" alt="Jacinda &quot;Kindness Wave&quot; Ardern, standard look, bust" width="160" height="160"><img src="likeness/ardern-new-body.webp" alt="Jacinda &quot;Kindness Wave&quot; Ardern, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Long <span class="sw"><i style="background:#462d1b"></i></span></li><li>Long coat over a top <span class="sw"><i style="background:#14171f"></i><i style="background:#d9d4cc"></i><i style="background:#121213"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+
+  <article class="hero">
+    <header><h2>Lee Kuan &quot;Miracle&quot; Yew</h2><p>World leader · Tiny man · weight 0.38, muscle 0.38, age 0.51</p></header>
+    <div class="pair">
+      <figure><img src="likeness/yew-old-bust.webp" alt="Lee Kuan &quot;Miracle&quot; Yew, old model, bust" width="160" height="160"><img src="likeness/yew-old-body.webp" alt="Lee Kuan &quot;Miracle&quot; Yew, old model, full body" width="120" height="180"><figcaption>Before: its own model</figcaption></figure>
+      <figure><img src="likeness/yew-new-bust.webp" alt="Lee Kuan &quot;Miracle&quot; Yew, standard look, bust" width="160" height="160"><img src="likeness/yew-new-body.webp" alt="Lee Kuan &quot;Miracle&quot; Yew, standard look, full body" width="120" height="180"><figcaption>After: the charter</figcaption></figure>
+    </div>
+    <ul class="worn"><li>Side part <span class="sw"><i style="background:#252525"></i></span></li><li>Shirt <span class="sw"><i style="background:#f0f0f2"></i></span></li><li>Trousers <span class="sw"><i style="background:#ebebed"></i></span></li><li>Dress shoes <span class="sw"><i style="background:#0d0d0e"></i></span></li></ul>
+  </article>
+</div>
+</main>
+</body>
+</html>

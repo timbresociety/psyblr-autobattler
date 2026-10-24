@@ -7,7 +7,6 @@ import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
 import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
 import { formSize } from '../../forge/form.js'
-import { BODIES, modelFor, type BodyName } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
 import { loadWear } from './wear/items.js'
@@ -71,20 +70,16 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const dressed = async (shape: Build) => {
     const shapeLook = characterLook(shape, hue)
     const file = await load(shapeLook.build)
-    const onBody = (BODIES as readonly string[]).includes(shapeLook.build)
-    const [atlas, wear] = await Promise.all([
-      heroAtlas(file, shapeLook),
-      onBody ? loadWear(shapeLook.build as BodyName, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>) : undefined,
-    ])
+    const [atlas, wear] = await Promise.all([heroAtlas(file, shapeLook), loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
     return characterView(file, shapeLook, color, build, atlas, wear)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
   view.root.scale.setScalar(SIZE_SCALE[chosen])
-  // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up); a demo hero,
-  // whose model is its own, grows instead
+  // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up), dressed in
+  // the same look; if that fails, the hero grows instead
   const form = formSize(build)
-  const formView = form && !modelFor(build.heroName) ? await dressed({ ...build, sizeClass: form }).catch(() => undefined) : undefined
+  const formView = form ? await dressed({ ...build, sizeClass: form }).catch(() => undefined) : undefined
   const root = new THREE.Group()
   root.add(view.root)
   if (formView) {

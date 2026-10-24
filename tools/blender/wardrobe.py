@@ -180,7 +180,7 @@ class Wardrobe(Surface):
         self.rig = R.build_rig(self.body)
         R.merge_weights(self.body.mesh)
         obj = self.body.mesh
-        mats = build.define_materials(dict(spec, mats={}), (0.62, 0.62, 0.64))
+        mats = build.define_materials(spec, (0.62, 0.62, 0.64))
         d = G.Dresser(obj, self.rig, mats)
         d.dress([])
         me = obj.data

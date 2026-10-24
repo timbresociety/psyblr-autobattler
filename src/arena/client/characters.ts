@@ -1,11 +1,11 @@
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
-import { attribute, float, mix, normalView, positionViewDirection, step, uniform, uv, vertexColor } from 'three/tsl'
+import { attribute, float, normalView, positionViewDirection, uniform, vertexColor } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import type { Build } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { AnimState } from './animation.js'
-import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look.js'
+import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel } from './wear/dress-model.js'
 import type { LoadedWear } from './wear/items.js'
@@ -15,25 +15,17 @@ export { characterLook, heroHue, loadBuild } from './character-look.js'
 /**
  * The arena's own characters (R24): rigged, animated MakeHuman-based bodies made in Blender (tools/blender/human.py),
  * all on one shared surface, shaped by each hero's physique and dressed from the wardrobe (src/kit/wear): two draws per
- * hero, the body and its whole outfit, plus any rigid pieces. A demo hero still wears its own model with its outfit
- * baked in. All are lit with a rim in the team colour.
+ * hero, the body and its whole outfit, plus any rigid pieces. All are lit with a rim in the team colour.
  */
 
 /**
- * The hero's material: the file's atlas (face, outfit, hair) times the per-vertex region colours, metal regions
- * metallic, leather and silk glossy, everything else soft, and a rim light in the team's colour so a crowd of twenty
- * reads by side at a glance (R38). `meta` is the UV set carrying regions (the second one on textured files).
+ * The hero's body material: the file's atlas (skin and face) times the per-vertex skin colour, soft, and a rim light in
+ * the team's colour so a crowd of twenty reads by side at a glance (R38).
  */
-export function characterMaterial(team: THREE.Color, map: THREE.Texture | null = null, meta: 'uv' | 'uv1' = 'uv', normalMap: THREE.Texture | null = null): MeshStandardNodeMaterial {
-  const m = new MeshStandardNodeMaterial({ vertexColors: true })
+export function characterMaterial(team: THREE.Color, map: THREE.Texture | null = null, normalMap: THREE.Texture | null = null): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({ vertexColors: true, roughness: 0.6, metalness: 0 })
   if (map) m.map = map
   if (normalMap) m.normalMap = normalMap
-  const region = uv(meta === 'uv1' ? 1 : 0).x
-  const inRegion = (index: number) => step(index, region).mul(step(region, index + 1))
-  const metal = inRegion(REGION_INDEX.metal).add(inRegion(REGION_INDEX.bakedMetal))
-  const gloss = inRegion(REGION_INDEX.bakedGloss)
-  m.metalnessNode = metal.mul(0.85)
-  m.roughnessNode = mix(mix(float(0.6), float(0.34), gloss), float(0.4), metal)
   // a painted face reads best with the rim kept to the silhouette, so textured characters get a tighter, softer one
   const rim = float(1).sub(normalView.dot(positionViewDirection).abs()).pow(map ? 3.2 : 2.5)
   const rimColor = uniform(team)
@@ -82,14 +74,8 @@ export interface CharacterView {
 export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null, wear?: LoadedWear): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
-  let meta: 'uv' | 'uv1' = 'uv'
-  scene.traverse((o) => {
-    const mesh = o as THREE.SkinnedMesh
-    if (mesh.isSkinnedMesh) meta = metaChannel(mesh.geometry)
-  })
-  const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, meta, normalMap)
-  // a demo hero's own model isn't on the shared surface: it keeps its baked outfit, painted the old way
-  if (!dressModel(scene, look, wear, { body, cloth: () => clothMaterial(team) }, atlas)) paintModel(scene, look, body, atlas)
+  const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
+  dressModel(scene, look, wear, { body, cloth: () => clothMaterial(team) }, atlas)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
   })

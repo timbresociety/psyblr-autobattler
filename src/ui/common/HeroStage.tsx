@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { BODIES, characterLook, classicCharacterMaterial, paintModel, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
+import { characterLook, classicCharacterMaterial, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
 import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
@@ -77,7 +77,7 @@ const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2)
 
 /** A neutral figure for the empty stage: a generic body, nothing worn. */
 function standInLook(): CharacterLook {
-  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', hair: 'crop', armour: false, cape: false, outfit: {} }
+  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', outfit: {} }
 }
 
 function disposeModel(model: THREE.Object3D) {
@@ -289,8 +289,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const onBody = (BODIES as readonly string[]).includes(painted.build)
-        const [atlas, wear] = look ? await Promise.all([heroAtlas(file, painted), onBody ? loadWear(painted.build as BodyName, painted.outfit, modelFile) : undefined]) : [null, undefined]
+        const [atlas, wear] = look ? await Promise.all([heroAtlas(file, painted), loadWear(painted.build, painted.outfit, modelFile)]) : [null, undefined]
         return { file, atlas, wear }
       })
       .then(
@@ -300,7 +299,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
         // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
         const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
-        if (!dressModel(model, painted, wear, { body, cloth: () => (look ? classicClothMaterial() : empty) }, atlas)) paintModel(model, painted, body, atlas)
+        dressModel(model, painted, wear, { body, cloth: () => (look ? classicClothMaterial() : empty) }, atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

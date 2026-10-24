@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
-import type { Build } from '../charter/build'
+import { remixBuild, type Build } from '../charter/build'
 import type { BuildRecord } from './api'
 import { BrandMark } from './brand/BrandMark'
 import { ForgeScreen } from './forge/ForgeScreen'
@@ -196,7 +196,7 @@ function Screens() {
             <ArenaScreen />
           </Suspense>
         )}
-        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixOf(build) })} onForge={() => openInForge({})} />}
+        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixBuild(build) })} onForge={() => openInForge({})} />}
         {forgeKept && (
           <div className="kept" hidden={tab !== 'forge'}>
             <ForgeScreen key={forge.key} record={forge.record} initial={forge.initial} />
@@ -205,10 +205,4 @@ function Screens() {
       </div>
     </>
   )
-}
-
-/** A remix starts a new hero: the same kit and stats, its own name, and no tie to the original. */
-function remixOf(build: Build): Build {
-  const { heroId: _original, ...rest } = build
-  return { ...rest, heroName: `${build.heroName} Remix`.slice(0, 60), gate: { state: 'draft' } }
 }

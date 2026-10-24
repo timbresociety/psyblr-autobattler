@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/build.js'
 import { isGateStale, type GateOptions } from '../sim/gate.js'
 import { cachedGate } from './gate-cache.js'
-import { isOwnPhotoUrl } from './photo-url.js'
+import { isFacePhotoUrl, isOwnPhotoUrl } from './photo-url.js'
 import { countUses } from './assets.js'
 import { checkGear, communityIds } from './gear.js'
 import type { Db } from './db.js'
@@ -54,8 +54,8 @@ export async function issueDeviceId(db: Db): Promise<string> {
 function validated(raw: unknown): Build {
   const result = hydrateBuild(raw)
   if (!result.ok) throw new StoreInputError(`invalid build: ${result.errors.map((e) => e.field).join(', ')}`)
-  // a face is a photo like any other: it must have come through the upload endpoint
-  if (result.build.look?.face && !isOwnPhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
+  // a face is a photo like any other: it must have come through the upload endpoint, unless it is a demo hero's own
+  if (result.build.look?.face && !isFacePhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
   return result.build
 }
 

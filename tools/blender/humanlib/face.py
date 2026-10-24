@@ -393,11 +393,11 @@ def skin_sample(img, pts):
     return np.median(np.concatenate(samples), axis=0)
 
 
-def face_texture(portrait_path, portrait, mesh_lm, frame, out_path, delight=0.6, neutral=False, hair_out=None):
+def face_texture(portrait_path, portrait, mesh_lm, frame, out_path, delight=0.6):
     """
-    Warp the portrait into the head frame so its landmarks land on the mesh's, with a feathered face mask in alpha.
-    Returns the portrait's skin colour (sRGB) for the rest of the body. With `hair_out`, also writes the portrait's hair
-    (and beard) seen front-on, masked to where it is neither skin nor background, and returns its colours too.
+    Warp the portrait into the head frame so its landmarks land on the mesh's, with a feathered face mask in alpha, as a
+    generic face: its detail relative to its skin, so the game can tint any skin tone through it. Returns the portrait's
+    skin colour (sRGB) for the rest of the body.
     """
     img = load_rgb(portrait_path)
     bind_ok = [i for i in WARP if mesh_lm[1][i]]
@@ -433,59 +433,10 @@ def face_texture(portrait_path, portrait, mesh_lm, frame, out_path, delight=0.6,
         target = float(skin @ np.array([0.3, 0.59, 0.11]))
         gain = np.clip(target / np.maximum(base, 1e-3), 0.6, 1.6)
         rgb = rgb * (1 + delight * (gain - 1))[..., None]
-    hair = None
-    if hair_out:
-        hair = hair_texture(img, rgb, mask, skin, mesh_lm, frame, hair_out)
-    if neutral:
-        # a generic face: its detail relative to its skin, so the game can tint any skin tone through it
-        rgb = rgb / np.maximum(skin, 1e-3)
+    rgb = rgb / np.maximum(skin, 1e-3)
     out = np.concatenate([np.clip(rgb, 0, 1), mask[..., None]], axis=2)
     save_rgba(out, out_path)
-    return (skin, hair) if hair_out else skin
-
-
-def hair_texture(img, rgb, oval, skin, mesh_lm, frame, out_path):
-    """
-    The portrait's hair and beard in the head frame: pixels that are neither the background (sampled round the
-    portrait's border) nor skin, kept to the head, minus the eyes, brows and mouth inside the face. Returns the hair's
-    base and highlight colours (sRGB), or None when the portrait shows no hair (a bald head).
-    """
-    res = frame.res
-    border = np.concatenate([img[:8].reshape(-1, 3), img[:, :8].reshape(-1, 3), img[:, -8:].reshape(-1, 3)])
-    bg = np.median(border, axis=0)
-    d_bg = np.linalg.norm(rgb - bg, axis=2)
-    d_skin = np.linalg.norm(rgb - skin, axis=2)
-    lum = rgb @ np.array([0.3, 0.59, 0.11])
-    skin_lum = float(skin @ np.array([0.3, 0.59, 0.11]))
-    # hair is far from the background and from skin (allowing for shaded skin, which keeps the skin's hue)
-    chroma_skin = np.linalg.norm(rgb / np.maximum(lum, 1e-3)[..., None] - skin / max(skin_lum, 1e-3), axis=2)
-    hairish = (d_bg > 0.1) & ((d_skin > 0.2) & ((chroma_skin > 0.18) | (lum < skin_lum * 0.55) | (lum > skin_lum * 1.25)))
-    P = frame.to_px(mesh_lm[0])
-    ok = mesh_lm[1]
-    pt = lambda i: P[i] if ok[i] else None
-    brow_v = min(P[i][1] for i in (105, 334, 66, 296) if ok[i])
-    mouth_v = max(P[i][1] for i in (13, 14, 17) if ok[i])
-    chin_v = P[152][1] if ok[152] else res * 0.75
-    eye_l, eye_r = pt(263), pt(33)
-    half_w = abs(P[454][0] - P[234][0]) / 2 if ok[454] and ok[234] else res * 0.25
-    cx = (P[454][0] + P[234][0]) / 2 if ok[454] and ok[234] else res / 2
-    ys, xs = np.mgrid[0:res, 0:res]
-    inside = oval > 0.5
-    # inside the face only the fringe (above the brows) and the beard (below the mouth) count as hair
-    face_ok = (ys < brow_v - res * 0.008) | (ys > mouth_v + res * 0.01)
-    # the head's extent: no clothes below the jaw, nothing far to the sides
-    head_ok = (ys < chin_v + res * 0.05) & (np.abs(xs - cx) < half_w * 1.45)
-    keep = hairish & head_ok & (~inside | face_ok)
-    alpha = blur(keep.astype(np.float32), res * 0.004)
-    alpha = np.clip((alpha - 0.3) / 0.5, 0, 1)
-    if keep.sum() < res * res * 0.002:
-        return None
-    pix = rgb[keep]
-    plum = pix @ np.array([0.3, 0.59, 0.11])
-    base = np.median(pix[plum <= np.percentile(plum, 60)], axis=0)
-    light = np.median(pix[plum >= np.percentile(plum, 80)], axis=0)
-    save_rgba(np.concatenate([np.clip(rgb, 0, 1), alpha[..., None]], axis=2), out_path)
-    return tuple(float(x) for x in base), tuple(float(x) for x in light)
+    return skin
 
 
 def face_meta(frame, mesh_lm, atlas_size):

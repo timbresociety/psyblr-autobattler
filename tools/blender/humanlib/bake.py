@@ -244,7 +244,7 @@ def _range(nt, x, a, b, lo, hi):
     return n.outputs['Result']
 
 
-def paint_material(mat, face_img=None, hair_img=None):
+def paint_material(mat, face_img=None):
     """Turn a region material into an emission network the bake renders (see the 'paint' kinds below)."""
     paint = mat.get('paint', 'flat')
     color = tuple(mat.get('color', (0.7, 0.7, 0.7)))
@@ -307,19 +307,6 @@ def paint_material(mat, face_img=None, hair_img=None):
         strands = _range(nt, broad.outputs['Fac'], 0.35, 0.68, 0.0, 1.0)
         col = _mix(nt, strands, _rgb(nt, color), _rgb(nt, color2))
         col = _scale_color(nt, col, _range(nt, fine.outputs['Fac'], 0.3, 0.7, 0.78, 1.12))
-        if hair_img is not None and mat.get('front'):
-            # where the portrait shows the hair front-on, paint it from the portrait
-            uvn = nt.nodes.new('ShaderNodeUVMap')
-            uvn.uv_map = 'proj'
-            img = nt.nodes.new('ShaderNodeTexImage')
-            img.image = hair_img
-            img.extension = 'EXTEND'
-            nt.links.new(uvn.outputs['UV'], img.inputs['Vector'])
-            geo = nt.nodes.new('ShaderNodeNewGeometry')
-            sepn = nt.nodes.new('ShaderNodeSeparateXYZ')
-            nt.links.new(geo.outputs['Normal'], sepn.inputs['Vector'])
-            facing = _range(nt, _math(nt, 'MULTIPLY', sepn.outputs['Y'], -1.0), 0.05, 0.45, 0.0, 1.0)
-            col = _mix(nt, _math(nt, 'MULTIPLY', img.outputs['Alpha'], facing), col, img.outputs['Color'])
     elif paint == 'dots':
         # polka dots (Churchill's bow tie)
         coord = nt.nodes.new('ShaderNodeTexCoord')
@@ -458,11 +445,11 @@ def setup_cycles(samples=1):
         scene.cycles.device = 'CPU'
 
 
-def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=None, log=print, hair_img=None, normal_size=512):
+def bake(hero, size, face_img=None, ao_samples=24, ao_strength=0.55, out_png=None, log=print, normal_size=512):
     """Bake the albedo (and multiply in ambient occlusion); returns the atlas image."""
     me = hero.data
     for m in me.materials:
-        paint_material(m, face_img, hair_img)
+        paint_material(m, face_img)
     albedo = bpy.data.images.new('albedo', size, size, alpha=False)
     ao = bpy.data.images.new('ao', size, size, alpha=False, float_buffer=True)
     ao.colorspace_settings.name = 'Non-Color'

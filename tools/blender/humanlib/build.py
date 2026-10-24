@@ -1,4 +1,4 @@
-"""Assemble one character: body, face, rig, clothes, gear, hair, bake, clips, export (see human.py)."""
+"""Build one body: its MPFB mesh, face, rig, base layer, bake, physique morphs, clips and export (see human.py)."""
 
 import json
 import math
@@ -49,21 +49,14 @@ def portrait_of(spec):
 
 
 def define_materials(spec, skin_rgb):
+    """
+    A body's materials: its skin with the painted base layer, the face the portrait projects onto, and the eyes. All are
+    baked as grey detail, and the game tints them per hero.
+    """
     mats = G.Materials()
-    tinted_skin = spec.get('base', False)
-    region_default = 'baked' if not spec.get('base') else None
-    mats.get('skin', paint='skin', color=skin_rgb, region='skin' if tinted_skin else 'baked', tint=tinted_skin, **spec.get('under', {}))
-    mats.get('face', paint='face', color=skin_rgb, region='skin' if tinted_skin else 'baked', tint=tinted_skin)
-    mats.get('eye', paint='eye', color=(0.93, 0.92, 0.9), region='eye' if tinted_skin else 'baked', tint=tinted_skin)
-    for name, m in spec['mats'].items():
-        props = dict(m)
-        props.setdefault('paint', 'fabric')
-        if region_default:
-            # a real person's outfit keeps its baked colours; leather and silk shine, bronze is metal
-            props.setdefault('region', {'leather': 'baked_gloss', 'silk': 'baked_gloss', 'metal': 'baked_metal'}.get(props['paint'], 'baked'))
-        else:
-            props.setdefault('region', 'metal' if props['paint'] == 'metal' else 'suit')
-        mats.get(name, **props)
+    mats.get('skin', paint='skin', color=skin_rgb, region='skin', tint=True, **spec.get('under', {}))
+    mats.get('face', paint='face', color=skin_rgb, region='skin', tint=True)
+    mats.get('eye', paint='eye', color=(0.93, 0.92, 0.9), region='eye', tint=True)
     return mats
 
 
@@ -139,8 +132,7 @@ def main(opts):
         return face_basis(opts)
     if opts.get('face-fits'):
         return face_fits(opts)
-    spec = heroes.spec(opts.get('hero') or opts.get('base'))
-    base = bool(spec.get('base'))
+    spec = heroes.spec(opts.get('base'))
     size = int(opts.get('size', spec.get('atlas', 1024)))
     img_path, lm = portrait_of(spec)
     fitted = {}
@@ -150,60 +142,48 @@ def main(opts):
             fitted.update(F.fit_face(human, lm, log=log))
 
     writing = bool(opts.get('write-topology'))
-    topo = load_topology() if base and not writing else None
+    topo = None if writing else load_topology()
     if topo and topo['proxy'] != spec['proxy']:
         raise ValueError(f"topology.json is for {topo['proxy']}, this body is on {spec['proxy']}")
+    # fit the body's face once, then build each physique variant and the body itself at that face and scale, so a
+    # variant minus the body is the physique alone, vertex for vertex
+    probe, split = build_body(spec, spec.get('targets', {}), extra=extra, faces=topo and topo['refine'])
+    scale = probe.scale
+    targets = dict(spec.get('targets', {}), **F.fitted_targets(fitted))
     variants = []
-    if base:
-        # a body: fit its face once, then build each physique variant and the body itself at that face and scale, so
-        # a variant minus the body is the physique alone, vertex for vertex
-        probe, split = build_body(spec, spec.get('targets', {}), extra=extra, faces=topo and topo['refine'])
-        scale = probe.scale
-        targets = dict(spec.get('targets', {}), **F.fitted_targets(fitted))
-        for name, change in heroes.MORPHS:
-            v, _ = build_body(spec, targets, scale=scale, macro=dict(spec['macro'], **change), faces=split)
-            variants.append((name, B.positions(v.mesh), eye_frames(v)))
-        body, _ = build_body(spec, targets, scale=scale, faces=split)
-    else:
-        body, split = build_body(spec, spec.get('targets', {}), extra=extra)
+    for name, change in heroes.MORPHS:
+        v, _ = build_body(spec, targets, scale=scale, macro=dict(spec['macro'], **change), faces=split)
+        variants.append((name, B.positions(v.mesh), eye_frames(v)))
+    body, _ = build_body(spec, targets, scale=scale, faces=split)
     rig = R.build_rig(body)
     R.merge_weights(body.mesh)
     log('body', B.triangles([body.mesh]), 'tris', f'{time.time() - t0:.1f}s')
     body_pos = B.positions(body.mesh)
     body_eyes = eye_frames(body)
-    if base:
-        spec = dict(spec, under=under_layer(rig, spec['id'][0]))
-        log('base layer', {k: [round(z, 3) for z in v] for k, v in spec['under'].items()}, 'bones', {b: round(rig.data.bones[b].head_local.z, 3) for b in ('spine', 'chest', 'upper_chest', 'neck')})
+    spec = dict(spec, under=under_layer(rig, spec['id'][0]))
+    log('base layer', {k: [round(z, 3) for z in v] for k, v in spec['under'].items()}, 'bones', {b: round(rig.data.bones[b].head_local.z, 3) for b in ('spine', 'chest', 'upper_chest', 'neck')})
 
     # the face: the portrait warped onto this head, and its skin colour for the rest of the body
     head_frame = None
     face_img = None
-    hair_img = None
-    hair_cols = None
     skin_rgb = tuple(spec.get('skin', (0.78, 0.58, 0.46)))
     if img_path and body.lm is not None:
         (el, _), (er, _) = body.eyes
         eyes = (el + er) / 2
         head_frame = F.HeadFrame(eyes.x, eyes.z - 0.03, 0.30, 1024)
         tmp = os.path.join(bpy.app.tempdir or '/tmp', f"face_{spec['id']}.png")
-        hair_tmp = os.path.join(bpy.app.tempdir or '/tmp', f"hair_{spec['id']}.png")
-        made = F.face_texture(img_path, lm, body.lm, head_frame, tmp, delight=spec.get('delight', 0.5), neutral=base, hair_out=None if base else hair_tmp)
-        skin, hair_cols = made if isinstance(made, tuple) and len(made) == 2 and not isinstance(made[0], float) else (made, None)
+        skin = F.face_texture(img_path, lm, body.lm, head_frame, tmp, delight=spec.get('delight', 0.5))
         if 'skin' not in spec:
             skin_rgb = tuple(float(x) for x in skin)
         face_img = bpy.data.images.load(tmp)
         face_img.colorspace_settings.name = 'sRGB'
-        if hair_cols:
-            hair_img = bpy.data.images.load(hair_tmp)
-            hair_img.colorspace_settings.name = 'sRGB'
-        log('face texture', tmp, 'skin', [round(x, 3) for x in skin_rgb], 'hair', hair_cols and [round(x, 3) for x in hair_cols[0]])
+        log('face texture', tmp, 'skin', [round(x, 3) for x in skin_rgb])
 
+    # the bare body: every face takes the skin, and the head the face material the portrait projects onto. What a hero
+    # wears is bound over this surface in the game (src/kit/wear/).
     mats = define_materials(spec, skin_rgb)
     d = G.Dresser(body.mesh, rig, mats)
-    d.dress(spec['layers'])
-    if spec.get('smooth'):
-        d.smooth_region(spec['smooth'], iterations=2, factor=0.35)
-    # head skin takes the face material (the portrait projects only there)
+    d.dress([])
     me = body.mesh.data
     me.materials.append(mats.mats['face'])
     face_slot = len(me.materials) - 1
@@ -212,47 +192,21 @@ def main(opts):
         if p.material_index == skin_slot and d.face_bone(p) == 'head':
             p.material_index = face_slot
     head = H.Head(body, body.mesh)
-    sockets = S.body_sockets(rig, head, body.mesh) if base else None
-    for m in mats.mats.values():
-        if m.get('paint') == 'hair':
-            m['centre'] = tuple(head.centre)
-            if hair_cols and not spec.get('keep_hair_color'):
-                # the portrait knows the hair colour better than a guess
-                m['color'], m['color2'] = hair_cols
-            if hair_img is not None:
-                m['front'] = True
-    parts = []
-    hs = spec.get('hair')
-    if hs:
-        h = H.make_hair(d, head, **hs)
-        if h:
-            parts.append(h)
-    if spec.get('beard'):
-        style, depth = spec['beard'] if isinstance(spec['beard'], tuple) else (spec['beard'], None)
-        b = H.make_beard(d, head, style, depth=depth)
-        if b:
-            parts.append(b)
-    for kind, args in spec.get('gear', []):
-        made = GEAR[kind](d, head, body, **args)
-        parts.extend([x for x in (made if isinstance(made, list) else [made]) if x])
+    sockets = S.body_sockets(rig, head, body.mesh)
     eyes = B.make_eyes(body)
     for e in eyes:
         e.data.materials.append(mats.mats['eye'])
         d.skin_weights(e, rigid='head')
     eye_verts = [B.positions(e) for e in eyes]
-    if base:
-        trunk_attributes(body.mesh)
-    tris = B.triangles([body.mesh] + parts + eyes)
-    log('dressed', tris, 'tris', [p.name for p in parts], f'{time.time() - t0:.1f}s')
-    for p in parts + eyes:
-        K.unwrap_part(p)
+    trunk_attributes(body.mesh)
+    log('dressed', B.triangles([body.mesh] + eyes), 'tris', f'{time.time() - t0:.1f}s')
+    for e in eyes:
+        K.unwrap_part(e)
     bpy.data.objects.remove(body.hires, do_unlink=True)
-    hero = K.join([body.mesh] + parts + eyes)
-    if base:
-        # the skin comes first in the joined mesh, the eyeballs after it: the morphs and the game rely on that order
-        assert np.abs(B.positions(hero)[: len(body_pos)] - body_pos).max() < 1e-6, 'join reordered the skin'
+    hero = K.join([body.mesh] + eyes)
+    # the skin comes first in the joined mesh, the eyeballs after it: the morphs and the game rely on that order
+    assert np.abs(B.positions(hero)[: len(body_pos)] - body_pos).max() < 1e-6, 'join reordered the skin'
     face_mats = {i for i, m in enumerate(hero.data.materials) if m.get('paint') in ('face', 'eye')}
-    hair_mats = {i for i, m in enumerate(hero.data.materials) if m.get('paint') == 'hair'}
     island = None
     if head_frame:
         K.projection_uvs(hero, head_frame)
@@ -277,8 +231,6 @@ def main(opts):
         if sum(1 for i in idx if i in face_mats) > len(idx) * 0.5:
             front = sum(f.normal.y for f in faces) / len(faces) < -0.3
             return spec.get('face_density', 3.4) if front else 1.1
-        if sum(1 for i in idx if i in hair_mats) > len(idx) * 0.5:
-            return 0.9
         return 1.0
 
     K.layout_atlas(hero, density)
@@ -286,25 +238,24 @@ def main(opts):
     out = opts.get('out')
     png = (os.path.splitext(out)[0] + '_atlas.png') if opts.get('keep-atlas') and out else None
     log('laid out', f'{time.time() - t0:.1f}s')
-    atlas, normal = K.bake(hero, size, face_img, ao_samples=int(opts.get('ao', 24)), out_png=png, log=log, hair_img=hair_img, normal_size=int(opts.get('normal', 512)))
+    atlas, normal = K.bake(hero, size, face_img, ao_samples=int(opts.get('ao', 24)), out_png=png, log=log, normal_size=int(opts.get('normal', 512)))
     K.final_material(hero, atlas, normal)
-    if base:
-        for name in ('trunk_low', 'trunk_high'):
-            hero.data.attributes.remove(hero.data.attributes[name])
-        B.triangulate(hero, body.proxy_verts)
-        # every vertex keeps its index in the joined mesh, so the game can weld what the export split at UV seams and
-        # index per-vertex data (the face basis) the same way on every body
-        vid = hero.data.attributes.new('_vid', 'INT', 'POINT')
-        vid.data.foreach_set('value', list(range(len(hero.data.vertices))))
-        base_all = hero_positions(body_pos, body_eyes, eye_verts, body_eyes)
-        add_morphs(hero, base_all, [(name, hero_positions(pos, ey, eye_verts, body_eyes)) for name, pos, ey in variants])
+    for name in ('trunk_low', 'trunk_high'):
+        hero.data.attributes.remove(hero.data.attributes[name])
+    B.triangulate(hero, body.proxy_verts)
+    # every vertex keeps its index in the joined mesh, so the game can weld what the export split at UV seams and index
+    # per-vertex data (the face basis) the same way on every body
+    vid = hero.data.attributes.new('_vid', 'INT', 'POINT')
+    vid.data.foreach_set('value', list(range(len(hero.data.vertices))))
+    base_all = hero_positions(body_pos, body_eyes, eye_verts, body_eyes)
+    add_morphs(hero, base_all, [(name, hero_positions(pos, ey, eye_verts, body_eyes)) for name, pos, ey in variants])
     R.bind(rig, [hero])
     C.author(rig, arms_out=spec.get('arms_out', 0.0))
     log('baked', f'{time.time() - t0:.1f}s', 'tris', B.triangles([hero]), 'verts', len(hero.data.vertices))
     if out:
         export(out, size)
         log('wrote', out, os.path.getsize(out), 'bytes', f'{time.time() - t0:.1f}s')
-        if face_meta and base:
+        if face_meta:
             # the body's kit sidecar (version 2): where a photo face goes (src/arena/client/face/), where gear hangs
             # (src/arena/client/gear.ts), its physique morphs in file order, and what the face basis needs to fit a
             # photo on this body: its scale against the reference body's and the base face's own group weights
@@ -386,22 +337,20 @@ def face_basis(opts):
 
 def face_fits(opts):
     """
-    fit_face on the reference body, with no face of its own, for each demo hero's portrait: every group's weight, which
-    the game's port (src/arena/client/face/shape.ts) is tested against. Writes <out>: the groups, then per hero its
-    portrait and weights.
+    fit_face on the reference body, with no face of its own, for each demo hero's portrait landmarks (portraits/<id>
+    .lm.json): every group's weight, which the game's port (src/arena/client/face/shape.ts) is tested against. Writes
+    <out>: the groups, then per portrait its weights.
     """
     t0 = time.time()
     spec = heroes.spec(opts.get('base', REFERENCE))
     topo = load_topology()
     fits = {}
-    for name in heroes.HEROES:
-        hero = heroes.spec(name)
-        _img, lm = portrait_of(hero)
-        if lm is None:
-            continue
+    for name in sorted(n[: -len('.lm.json')] for n in os.listdir(PORTRAITS) if n.endswith('.lm.json') and not n.startswith('base_')):
+        with open(os.path.join(PORTRAITS, name + '.lm.json')) as f:
+            lm = json.load(f)
         got = {}
         build_body(spec, {}, extra=lambda human: got.update(F.fit_face(human, lm, log=log, full=True)), faces=topo['refine'])
-        fits[name] = {'portrait': hero['portrait'], 'weights': [got.get(g, 0.0) for g in F.group_names()]}
+        fits[name] = {'portrait': name, 'weights': [got.get(g, 0.0) for g in F.group_names()]}
         log('fit', name, f'{time.time() - t0:.1f}s')
     with open(opts['face-fits'], 'w') as f:
         json.dump({'from': spec['id'], 'groups': F.group_names(), 'fits': fits}, f, separators=(',', ':'))
@@ -431,10 +380,9 @@ def export(path, size):
     )
 
 
-# ------------------------------------------------------------------------------------------------ generic body parts
-
-
 # ------------------------------------------------------------------------------------------------ gear
+
+# what the wardrobe builds clothes from (tools/blender/wardrobe.py): bands, shells and strips on the reference body
 
 
 def gear_belt(d, head, body, mat='belt', buckle='bronze', height=0.05):
@@ -523,35 +471,6 @@ def gear_sash(d, head, body, mat='accent', width=0.045, side='R'):
     return parts
 
 
-def gear_cape(d, head, body, mat='accent', length=0.95, flare=0.5):
-    """A cloth panel from the shoulders down the back, tied at the collar (rides the upper chest)."""
-    import bmesh as bm_
-
-    sh = d.bones['upper_arm_L'][0]
-    rows, cols = 8, 7
-    back = max(v.co.y for v in d.obj.data.vertices if v.co.z > d.neck.z - 0.25 and v.co.z < d.neck.z - 0.05)
-    bm = bm_.new()
-    uv = bm.loops.layers.uv.new('UVMap')
-    grid = []
-    for r in range(rows + 1):
-        t = r / rows
-        width = (sh.x + 0.03) * (1 + flare * t)
-        z = d.neck.z - 0.02 - length * t
-        row = []
-        for c in range(cols + 1):
-            u = c / cols * 2 - 1
-            y = back + 0.035 + 0.06 * t + 0.035 * (1 - u * u) * (1 - t * 0.5)
-            row.append(bm.verts.new((u * width, y, z)))
-        grid.append(row)
-    for r in range(rows):
-        for c in range(cols):
-            f = bm.faces.new((grid[r][c], grid[r + 1][c], grid[r + 1][c + 1], grid[r][c + 1]))
-            for loop, (uu, vv) in zip(f.loops, ((c, r), (c, r + 1), (c + 1, r + 1), (c + 1, r))):
-                loop[uv].uv = (uu / cols, vv / rows)
-    G.solidify(bm, 0.008)
-    return d._finish('cape', bm, mat, rigid='upper_chest')
-
-
 def gear_collar(d, head, body, mat='shirt', height=0.04, gap=0.18, offset=0.007, drop=0.02, tilt=0.3, flare=0.006, name='collar'):
     """A collar standing round the neck (open at the front when `gap` > 0); a thin one is a tee's ribbed neckband."""
     n = d.neck
@@ -632,18 +551,6 @@ def gear_lapels(d, head, body, mat='jacket', width=0.06, button=None, drop=0.005
     return out
 
 
-def gear_glasses(d, head, body, shape='round', mat='glasses'):
-    return H.make_glasses(d, head, shape, mat)
-
-
-def gear_top_hat(d, head, body, mat='hat'):
-    return H.make_top_hat(d, head, mat)
-
-
-def gear_cigar(d, head, body, mat='cigar'):
-    return H.make_cigar(d, head, mat)
-
-
 def gear_cuffs(d, head, body, mat='shirt', at=0.9, height=0.035, offset=0.006, bone='forearm'):
     out = []
     for side in 'LR':
@@ -661,16 +568,12 @@ GEAR = {
     'bracers': gear_bracers,
     'greaves': gear_greaves,
     'sash': gear_sash,
-    'cape': gear_cape,
     'collar': gear_collar,
     'hem': gear_hem,
     'trouser_hems': gear_trouser_hems,
     'tie': gear_tie,
     'bowtie': gear_bowtie,
     'lapels': gear_lapels,
-    'glasses': gear_glasses,
-    'top_hat': gear_top_hat,
-    'cigar': gear_cigar,
     'cuffs': gear_cuffs,
 }
 

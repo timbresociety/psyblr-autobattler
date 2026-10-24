@@ -201,8 +201,8 @@ function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>
 }
 
 /**
- * Dress a cloned body (from SkeletonUtils.clone) for one hero. Returns false for a model not on the shared surface (a
- * demo hero's own model), which the caller paints the old way.
+ * Dress a cloned body (from SkeletonUtils.clone) for one hero. Returns false for a model that isn't one of the bodies,
+ * which then draws as its file made it.
  */
 export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: LoadedWear | undefined, materials: WearMaterials, atlas?: THREE.Texture | null): boolean {
   const mesh = bodyMesh(model)

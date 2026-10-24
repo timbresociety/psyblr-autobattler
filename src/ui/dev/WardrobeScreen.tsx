@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react'
 import { defaultLook, wearUrl, type FacePhoto, type Gender, type LookSlot, type Worn } from '../../charter/look'
 import type { RoleId } from '../../charter/types'
 import { heroHue } from '../../arena/client/characters'
+import { DEMO_HEROES, demoBuild } from '../../arena/demo/roster'
 import { BUILT_IN_ITEMS } from '../../kit/wear/library.gen'
 import { HeroStage } from '../common/HeroStage'
 import type { StageClip } from '../common/hero-look'
+import { HeroPortrait } from '../common/portrait'
 
 /**
  * A dev bench for the wardrobe (?wardrobe, dev builds only): outfits from the library on the shared bodies, to check
  * how items sit and how their loose cloth swings. ?wardrobe=kimono,hair_long,geta wears just the listed items,
  * &gender=m or f picks the body, &facing=3.14 holds it turned (radians; that one shows the back), &speed=0.25 plays
- * in slow motion and &face=musk wears a demo portrait's face (tools/blender/portraits): its photo and fitted shape.
+ * in slow motion and &face=musk wears a demo hero's portrait (public/kit/faces): its photo and fitted shape.
+ * &hero=3 shows the fourth demo hero instead, its bust and its whole body, as the likeness sheet captures them
+ * (docs/forge/likeness.html).
  */
 
 const PRESETS: { name: string; role: RoleId; items: string[] }[] = [
@@ -43,10 +47,11 @@ export function WardrobeScreen() {
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   useEffect(() => {
     if (!portrait) return
-    void fetch(`/tools/blender/portraits/${portrait}.lm.json`)
-      .then((r) => r.json() as Promise<{ width: number; height: number; points: number[][] }>)
-      .then((lm) => setFace({ url: `/tools/blender/portraits/${portrait}.webp`, width: lm.width, height: lm.height, points: lm.points.flatMap((p) => [p[0], p[1]]) }))
+    const demo = DEMO_HEROES.find((h) => h.id === portrait)
+    if (demo) setFace(demoBuild(demo).look!.face)
   }, [portrait])
+  const pick = params.get('hero')
+  if (pick !== null && DEMO_HEROES[Number(pick)]) return <DemoHeroBench index={Number(pick)} {...(facing === undefined ? {} : { facing })} />
   if (portrait && !face) return <p className="screen-loading">Loading the face…</p>
   return (
     <main style={{ padding: 16, display: 'grid', gap: 12 }}>
@@ -68,6 +73,20 @@ export function WardrobeScreen() {
           )
         })}
       </div>
+    </main>
+  )
+}
+
+/** One demo hero as the game draws it: the bust the staging row and the HUD show, and the whole body on the plinth. */
+function DemoHeroBench({ index, facing }: { index: number; facing?: number }) {
+  const hero = DEMO_HEROES[index]
+  const build = demoBuild(hero)
+  return (
+    <main style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <HeroPortrait hero={{ key: `bench:${index}`, heroName: build.heroName, roleId: build.roleId, hue: hero.hue, build }} className="bench-bust" />
+      <section style={{ width: 480, height: 720 }}>
+        <HeroStage look={{ heroName: build.heroName, roleId: build.roleId, ...(build.sizeClass ? { sizeClass: build.sizeClass } : {}), ...(build.look ? { look: build.look } : {}) }} hue={hero.hue} {...(facing === undefined ? {} : { facing })} label={build.heroName} />
+      </section>
     </main>
   )
 }

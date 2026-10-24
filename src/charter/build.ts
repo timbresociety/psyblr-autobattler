@@ -324,6 +324,16 @@ export function setLook(build: Build, look: HeroLook): Build {
   return { ...build, look }
 }
 
+/**
+ * A remix starts a new hero from another: the same kit, stats and look (body, face, hair, wardrobe and gear), its own
+ * name, and no tie to the original. Nothing about the copy depends on the name, so it looks exactly like the hero it
+ * came from.
+ */
+export function remixBuild(build: Build): Build {
+  const { heroId: _original, ...rest } = build
+  return { ...structuredClone(rest), heroName: `${build.heroName} Remix`.slice(0, TEXT_LIMITS.heroName), gate: { state: 'draft' } }
+}
+
 /** The spread the engine proposes for a role. */
 export function proposedSpread(roleId: RoleId): Spread {
   return { ...getRole(roleId).defaultSpread }
