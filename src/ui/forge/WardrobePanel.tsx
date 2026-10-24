@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { WEAR_SLOTS, type HeroLook, type LookSlot, type PieceKind, type WearSlot, type Worn, type WornPrint } from '../../charter/look.js'
 import { PIECE_PRICE } from '../../forge/pricing.js'
 import { slotFor } from '../../kit/pieces.js'
-import type { GearGap } from '../../kit/resolve.js'
+import type { WearGap } from '../../forge/wardrobe-read.js'
 import { FINISHES, type Finish, type ItemChannel, type Knob } from '../../kit/wear/item.js'
 import type { LibraryEntry } from '../../kit/wear/library.js'
 import { PRINTS, PRINT_LABEL, PRINT_SCALE, drawPrint, inkFor, type PrintId } from '../../kit/wear/prints.js'
@@ -18,8 +18,8 @@ interface Props {
   onLook: (change: (look: HeroLook) => HeroLook) => void
   /** The repository: search it and generate what it lacks. Without it the strips offer the library alone. */
   pieces?: PieceDeps
-  /** What the prompt asked for that the repository doesn't have. */
-  gaps?: GearGap[]
+  /** What the reading asked for that the library doesn't have, and what stands in for each meanwhile. */
+  gaps?: WearGap[]
   /** An uploaded reference image: a print can be lifted from it, and a new item modelled on it. */
   referenceUrl?: string
   /** Items found in a search or just generated, for the catalog. */
@@ -31,9 +31,6 @@ const PIECE_KIND: Partial<Record<LookSlot, PieceKind>> = { head: 'head', back: '
 const isWearSlot = (slot: LookSlot): slot is WearSlot => (WEAR_SLOTS as readonly string[]).includes(slot)
 const canGenerate = (slot: LookSlot) => isWearSlot(slot) || !!PIECE_KIND[slot]
 const tabOf = (slot: LookSlot): WardrobeTab => WARDROBE_TABS.find((t) => (t.slots as readonly LookSlot[]).includes(slot))!.id
-
-/** Where a gap from the prompt goes: a hand piece in the first free hand. */
-const gapSlot = (gap: GearGap, wear: Partial<Record<LookSlot, Worn>>): LookSlot => (gap.kind === 'hand' && wear.hand_r ? 'hand_l' : slotFor(gap.kind))
 
 /** A worn community item the catalog hasn't loaded (a saved hero's): enough to show it, its thumbnail beside its file. */
 const stub = (worn: Worn, slot: LookSlot): LibraryEntry => ({ id: worn.id, name: 'Community item', slot: slot === 'hand_r' || slot === 'hand_l' ? 'hand' : slot, tags: [], url: worn.url, thumb: worn.url.replace(/\.glb$/, '.webp'), source: 'community', channels: [], knobs: [] })
@@ -72,8 +69,8 @@ export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], refere
     return () => clearTimeout(timer)
   }, [q, pieces])
 
-  // a gap whose slot the player has since filled is no longer missing
-  const open = gaps.filter((g) => !(g.kind === 'hand' ? wear.hand_r && wear.hand_l : wear[slotFor(g.kind)]))
+  // a gap is open while its stand-in (or nothing) is still worn there: anything else the player put on closes it
+  const open = gaps.filter((g) => wear[g.slot]?.id === g.under)
   const current = WARDROBE_TABS.find((t) => t.id === tab)!
 
   const generator = (slot: LookSlot) =>
@@ -114,9 +111,8 @@ export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], refere
               type="button"
               className="gap-chip"
               onClick={() => {
-                const slot = gapSlot(g, wear)
-                setTab(tabOf(slot))
-                setMaking({ slot, phrase: g.phrase, kind: g.kind })
+                setTab(tabOf(g.slot))
+                setMaking({ slot: g.slot, phrase: g.phrase, kind: PIECE_KIND[g.slot] })
               }}
             >
               {g.phrase}

@@ -20,13 +20,14 @@ import { SIZES, type SizeClass } from '../../charter/sizes'
 import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
-import type { HeroLook, LookColor } from '../../charter/look'
+import type { HeroLook, LookSlot } from '../../charter/look'
 import { elementLook, type SkillLook } from '../../charter/skill-look'
 import { skillLookOf } from '../../arena/recipes/looks'
-import { BUILT_IN, type PieceEntry } from '../../kit/pieces'
-import type { LibraryEntry } from '../../kit/wear/library'
-import type { GearGap } from '../../kit/resolve'
-import { buildFromReading, type GearWish, type Reading } from '../../forge/reading'
+import type { ItemSlot } from '../../kit/wear/item'
+import { slotsFor, type LibraryEntry } from '../../kit/wear/library'
+import { COLOUR_WORDS } from '../../forge/prompt'
+import { buildFromReading, type Reading } from '../../forge/reading'
+import { rungOfWish, type WearGap, type WearWish } from '../../forge/wardrobe-read'
 import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
 import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
@@ -38,7 +39,8 @@ import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
 import { BodyPanel } from './BodyPanel'
 import { WardrobePanel } from './WardrobePanel'
 import { wardrobeCatalog } from './wardrobe'
-import { facePhoto, gapsOf, matchWishes, photoColours, readingLook, resolvedLook, wornGear, type FaceCandidate, type GearChoice } from './look'
+import { facePhoto, gapsOf, isGap, photoColours, readingLook, resolvedLook, withOutfit, type Dressing, type FaceCandidate } from './look'
+import type { OutfitColours } from './outfit'
 import { ReadingBar, ReadingCard } from './ReadingCard'
 import { RoleSwitcher } from './RoleSwitcher'
 import { SizePicker } from './SizePicker'
@@ -84,6 +86,11 @@ function withoutFace(look: HeroLook): HeroLook {
 
 let nextImage = 0
 
+/** What a slot's community items are searched as: anything for the left hand, which also holds shields and bows. */
+const searchSlot = (slot: LookSlot): ItemSlot | undefined => (slot === 'hand_r' ? 'hand' : slot === 'hand_l' ? undefined : slot)
+/** A wish's words as a search: the thing itself, without the colours a match can be recoloured to. */
+const searchWords = (phrase: string) => phrase.split(' ').filter((w) => !COLOUR_WORDS[w]).join(' ') || phrase
+
 const dragsFiles = (e: { dataTransfer: DataTransfer }) => [...e.dataTransfer.types].includes('Files')
 
 /**
@@ -105,18 +112,15 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   const [alternatives, setAlternatives] = useState<Template[]>()
   const [buildId, setBuildId] = useState<string | undefined>(record?.id)
   const [saving, setSaving] = useState(false)
-  // community pieces seen so far (the most worn, search results, generated ones) and what the prompt asked for that the
-  // repository lacks
-  const [community, setCommunity] = useState<PieceEntry[]>([])
-  // the community's wardrobe items seen so far: the most worn, search results and generated ones
+  // the community's wardrobe items seen so far (the most worn, search results and generated ones), and what the reading
+  // asked for that the library lacks
   const [items, setItems] = useState<LibraryEntry[]>([])
   const [trying, setTrying] = useState(false)
-  const [gaps, setGaps] = useState<GearGap[]>([])
+  const [gaps, setGaps] = useState<WearGap[]>([])
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
-  // the Forge reads before it builds: the reading of the first prompt, that prompt, and the gear it asked for
+  // the Forge reads before it builds: the reading of the first prompt, and that prompt
   const [reading, setReading] = useState<Reading>()
   const [prompt, setPrompt] = useState('')
-  const [choices, setChoices] = useState<GearChoice[]>([])
   // bumped on every change the player makes; an async result started before a change is discarded
   const edits = useRef(0)
   const changed = () => {
@@ -202,22 +206,34 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     return () => document.removeEventListener('paste', onPaste)
   }, [addImages])
 
-  const addCommunity = useCallback((entries: PieceEntry[]) => setCommunity((have) => [...have, ...entries.filter((e) => e.source === 'community' && !have.some((h) => h.id === e.id))]), [])
-  const catalog = useMemo(() => [...BUILT_IN, ...community], [community])
-  useEffect(() => {
-    deps.pieces.searchPieces('').then(addCommunity, () => undefined)
-  }, [deps, addCommunity])
   const addItems = useCallback((entries: LibraryEntry[]) => setItems((have) => [...have, ...entries.filter((e) => e.source === 'community' && !have.some((h) => h.id === e.id))]), [])
   const wardrobe = useMemo(() => wardrobeCatalog(items), [items])
   useEffect(() => {
     deps.pieces.searchItems('').then(addItems, () => undefined)
   }, [deps, addItems])
 
-  /** A reading's gear the built-ins lack, looked up among the community's pieces; a match is worn like any other. */
-  async function findNear(wishes: GearWish[]) {
-    const missing = matchWishes(wishes, catalog).filter((c) => !c.entry)
-    const found = (await Promise.all(missing.slice(0, 3).map((c) => deps.pieces.searchPieces(c.wish.phrase, c.wish.kind).catch(() => [] as PieceEntry[])))).flat()
-    if (found.length) addCommunity(found)
+  /** A reading's wishes the library lacks, looked up among the community's items: a match is worn free, like any other. */
+  async function findNear(wear: readonly WearWish[]) {
+    const missing = wear.filter((w) => isGap(w, wardrobe)).slice(0, 3)
+    const found = await Promise.all(missing.map((w) => deps.pieces.searchItems(searchWords(w.phrase), searchSlot(w.slot)).catch(() => [] as LibraryEntry[])))
+    const hits = missing.flatMap((w, i) => {
+      const hit = found[i].find((e) => e.source === 'community' && slotsFor(e.slot).includes(w.slot))
+      return hit ? [{ w, hit }] : []
+    })
+    if (!hits.length) return
+    addItems(hits.map((h) => h.hit))
+    // the wish wears the match from now on, unless the player has since changed it
+    setReading((r) =>
+      r && {
+        ...r,
+        wear: r.wear.map((w) => {
+          const hit = hits.find((h) => h.w.slot === w.slot && h.w.phrase === w.phrase && h.w.item === w.item)?.hit
+          if (!hit) return w
+          const next = { ...w, item: hit.id }
+          return { ...next, rung: rungOfWish(next) }
+        }),
+      },
+    )
   }
 
   /** A blank slate for the next hero; saved heroes stay in the Loadout. */
@@ -237,7 +253,6 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     setMessages([])
     setReading(undefined)
     setPrompt('')
-    setChoices([])
   }
 
   async function save() {
@@ -285,8 +300,10 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
       }
       changed()
       setPrompt(text)
-      setReading(next)
-      void findNear(next.gear)
+      // offline, the garments take the colours sampled off the image
+      const dressed = withOutfit(next, outfit, wardrobe)
+      setReading(dressed)
+      void findNear(dressed.wear)
       const asks = next.questions.length
       say(
         note
@@ -305,8 +322,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     if (!reading) return
     changed()
     const forged = buildFromReading(reading)
-    setBuild(setLook(forged, readingLook(reading, candidate, outfit, wornGear(choices))))
-    setGaps(gapsOf(choices))
+    const look = readingLook(reading, dressing(reading))
+    setBuild(setLook(forged, look))
+    setGaps(gapsOf(reading, look, wardrobe))
     setHeroName(reading.heroName)
     setOffline(reading.source === 'offline')
     setAlternatives(undefined)
@@ -394,14 +412,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     return img ? { url: img.url!, finding: img.face! } : undefined
   }, [images])
   /** The outfit colours off the first image that has any, for an offline reading. */
-  const outfit = useMemo<Partial<Record<LookColor, string>>>(() => images.find((i) => i.status === 'ready' && i.outfit && Object.keys(i.outfit).length)?.outfit ?? {}, [images])
-  // the reading's gear against the repository as it grows, keeping what the player switched off
-  const wishes = reading?.gear
-  useEffect(() => {
-    setChoices((before) => (wishes ? matchWishes(wishes, catalog, before) : []))
-  }, [wishes, catalog])
-  const onGearChoice = (index: number, wear: boolean) => setChoices((list) => list.map((c, i) => (i === index ? { ...c, wear } : c)))
-  const readingSubject: Subject | undefined = reading ? { heroName: reading.heroName, roleId: reading.roleId, sizeClass: reading.look.size, look: readingLook(reading, candidate, outfit, wornGear(choices)) } : undefined
+  const outfit = useMemo<OutfitColours>(() => images.find((i) => i.status === 'ready' && i.outfit && Object.keys(i.outfit).length)?.outfit ?? {}, [images])
+  const dressing = (r: Reading): Dressing => ({ catalog: wardrobe, hue: heroHue(r.heroName), face: candidate, outfit })
+  const readingSubject: Subject | undefined = reading ? { heroName: reading.heroName, roleId: reading.roleId, sizeClass: reading.look.size, look: readingLook(reading, dressing(reading)) } : undefined
 
   /** A change to the look as drawn: the first one writes down what the role gave the hero, in the colours it wears. */
   const onLook = (change: (look: HeroLook) => HeroLook) => setBuild((b) => b && setLook(b, change(resolvedLook(b.look, b.roleId, b.heroName, heroHue(b.heroName)))))
@@ -482,14 +495,13 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
             <ReadingCard
               reading={reading}
               stage={<Stage subject={readingSubject} />}
-              gear={choices}
               look={resolvedLook(readingSubject!.look, reading.roleId, reading.heroName, heroHue(reading.heroName))}
+              catalog={wardrobe}
               canFace={!!candidate}
               onChange={(next) => {
                 changed()
                 setReading(next)
               }}
-              onGear={onGearChoice}
             />
           ) : !build ? (
             <section className="showcase is-empty">

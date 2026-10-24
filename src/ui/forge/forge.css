@@ -391,13 +391,23 @@
 .answer.best { box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.6), inset 0 -2px 0 var(--accent); }
 .reading-size { max-width: 520px; }
 .wishes { display: grid; gap: 6px; }
-.wish { display: grid; grid-template-columns: 72px minmax(120px, auto) minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 8px 12px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); }
-.wish:not(.on) { opacity: 0.6; }
-.wish-kind { font: 600 10px/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.wish { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto auto; align-items: center; gap: 6px 12px; padding: 8px 8px 8px 12px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); }
+.wish-kind { font: 600 10px/1.2 var(--font); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); }
+.wish-words { display: grid; gap: 3px; min-width: 0; }
 .wish-phrase { font: 700 italic 15px/1.1 var(--display); letter-spacing: 0.03em; text-transform: uppercase; }
 .wish-status { font-size: 12.5px; color: var(--ink-dim); }
 .wish.found .wish-status { color: var(--ok); }
-.wish-toggle { display: flex; align-items: center; gap: 6px; font: 600 12px/1 var(--font); color: var(--ink-dim); cursor: pointer; white-space: nowrap; }
+.wish.bare .wish-phrase { color: var(--ink-dim); }
+.wish .rungs { margin-left: 0; }
+.wish .rung { min-width: 64px; padding: 5px 8px; font-size: 12px; }
+.wish .rung:disabled { opacity: 0.35; cursor: default; }
+.wish.bare .wish-remove { grid-column: 4; }
+.wish-remove { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ink-faint); cursor: pointer; transition: color 0.15s, background 0.15s; }
+.wish-remove svg { width: 16px; height: 16px; }
+.wish-remove:hover { color: var(--ink); background: rgba(var(--ink-rgb), 0.07); }
+.wish-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.read-look { display: block; margin-top: 3px; font: 600 11px/1.3 var(--font); letter-spacing: 0.04em; color: var(--ink-dim); }
+.read-form { grid-column: 2 / -1; justify-self: start; }
 .read-skills { display: grid; gap: 8px; }
 .read-skill { display: grid; grid-template-columns: 30px minmax(130px, 0.8fr) minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: 'icon slot slot mech' 'icon name does mech'; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: 6px; background: rgba(var(--surface-lo-rgb), 0.3); box-shadow: inset 0 0 0 1px var(--glass-line); }
 .read-skill .ab-icon { grid-area: icon; }
@@ -410,8 +420,9 @@
 .reading-bar .correct { display: flex; gap: 8px; min-width: 0; }
 .reading-bar .correct input { flex: 1; min-width: 0; min-height: 40px; }
 @media (max-width: 980px) {
-  .wish { grid-template-columns: 64px minmax(0, 1fr) auto; }
-  .wish-status { grid-column: 2 / -1; }
+  .wish { grid-template-columns: 72px minmax(0, 1fr) auto; }
+  .wish .rungs { grid-column: 1 / -1; grid-row: 2; }
+  .wish-remove, .wish.bare .wish-remove { grid-column: 3; grid-row: 1; }
   .read-skill { grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: 'icon slot' 'icon name' 'icon does' 'icon mech'; }
   .reading-bar { grid-template-columns: 1fr; }
 }

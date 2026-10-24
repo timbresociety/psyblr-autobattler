@@ -31,6 +31,10 @@ export type Finish = (typeof FINISHES)[number]
 export const KNOBS = ['sleeve', 'hem', 'leg', 'length'] as const
 export type Knob = (typeof KNOBS)[number]
 
+/** The four rungs to any look, cheapest first: wear an item as made, recolour it, restyle it, or generate a new one. */
+export const RUNGS = ['wear', 'recolour', 'restyle', 'generate'] as const
+export type Rung = (typeof RUNGS)[number]
+
 /**
  * Loose cloth (a skirt, a cape, a kimono sleeve, long hair) hangs from short chains of particles that sway and
  * collide with the body (src/kit/physics/). A group is a row of columns hanging side by side, each with `levels`

@@ -274,24 +274,33 @@ describe('forge from a prompt and reference images', () => {
     expect(paste.defaultPrevented).toBe(true)
   })
 
-  it("the prompt's gear words put kit pieces on the hero, and the Gear rows swap or remove them", async () => {
+  it("the prompt's wardrobe words dress the hero from the library, and what it lacks is offered for generating", async () => {
     const d = deps()
     render(<ForgeScreen deps={d} />)
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana and a straw hat' } })
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana, a straw hat and a brown poncho' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
-    // the reading lists the gear: the katana is in the repository, the straw hat isn't yet
-    const wishes = within(await screen.findByRole('region', { name: 'Gear as read' }))
-    expect(wishes.getByText(/Katana, free from the repository/)).toBeTruthy()
-    expect(wishes.getByText(/Not in the repository yet/)).toBeTruthy()
+    // the reading lists what it read: the kasa and the katana are in the library, a poncho isn't yet
+    const wishes = within(await screen.findByRole('region', { name: 'Wardrobe as read' }))
+    expect(wishes.getByText('Straw kasa')).toBeTruthy()
+    expect(wishes.getByText('Katana')).toBeTruthy()
+    expect(wishes.getByText(/Not in the library yet/)).toBeTruthy()
+    // the community is searched for what the library lacks, by the thing and not its colour
+    expect(d.pieces.searchItems).toHaveBeenCalledWith('poncho', 'upper')
+    // the poncho can only be generated; the kasa can be worn as made, and the rungs say what each costs
+    const poncho = within(wishes.getByRole('group', { name: 'brown poncho rungs' }))
+    expect(poncho.getByRole('button', { name: /Generate/ }).getAttribute('aria-current')).toBe('step')
+    expect((poncho.getByRole('button', { name: /Wear/ }) as HTMLButtonElement).disabled).toBe(true)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
     await screen.findByRole('heading', { name: 'Samurai' })
     tab('Gear')
     expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Katana')
     tab('Head')
-    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
-    // the straw hat isn't in the repository: the community is searched for it, then it's offered for generating
-    expect(await screen.findByRole('button', { name: /straw hat/ })).toBeTruthy()
-    expect(d.pieces.searchPieces).toHaveBeenCalledWith('straw hat', 'head')
+    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Straw kasa')
+    // the poncho waits to be generated, worn meanwhile as the top the outfit already had
+    expect(screen.getByRole('button', { name: /brown poncho/ })).toBeTruthy()
+    tab('Upper')
+    expect(row('Upper body').getByRole('radio', { checked: true }).textContent).toBe('Long-sleeve tee')
+    tab('Head')
     await act(async () => fireEvent.click(row('Over the head').getByRole('radio', { name: 'Crown' })))
     tab('Gear')
     await act(async () => fireEvent.click(row('Right hand').getByRole('radio', { name: 'Nothing' })))
@@ -352,16 +361,21 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     expect(saved.look?.face?.points).toHaveLength(956)
   })
 
-  it('the prompt dresses the hero: a queen in gold armour with a red cape', async () => {
+  it('the prompt dresses the hero: a queen in gold armour with a red cape and a crown', async () => {
     render(<ForgeScreen deps={deps()} />)
-    await readAndBuild('a queen in gold armour with a red cape')
+    await readAndBuild('a queen in gold armour with a red cape and a crown')
     expect(within(screen.getByRole('radiogroup', { name: 'Body' })).getByRole('radio', { name: 'Woman' }).getAttribute('aria-checked')).toBe('true')
+    tab('Full')
+    expect(row('Full body').getByRole('radio', { checked: true }).textContent).toBe('Knight armour')
+    expect((screen.getByLabelText('Knight armour plate colour') as HTMLInputElement).value).toBe('#d4a531')
+    // the armour covers the whole body, so nothing is worn on top or below
     tab('Upper')
-    expect(row('Upper body').getByRole('radio', { checked: true }).textContent).toBe('Breastplate')
-    expect((screen.getByLabelText('Breastplate plate colour') as HTMLInputElement).value).toBe('#d4a531')
+    expect(row('Upper body').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
     tab('Back')
     expect(row('Back').getByRole('radio', { checked: true }).textContent).toBe('Cape')
     expect((screen.getByLabelText('Cape colour') as HTMLInputElement).value).toBe('#c8242c')
+    tab('Head')
+    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Crown')
   })
 
   it('changing the look keeps the balance check, since looks never touch a number', async () => {
@@ -464,6 +478,39 @@ describe('the Forge reads before it builds', () => {
     expect(glance.getByText('Encore Kha Ja')).toBeTruthy()
     expect(glance.getByText('Kendrick Se Bhi Upar')).toBeTruthy()
     expect(screen.getAllByText(new RegExp(mechanic)).length).toBeGreaterThan(0)
+  })
+
+  it('asks which way the transformation goes, and the answer moves the hero to the role that holds it', async () => {
+    const read = vi.fn(async (input: ReadRequest) => ({ reading: offlineReading(input) }))
+    render(<ForgeScreen deps={deps({ read })} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: ENCORE } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    const ask = within(await screen.findByRole('group', { name: 'Does Kendrick Se Bhi Upar grow, shrink, or keep his size?' }))
+    await act(async () => fireEvent.click(ask.getByRole('button', { name: 'Titan Form: grows colossal (tank)' })))
+    expect(roleNow()).toBe('tank')
+    const sizes = within(screen.getByRole('radiogroup', { name: 'Transformation size' }))
+    expect(sizes.getByRole('radio', { checked: true }).textContent).toBe('Grows colossal')
+    // the size can still change on the card, and the role follows the form picked
+    await act(async () => fireEvent.click(sizes.getByRole('radio', { name: 'Shrinks to tiny' })))
+    expect(roleNow()).toBe('assassin')
+    expect((screen.getByLabelText('Ultimate name') as HTMLInputElement).value).toBe('Kendrick Se Bhi Upar')
+  })
+
+  it('the card edits the wardrobe it read: a rung moves a wish, and a change in the wardrobe becomes one', async () => {
+    render(<ForgeScreen deps={deps()} />)
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a queen in gold armour with a red cape' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
+    const wishes = within(await screen.findByRole('region', { name: 'Wardrobe as read' }))
+    // back down to the cape as it was made
+    await act(async () => fireEvent.click(within(wishes.getByRole('group', { name: 'red cape rungs' })).getByRole('button', { name: /Wear/ })))
+    tab('Back')
+    expect((screen.getByLabelText('Cape colour') as HTMLInputElement).value).not.toBe('#c8242c')
+    // a hat picked in the wardrobe is a wish of its own
+    tab('Head')
+    await act(async () => fireEvent.click(row('Over the head').getByRole('radio', { name: 'Crown' })))
+    expect(wishes.getByText('crown')).toBeTruthy()
+    await act(async () => fireEvent.click(wishes.getByRole('button', { name: 'Remove crown' })))
+    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
   })
 
   it('a reading the content floor refuses says why and builds nothing', async () => {

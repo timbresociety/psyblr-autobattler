@@ -100,7 +100,7 @@ describe('the wardrobe', () => {
       startPiece: vi.fn(async () => ({ job: { id: 'j1', kind: 'head' as const, name: 'Straw Hat', status: 'running' as const }, balance: 40 })),
       pollPiece: vi.fn(async () => ({ job: { id: 'j1', kind: 'head' as const, name: 'Straw Hat', status: 'done' as const, item: straw }, balance: 40 })),
     })
-    const { onFound, seen } = panel({ pieces, gaps: [{ phrase: 'straw hat', kind: 'head' }] })
+    const { onFound, seen } = panel({ pieces, gaps: [{ phrase: 'straw hat', slot: 'head' }] })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: /straw hat/ })))
     expect(screen.getByRole('tab', { name: /^Head/ }).getAttribute('aria-selected')).toBe('true')
     const generator = within(screen.getByRole('region', { name: 'Generate for over the head' }))

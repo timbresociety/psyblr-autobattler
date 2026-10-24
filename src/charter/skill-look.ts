@@ -382,6 +382,9 @@ function hydrateFormBody(raw: unknown): FormBody | undefined {
   return Object.keys(body).length ? body : undefined
 }
 
+/** A stored transformation look, kept field by field, or undefined when nothing in it is known. */
+export const hydrateTransformation = (raw: unknown): TransformationLook | undefined => transformationField(raw).transformation
+
 function transformationField(raw: unknown): { transformation?: TransformationLook } {
   const t = raw as Record<string, unknown> | undefined
   if (!t || typeof t !== 'object') return {}

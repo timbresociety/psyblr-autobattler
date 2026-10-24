@@ -1,11 +1,21 @@
-import { toHex, type LookColor } from '../../charter/look.js'
+import { toHex } from '../../charter/look.js'
 import type { FaceFinding } from './face/find.js'
+
+/** The outfit's colours on a reference image: the top and a second colour on it, and the legs. */
+export interface OutfitColours {
+  top?: string
+  accent?: string
+  legs?: string
+}
 
 type Rgb = readonly [number, number, number]
 type Box = [number, number, number, number]
 
 const SIDE = 160
 const dist = (a: Rgb, b: Rgb) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+// the histogram works in 0 to 255, as the pixels come; colours elsewhere run 0 to 1
+const hex = (rgb: Rgb) => toHex([rgb[0] / 255, rgb[1] / 255, rgb[2] / 255])
+const bytes = (rgb: Rgb): Rgb => [rgb[0] * 255, rgb[1] * 255, rgb[2] * 255]
 
 /** A box's colours, commonest first: a coarse 8-level histogram, each bin averaged, skipping pixels close to `skip`. */
 function bins(data: Uint8ClampedArray, width: number, [x0, y0, x1, y1]: Box, skip: Rgb[]): { rgb: Rgb; count: number }[] {
@@ -36,7 +46,7 @@ const area = ([x0, y0, x1, y1]: Box) => Math.max(0, x1 - x0) * Math.max(0, y1 - 
  * the trousers further down), the middle of the picture where there isn't. Skin and hair are left out, so a bare arm
  * never reads as a sleeve.
  */
-export async function outfitColours(image: Blob, face?: FaceFinding): Promise<Partial<Record<LookColor, string>>> {
+export async function outfitColours(image: Blob, face?: FaceFinding): Promise<OutfitColours> {
   const bitmap = await createImageBitmap(image)
   try {
     const scale = Math.min(1, SIDE / Math.max(bitmap.width, bitmap.height))
@@ -63,22 +73,22 @@ export async function outfitColours(image: Blob, face?: FaceFinding): Promise<Pa
       legs = [cx - 1.2 * fw, maxY + 3.1 * fh, cx + 1.2 * fw, maxY + 5 * fh]
     }
     const skip: Rgb[] = []
-    if (face?.skin) skip.push(face.skin)
-    if (face?.hair) skip.push(face.hair)
-    const out: Partial<Record<LookColor, string>> = {}
+    if (face?.skin) skip.push(bytes(face.skin))
+    if (face?.hair) skip.push(bytes(face.hair))
+    const out: OutfitColours = {}
     const top = clamp(torso, w, h)
     if (area(top) >= 40) {
-      const [suit, ...rest] = bins(data, w, top, skip)
-      if (suit) {
-        out.suit = toHex(suit.rgb.map(Math.round) as [number, number, number])
-        const trim = rest.find((b) => b.count >= suit.count * 0.12 && dist(b.rgb, suit.rgb) >= 70)
-        if (trim) out.trim = toHex(trim.rgb.map(Math.round) as [number, number, number])
+      const [main, ...rest] = bins(data, w, top, skip)
+      if (main) {
+        out.top = hex(main.rgb)
+        const accent = rest.find((b) => b.count >= main.count * 0.12 && dist(b.rgb, main.rgb) >= 70)
+        if (accent) out.accent = hex(accent.rgb)
       }
     }
     const bottom = clamp(legs, w, h)
     if (area(bottom) >= 40) {
-      const [pants] = bins(data, w, bottom, skip)
-      if (pants) out.pants = toHex(pants.rgb.map(Math.round) as [number, number, number])
+      const [legs] = bins(data, w, bottom, skip)
+      if (legs) out.legs = hex(legs.rgb)
     }
     return out
   } finally {

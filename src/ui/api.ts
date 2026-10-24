@@ -1,6 +1,6 @@
 import { requestStats, type Build } from '../charter/build.js'
 import { parseStatWishes } from '../charter/chat.js'
-import type { LookColor, PieceKind, WearSlot } from '../charter/look.js'
+import type { PieceKind, WearSlot } from '../charter/look.js'
 import { floorBreach, offlineReading, readingText, type Reading, type ReadInput } from '../forge/reading.js'
 import type { LimitHit } from '../charter/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
@@ -10,6 +10,7 @@ import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
 import { prepareImage, type PreparedImage } from './common/image-prep.js'
 import type { FaceFinding } from './forge/face/find.js'
+import type { OutfitColours } from './forge/outfit.js'
 
 /**
  * Forge and Loadout I/O. Every Forge call has an offline path, so making a hero keeps working without the API (R13):
@@ -115,7 +116,7 @@ export interface ForgeDeps {
   /** The Forge's reading of a hero before it builds: its look, gear, kit and questions (src/forge/reading.ts). */
   read(input: ReadRequest): Promise<ReadResponse>
   /** The outfit's colours on a prepared image, read away from the face; empty when it can't be read. */
-  outfitColours(image: Blob, face?: FaceFinding): Promise<Partial<Record<LookColor, string>>>
+  outfitColours(image: Blob, face?: FaceFinding): Promise<OutfitColours>
   chat(build: Build, message: string): Promise<ChatResponse>
   runGate(build: Build): Promise<GateOutcome>
   /** Decode, shrink and re-encode a reference image before it is uploaded. */

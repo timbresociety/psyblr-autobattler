@@ -103,7 +103,8 @@ export function skillsFromPrompt(prompt: string): Partial<Record<BuildSlot, { na
 
 // ------------------------------------------------------------------------------------------------ the look a prompt asks for
 
-const COLOUR_WORDS: Record<string, string> = {
+/** Colour words and the '#rrggbb' each reads as: the reader's for the body and the wardrobe's channels. */
+export const COLOUR_WORDS: Record<string, string> = {
   red: '#c8242c', crimson: '#a3122a', scarlet: '#d4231e', maroon: '#6e1423', orange: '#e8741c', amber: '#f0a020',
   gold: '#d4a531', golden: '#d4a531', yellow: '#f2cf2e', lime: '#9ccf2c', green: '#2f9a48', emerald: '#18905e', jade: '#3a9a7a',
   olive: '#6e7a2c', teal: '#178a8a', cyan: '#22b8d6', turquoise: '#2ec4b6', blue: '#2a5bd7', azure: '#3b8fe8', navy: '#1c2a5e',

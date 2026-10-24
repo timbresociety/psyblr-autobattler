@@ -1,6 +1,6 @@
 import { outfitOf, type HeroLook, type LookSlot, type Worn } from '../../charter/look.js'
 import type { PieceEntry } from '../../kit/pieces.js'
-import type { Finish, Knob } from '../../kit/wear/item.js'
+import type { Finish, Knob, Rung } from '../../kit/wear/item.js'
 import { LIBRARY, slotsFor, type LibraryEntry } from '../../kit/wear/library.js'
 
 /**
@@ -38,9 +38,7 @@ export type WardrobeTab = (typeof WARDROBE_TABS)[number]['id']
 export const KNOB_LABEL: Record<Knob, string> = { sleeve: 'Sleeves', hem: 'Hem', leg: 'Legs', length: 'Length' }
 export const FINISH_LABEL: Record<Finish, string> = { cotton: 'Cotton', silk: 'Silk', denim: 'Denim', knit: 'Knit', leather: 'Leather', metal: 'Metal', glow: 'Glow' }
 
-/** The four rungs to any look, cheapest first. */
-export const RUNGS = ['wear', 'recolour', 'restyle', 'generate'] as const
-export type Rung = (typeof RUNGS)[number]
+export { RUNGS, type Rung } from '../../kit/wear/item.js'
 export const RUNG_LABEL: Record<Rung, string> = { wear: 'Wear', recolour: 'Recolour', restyle: 'Restyle', generate: 'Generate' }
 
 /** A rigid piece hangs on a socket and takes one colour; a surface item has channels, finishes, cuts and prints. */
