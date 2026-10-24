@@ -1,6 +1,6 @@
 /**
- * Vertices that sit in the same place, joined: a mesh is split wherever its UVs or materials part, so the fit welds
- * by position before asking what touches what.
+ * Vertices that sit in the same place, joined: a mesh is split wherever its UVs or materials part, so the fit and the
+ * dressing weld by position before asking what touches what.
  */
 export function weldPositions(positions: ArrayLike<number>, tolerance = 1e-5): { id: Uint32Array; count: number } {
   const n = positions.length / 3

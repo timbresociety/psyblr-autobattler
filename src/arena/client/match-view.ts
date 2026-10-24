@@ -373,6 +373,7 @@ function drawHeroes(
     if (fallen) {
       view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
       view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
+      view.settle?.(scaled, far)
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
@@ -380,6 +381,8 @@ function drawHeroes(
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
+    // the outfit's loose cloth swings once the hero stands where it's drawn
+    view.settle?.(scaled, far)
     return at
   })
 }

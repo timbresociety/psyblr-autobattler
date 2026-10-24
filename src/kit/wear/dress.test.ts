@@ -3,6 +3,7 @@ import { BODIES } from '../../arena/client/character-look.js'
 import { readBody, type BodyFile } from '../body/node.js'
 import { bodyBase, shapeBody, type BodyShape } from '../body/shape.js'
 import { shellItem, skinShape } from '../fit/shell.js'
+import { TriangleBVH } from './ray.js'
 import { readItemFile, writeItem } from '../fit/write.js'
 import { bindPoints, evaluate, fromLocal, toLocal } from './bind.js'
 import { dress, GAP, type Worn } from './dress.js'
@@ -141,6 +142,100 @@ describe('dressing', () => {
     for (let t = 0; t < T.length / 3; t++) if (![T[t * 3], T[t * 3 + 1], T[t * 3 + 2]].every((v) => coveredBy.has(v))) expected.push(t)
     expect(Array.from(out.body)).toEqual(expected)
     expect(out.body.length).toBeLessThan(T.length / 3 - 500)
+  })
+
+  it('wears a lower garment cut looser than the top outside it, the top tucked in', () => {
+    const legs = leaning(files.get('m-medium')!, ref, ['hips', 'thigh_L', 'thigh_R'], 0.3)
+    const skirt = shellItem(ref, { id: 'skirt', slot: 'lower', lift: 0.02, select: legs })
+    const out = dress({ body: ref, fields: fieldsOf.get('m-medium'), worn: [worn(tee), worn(skirt)] })
+    expect(out.items.map((i) => i.id)).toEqual(['tee', 'skirt'])
+    // where both cover the body the skirt stands outside the tee, and the tee stays tucked in as made
+    const shared = (item: SurfaceItem, other: SurfaceItem) => {
+      const cover = coverOf(other.meta, ref.surface.count)
+      const { tri } = item.binding
+      return Array.from({ length: item.count }, (_, k) => k).filter((k) => [tri[k * 3], tri[k * 3 + 1], tri[k * 3 + 2]].every((v) => cover.outer[v] === cover.outer[v]))
+    }
+    const outside = out.items.find((i) => i.id === 'skirt')!
+    const tucked = out.items.find((i) => i.id === 'tee')!
+    expect(shared(skirt, tee).length).toBeGreaterThan(5)
+    for (const k of shared(skirt, tee)) expect(liftOf(ref, skirt, outside.positions, k)).toBeGreaterThanOrEqual(0.004 + GAP - 1e-4)
+    expect(shared(tee, skirt).length).toBeGreaterThan(5)
+    for (const k of shared(tee, skirt)) expect(liftOf(ref, tee, tucked.positions, k)).toBeLessThan(0.004 + 1e-4)
+    // trousers as tight as the tee stay under it
+    expect(dress({ body: ref, worn: [worn(trousers), worn(tee)] }).items.map((i) => i.id)).toEqual(['trousers', 'tee'])
+  })
+
+  it('drapes loose cloth on every body, so no robe turns inside out between the knees', async () => {
+    const face = (P: ArrayLike<number>, index: ArrayLike<number>, t: number) => {
+      const [a, b, c] = [index[t] * 3, index[t + 1] * 3, index[t + 2] * 3]
+      const u = [P[b] - P[a], P[b + 1] - P[a + 1], P[b + 2] - P[a + 2]]
+      const v = [P[c] - P[a], P[c + 1] - P[a + 1], P[c + 2] - P[a + 2]]
+      return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    }
+    for (const id of ['kimono', 'hakama', 'wizard_robe', 'gown', 'monk_robe', 'skirt', 'cape']) {
+      const { item } = await readItemFile(pub(`/kit/wear/${id}.glb`), ref.surface.count)
+      for (const body of BODIES) {
+        const out = dress({ body: shapes.get(body)!, fields: fieldsOf.get(body), worn: [worn(item)] }).items[0]
+        // each triangle against itself as made: turned over is a fold showing its inside
+        let total = 0
+        let turned = 0
+        for (let t = 0; t < item.index.length; t += 3) {
+          const made = face(item.rest!, item.index, t)
+          const area = Math.hypot(made[0], made[1], made[2]) / 2
+          const now = face(out.positions, out.index, t)
+          total += area
+          if (now[0] * made[0] + now[1] * made[1] + now[2] * made[2] < 0) {
+            turned += area
+            expect(area, `${id} on ${body}`).toBeLessThan(2e-4)
+          }
+        }
+        expect(turned / total, `${id} on ${body}`).toBeLessThan(3e-4)
+      }
+    }
+    // cloth close to the skin (all but a tee's collar) moves exactly with it
+    const { item: tee } = await readItemFile(pub('/kit/wear/tee.glb'), ref.surface.count)
+    const { rest: _rest, ...bound } = tee
+    const body = shapes.get('f-huge')!
+    const draped = dress({ body, worn: [worn(tee)] }).items[0].positions
+    const exact = dress({ body, worn: [worn(bound)] }).items[0].positions
+    const close = Array.from({ length: tee.count }, (_, k) => k).filter((k) => Math.abs(tee.binding.lift[k]) < 0.02)
+    expect(close.length).toBeGreaterThan(tee.count * 0.9)
+    for (const k of close) for (let d = 0; d < 3; d++) expect(draped[k * 3 + d]).toBe(exact[k * 3 + d])
+  })
+
+  it('ties a band over its robe on every body: nothing stands proud of an obi, a rope or a sash', async () => {
+    for (const [id, band] of [
+      ['kimono', 'obi'],
+      ['wizard_robe', 'rope'],
+      ['gown', 'sash'],
+    ]) {
+      const { item } = await readItemFile(pub(`/kit/wear/${id}.glb`), ref.surface.count)
+      const ch = item.meta.channels.findIndex((c) => c.name === band)
+      for (const body of BODIES) {
+        const out = dress({ body: shapes.get(body)!, fields: fieldsOf.get(body), worn: [worn(item)] }).items[0]
+        const P = out.positions
+        const bvh = new TriangleBVH(P, out.index)
+        const ys = Array.from({ length: out.count }, (_, k) => k).filter((k) => item.channel[k] === ch).map((k) => P[k * 3 + 1])
+        const hips = files.get(body)!.rest.hips
+        let rays = 0
+        let worst = 0
+        // level rays out from the body's axis, all round and up the band: the band is the outermost cloth, give or take
+        // a couple of millimetres where a skirt flares out just under a narrow rope
+        for (let y = Math.min(...ys) + 0.003; y < Math.max(...ys) - 0.002; y += 0.004) {
+          for (let a = 0; a < 360; a += 3) {
+            const hits = bvh.hits([0, y, hips[2]], [Math.sin((a * Math.PI) / 180), 0, Math.cos((a * Math.PI) / 180)], 0, 0.8)
+            const on = hits.filter((h) => item.channel[out.index[h.triangle * 3]] === ch)
+            if (!on.length) continue
+            rays++
+            const outer = on[on.length - 1].t
+            // cloth just outside it (a hanging sleeve further out is meant to be)
+            for (const h of hits) if (h.t > outer && h.t < outer + 0.03 && item.channel[out.index[h.triangle * 3]] !== ch) worst = Math.max(worst, h.t - outer)
+          }
+        }
+        expect(rays, `${id} on ${body}`).toBeGreaterThan(400)
+        expect(worst, `${id} on ${body}`).toBeLessThan(0.002)
+      }
+    }
   })
 
   it('presses hair under a hat and keeps it out past the brim', () => {

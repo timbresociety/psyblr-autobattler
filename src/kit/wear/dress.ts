@@ -3,6 +3,7 @@ import { fieldAt, type BodyFields } from './fields.js'
 import { FINISH_LOOK } from './finish.js'
 import { coverOf, type ChainGroup, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
 import type { BodyShape } from '../body/shape.js'
+import { weldPositions } from './weld.js'
 
 /**
  * Dressing a body: every worn item evaluated on the hero's own body, layered so nothing pokes through, skinned from
@@ -11,7 +12,8 @@ import type { BodyShape } from '../body/shape.js'
  *
  * Layers run from the skin out. Each item sits in its slot's band: an outer item is pushed out over whatever lies
  * under it (a top over a waistband, boots over trouser legs), while hair and beards are pressed in under a hat (a cap
- * flattens hair; hair still hangs long below a kasa's brim).
+ * flattens hair; hair still hangs long below a kasa's brim). A lower garment cut looser than the top or the shoes over
+ * it goes outside them instead: a skirt over a tucked-in top, a hakama over the gi, wide trousers over shoes.
  */
 
 /** Slots from the skin out. Face and hand gear hang on sockets, outside the layers. */
@@ -21,6 +23,16 @@ export const GAP = 0.003
 /** Nothing is pressed closer to the skin than this. */
 const MIN_LIFT = 0.0015
 const PRESSED: ReadonlySet<ItemSlot> = new Set(['hair', 'beard'])
+/** How much further out a lower garment must stand than the top or shoes over it to be worn outside them, in metres. */
+const LOOSER = 0.01
+/** Cloth this far from the skin starts draping from its neighbours, and drapes fully by LOOSE_TO. */
+const LOOSE_FROM = 0.02
+const LOOSE_TO = 0.08
+/** What draped cloth keeps of the skin under it, so it still rises over a body's own bulges; cloth past HOLD_TO keeps none (bound that far out, the skin under it says little). */
+const DRAPE_HOLD = 0.05
+const HOLD_FROM = 0.2
+const HOLD_TO = 0.3
+const DRAPE_PASSES = 24
 
 const rank = (slot: ItemSlot) => {
   const r = LAYERS.indexOf(slot)
@@ -133,16 +145,21 @@ function coverAt(field: Float32Array, a: number, b: number, c: number, s: number
 
 const covered = (cover: Cover, v: number) => cover.inner[v] === cover.inner[v]
 
+/** Where a cover stands, three quarters of the way out over the vertices it shares with another: a few far ones don't decide. */
+function standing(cover: Cover, other: Cover): number {
+  const out: number[] = []
+  for (let v = 0; v < cover.outer.length; v++) if (covered(cover, v) && covered(other, v)) out.push(cover.outer[v])
+  return out.length < 8 ? NaN : out.sort((a, b) => a - b)[Math.floor((out.length - 1) * 0.75)]
+}
+
 export function dress(input: DressInput): Dressed {
   const { body, fields } = input
   const V = body.surface.count
-  const worn = [...input.worn].sort((a, b) => rank(a.item.meta.slot) - rank(b.item.meta.slot))
-  const cuts = worn.map((w) => cutsFor(w, fields))
-
   // every item's cover, trimmed by its cuts
-  const covers: Cover[] = worn.map((w, i) => {
+  const layered = input.worn.map((w) => {
+    const cuts = cutsFor(w, fields)
     const cover = coverOf(w.item.meta, V)
-    for (const cut of cuts[i]) {
+    for (const cut of cuts) {
       if (!cut.body) continue
       for (let v = 0; v < V; v++) {
         if (!covered(cover, v) || kept(cut, cut.body[v])) continue
@@ -150,8 +167,21 @@ export function dress(input: DressInput): Dressed {
         cover.hide[v] = 0
       }
     }
-    return cover
+    return { w, cuts, cover, rank: rank(w.item.meta.slot) }
   })
+  // a lower garment standing looser than the top or shoes over it goes outside them
+  for (const lower of layered) {
+    if (lower.w.item.meta.slot !== 'lower') continue
+    for (const over of layered) {
+      if (over.w.item.meta.slot !== 'upper' && over.w.item.meta.slot !== 'feet') continue
+      if (standing(lower.cover, over.cover) - standing(over.cover, lower.cover) > LOOSER) lower.rank = Math.max(lower.rank, over.rank + 0.5)
+    }
+  }
+  layered.sort((a, b) => a.rank - b.rank)
+  const worn = layered.map((l) => l.w)
+  const cuts = layered.map((l) => l.cuts)
+  const covers: Cover[] = layered.map((l) => l.cover)
+  const ranks = layered.map((l) => l.rank)
   const rigid = [...(input.rigid ?? [])]
 
   // lifts: pushed out over inner layers, pressed in under hats; each item's shell grows with its push
@@ -161,11 +191,10 @@ export function dress(input: DressInput): Dressed {
     const { tri, st } = w.item.binding
     const lift = lifts[i]
     const slot = w.item.meta.slot
-    const r = rank(slot)
     // the outer surface of everything inside this layer
     floor.fill(NaN)
     for (let j = 0; j < i; j++) {
-      if (rank(worn[j].item.meta.slot) >= r) continue
+      if (ranks[j] >= ranks[i]) continue
       const o = covers[j].outer
       for (let v = 0; v < V; v++) if (o[v] === o[v] && !(floor[v] >= o[v])) floor[v] = o[v]
     }
@@ -195,7 +224,7 @@ export function dress(input: DressInput): Dressed {
     const mesh = evaluateItem(w, lifts[i], body)
     // a vertex is inside an outer layer when it lies over what that layer hides and beneath its inner surface
     const inside = new Uint8Array(mesh.count)
-    const outers = [...covers.filter((_, j) => j > i && rank(worn[j].item.meta.slot) > rank(w.item.meta.slot)), ...rigid.filter((c) => rank(c.slot) > rank(w.item.meta.slot))].filter((c) => c.hides)
+    const outers = [...covers.filter((_, j) => j > i && ranks[j] > ranks[i]), ...rigid.filter((c) => rank(c.slot) > ranks[i])].filter((c) => c.hides)
     if (outers.length) {
       const { tri, st } = w.item.binding
       for (let k = 0; k < mesh.count; k++) {
@@ -300,7 +329,98 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
     finish.set([look.roughness, look.metalness, look.sheen, look.glow], k * 4)
     weave[k] = look.weave
   }
+  drape(item, lift, positions, normals)
   return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index, ...(item.chain ? { chain: Float32Array.from(item.chain) } : {}) }
+}
+
+/** An item's vertices welded by where they sit on the reference, and each welded vertex's neighbours: the same on every body. */
+const welds = new WeakMap<SurfaceItem, { id: Uint32Array; links: number[][] }>()
+
+function weldOf(item: SurfaceItem, rest: Float32Array): { id: Uint32Array; links: number[][] } {
+  const known = welds.get(item)
+  if (known) return known
+  const { id, count } = weldPositions(rest)
+  const links: number[][] = Array.from({ length: count }, () => [])
+  const link = (a: number, b: number) => a !== b && !links[a].includes(b) && (links[a].push(b), links[b].push(a))
+  for (let t = 0; t < item.index.length; t += 3) {
+    const [a, b, c] = [id[item.index[t]], id[item.index[t + 1]], id[item.index[t + 2]]]
+    link(a, b)
+    link(b, c)
+    link(c, a)
+  }
+  const weld = { id, links }
+  welds.set(item, weld)
+  return weld
+}
+
+/**
+ * Cloth well clear of the skin (a robe's front between the knees, a hanging sleeve) is bound to whichever limb lies
+ * nearest, so neighbours bound to different limbs part or cross on a body shaped unlike the reference. It drapes
+ * instead: its move from where it sat on the reference becomes mostly the average of its neighbours' moves, the more so
+ * the further it stands from the skin, while cloth close to the skin moves exactly with it. Its normals turn with the
+ * draped surface as far as it drapes.
+ */
+function drape(item: SurfaceItem, lift: Float32Array, positions: Float32Array, normals: Float32Array): void {
+  const rest = item.rest
+  if (!rest) return
+  const n = item.count
+  const { id, links } = weldOf(item, rest)
+  const count = links.length
+  // how far each welded vertex drapes (0 to 1), and how freely (what it keeps of the skin under it aside)
+  const ramp = (x: number, from: number, to: number) => {
+    const t = Math.min(1, Math.max(0, (x - from) / (to - from)))
+    return t * t * (3 - 2 * t)
+  }
+  const share = new Float32Array(count)
+  const free = new Float32Array(count)
+  for (let k = 0; k < n; k++) {
+    // a lift either side: cloth bound under a far limb's skin stands clear of the body too
+    const off = Math.abs(lift[k])
+    share[id[k]] = Math.max(share[id[k]], ramp(off, LOOSE_FROM, LOOSE_TO))
+    free[id[k]] = Math.max(free[id[k]], ramp(off, LOOSE_FROM, LOOSE_TO) * (1 - DRAPE_HOLD * (1 - ramp(off, HOLD_FROM, HOLD_TO))))
+  }
+  if (!share.some((s) => s > 0)) return
+  // each welded vertex's move on this body, then the loose ones' relaxed toward their neighbours'
+  const bound = new Float32Array(count * 3)
+  for (let k = 0; k < n; k++) for (let d = 0; d < 3; d++) bound[id[k] * 3 + d] = positions[k * 3 + d] - rest[k * 3 + d]
+  const moved = Float32Array.from(bound)
+  for (let pass = 0; pass < DRAPE_PASSES; pass++) {
+    for (let w = 0; w < count; w++) {
+      const f = free[w]
+      const near = links[w]
+      if (!f || !near.length) continue
+      for (let d = 0; d < 3; d++) {
+        let sum = 0
+        for (const u of near) sum += moved[u * 3 + d]
+        moved[w * 3 + d] = (1 - f) * bound[w * 3 + d] + (f * sum) / near.length
+      }
+    }
+  }
+  for (let k = 0; k < n; k++) if (share[id[k]] > 0) for (let d = 0; d < 3; d++) positions[k * 3 + d] = rest[k * 3 + d] + moved[id[k] * 3 + d]
+  // the draped surface's own normals (area-weighted), turned to agree with the bound ones
+  const face = new Float32Array(count * 3)
+  for (let t = 0; t < item.index.length; t += 3) {
+    const [a, b, c] = [item.index[t] * 3, item.index[t + 1] * 3, item.index[t + 2] * 3]
+    const ux = positions[b] - positions[a]
+    const uy = positions[b + 1] - positions[a + 1]
+    const uz = positions[b + 2] - positions[a + 2]
+    const vx = positions[c] - positions[a]
+    const vy = positions[c + 1] - positions[a + 1]
+    const vz = positions[c + 2] - positions[a + 2]
+    const fn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    for (const v of [item.index[t], item.index[t + 1], item.index[t + 2]]) for (let d = 0; d < 3; d++) face[id[v] * 3 + d] += fn[d]
+  }
+  for (let k = 0; k < n; k++) {
+    const s = share[id[k]]
+    if (!s) continue
+    const g = [face[id[k] * 3], face[id[k] * 3 + 1], face[id[k] * 3 + 2]]
+    const gl = Math.hypot(g[0], g[1], g[2])
+    if (!gl) continue
+    const side = g[0] * normals[k * 3] + g[1] * normals[k * 3 + 1] + g[2] * normals[k * 3 + 2] < 0 ? -1 : 1
+    const m = [0, 1, 2].map((d) => normals[k * 3 + d] * (1 - s) + ((side * g[d]) / gl) * s)
+    const ml = Math.hypot(m[0], m[1], m[2]) || 1
+    for (let d = 0; d < 3; d++) normals[k * 3 + d] = m[d] / ml
+  }
 }
 
 /**

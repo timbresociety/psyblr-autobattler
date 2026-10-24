@@ -3,9 +3,9 @@ import { fieldAt } from '../wear/fields.js'
 import type { ItemChannel, ItemSlot, Knob } from '../wear/item.js'
 import type { RawItem, RawSpec } from './fit.js'
 import { meshNormals } from './fit.js'
-import { TriangleBVH, type V3 } from './ray.js'
+import { TriangleBVH, type V3 } from '../wear/ray.js'
 import { leanOn, type Reference } from './reference.js'
-import { weldPositions } from './weld.js'
+import { weldPositions } from '../wear/weld.js'
 
 /**
  * A generated garment onto the reference body. What a 3D generator makes from a player's words or picture comes at

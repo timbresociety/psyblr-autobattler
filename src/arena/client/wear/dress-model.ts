@@ -9,6 +9,7 @@ import { coverOf, type Cover } from '../../../kit/wear/item.js'
 import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from '../character-look.js'
 import { hangPieces, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
+import { rigCloth } from './cloth-model.js'
 import { BODY_VERTICES, type LoadedWear } from './items.js'
 
 /**
@@ -29,6 +30,8 @@ interface BodyCache {
   base: BodyBase
   fields: BodyFields
   morphs: string[]
+  /** Each bone where it stands in the rest pose, in the mesh's own space. */
+  rest: Map<string, [number, number, number]>
 }
 
 const bodies = new WeakMap<THREE.BufferGeometry, BodyCache>()
@@ -66,7 +69,7 @@ function bodyCache(mesh: THREE.SkinnedMesh): BodyCache {
       rest.set(bone.name, [p.x, p.y, p.z])
     })
     const fields = bodyFields({ positions: base.positions, joints: base.joints, weights: base.weights, bones: mesh.skeleton.bones.map((b) => b.name), rest: (name) => rest.get(name) })
-    cache = { base, fields, morphs }
+    cache = { base, fields, morphs, rest }
     bodies.set(g, cache)
   }
   return cache
@@ -133,9 +136,12 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   return geo
 }
 
+/** The dressed items that draw anything, in the order the outfit's one geometry merges them. */
+const drawn = (items: DressedItem[]) => items.filter((i) => i.index.length)
+
 /** Every dressed item in one geometry, so the whole outfit is one draw. */
 export function clothGeometry(items: DressedItem[]): THREE.BufferGeometry | undefined {
-  const parts = items.filter((i) => i.index.length)
+  const parts = drawn(items)
   if (!parts.length) return undefined
   const total = parts.reduce((n, i) => n + i.count, 0)
   const triangles = parts.reduce((n, i) => n + i.index.length, 0)
@@ -227,6 +233,8 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
     outfit.frustumCulled = false
     outfit.castShadow = true
     mesh.parent!.add(outfit)
+    // whatever hangs loose swings on its own bones (settleCloth each frame)
+    rigCloth(model, outfit, drawn(dressed.items), shape, (bone) => cache.rest.get(bone))
   }
   if (wear) hangRigid(model, look.outfit, wear)
   return true

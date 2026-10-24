@@ -1,7 +1,7 @@
 /**
- * Rays against triangle meshes for the fit pipeline: which body vertices an item lies over (and how far out), whether
- * a point sits inside the body, and where a ray first meets a surface. A plain bounding-volume hierarchy, built once
- * per mesh.
+ * Rays against triangle meshes: for the fit pipeline, which body vertices an item lies over (and how far out) and
+ * whether a point sits inside the body; for dressing and cloth, what an item lies on. A plain bounding-volume
+ * hierarchy, built once per mesh.
  */
 
 export type V3 = [number, number, number]

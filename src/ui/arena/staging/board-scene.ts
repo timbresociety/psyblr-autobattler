@@ -970,6 +970,8 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       f.view.pose(f.anim, now / 1000, dt, false)
       busy = true
     }
+    // the outfit's loose cloth follows the figure, and keeps the board drawing while it swings
+    if (f.view?.settle?.(dt, false, reduced)) busy = true
     return busy
   }
   function layoutBadges() {

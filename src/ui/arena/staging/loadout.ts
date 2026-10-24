@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { BODIES, characterLook, classicCharacterMaterial, HERO_MODELS, heroHue, loadBuild, paintModel, type BodyName, type Build3D, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
 import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
+import { restClothOn } from '../../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, dressModel } from '../../../arena/client/wear/dress-model.js'
 import { wearNow, type LoadedWear } from '../../../arena/client/wear/items.js'
 import type { Build } from '../../../charter/build.js'
@@ -159,6 +160,8 @@ function posed(file: Gltf, look: CharacterLook, atlas: THREE.Texture | null = nu
     mixer.update(0.4)
   }
   model.updateMatrixWorld(true)
+  // a bust is a still: its cloth hangs at rest
+  restClothOn(model)
   return model
 }
 

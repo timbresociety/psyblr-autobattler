@@ -64,6 +64,7 @@ export function readItem(file: Gltf): LoadedItem {
       lift: attr('_lift', 1),
       normal: attr('_nlocal', 3),
       uv: attr('uv', 2),
+      rest: attr('position', 3),
       ...(channel ? { channel } : {}),
       ...(len ? { len } : {}),
       ...(chain ? { chain } : {}),

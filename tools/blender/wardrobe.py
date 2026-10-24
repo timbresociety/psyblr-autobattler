@@ -126,7 +126,9 @@ class Surface:
         self.body = w.body
         self.floor = w.floor
         # the trunk and legs, arms left out: what skirts and capes must clear
-        self.trunk = [v.co.copy() for v, wt in zip(obj.data.vertices, d.vweights) if sum(x for b, x in wt.items() if b.startswith(ARMS)) <= 0.2]
+        keep = {v.index for v, wt in zip(obj.data.vertices, d.vweights) if sum(x for b, x in wt.items() if b.startswith(ARMS)) <= 0.2}
+        self.trunk = [v.co.copy() for v in obj.data.vertices if v.index in keep]
+        self.trunk_edges = [(obj.data.vertices[a].co.copy(), obj.data.vertices[b].co.copy()) for a, b in (e.vertices for e in obj.data.edges) if a in keep and b in keep]
 
     def chain(self, side, s):
         """A point down an arm: 0 at the shoulder, 0.5 at the elbow, 1 at the wrist (as src/kit/wear/fields.ts measures)."""
@@ -135,8 +137,15 @@ class Surface:
         return a.lerp(b, s * 2) if s <= 0.5 else b.lerp(c, (s - 0.5) * 2)
 
     def section(self, z, band=0.025):
-        """The body's horizontal cross-section at height z: trunk and leg points within `band`."""
-        return [p for p in self.trunk if abs(p.z - z) <= band]
+        """
+        The body's horizontal cross-section at height z, trunk and legs: where its edges cross z, and its vertices within
+        `band`. The body is coarse (a leg's vertices sit further apart than a skirt's rings), so the edges carry it.
+        """
+        pts = [p for p in self.trunk if abs(p.z - z) <= band]
+        for a, b in self.trunk_edges:
+            if (a.z - z) * (b.z - z) < 0:
+                pts.append(a.lerp(b, (z - a.z) / (b.z - a.z)))
+        return pts
 
     def snap(self, p, d=None, reach=0.6):
         """Where a point lands on the surface: along `d` (from outside) or at the nearest point."""
@@ -630,6 +639,7 @@ def skirt(s, mat, top='waist', hem=0.45, flare=0.06, ease=0.018, pleats=0, pleat
     top_z = {'waist': d.waist_z + 0.03, 'hip': d.hip_z + 0.04, 'low': d.hip_z - 0.02}[top]
     hem_z = top_z - hem * (top_z - (s.floor + 0.03))
     rings = max(4, round((top_z - hem_z) / 0.045) + 1)
+    step = (top_z - hem_z) / (rings - 1)
     c = (0.0, d.bones['hips'][0].y)
     bm = bmesh.new()
     uv = bm.loops.layers.uv.new('UVMap')
@@ -638,7 +648,10 @@ def skirt(s, mat, top='waist', hem=0.45, flare=0.06, ease=0.018, pleats=0, pleat
     for r in range(rings):
         t = r / (rings - 1)
         z = top_z + (hem_z - top_z) * t
-        pts = [(p.x, p.y) for p in s.section(z)]
+        # everything the ring's slab holds (halfway to the rings either side, never past the top or the hem, which
+        # would take in the feet), and the centre, so the hull is round it
+        dzs = [k * 0.25 for k in range(-2, 3) if (r < rings - 1 or k >= 0) and (r > 0 or k <= 0)]
+        pts = [(p.x, p.y) for dz in dzs for p in s.section(z + dz * step, band=step / 8)] + [c]
         hull = hull2d(pts) if len(pts) >= 3 else [(0.12, c[1]), (0, c[1] + 0.1), (-0.12, c[1]), (0, c[1] - 0.1)]
         radii = []
         for k in range(segs):
@@ -752,9 +765,44 @@ def cape(s, mat, length=0.95, flare=0.4, cols=11, rows=13, ease=0.03, width=1.0,
     return obj
 
 
-def band(s, mat, centre, axis, height, offset, count=24, flare=0.0, radius=0.4, faces=None, name='band'):
-    """A ring band (belt, obi, cuff, hem) round `s`'s surface: humanlib's, in this item's channel."""
-    return s.d.band(name, centre, axis, V((1, 0, 0)), height, offset, mat, count=count, flare=flare, radius=radius, faces=faces)
+def band(s, mat, centre, axis, height, offset, count=24, flare=0.0, radius=0.4, faces=None, name='band', over=None, gap=0.004):
+    """
+    A ring band (belt, obi, cuff, hem) round `s`'s surface: humanlib's, in this item's channel. Parts listed in `over`
+    (a robe's skirt under its obi) are cleared by `gap` wherever the band's height overlaps them.
+    """
+    made = s.d.band(name, centre, axis, V((1, 0, 0)), height, offset, mat, count=count, flare=flare, radius=radius, faces=faces)
+    return clear_of(made, over, centre, axis.normalized(), height, gap) if over and made is not None else made
+
+
+def clear_of(obj, over, centre, axis, height, gap, samples=11, margin=0.01):
+    """
+    Push a band straight out from its axis until, at each bearing, it stands `gap` outside the furthest of the `over`
+    parts anywhere along its height, and `margin` past either edge (a skirt flaring out just under a narrow rope would
+    show past its edge): an obi wraps the skirt it's tied over instead of sinking into it.
+    """
+    trees = [BVHTree.FromPolygons([o.matrix_world @ v.co for v in o.data.vertices], [list(f.vertices) for f in o.data.polygons]) for o in over if o is not None]
+    inv = obj.matrix_world.inverted()
+    for v in obj.data.vertices:
+        p = obj.matrix_world @ v.co
+        along = (p - centre).dot(axis)
+        radial = (p - centre) - axis * along
+        r = radial.length
+        if r < 1e-6:
+            continue
+        d = radial / r
+        need = 0.0
+        for i in range(samples):
+            c = centre + axis * (-margin + (height + 2 * margin) * i / (samples - 1))
+            for tree in trees:
+                # inward from just outside the band (an arm hanging further out isn't what it's tied over): the first
+                # hit is the part's outer side
+                hit = tree.ray_cast(c + d * (r + 0.05), -d, r + 0.05)
+                if hit[0] is not None:
+                    need = max(need, (hit[0] - c - axis * (hit[0] - c).dot(axis)).length + gap)
+        if need > r:
+            v.co = inv @ (centre + axis * along + d * need)
+    obj.data.update()
+    return obj
 
 
 def gear(s, kind, clear=None, thick=0.0, **args):
@@ -1351,14 +1399,15 @@ def _greaves(w):
 # full body ---------------------------------------------------------------------------------------------------------
 
 
-def obi(c, mat, height=0.12, offset=0.016):
-    return band(c, mat, V((0, c.d.bones['hips'][0].y, c.d.waist_z - 0.04)), V((0, 0, 1)), height, offset, count=28, faces=c.faces('hips', 'spine', 'chest'), name='obi')
+def obi(c, mat, height=0.12, offset=0.016, over=None):
+    return band(c, mat, V((0, c.d.bones['hips'][0].y, c.d.waist_z - 0.04)), V((0, 0, 1)), height, offset, count=28, faces=c.faces('hips', 'spine', 'chest'), name='obi', over=over)
 
 
 @item('kimono', 'Kimono', 'full', [('kimono', '#7a1f2b', 'silk'), ('obi', '#d9b45a', 'silk'), ('collar', '#f1ece2', 'silk')], knobs=['length'], tags=['kimono', 'yukata', 'japanese robe', 'geisha'])
 def _kimono(w):
     c = clothes(w, [top(kind='jacket', mat='kimono', sleeve=0.55, neck='deep-v', hem='hip', thick=0.01)])
-    return [c, skirt(c, 'kimono', top='waist', hem=0.97, flare=0.03, ease=0.014, name='kimono_skirt'), obi(c, 'obi')] + sleeves(c, 'kimono', start=0.16, end=0.95, drop=0.24, ease=0.03) + gear(c, 'lapels', mat='collar', width=0.035, clear=0.002, thick=0.004)
+    under = skirt(c, 'kimono', top='waist', hem=0.97, flare=0.03, ease=0.014, name='kimono_skirt')
+    return [c, under, obi(c, 'obi', over=[c.obj, under])] + sleeves(c, 'kimono', start=0.16, end=0.95, drop=0.24, ease=0.03) + gear(c, 'lapels', mat='collar', width=0.035, clear=0.002, thick=0.004)
 
 
 @item('wizard_robe', 'Wizard robe', 'full', [('robe', '#2b2a6b', 'silk'), ('trim', '#d9b45a', 'silk'), ('rope', '#c8b48a', 'cotton')], knobs=['length'], tags=['wizard robe', 'robe', 'mage robe', 'sorcerer', 'gandalf', 'wizard'])
@@ -1366,7 +1415,7 @@ def _wizard_robe(w):
     c = clothes(w, [top(kind='jacket', mat='robe', sleeve=0.6, neck='v', hem='hip', thick=0.012)])
     parts = [c, skirt(c, 'robe', top='waist', hem=0.98, flare=0.12, ease=0.016, name='robe_skirt')]
     parts += sleeves(c, 'robe', start=0.2, end=1.0, drop=0.12, ease=0.03, flare=0.09)
-    parts.append(band(c, 'rope', V((0, c.d.bones['hips'][0].y, c.d.waist_z - 0.02)), V((0, 0, 1)), 0.022, 0.02, faces=c.faces('hips', 'spine'), name='rope'))
+    parts.append(band(c, 'rope', V((0, c.d.bones['hips'][0].y, c.d.waist_z - 0.02)), V((0, 0, 1)), 0.022, 0.02, faces=c.faces('hips', 'spine'), name='rope', over=[c.obj, parts[1]]))
     return parts + gear(c, 'lapels', mat='trim', width=0.03, clear=0.002, thick=0.004)
 
 
@@ -1407,7 +1456,8 @@ def _jumpsuit(w):
 @item('gown', 'Gown', 'full', [('gown', '#1d1b3a', 'silk'), ('sash', '#c9a14a', 'silk')], knobs=['length'], tags=['gown', 'ball gown', 'evening dress', 'dress', 'princess dress'])
 def _gown(w):
     c = clothes(w, [top(kind='vest', mat='gown', sleeve=0, neck='scoop', hem='waist', thick=0.006)])
-    return [c, skirt(c, 'gown', top='waist', hem=1.0, flare=0.28, ease=0.014, name='gown_skirt'), obi(c, 'sash', height=0.035, offset=0.02)]
+    under = skirt(c, 'gown', top='waist', hem=1.0, flare=0.28, ease=0.014, name='gown_skirt')
+    return [c, under, obi(c, 'sash', height=0.035, offset=0.02, over=[c.obj, under])]
 
 
 @item('bodysuit', 'Hero bodysuit', 'full', [('suit', '#1a3f9e', 'silk'), ('panels', '#c4162a', 'silk'), ('emblem', '#f2c230', 'glow')], knobs=['sleeve', 'leg'], tags=['superhero suit', 'bodysuit', 'spandex', 'hero suit', 'catsuit', 'superhero'])

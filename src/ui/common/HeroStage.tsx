@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { BODIES, characterLook, classicCharacterMaterial, paintModel, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
+import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { HeroLook } from '../../charter/look.js'
@@ -82,6 +83,8 @@ function disposeModel(model: THREE.Object3D) {
     if (!mesh.isMesh) return
     // the painted geometry is ours; its buffers are shared with the cached file, which only this renderer uploaded
     mesh.geometry.dispose()
+    // so is each clone's skeleton (the outfit's own, when its cloth hangs on bones of its own)
+    ;(o as THREE.SkinnedMesh).skeleton?.dispose()
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m)
   })
   materials.forEach((m) => m.dispose())
@@ -238,6 +241,11 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
       // reduced motion: nothing moves on its own, so only changes are drawn
       if (calm && !state.dirty && !dragging) return
       state.dirty = false
+      // the outfit's loose cloth swings with the turntable and the idle, or holds still under reduced motion
+      if (state.model) {
+        if (calm) restClothOn(state.model)
+        else settleCloth(state.model, step)
+      }
       renderer.render(scene, camera)
     })
 

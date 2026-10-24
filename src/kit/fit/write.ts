@@ -83,6 +83,7 @@ export async function readItemFile(source: string | URL | Uint8Array, vertices: 
       lift: need('_LIFT'),
       normal: need('_NLOCAL'),
       uv: need('TEXCOORD_0'),
+      rest: need('POSITION'),
       ...(channel ? { channel } : {}),
       ...(len ? { len } : {}),
       ...(chain ? { chain } : {}),

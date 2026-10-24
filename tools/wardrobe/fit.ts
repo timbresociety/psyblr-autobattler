@@ -117,9 +117,9 @@ writeFileSync(
 )
 
 const pad = (s: string | number, n: number) => String(s).padEnd(n)
-console.log(`${pad('item', 22)}${pad('slot', 7)}${pad('tris', 6)}${pad('covers', 8)}${pad('hides', 7)}${pad('chain', 6)}${pad('bind mm', 9)}${pad('under', 7)}coverage`)
+console.log(`${pad('item', 22)}${pad('slot', 7)}${pad('tris', 6)}${pad('buried', 7)}${pad('covers', 8)}${pad('hides', 7)}${pad('chain', 6)}${pad('bind mm', 9)}${pad('under', 7)}coverage`)
 for (const r of reports) {
-  console.log(`${pad(r.id, 22)}${pad(r.slot, 7)}${pad(r.triangles, 6)}${pad(r.covered, 8)}${pad(r.hidden, 7)}${pad(r.particles, 6)}${pad((r.bindError * 1000).toFixed(2), 9)}${pad(`${(r.underSkin * 100).toFixed(1)}%`, 7)}${r.coverage.map((c) => `${(c * 100).toFixed(0)}%`).join(' ')}`)
+  console.log(`${pad(r.id, 22)}${pad(r.slot, 7)}${pad(r.triangles, 6)}${pad(r.buried, 7)}${pad(r.covered, 8)}${pad(r.hidden, 7)}${pad(r.particles, 6)}${pad((r.bindError * 1000).toFixed(2), 9)}${pad(`${(r.underSkin * 100).toFixed(1)}%`, 7)}${r.coverage.map((c) => `${(c * 100).toFixed(0)}%`).join(' ')}`)
 }
 if (missing.length) console.log(`not built yet: ${missing.join(', ')}`)
 const failed = reports.filter((r) => r.problems.length)

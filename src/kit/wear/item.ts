@@ -91,6 +91,8 @@ export interface SurfaceItem {
   len?: Float32Array
   /** Per vertex: chain group (-1 for none), column, level. */
   chain?: Float32Array
+  /** Per vertex, where it sits on the reference body (the file's mesh): loose cloth drapes from here (see dress.ts). */
+  rest?: Float32Array
 }
 
 /** What a covering item (surface or rigid) gives the layers: the vertices it lies over and its shell there. */
@@ -157,13 +159,13 @@ export function coverOf(meta: ItemMeta, vertices: number): Cover {
 
 /** A surface item from its file's arrays (custom attributes as three.js or gltf-transform hands them over). */
 export function surfaceItem(
-  raw: { extras: unknown; index: ArrayLike<number>; tri: ArrayLike<number>; st: ArrayLike<number>; lift: ArrayLike<number>; normal: ArrayLike<number>; uv: ArrayLike<number>; channel?: ArrayLike<number>; len?: ArrayLike<number>; chain?: ArrayLike<number> },
+  raw: { extras: unknown; index: ArrayLike<number>; tri: ArrayLike<number>; st: ArrayLike<number>; lift: ArrayLike<number>; normal: ArrayLike<number>; uv: ArrayLike<number>; channel?: ArrayLike<number>; len?: ArrayLike<number>; chain?: ArrayLike<number>; rest?: ArrayLike<number> },
   vertices: number,
 ): SurfaceItem {
   const count = raw.lift.length
   const meta = checkMeta(raw.extras, vertices)
   if (meta.mode !== 'surface') throw new Error(`${meta.id} is not a surface item`)
-  if (raw.tri.length !== count * 3 || raw.st.length !== count * 2 || raw.normal.length !== count * 3 || raw.uv.length !== count * 2) throw new Error(`${meta.id}: attribute sizes disagree`)
+  if (raw.tri.length !== count * 3 || raw.st.length !== count * 2 || raw.normal.length !== count * 3 || raw.uv.length !== count * 2 || (raw.rest && raw.rest.length !== count * 3)) throw new Error(`${meta.id}: attribute sizes disagree`)
   const tri = Uint16Array.from(raw.tri, (v) => Math.round(v))
   if (tri.some((v) => v >= vertices)) throw new Error(`${meta.id}: binds past the body's vertices`)
   const index = Uint32Array.from(raw.index)
@@ -196,5 +198,6 @@ export function surfaceItem(
     channel,
     ...(raw.len ? { len: Float32Array.from(raw.len) } : {}),
     ...(chain ? { chain } : {}),
+    ...(raw.rest ? { rest: Float32Array.from(raw.rest) } : {}),
   }
 }

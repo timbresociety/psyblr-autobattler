@@ -5,7 +5,7 @@ import { bodyBase, shapeBody, type BodyShape } from '../body/shape.js'
 import { TriangleGrid, type SurfaceShape } from '../wear/bind.js'
 import { bodyFields, type BodyFields } from '../wear/fields.js'
 import { skinShape } from './shell.js'
-import { TriangleBVH, type V3 } from './ray.js'
+import { TriangleBVH, type V3 } from '../wear/ray.js'
 
 /**
  * The body every item is fitted on: the medium male body as built, with no physique and no face of its own. Items

@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { bindPoints, evaluate } from '../wear/bind.js'
 import { chainsOf, PARTICLES } from './chains.js'
-import { BUDGET, fitItem, type RawItem } from './fit.js'
-import { TriangleBVH } from './ray.js'
+import { BUDGET, fitItem, unburied, type RawItem } from './fit.js'
+import { TriangleBVH } from '../wear/ray.js'
 import { leanOn, readReference, type Reference } from './reference.js'
 import { shellItem } from './shell.js'
-import { weldPositions } from './weld.js'
+import { weldPositions } from '../wear/weld.js'
 import { readItemFile, writeItem } from './write.js'
 
 const pub = (path: string) => new URL(`../../../public${path}`, import.meta.url)
@@ -21,6 +21,20 @@ const spec = (id: string, slot: RawItem['spec']['slot']): RawItem['spec'] => ({ 
 function shell(id: string, slot: RawItem['spec']['slot'], select: (v: number) => boolean, lift: number): RawItem {
   const s = shellItem(ref.shape, { id, slot, select, lift })
   return { spec: spec(id, slot), positions: s.positions, index: s.index, uv: s.uv }
+}
+
+/** Items joined into one, as an item's parts are. */
+function joined(id: string, ...parts: RawItem[]): RawItem {
+  const positions: number[] = []
+  const uv: number[] = []
+  const index: number[] = []
+  for (const p of parts) {
+    const base = positions.length / 3
+    positions.push(...p.positions)
+    uv.push(...(p.uv ?? new Float32Array((p.positions.length / 3) * 2)))
+    index.push(...Array.from(p.index, (v) => v + base))
+  }
+  return { spec: spec(id, parts[0].spec.slot), positions: Float32Array.from(positions), uv: Float32Array.from(uv), index: Uint32Array.from(index) }
 }
 
 /** A skirt round the hips: rings from the waist down, the top ring riding the body and the rest hanging. */
@@ -133,6 +147,31 @@ describe('fitting', () => {
     expect(back.meta).toEqual(file.meta)
     expect(Array.from(back.item.chain!)).toEqual(Array.from(file.item.chain!))
     expect(Array.from(back.item.binding.tri)).toEqual(Array.from(file.item.binding.tri))
+  })
+
+  it("drops what lies under the item's own outer parts, tucks its edges under, and leaves what lies beside them", () => {
+    const P = ref.shape.positions
+    const chest = ref.rest.chest[1]
+    const torso = (v: number) => ref.shape.skin[v] === 1 && leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5
+    const arms = (v: number) => ref.shape.skin[v] === 1 && leanOn(ref, v, ['upper_arm_L', 'upper_arm_R', 'forearm_L', 'forearm_R']) >= 0.5
+    const shirt = shell('shirt', 'upper', torso, 0.005)
+    const band = shell('band', 'upper', (v) => torso(v) && Math.abs(P[v * 3 + 1] - chest) < 0.1, 0.014)
+    const key = (q: ArrayLike<number>, v: number) => `${Math.round(q[v * 3] * 1e4)},${Math.round(q[v * 3 + 1] * 1e4)},${Math.round(q[v * 3 + 2] * 1e4)}`
+    const all = (raw: RawItem) => Array.from({ length: raw.positions.length / 3 }, (_, v) => v)
+    // a band 9 mm over the shirt, as an obi lies over a robe
+    const { raw, buried } = unburied(joined('banded', shirt, band), ref)
+    expect(buried).toBeGreaterThan(band.index.length / 3 / 4)
+    const left = new Set(all(raw).map((v) => key(raw.positions, v)))
+    // the band stays whole, and so does the shirt clear of it
+    expect(all(band).every((v) => left.has(key(band.positions, v)))).toBe(true)
+    expect(all(shirt).filter((v) => Math.abs(shirt.positions[v * 3 + 1] - chest) > 0.17).every((v) => left.has(key(shirt.positions, v)))).toBe(true)
+    // what's left of the shirt under the band lies a centimetre under it
+    const { lift } = bindPoints(raw.positions, ref.skin, ref.grid)
+    const tucked = all(raw).filter((v) => Math.abs(raw.positions[v * 3 + 1] - chest) < 0.05 && lift[v] < 0.01)
+    expect(tucked.length).toBeGreaterThan(0)
+    for (const v of tucked) expect(lift[v]).toBeLessThan(0.014 - 0.01 + 5e-4)
+    // sleeves beside the torso bury none of it
+    expect(unburied(joined('sleeved', shirt, shell('sleeves', 'upper', arms, 0.014)), ref).buried).toBe(0)
   })
 
   it('flags an item that sinks into the skin, misses its slot, or runs over budget', () => {

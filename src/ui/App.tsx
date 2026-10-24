@@ -8,6 +8,7 @@ import './theme.css'
 
 // the arena bench (U1) opens on its own with `?bench` and loads three's WebGPU build only there
 const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
+const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./dev/WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
 // the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
 
@@ -93,6 +94,13 @@ const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[]
 ]
 
 export function App() {
+  if (WardrobeScreen && new URLSearchParams(window.location.search).has('wardrobe')) {
+    return (
+      <Suspense fallback={<p className="screen-loading">Loading the wardrobe…</p>}>
+        <WardrobeScreen />
+      </Suspense>
+    )
+  }
   if (new URLSearchParams(window.location.search).has('bench')) {
     return (
       <Suspense fallback={<p className="screen-loading">Loading the bench…</p>}>

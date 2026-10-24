@@ -6,6 +6,7 @@ import type { Build } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { AnimState } from './animation.js'
 import { metaChannel, paintModel, REGION_INDEX, type CharacterLook, type Gltf } from './character-look.js'
+import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel } from './wear/dress-model.js'
 import type { LoadedWear } from './wear/items.js'
 
@@ -70,6 +71,11 @@ export function castClip(build: Build, slot: string): string {
 export interface CharacterView {
   root: THREE.Group
   pose: (state: AnimState, dt: number, moving: boolean) => void
+  /**
+   * The outfit's loose cloth, once the hero stands where it's drawn this frame: `far` steps it less often, `still`
+   * holds it at rest (reduced motion). True while it still swings.
+   */
+  settle: (dt: number, far?: boolean, still?: boolean) => boolean
 }
 
 /** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face, `wear` its outfit. */
@@ -115,6 +121,11 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       const oneShotPlaying = current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
       if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, wanted === 'hurt' ? 0.05 : 0.15)
       mixer.update(dt)
+    },
+    settle: (dt, far, still) => {
+      if (!still) return settleCloth(scene, dt, far)
+      restClothOn(scene)
+      return false
     },
   }
 }

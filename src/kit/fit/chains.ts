@@ -1,6 +1,6 @@
 import type { ChainGroup, ItemSlot } from '../wear/item.js'
 import type { Reference } from './reference.js'
-import { weldPositions } from './weld.js'
+import { weldPositions } from '../wear/weld.js'
 
 /**
  * Loose cloth into chains: the parts of an item that hang (a skirt below the hips, a cape, a kimono's sleeves, long

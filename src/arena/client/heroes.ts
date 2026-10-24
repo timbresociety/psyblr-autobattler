@@ -39,6 +39,8 @@ export interface HeroView {
   animatesDeath?: boolean
   /** The hero's size class right now: a transformation swaps in its form's body, or grows the model if it has none. */
   setSize?: (size: SizeClass) => void
+  /** Swing the outfit's loose cloth once the hero stands where it's drawn this frame (see CharacterView.settle). */
+  settle?: (dt: number, far?: boolean, still?: boolean) => boolean
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
@@ -96,6 +98,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     fallback: false,
     animatesDeath: true,
     pose: (state, _t, dt, moving = false) => (formView?.root.visible ? formView : view).pose(state, dt, moving),
+    settle: (dt, far, still) => (formView?.root.visible ? formView : view).settle(dt, far, still),
     setSize: (next) => {
       if (next === size) return
       size = next
