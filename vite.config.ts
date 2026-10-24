@@ -7,7 +7,7 @@ import { mediapipeWasm } from './scripts/mediapipe-wasm'
 export default defineConfig({
   plugins: [react(), devApi(), mediapipeWasm()],
   test: {
-    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**', '.vercel/**', '.dev-store/**'],
+    exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**', 'tools/**', '.vercel/**', '.dev-store/**', '.scratch/**'],
     setupFiles: ['./vitest.setup.ts'],
     passWithNoTests: true,
     // balance tests run thousands of simulated fights
@@ -17,6 +17,6 @@ export default defineConfig({
     port: 3110,
     host: true,
     // the dev API's database and uploads (scripts/dev-api.ts) change constantly and are never source
-    watch: { ignored: ['**/.dev-store/**'] },
+    watch: { ignored: ['**/.dev-store/**', '**/.scratch/**'] },
   },
 })

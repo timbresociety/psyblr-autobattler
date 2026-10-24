@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { proposeBuild, hydrateBuild, setLook } from './build.js'
-import { FACE_POINTS, defaultLook, hslHex, hydrateLook, toHex } from './look.js'
+import { FACE_POINTS, defaultLook, hslHex, hydrateLook, outfitOf, toHex } from './look.js'
 
 const face = { url: '/dev-store/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp', width: 512, height: 512, points: new Array(FACE_POINTS * 2).fill(100.04) }
 
@@ -38,5 +38,43 @@ describe('a hero’s look', () => {
     expect(hslHex(1 / 3, 1, 0.5)).toBe('#00ff00')
     expect(hslHex(0, 0, 0.5)).toBe('#808080')
     expect(toHex([1, 0.5, 0])).toBe('#ff8000')
+  })
+
+  it('reads the wardrobe: a physique, and well-formed items in known slots with their colours, finishes and cuts', () => {
+    const look = hydrateLook({
+      gender: 'f',
+      colors: {},
+      physique: { weight: 0.7, muscle: 0.2, age: 0.1 },
+      wear: {
+        full: { id: 'kimono', url: '/kit/wear/kimono.glb', colors: ['#AA0000', 'gold', null], finishes: ['silk', 'velvet'], knobs: { sleeve: 0.5, hem: 2, wings: 1 } },
+        upper: { id: 'tee', url: '/kit/wear/tee.glb' },
+        head: { id: 'kasa', url: 'https://evil.example/x.glb' },
+        tail: { id: 'x', url: '/kit/wear/x.glb' },
+        hand_r: { id: 'katana', url: '/kit/pieces/katana.glb' },
+      },
+    })
+    expect(look?.physique).toEqual({ weight: 0.7, muscle: 0.2, age: 0.1 })
+    // a full-body item replaces the upper one; bad colours and finishes become the item's own (null); bad knobs go
+    expect(look?.wear).toEqual({
+      full: { id: 'kimono', url: '/kit/wear/kimono.glb', colors: ['#aa0000', null, null], finishes: ['silk', null], knobs: { sleeve: 0.5 } },
+      hand_r: { id: 'katana', url: '/kit/pieces/katana.glb' },
+    })
+    expect(hydrateLook({ gender: 'm', colors: {}, physique: { weight: 2, muscle: 0, age: 0 } })).not.toHaveProperty('physique')
+  })
+
+  it('dresses a look from before the wardrobe in wardrobe items, in its old colours', () => {
+    const old = { gender: 'm' as const, hair: 'curly' as const, beard: 'goatee' as const, armour: true, cape: true, colors: { suit: '#112233', metal: '#c0a060', cape: '#330000', hair: '#221100', pants: '#000011', boot: '#100000' }, gear: { hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', color: '#00ff00' } } }
+    expect(outfitOf(old)).toEqual({
+      hair: { id: 'hair_curly', url: '/kit/wear/hair_curly.glb', colors: ['#221100'] },
+      beard: { id: 'beard_goatee', url: '/kit/wear/beard_goatee.glb', colors: ['#221100'] },
+      upper: { id: 'breastplate', url: '/kit/wear/breastplate.glb', colors: ['#c0a060', '#112233'] },
+      lower: { id: 'trousers', url: '/kit/wear/trousers.glb', colors: ['#000011'] },
+      feet: { id: 'boots', url: '/kit/wear/boots.glb', colors: ['#100000'] },
+      back: { id: 'cape', url: '/kit/wear/cape.glb', colors: ['#330000'] },
+      hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', colors: ['#00ff00'] },
+    })
+    // a wardrobe look wears its own
+    const wear = { upper: { id: 'tee', url: '/kit/wear/tee.glb' } }
+    expect(outfitOf({ ...old, wear })).toBe(wear)
   })
 })

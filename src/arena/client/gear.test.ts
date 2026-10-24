@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { hangSockets, socketMatrix, wearGear, type BodySockets } from './gear.js'
+import { hangPieces, hangSockets, socketMatrix, type BodySockets } from './gear.js'
 
 /** A one-bone skinned body whose bone sits at (0, 1, 0) at rest. */
 function body() {
@@ -48,8 +48,9 @@ describe('gear on a body', () => {
     const steel = new THREE.MeshStandardMaterial({ name: 'steel' })
     const scene = new THREE.Group()
     scene.add(new THREE.Mesh(new THREE.BufferGeometry(), primary), new THREE.Mesh(new THREE.BufferGeometry(), steel))
-    const [worn] = wearGear(root, { hand_r: { id: 'katana', url: '/kit/pieces/katana.glb', color: '#00ff00' } }, { sockets, files: new Map([['/kit/pieces/katana.glb', { scene, animations: [] }]]) })
+    const [worn] = hangPieces(root, [{ name: 'hand_r', socket: 'hand_r', file: { scene, animations: [] }, color: '#00ff00' }], sockets)
     expect(worn.parent?.name).toBe('socket:hand_r')
+    expect(worn.name).toBe('gear:hand_r')
     const [a, b] = worn.children as THREE.Mesh[]
     expect((a.material as THREE.MeshStandardMaterial).color.getHexString()).toBe('00ff00')
     expect(primary.color.getHexString()).toBe('ff0000')
@@ -57,8 +58,8 @@ describe('gear on a body', () => {
     expect(a.castShadow).toBe(true)
   })
 
-  it('skips a slot whose piece did not load', () => {
+  it('skips a piece whose socket the body lacks', () => {
     const { root } = body()
-    expect(wearGear(root, { hand_r: { id: 'katana', url: '/kit/pieces/katana.glb' } }, { sockets, files: new Map() })).toEqual([])
+    expect(hangPieces(root, [{ name: 'face', socket: 'face', file: { scene: new THREE.Group(), animations: [] } }], sockets)).toEqual([])
   })
 })

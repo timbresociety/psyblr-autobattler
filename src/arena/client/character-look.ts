@@ -1,14 +1,15 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import { defaultLook, ROLE_GENDER, type BeardStyle, type FacePhoto, type Gender, type HairStyle, type HeroLook, type LookColor } from '../../charter/look.js'
+import { defaultLook, outfitOf, ROLE_GENDER, type BeardStyle, type FacePhoto, type Gender, type HairStyle, type HeroLook, type LookColor, type LookSlot, type Worn } from '../../charter/look.js'
+import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 import { DEMO_HEROES } from '../demo/roster.js'
 
 /**
- * What a hero looks like in the arena's own characters (R24), without any renderer: which character file it wears,
- * its colours per body region, which switchable parts show, and its photo face if it has one. The demo roster's real
- * people each have their own model (a MakeHuman body with their face, hair and signature outfit over battle gear);
- * every other hero wears the body for its size and gender, dressed and coloured by its look. Both come from
+ * What a hero looks like in the arena's own characters (R24), without any renderer: which body it wears (its size and
+ * gender), how that body is built, its skin and photo face, and its outfit from the wardrobe (wear/dress-model.ts
+ * dresses the body with it). The demo roster's real people still wear their own models from before the shared
+ * surface, outfits baked in and painted per region (paintModel), until they move onto the wardrobe. All come from
  * tools/blender/human.py. The arena, the staging busts and the 3D previews all read this, so a hero looks the same in
  * its portrait as on the field, on either side.
  */
@@ -63,6 +64,11 @@ export const REGION_INDEX = { metal: 7, baked: 12, bakedGloss: 13, bakedMetal: 1
 
 export interface CharacterLook {
   build: Build3D
+  /** How the body is built (bodies on the shared surface). */
+  physique: Physique
+  /** What it wears, slot by slot (bodies on the shared surface; a demo hero's own model wears its baked outfit). */
+  outfit: Partial<Record<LookSlot, Worn>>
+  /** The rest paints a demo hero's own model (regions and parts); bodies read only the skin and eye colours. */
   hair: Hair
   beard: Beard
   armour: boolean
@@ -70,7 +76,6 @@ export interface CharacterLook {
   colors: Record<TintRegion, THREE.Color>
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
   face?: FacePhoto
-  /** Pieces in the body's sockets (gear.ts); a demo hero's model has its own outfit and wears none. */
   gear?: HeroLook['gear']
 }
 
@@ -111,6 +116,8 @@ export function characterLook(build: Build, hue: number): CharacterLook {
   const colors = { ...base.colors, ...(look?.colors ?? {}) }
   const out: CharacterLook = {
     build: model ?? bodyFor(build),
+    physique: { ...NEUTRAL_PHYSIQUE, ...(look?.physique ?? {}) },
+    outfit: outfitOf(look ?? base),
     hair: look?.hair ?? base.hair,
     beard: look?.beard ?? base.beard ?? 'none',
     armour: look ? look.armour : base.armour,

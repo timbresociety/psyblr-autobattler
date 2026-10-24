@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
+import { BODIES, characterLook, classicCharacterMaterial, paintModel, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
-import { loadGear, wearGear } from '../../arena/client/gear.js'
+import { classicClothMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
+import { loadWear } from '../../arena/client/wear/items.js'
 import type { HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
 import type { Build } from '../../charter/build'
@@ -69,9 +70,9 @@ function radialTexture(stops: [number, string][]): THREE.CanvasTexture {
 
 const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2).translate(0, y, 0)
 
-/** A neutral figure for the empty stage: a generic body, no cape or armour, short hair. */
+/** A neutral figure for the empty stage: a generic body, nothing worn. */
 function standInLook(): CharacterLook {
-  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', hair: 'crop', armour: false, cape: false }
+  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', hair: 'crop', armour: false, cape: false, outfit: {} }
 }
 
 function disposeModel(model: THREE.Object3D) {
@@ -274,17 +275,18 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const [atlas, gear] = look ? await Promise.all([heroAtlas(file, painted), loadGear(painted.build, painted.gear, modelFile)]) : [null, undefined]
-        return { file, atlas, gear }
+        const onBody = (BODIES as readonly string[]).includes(painted.build)
+        const [atlas, wear] = look ? await Promise.all([heroAtlas(file, painted), onBody ? loadWear(painted.build as BodyName, painted.outfit, modelFile) : undefined]) : [null, undefined]
+        return { file, atlas, wear }
       })
       .then(
-      ({ file, atlas, gear }) => {
+      ({ file, atlas, wear }) => {
         if (cancelled || live.current !== state) return
         const model = cloneSkinned(file.scene)
-        // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
+        // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-        paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty), atlas)
-        if (gear) wearGear(model, painted.gear, gear)
+        const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
+        if (!dressModel(model, painted, wear, { body, cloth: () => (look ? classicClothMaterial() : empty) }, atlas)) paintModel(model, painted, body, atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)

@@ -10,6 +10,9 @@ import { weldSurface, type BodySurface } from './surface.js'
  */
 export interface BodyFile {
   surface: BodySurface
+  /** The file's own vertex order: welded index per vertex, and the index buffer. */
+  vid: Float32Array
+  index: Uint32Array
   /** Per file vertex. */
   positions: Float32Array
   joints: Uint16Array | Uint8Array
@@ -17,6 +20,8 @@ export interface BodyFile {
   /** Morph target position deltas per file vertex, in file order. */
   morphs: Float32Array[]
   bones: string[]
+  /** Each bone's rest position (glTF axes), from the skin's inverse bind matrices. */
+  rest: Record<string, [number, number, number]>
   clips: string[]
 }
 
@@ -39,13 +44,34 @@ export async function readBody(path: string | URL): Promise<BodyFile> {
   const prims = root.listMeshes().flatMap((m) => m.listPrimitives())
   if (prims.length !== 1) throw new Error(`a body file has one primitive, this one ${prims.length}`)
   const p = prims[0]
+  const skin = root.listSkins()[0]
+  const joints = skin?.listJoints() ?? []
+  const inverse = skin?.getInverseBindMatrices()?.getArray()
+  const rest: BodyFile['rest'] = {}
+  joints.forEach((j, i) => {
+    if (!inverse) return
+    const m = Array.from(inverse.slice(i * 16, i * 16 + 16))
+    rest[j.getName()] = invertTranslation(m)
+  })
+  const vid = Float32Array.from(array(p, '_VID'))
+  const index = Uint32Array.from(p.getIndices()!.getArray()!)
   return {
-    surface: weldSurface(array(p, '_VID'), p.getIndices()!.getArray()!),
+    surface: weldSurface(vid, index),
+    vid,
+    index,
     positions: Float32Array.from(array(p, 'POSITION')),
     joints: array(p, 'JOINTS_0') as Uint16Array | Uint8Array,
     weights: Float32Array.from(array(p, 'WEIGHTS_0')),
     morphs: p.listTargets().map((t) => Float32Array.from(t.getAttribute('POSITION')!.getArray()!)),
-    bones: root.listSkins()[0]?.listJoints().map((j) => j.getName()) ?? [],
+    bones: joints.map((j) => j.getName()),
+    rest,
     clips: root.listAnimations().map((a) => a.getName()),
   }
+}
+
+/** Where an inverse bind matrix (column-major) puts its bone: the translation of its inverse. */
+function invertTranslation(m: number[]): [number, number, number] {
+  // a rigid inverse bind matrix: the rotation's transpose takes the translation back
+  const [r00, r10, r20, , r01, r11, r21, , r02, r12, r22, , tx, ty, tz] = m
+  return [-(r00 * tx + r10 * ty + r20 * tz), -(r01 * tx + r11 * ty + r21 * tz), -(r02 * tx + r12 * ty + r22 * tz)]
 }

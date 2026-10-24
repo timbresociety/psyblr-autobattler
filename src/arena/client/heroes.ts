@@ -7,10 +7,10 @@ import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
 import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
 import { formSize } from '../../forge/form.js'
-import { modelFor } from './character-look.js'
+import { BODIES, modelFor, type BodyName } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
-import { loadGear } from './gear.js'
+import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
 
 /**
@@ -69,8 +69,12 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const dressed = async (shape: Build) => {
     const shapeLook = characterLook(shape, hue)
     const file = await load(shapeLook.build)
-    const [atlas, gear] = await Promise.all([heroAtlas(file, shapeLook), loadGear(shapeLook.build, shapeLook.gear, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
-    return characterView(file, shapeLook, color, build, atlas, gear)
+    const onBody = (BODIES as readonly string[]).includes(shapeLook.build)
+    const [atlas, wear] = await Promise.all([
+      heroAtlas(file, shapeLook),
+      onBody ? loadWear(shapeLook.build as BodyName, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>) : undefined,
+    ])
+    return characterView(file, shapeLook, color, build, atlas, wear)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
