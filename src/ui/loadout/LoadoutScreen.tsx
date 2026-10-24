@@ -129,7 +129,7 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
               const { heroName, roleId, sizeClass, gate } = record.build
               return (
                 <li key={record.id} className={`card role-${roleId}`}>
-                  <HeroPortrait hero={{ key: `build:${record.id}`, heroName, roleId, hue: heroHue(heroName) }} photo={record.photo} />
+                  <HeroPortrait hero={{ key: `build:${record.id}`, heroName, roleId, hue: heroHue(heroName), build: record.build }} photo={record.photo} />
                   <div className="card-who">
                     <strong>{heroName}</strong>
                     <span className="card-meta">
