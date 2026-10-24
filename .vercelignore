@@ -8,5 +8,5 @@ dist/
 coverage/
 *.log
 .dev-store/
-# Tests next to API routes would otherwise deploy as routes.
-api/**/*.test.ts
+# Route tests run locally; the deployment never needs them.
+routes/**/*.test.ts

@@ -9,7 +9,8 @@ export const DEV_STORE_DIR = join(process.cwd(), '.dev-store')
 export const DEV_STORE_PATH = '/dev-store/'
 
 /**
- * Development only: serve api/*.ts through Vite so the Forge runs end to end without Vercel (KTD3 offline path).
+ * Development only: serve /api through Vite, via the same catch-all function Vercel runs (api/[...path].ts), so the
+ * Forge runs end to end without Vercel (KTD3 offline path).
  * Forces fake providers, so no live or paid call can happen. The database is PGlite kept on disk in the dev store,
  * so heroes and device IDs survive a restart; uploads are stored there too and served from /dev-store/.
  */
@@ -99,28 +100,15 @@ async function serveStored(req: IncomingMessage, res: ServerResponse) {
 async function handle(server: ViteDevServer, setup: () => Promise<void>, req: IncomingMessage, res: ServerResponse) {
   await setup()
   const url = new URL(req.url!, `http://${req.headers.host ?? 'localhost'}`)
-  const route = url.pathname.replace(/^\/api\//, '').replace(/\/$/, '')
-  const fs = await import('node:fs')
-  const file = [`/api/${route}.ts`, `/api/${route}/index.ts`].find((f) => fs.existsSync(`${server.config.root}${f}`))
-  if (!file || route.includes('..')) {
-    res.statusCode = 404
-    res.end(JSON.stringify({ error: 'no such route' }))
-    return
-  }
-  const mod = (await server.ssrLoadModule(file)) as Record<string, (request: Request) => Promise<Response>>
+  // the same catch-all function Vercel runs, so local requests take the production path
+  const api = (await server.ssrLoadModule('/api/[...path].ts')) as { dispatch: (request: Request) => Promise<Response> }
   const method = req.method ?? 'GET'
-  const fn = mod[method]
-  if (!fn) {
-    res.statusCode = 405
-    res.end()
-    return
-  }
   const chunks: Buffer[] = []
   for await (const chunk of req) chunks.push(chunk as Buffer)
   const headers = new Headers()
   for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v)
   headers.set('x-forwarded-for', '127.0.0.1')
-  const response = await fn(new Request(url, { method, headers, body: method === 'GET' || method === 'HEAD' ? undefined : Buffer.concat(chunks) }))
+  const response = await api.dispatch(new Request(url, { method, headers, body: method === 'GET' || method === 'HEAD' ? undefined : Buffer.concat(chunks) }))
   res.statusCode = response.status
   response.headers.forEach((value, key) => res.setHeader(key, value))
   res.end(Buffer.from(await response.arrayBuffer()))
