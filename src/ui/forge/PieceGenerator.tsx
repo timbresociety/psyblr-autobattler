@@ -34,8 +34,21 @@ export function PieceGenerator({ deps, start, referenceUrl, onDone, onClose }: P
   const [step, setStep] = useState<Step>({ at: 'form' })
   const [busy, setBusy] = useState(false)
   const [seconds, setSeconds] = useState(0)
+  // undefined until the deployment says whether generating is switched on
+  const [ready, setReady] = useState<boolean>()
   const done = useRef(onDone)
   done.current = onDone
+
+  useEffect(() => {
+    let live = true
+    deps.generationReady().then(
+      (r) => live && setReady(r),
+      () => live && setReady(false),
+    )
+    return () => {
+      live = false
+    }
+  }, [deps])
 
   async function generate() {
     setBusy(true)
@@ -84,6 +97,17 @@ export function PieceGenerator({ deps, start, referenceUrl, onDone, onClose }: P
     }
   }, [jobId, deps])
 
+  if (ready === false)
+    return (
+      <section className="generator" aria-label="Generate a piece">
+        <p className="notice">Generating new pieces isn't switched on for this deployment yet. Everything already in the repository stays free to wear.</p>
+        <div className="row">
+          <button type="button" className="btn quiet sm" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </section>
+    )
   if (step.at === 'signin') return <SignIn deps={deps} onCancel={() => setStep({ at: 'form' })} onSignedIn={() => (setStep({ at: 'form' }), void generate())} />
   if (step.at === 'credits') return <Credits deps={deps} balance={step.balance} need={PIECE_PRICE} onBalance={(n) => (n >= PIECE_PRICE ? (setStep({ at: 'form' }), void generate()) : setStep({ at: 'credits', balance: n }))} onCancel={() => setStep({ at: 'form' })} />
   if (step.at === 'running')
@@ -128,7 +152,7 @@ export function PieceGenerator({ deps, start, referenceUrl, onDone, onClose }: P
         </p>
       )}
       <div className="row">
-        <button type="button" className="btn primary sm" disabled={busy || prompt.trim().length < 3} onClick={generate}>
+        <button type="button" className="btn primary sm" disabled={busy || !ready || prompt.trim().length < 3} onClick={generate}>
           Generate · {PIECE_PRICE} credits
         </button>
         <button type="button" className="btn quiet sm" onClick={onClose}>

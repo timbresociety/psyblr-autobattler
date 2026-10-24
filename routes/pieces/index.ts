@@ -3,7 +3,7 @@ import { createRegistry } from '../../src/forge/providers/registry.js'
 import { balance } from '../../src/server/credits.js'
 import { getDb } from '../../src/server/db.js'
 import { clientIp, errorResponse, readJson, tooMany } from '../../src/server/http.js'
-import { pickPieceStore, pieceLimited, pollPiece, startPiece, type PieceDeps } from '../../src/server/pieces.js'
+import { generationReady, pickPieceStore, pieceLimited, pollPiece, startPiece, type PieceDeps } from '../../src/server/pieces.js'
 import type { Db } from '../../src/server/db.js'
 import { requireAccount } from '../../src/server/sessions.js'
 
@@ -36,15 +36,19 @@ export async function POST(request: Request): Promise<Response> {
   }
 }
 
-/** GET /api/pieces?id= -> that job, moved along as far as it can go; the piece once it's in the repository. */
+/**
+ * GET /api/pieces -> { ready }: whether generating is switched on here. GET /api/pieces?id= -> that job, moved along as
+ * far as it can go, and the piece once it's in the repository.
+ */
 export async function GET(request: Request): Promise<Response> {
   try {
+    const id = new URL(request.url).searchParams.get('id')
+    if (id === null) return Response.json({ ready: generationReady(process.env, createRegistry(process.env)) })
     const db = await getDb()
     const { accountId } = await requireAccount(request, db)
     if (await pieceLimited(db, accountId, clientIp(request))) return tooMany()
     const d = deps(db)
     if (!d) return unavailable()
-    const id = new URL(request.url).searchParams.get('id') ?? ''
     return Response.json({ job: await pollPiece(d, accountId, id), balance: await balance(db, accountId) })
   } catch (error) {
     return errorResponse(error)

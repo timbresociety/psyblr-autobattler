@@ -81,6 +81,8 @@ export class ApiError extends Error {
 /** The asset repository from the Forge: search it free, and generate what it lacks (signed in, for credits). */
 export interface PieceDeps {
   searchPieces(query: string, kind?: PieceKind): Promise<PieceEntry[]>
+  /** Whether generating is switched on for this deployment. */
+  generationReady(): Promise<boolean>
   session(): Promise<SessionView>
   startSignIn(email: string): Promise<SignInStart | void>
   verifySignIn(token: string): Promise<void>
@@ -261,6 +263,7 @@ export const livePieceDeps: PieceDeps = {
     const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) })
     return (await call<{ pieces: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces
   },
+  generationReady: async () => (await call<{ ready: boolean }>('/api/pieces')).ready,
   session: () => call<SessionView>('/api/auth/session'),
   startSignIn: (email) => send<SignInStart>('/api/auth/start', { email }),
   verifySignIn: (token) => send('/api/auth/verify', { token }),

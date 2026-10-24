@@ -60,6 +60,13 @@ describe('the gear panel and the repository', () => {
     expect(await screen.findByText(/Making Jade Sickle/)).toBeTruthy()
   })
 
+  it("says so up front when generating isn't switched on, before asking for an email", async () => {
+    panel({ pieces: pieceDeps({ generationReady: vi.fn(async () => false) }) })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Generate a piece' })))
+    expect(await screen.findByText(/isn't switched on for this deployment yet/)).toBeTruthy()
+    expect(screen.queryByLabelText('Email')).toBeNull()
+  })
+
   it('searches the community too, and marks its pieces', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const pieces = pieceDeps({ searchPieces: vi.fn(async () => [straw]) })

@@ -8,7 +8,7 @@ import { imageBreach } from '../forge/director/floor.js'
 import { keywordFlags } from '../forge/keywords.js'
 import { pieceAsset } from '../forge/piece-asset.js'
 import { PIECE_PRICE } from '../forge/pricing.js'
-import { pollTask, route, type Registry } from '../forge/providers/router.js'
+import { candidates, pollTask, route, type Registry } from '../forge/providers/router.js'
 import type { Asset, Env, ModerationProvider, PieceProvider } from '../forge/providers/types.js'
 import type { ContentFlags } from '../forge/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
@@ -16,7 +16,8 @@ import { bump } from './accounts.js'
 import { insertAsset } from './assets.js'
 import { placeHold, settleHold } from './credits.js'
 import type { Db } from './db.js'
-import { DEV_STORE_DIR, DEV_STORE_PATH, devStoreActive } from './dev-store.js'
+import { DEV_STORE_DIR, DEV_STORE_PATH, devStoreActive, localDev } from './dev-store.js'
+import { resendSender } from './email.js'
 import { isOwnPhotoUrl } from './photo-url.js'
 
 /**
@@ -49,6 +50,14 @@ export function pickPieceStore(env: Env): PieceStore | undefined {
     }
   if (env.BLOB_READ_WRITE_TOKEN) return async (pathname, bytes, contentType) => (await put(pathname, Buffer.from(bytes), { access: 'public', addRandomSuffix: false, allowOverwrite: true, contentType })).url
   return undefined
+}
+
+/**
+ * Whether a player can generate here at all: the deployment needs somewhere to publish pieces, a piece provider, and a
+ * way to finish signing in (real email, or the local dev server's link). The Forge asks before it asks for an email.
+ */
+export function generationReady(env: Env, registry: Registry): boolean {
+  return !!pickPieceStore(env) && candidates(registry, 'piece').length > 0 && (resendSender(env).available() || localDev(env))
 }
 
 export interface PieceDeps {

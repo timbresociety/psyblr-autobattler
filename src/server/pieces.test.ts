@@ -5,7 +5,7 @@ import { createRegistry } from '../forge/providers/registry.js'
 import { searchAssets } from './assets.js'
 import { balance, grantPurchase } from './credits.js'
 import { SCHEMA_SQL, type Db } from './db.js'
-import { pieceName, pollPiece, startPiece, type PieceDeps } from './pieces.js'
+import { generationReady, pieceName, pollPiece, startPiece, type PieceDeps } from './pieces.js'
 
 let db: Db
 let stored: Map<string, Uint8Array>
@@ -65,6 +65,19 @@ describe('generating a piece into the repository', () => {
     await grantPurchase(db, 'a1', 100, 'test-grant')
     const job = await startPiece(deps, 'a1', { prompt: 'a jade dagger', kind: 'hand' })
     await expect(pollPiece(deps, 'a2', job.id)).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('is ready only with a store, a piece provider and a way to finish signing in', () => {
+    const fake = createRegistry({ FORGE_FAKE_PROVIDERS: '1' })
+    // the local dev server: the dev store, fakes and the dev sign-in link
+    expect(generationReady({ FORGE_FAKE_PROVIDERS: '1' }, fake)).toBe(true)
+    // production without a Tripo key, or a preview without email, can't
+    const prod = { VERCEL: '1', VERCEL_ENV: 'production', NODE_ENV: 'production', BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_abc_x' }
+    expect(generationReady(prod, createRegistry(prod))).toBe(false)
+    const preview = { VERCEL: '1', VERCEL_ENV: 'preview', NODE_ENV: 'production', FORGE_FAKE_PROVIDERS: '1', BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_abc_x' }
+    expect(generationReady(preview, createRegistry(preview))).toBe(false)
+    const live = { ...prod, TRIPO_API_KEY: 'k', RESEND_API_KEY: 'r', EMAIL_FROM: 'psyblr <hi@example.com>' }
+    expect(generationReady(live, createRegistry(live))).toBe(true)
   })
 
   it('names a piece from its prompt', () => {
