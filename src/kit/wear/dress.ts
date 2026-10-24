@@ -1,6 +1,7 @@
 import { surfaceFrame } from './bind.js'
 import { fieldAt, type BodyFields } from './fields.js'
 import { FINISH_LOOK } from './finish.js'
+import { TriangleBVH, type V3 } from './ray.js'
 import { coverOf, type ChainGroup, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
 import type { BodyShape } from '../body/shape.js'
 import { weldPositions } from './weld.js'
@@ -220,8 +221,17 @@ export function dress(input: DressInput): Dressed {
     }
   })
 
-  const items: DressedItem[] = worn.map((w, i) => {
-    const mesh = evaluateItem(w, lifts[i], body)
+  // outermost first, so each item is pressed under the outer ones as they are finally dressed
+  const items: DressedItem[] = new Array(worn.length)
+  const shells: TriangleBVH[] = []
+  for (let i = worn.length - 1; i >= 0; i--) {
+    const w = worn[i]
+    const over: { shell: TriangleBVH; cover: Cover }[] = []
+    for (let j = i + 1; j < worn.length; j++)
+      if (ranks[j] > ranks[i] && covers[j].hides && items[j].index.length) over.push({ shell: (shells[j] ??= new TriangleBVH(items[j].positions, items[j].index)), cover: covers[j] })
+    let mesh = evaluateItem(w, lifts[i], body)
+    // a pressed triangle can land under another sag nearby: look again, a few times at most
+    for (let pass = 0; pass < 3 && over.length && press(w.item, lifts[i], mesh.positions, body, over, covers[i].hides ? -GAP : MIN_LIFT); pass++) mesh = evaluateItem(w, lifts[i], body)
     // a vertex is inside an outer layer when it lies over what that layer hides and beneath its inner surface
     const inside = new Uint8Array(mesh.count)
     const outers = [...covers.filter((_, j) => j > i && ranks[j] > ranks[i]), ...rigid.filter((c) => rank(c.slot) > ranks[i])].filter((c) => c.hides)
@@ -251,8 +261,8 @@ export function dress(input: DressInput): Dressed {
       if (!(out.inside[a] && out.inside[b] && out.inside[c])) index.push(a, b, c)
     }
     const { inside: _inside, fields: _fields, ...rest } = out
-    return { ...rest, index: Uint32Array.from(index), id: w.item.meta.id, slot: w.item.meta.slot, ...(rest.chain && w.item.meta.chains ? { chains: w.item.meta.chains } : {}) }
-  })
+    items[i] = { ...rest, index: Uint32Array.from(index), id: w.item.meta.id, slot: w.item.meta.slot, ...(rest.chain && w.item.meta.chains ? { chains: w.item.meta.chains } : {}) }
+  }
 
   // the body shows wherever no item hides all three corners of a triangle
   const hidden = new Uint8Array(V)
@@ -261,6 +271,94 @@ export function dress(input: DressInput): Dressed {
   const shown: number[] = []
   for (let t = 0; t < T.length / 3; t++) if (!(hidden[T[t * 3]] && hidden[T[t * 3 + 1]] && hidden[T[t * 3 + 2]])) shown.push(t)
   return { body: Uint32Array.from(shown), items }
+}
+
+/**
+ * Where an outer item still dips under this one. Its triangles span several of the body's, so on a curve (a hip, a
+ * shoulder blade) one sags between its corners under the layer beneath it, where the shells above can't see. Looking
+ * down toward the skin from GAP outside each vertex, and from the middle of each triangle and of its edges, whatever
+ * outer surface lies in the way presses those vertices GAP under the deepest of it: a waistband tucks under a tee's
+ * hem, a tee's shoulder under a cape. Only where an outer item covers the body is it looked for. Clothes may go down to
+ * `lowest`, a little under the skin: the skin they hide isn't drawn, and the outer item shows there anyway. Returns
+ * whether anything moved.
+ */
+function press(item: SurfaceItem, lift: Float32Array, positions: Float32Array, body: BodyShape, over: readonly { shell: TriangleBVH; cover: Cover }[], lowest: number): boolean {
+  const { tri, st } = item.binding
+  const N = body.normals
+  const n = item.count
+  // each vertex's way down to the skin, how long its unnormalised normal is, and which outer items cover its triangle
+  const down = new Float32Array(n * 3)
+  const scale = new Float32Array(n)
+  const under = new Uint32Array(n)
+  for (let k = 0; k < n; k++) {
+    const a = tri[k * 3]
+    const b = tri[k * 3 + 1]
+    const c = tri[k * 3 + 2]
+    const s = st[k * 2]
+    const t = st[k * 2 + 1]
+    let len = 0
+    for (let d = 0; d < 3; d++) {
+      const v = N[a * 3 + d] + s * (N[b * 3 + d] - N[a * 3 + d]) + t * (N[c * 3 + d] - N[a * 3 + d])
+      down[k * 3 + d] = -v
+      len += v * v
+    }
+    len = Math.sqrt(len) || 1
+    scale[k] = len
+    for (let d = 0; d < 3; d++) down[k * 3 + d] /= len
+    over.forEach(({ cover }, j) => {
+      if (covered(cover, a) || covered(cover, b) || covered(cover, c)) under[k] |= 1 << j
+    })
+  }
+  const need = new Float32Array(n)
+  const from: V3 = [0, 0, 0]
+  const dir: V3 = [0, 0, 0]
+  const look = (corners: readonly number[], weights: readonly number[]) => {
+    let mask = 0
+    for (const k of corners) mask |= under[k]
+    if (!mask) return
+    let len = 0
+    for (let d = 0; d < 3; d++) {
+      dir[d] = 0
+      from[d] = 0
+      corners.forEach((k, j) => {
+        dir[d] += weights[j] * down[k * 3 + d]
+        from[d] += weights[j] * positions[k * 3 + d]
+      })
+      len += dir[d] * dir[d]
+    }
+    len = Math.sqrt(len) || 1
+    for (let d = 0; d < 3; d++) {
+      dir[d] /= len
+      from[d] -= dir[d] * GAP
+    }
+    // from GAP outside down to the skin, and a gap past it: a chord's middle needn't stand off the skin as its corners do
+    let height = 0
+    corners.forEach((k, j) => (height += weights[j] * lift[k] * scale[k]))
+    const reach = Math.max(0, height) + 2 * GAP
+    let deepest = 0
+    over.forEach(({ shell }, j) => {
+      if (!(mask & (1 << j))) return
+      const hits = shell.hits(from, dir, 0, reach)
+      if (hits.length) deepest = Math.max(deepest, hits[hits.length - 1].t)
+    })
+    if (deepest > 0) for (const k of corners) need[k] = Math.max(need[k], deepest)
+  }
+  for (let k = 0; k < n; k++) if (lift[k] > lowest) look([k], [1])
+  const index = item.index
+  for (let t = 0; t < index.length; t += 3) {
+    const [a, b, c] = [index[t], index[t + 1], index[t + 2]]
+    look([a, b, c], [1 / 3, 1 / 3, 1 / 3])
+    look([a, b], [0.5, 0.5])
+    look([b, c], [0.5, 0.5])
+    look([c, a], [0.5, 0.5])
+  }
+  let moved = false
+  for (let k = 0; k < n; k++) {
+    if (!need[k] || lift[k] <= lowest) continue
+    lift[k] = Math.max(lowest, lift[k] - need[k] / scale[k])
+    moved = true
+  }
+  return moved
 }
 
 /** An item's mesh mid-dress: whether each vertex is inside an outer layer, and each cut's field per vertex. */

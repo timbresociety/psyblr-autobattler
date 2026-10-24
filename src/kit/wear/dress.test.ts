@@ -3,10 +3,10 @@ import { BODIES } from '../../arena/client/character-look.js'
 import { readBody, type BodyFile } from '../body/node.js'
 import { bodyBase, shapeBody, type BodyShape } from '../body/shape.js'
 import { shellItem, skinShape } from '../fit/shell.js'
-import { TriangleBVH } from './ray.js'
+import { TriangleBVH, type V3 } from './ray.js'
 import { readItemFile, writeItem } from '../fit/write.js'
 import { bindPoints, evaluate, fromLocal, toLocal } from './bind.js'
-import { dress, GAP, type Worn } from './dress.js'
+import { dress, GAP, type Dressed, type Worn } from './dress.js'
 import { bodyFields, chainParam, fieldAt, type BodyFields } from './fields.js'
 import { coverOf, type SurfaceItem } from './item.js'
 
@@ -42,6 +42,41 @@ function liftOf(shape: BodyShape, item: SurfaceItem, positions: Float32Array, k:
   const p = [0, 1, 2].map((d) => at(shape.positions, d))
   const n = [0, 1, 2].map((d) => at(shape.normals, d))
   return [0, 1, 2].reduce((acc, d) => acc + (positions[k * 3 + d] - p[d]) * n[d], 0) / [0, 1, 2].reduce((acc, d) => acc + n[d] * n[d], 0)
+}
+
+/**
+ * Where an inner layer shows through an outer one: looking toward the skin from each of its vertices, and from the middle
+ * of each of its triangles and their edges, some outer item's surface lies in the way.
+ */
+function crossings(shape: BodyShape, out: Dressed, items: readonly SurfaceItem[]): string[] {
+  const found: string[] = []
+  const byId = new Map(items.map((i) => [i.meta.id, i]))
+  out.items.forEach((outer, o) => {
+    const bvh = new TriangleBVH(outer.positions, outer.index)
+    for (const inner of out.items.slice(0, o)) {
+      const { tri, st } = byId.get(inner.id)!.binding
+      const at = (arr: Float32Array, k: number, d: number) => {
+        const [a, b, c] = [tri[k * 3], tri[k * 3 + 1], tri[k * 3 + 2]]
+        return arr[a * 3 + d] + st[k * 2] * (arr[b * 3 + d] - arr[a * 3 + d]) + st[k * 2 + 1] * (arr[c * 3 + d] - arr[a * 3 + d])
+      }
+      let count = 0
+      const look = (ks: number[], w: number[]) => {
+        const from = [0, 1, 2].map((d) => ks.reduce((acc, k, j) => acc + w[j] * inner.positions[k * 3 + d], 0)) as V3
+        const n = [0, 1, 2].map((d) => ks.reduce((acc, k, j) => acc + w[j] * at(shape.normals, k, d), 0))
+        const len = Math.hypot(n[0], n[1], n[2])
+        const reach = ks.reduce((acc, k, j) => acc + w[j] * Math.hypot(...[0, 1, 2].map((d) => inner.positions[k * 3 + d] - at(shape.positions, k, d))), 0)
+        if (bvh.first(from, [-n[0] / len, -n[1] / len, -n[2] / len], 1e-4, reach)) count++
+      }
+      for (const k of new Set(inner.index)) look([k], [1])
+      for (let t = 0; t < inner.index.length; t += 3) {
+        const [a, b, c] = [inner.index[t], inner.index[t + 1], inner.index[t + 2]]
+        look([a, b, c], [1 / 3, 1 / 3, 1 / 3])
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) look([p, q], [0.5, 0.5])
+      }
+      if (count) found.push(`${inner.id} through ${outer.id} at ${count}`)
+    }
+  })
+  return found
 }
 
 const worn = (item: SurfaceItem, knobs?: Worn['knobs']): Worn => ({ item, colors: [[0.5, 0.2, 0.1]], finishes: ['cotton'], ...(knobs ? { knobs } : {}) })
@@ -142,6 +177,16 @@ describe('dressing', () => {
     for (let t = 0; t < T.length / 3; t++) if (![T[t * 3], T[t * 3 + 1], T[t * 3 + 2]].every((v) => coveredBy.has(v))) expected.push(t)
     expect(Array.from(out.body)).toEqual(expected)
     expect(out.body.length).toBeLessThan(T.length / 3 - 500)
+  })
+
+  it("presses each layer under an outer one where its few big triangles sag on a curve, on every body", async () => {
+    // a built-in tee's hem crosses a hip in a few triangles, and a cape's a shoulder blade: before they pressed the
+    // layer under them, the trousers stood 13 mm through the tee
+    const outfit = await Promise.all(['trousers', 'sneakers', 'tee', 'cape'].map(async (id) => (await readItemFile(pub(`/kit/wear/${id}.glb`), ref.surface.count)).item))
+    for (const body of BODIES) {
+      const shape = shapes.get(body)!
+      expect(crossings(shape, dress({ body: shape, fields: fieldsOf.get(body), worn: outfit.map((item) => worn(item)) }), outfit), body).toEqual([])
+    }
   })
 
   it('wears a lower garment cut looser than the top outside it, the top tucked in', () => {
