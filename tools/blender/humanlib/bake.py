@@ -336,6 +336,8 @@ def paint_material(mat, face_img=None, hair_img=None):
     elif paint == 'skin':
         blotch = _range(nt, _noise(nt, 22, 5), 0.3, 0.7, 0.95, 1.03)
         col = _scale_color(nt, base, blotch)
+        if mat.get('shorts') or mat.get('top'):
+            col = _mix(nt, base_layer(nt, mat), col, _scale_color(nt, _rgb(nt, (0.2, 0.2, 0.22)), _range(nt, _wave(nt, 260, 'X', 0.4), 0.0, 1.0, 0.86, 1.04)))
     elif paint in ('face', 'eye'):
         skin = _scale_color(nt, base, _range(nt, _noise(nt, 22, 5), 0.3, 0.7, 0.96, 1.02))
         if face_img is None:
@@ -360,6 +362,30 @@ def paint_material(mat, face_img=None, hair_img=None):
     nt.links.new(col, emit.inputs['Color'])
     emit.inputs['Strength'].default_value = 1.0
     return nt
+
+
+def base_layer(nt, mat):
+    """
+    Where a body's base layer covers the skin: each band of height (shorts, a sports top) on the trunk, by the vertex
+    attributes build.trunk_attributes writes, so the arms hanging beside it stay bare. The bands' edges are exact: z is
+    linear across a triangle, so the line is straight however coarse the mesh.
+    """
+    geo = nt.nodes.new('ShaderNodeNewGeometry')
+    z = nt.nodes.new('ShaderNodeSeparateXYZ')
+    nt.links.new(geo.outputs['Position'], z.inputs['Vector'])
+    z = z.outputs['Z']
+    mask = None
+    for band, attr in (('shorts', 'trunk_low'), ('top', 'trunk_high')):
+        if not mat.get(band):
+            continue
+        lo, hi = mat[band]
+        a = nt.nodes.new('ShaderNodeAttribute')
+        a.attribute_type = 'GEOMETRY'
+        a.attribute_name = attr
+        inside = _math(nt, 'MULTIPLY', _range(nt, z, lo - 0.002, lo + 0.002, 0.0, 1.0), _range(nt, z, hi + 0.002, hi - 0.002, 0.0, 1.0))
+        m = _math(nt, 'MULTIPLY', inside, _range(nt, a.outputs['Fac'], 0.45, 0.55, 0.0, 1.0))
+        mask = m if mask is None else _math(nt, 'MAXIMUM', mask, m)
+    return mask
 
 
 def add_relief(mat):

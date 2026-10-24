@@ -288,41 +288,26 @@ HEROES = {
 
 # ------------------------------------------------------------------------------------------------ generic bodies
 
-# Every region is tinted per hero at runtime (characterLook): suit, trim, pants, glove, boot, hair, metal, cape. Hair
-# styles, the helmet, the armour and the cape are switchable parts.
-BASE_MATS = {
-    'suit': dict(paint='fabric', region='suit', tint=True),
-    'trim': dict(paint='leather', region='trim', tint=True),
-    'pants': dict(paint='fabric', region='pants', tint=True),
-    'boot': dict(paint='leather', region='boot', tint=True),
-    'glove': dict(paint='leather', region='glove', tint=True),
-    'hair': dict(paint='hair', region='hair', tint=True, color=(1, 1, 1), color2=(0.72, 0.72, 0.72)),
-    'metal': dict(paint='metal', region='metal', tint=True),
-    'cape': dict(paint='fabric', region='cape', tint=True),
-    'belt': dict(paint='leather', region='boot', tint=True),
-    'strap': dict(paint='leather', region='trim', tint=True),
-    'accent': dict(paint='fabric', region='trim', tint=True),
-}
+# Every body is built on the same proxy, so all twelve share one surface: the same vertices in the same order. Anything
+# made for one body (a kimono, a haircut, a hat) binds to that surface once and fits them all (src/kit/wear/).
+BODY_PROXY = 'female1605'
+
+# The physique a player sets on any body, as morph targets: each is the body rebuilt with one macro moved to its end,
+# minus the body itself (build.py). Weight and muscle go both ways from the body's own; age only ages.
+MORPHS = [
+    ('weight-', dict(weight=0.0)),
+    ('weight+', dict(weight=1.0)),
+    ('muscle-', dict(muscle=0.0)),
+    ('muscle+', dict(muscle=1.0)),
+    ('age', dict(age=age(75))),
+]
 
 
 def base(macro, height, portrait, **more):
-    layers = [
-        dict(kind='trousers', mat='pants', thick=0.009, flare=0.004),
-        dict(kind='tee', mat='suit', sleeve=0.55, hem='crotch', neck='crew', thick=0.006),
-        dict(kind='boots', mat='boot', thick=0.012, top=0.6),
-        dict(kind='gloves', mat='glove', thick=0.004, cuff=0.75),
-    ]
-    gear = [
-        ('collar', dict(mat='trim', height=0.012, gap=0, offset=0.005, drop=0.04, name='neckband')),
-        ('hem', dict(mat='suit', at='crotch', offset=0.014, flare=0.012)),
-        ('belt', dict(mat='belt', buckle='metal')),
-        ('bracers', dict(mat='strap', start=0.3, end=0.72)),
-    ]
-    out = dict(macro=macro, height=height, portrait=portrait, layers=layers, gear=gear, mats=dict(BASE_MATS), parts=True, smooth=['suit'])
+    """A body: skin, a face and a painted base layer. Clothes, hair and beards are wardrobe items worn over it."""
+    out = dict(macro=macro, height=height, portrait=portrait, layers=[], gear=[], mats={}, proxy=BODY_PROXY)
     out.update(more)
     return out
-
-
 
 
 # ------------------------------------------------------------------------------------------------ a body per size
@@ -353,7 +338,7 @@ def body_spec(gender, size):
     return base(macro, 1.8, 'base_male' if gender == 'm' else 'base_female', **more)
 
 
-# m-tiny … f-colossal: the bodies every hero without a model of its own wears (character-look.ts picks one)
+# m-tiny … f-colossal: the bodies every hero wears (character-look.ts picks one by gender and size)
 BODIES = {f'{g}-{size}': body_spec(g, size) for g in ('m', 'f') for size in SIZE_SHAPES}
 
 

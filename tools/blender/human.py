@@ -4,6 +4,12 @@ and a face from a generated portrait, baked into one textured mesh and exported 
 
     Blender -b --python tools/blender/human.py -- --hero huang --out public/heroes/huang.glb [--sheet dir] [--render png]
     Blender -b --python tools/blender/human.py -- --base m-medium --out public/heroes/m-medium.glb   (writes m-medium.kit.json too)
+    Blender -b --python tools/blender/human.py -- --face-basis public/kit/face-basis   (the face basis, .bin and .json)
+
+Every body shares one surface. The proxy faces it refines and the faces of its photo island are stored in
+humanlib/topology.json, written once from the reference body:
+
+    Blender -b --python tools/blender/human.py -- --base m-medium --write-topology --out public/heroes/m-medium.glb
 
 One-time landmark binding (ties MediaPipe's face landmarks to the MakeHuman mesh; writes humanlib/face_bind.json):
 

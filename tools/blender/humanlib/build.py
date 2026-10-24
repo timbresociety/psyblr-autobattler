@@ -3,10 +3,14 @@
 import json
 import math
 import os
+import struct
 import time
 
+import bmesh
 import bpy
+import numpy as np
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
 
 from . import bake as K
 from . import body as B
@@ -20,6 +24,11 @@ from . import sockets as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PORTRAITS = os.path.join(os.path.dirname(HERE), 'portraits')
+# what keeps every body on one surface: the proxy faces refine_head splits and the faces that take the photo island.
+# Written once from the reference body (--write-topology); every body build reads it.
+TOPOLOGY = os.path.join(HERE, 'topology.json')
+# the body items are made on and bound to (tools/blender/wardrobe.py, src/kit/fit/)
+REFERENCE = 'm-medium'
 
 
 def log(*a):
@@ -43,7 +52,7 @@ def define_materials(spec, skin_rgb):
     mats = G.Materials()
     tinted_skin = spec.get('base', False)
     region_default = 'baked' if not spec.get('base') else None
-    mats.get('skin', paint='skin', color=skin_rgb, region='skin' if tinted_skin else 'baked', tint=tinted_skin)
+    mats.get('skin', paint='skin', color=skin_rgb, region='skin' if tinted_skin else 'baked', tint=tinted_skin, **spec.get('under', {}))
     mats.get('face', paint='face', color=skin_rgb, region='skin' if tinted_skin else 'baked', tint=tinted_skin)
     mats.get('eye', paint='eye', color=(0.93, 0.92, 0.9), region='eye' if tinted_skin else 'baked', tint=tinted_skin)
     for name, m in spec['mats'].items():
@@ -58,9 +67,78 @@ def define_materials(spec, skin_rgb):
     return mats
 
 
+def load_topology():
+    with open(TOPOLOGY) as f:
+        return json.load(f)
+
+
+def build_body(spec, targets, extra=None, scale=None, macro=None, faces=None):
+    """The MPFB body of a spec with its face refined: the first step of every build and of every variant of one."""
+    body = B.make_body(macro or spec['macro'], targets, spec['proxy'], height=spec.get('height', 1.8), extra=extra, head_scale=spec.get('head_scale', 1.08), scale=scale)
+    split = B.refine_head(body, faces)
+    return body, split
+
+
+def eye_frames(body):
+    return [(c.copy(), r) for c, r in body.eyes]
+
+
+def hero_positions(body_pos, eyes, base_eye_verts, base_eyes):
+    """
+    Every vertex of a joined body (its skin, then both eyeballs) for a variant of it: the skin as built, each eyeball
+    moved and scaled with the variant's eye (left eye at +x).
+    """
+    out = [body_pos]
+    for verts in base_eye_verts:
+        i = 0 if verts[:, 0].mean() > 0 else 1
+        (c0, r0), (c1, r1) = base_eyes[i], eyes[i]
+        c0, c1 = np.array(c0), np.array(c1)
+        out.append(c1 + (verts - c0) * (r1 / r0))
+    return np.concatenate(out)
+
+
+def under_layer(rig, gender):
+    """
+    The base layer painted on the skin, so a body never shows more than a swimmer would when a slot is empty: shorts
+    from the waist to mid-thigh, and a sports top for women. Bands of height on the trunk (bake.py paints them).
+    """
+    z = lambda bone: rig.data.bones[bone].head_local.z
+    out = {'shorts': (z('thigh_L') - 0.2, z('spine') + 0.01)}
+    if gender == 'f':
+        out['top'] = (z('upper_chest'), z('upper_chest') + 0.18)
+    return out
+
+
+def trunk_attributes(obj):
+    """Per-vertex trunk membership the base layer is masked by (arms and hands hang beside the shorts in the A-pose)."""
+    from . import body as BB
+
+    me = obj.data
+    low = [sum(x) for x in zip(*(BB.group_weight(obj, g) for g in ('hips', 'spine', 'thigh_L', 'thigh_R')))]
+    high = [sum(x) for x in zip(*(BB.group_weight(obj, g) for g in ('spine', 'chest', 'upper_chest')))]
+    for name, vals in (('trunk_low', low), ('trunk_high', high)):
+        a = me.attributes.get(name) or me.attributes.new(name, 'FLOAT', 'POINT')
+        for i, v in enumerate(vals):
+            a.data[i].value = min(1.0, v)
+
+
+def add_morphs(hero, base_pos, variants):
+    """The physique morphs as shape keys (exported as glTF morph targets, positions only: the game remakes normals)."""
+    if not hero.data.shape_keys:
+        hero.shape_key_add(name='Basis', from_mix=False)
+    for name, pos in variants:
+        kb = hero.shape_key_add(name=name, from_mix=False)
+        kb.data.foreach_set('co', pos.reshape(-1))
+        kb.value = 0.0
+    del base_pos
+
+
 def main(opts):
     t0 = time.time()
+    if opts.get('face-basis'):
+        return face_basis(opts)
     spec = heroes.spec(opts.get('hero') or opts.get('base'))
+    base = bool(spec.get('base'))
     size = int(opts.get('size', spec.get('atlas', 1024)))
     img_path, lm = portrait_of(spec)
     fitted = {}
@@ -69,11 +147,31 @@ def main(opts):
         if lm is not None:
             fitted.update(F.fit_face(human, lm, log=log))
 
-    body = B.make_body(spec['macro'], spec.get('targets', {}), spec.get('proxy', 'male1591'), height=spec.get('height', 1.8), extra=extra, head_scale=spec.get('head_scale', 1.08))
-    B.refine_head(body)
+    writing = bool(opts.get('write-topology'))
+    topo = load_topology() if base and not writing else None
+    if topo and topo['proxy'] != spec['proxy']:
+        raise ValueError(f"topology.json is for {topo['proxy']}, this body is on {spec['proxy']}")
+    variants = []
+    if base:
+        # a body: fit its face once, then build each physique variant and the body itself at that face and scale, so
+        # a variant minus the body is the physique alone, vertex for vertex
+        probe, split = build_body(spec, spec.get('targets', {}), extra=extra, faces=topo and topo['refine'])
+        scale = probe.scale
+        targets = dict(spec.get('targets', {}), **F.fitted_targets(fitted))
+        for name, change in heroes.MORPHS:
+            v, _ = build_body(spec, targets, scale=scale, macro=dict(spec['macro'], **change), faces=split)
+            variants.append((name, B.positions(v.mesh), eye_frames(v)))
+        body, _ = build_body(spec, targets, scale=scale, faces=split)
+    else:
+        body, split = build_body(spec, spec.get('targets', {}), extra=extra)
     rig = R.build_rig(body)
     R.merge_weights(body.mesh)
     log('body', B.triangles([body.mesh]), 'tris', f'{time.time() - t0:.1f}s')
+    body_pos = B.positions(body.mesh)
+    body_eyes = eye_frames(body)
+    if base:
+        spec = dict(spec, under=under_layer(rig, spec['id'][0]))
+        log('base layer', {k: [round(z, 3) for z in v] for k, v in spec['under'].items()}, 'bones', {b: round(rig.data.bones[b].head_local.z, 3) for b in ('spine', 'chest', 'upper_chest', 'neck')})
 
     # the face: the portrait warped onto this head, and its skin colour for the rest of the body
     head_frame = None
@@ -87,7 +185,7 @@ def main(opts):
         head_frame = F.HeadFrame(eyes.x, eyes.z - 0.03, 0.30, 1024)
         tmp = os.path.join(bpy.app.tempdir or '/tmp', f"face_{spec['id']}.png")
         hair_tmp = os.path.join(bpy.app.tempdir or '/tmp', f"hair_{spec['id']}.png")
-        made = F.face_texture(img_path, lm, body.lm, head_frame, tmp, delight=spec.get('delight', 0.5), neutral=bool(spec.get('base')), hair_out=None if spec.get('base') else hair_tmp)
+        made = F.face_texture(img_path, lm, body.lm, head_frame, tmp, delight=spec.get('delight', 0.5), neutral=base, hair_out=None if base else hair_tmp)
         skin, hair_cols = made if isinstance(made, tuple) and len(made) == 2 and not isinstance(made[0], float) else (made, None)
         if 'skin' not in spec:
             skin_rgb = tuple(float(x) for x in skin)
@@ -111,9 +209,8 @@ def main(opts):
     for p in me.polygons:
         if p.material_index == skin_slot and d.face_bone(p) == 'head':
             p.material_index = face_slot
-    me.materials[skin_slot]  # keep
     head = H.Head(body, body.mesh)
-    sockets = S.body_sockets(rig, head, body.mesh) if spec.get('base') else None
+    sockets = S.body_sockets(rig, head, body.mesh) if base else None
     for m in mats.mats.values():
         if m.get('paint') == 'hair':
             m['centre'] = tuple(head.centre)
@@ -136,29 +233,42 @@ def main(opts):
     for kind, args in spec.get('gear', []):
         made = GEAR[kind](d, head, body, **args)
         parts.extend([x for x in (made if isinstance(made, list) else [made]) if x])
-    if spec.get('parts'):
-        parts.extend(base_parts(d, head, body, mats))
     eyes = B.make_eyes(body)
     for e in eyes:
         e.data.materials.append(mats.mats['eye'])
         d.skin_weights(e, rigid='head')
+    eye_verts = [B.positions(e) for e in eyes]
+    if base:
+        trunk_attributes(body.mesh)
     tris = B.triangles([body.mesh] + parts + eyes)
     log('dressed', tris, 'tris', [p.name for p in parts], f'{time.time() - t0:.1f}s')
     for p in parts + eyes:
         K.unwrap_part(p)
     bpy.data.objects.remove(body.hires, do_unlink=True)
     hero = K.join([body.mesh] + parts + eyes)
+    if base:
+        # the skin comes first in the joined mesh, the eyeballs after it: the morphs and the game rely on that order
+        assert np.abs(B.positions(hero)[: len(body_pos)] - body_pos).max() < 1e-6, 'join reordered the skin'
     face_mats = {i for i, m in enumerate(hero.data.materials) if m.get('paint') in ('face', 'eye')}
     hair_mats = {i for i, m in enumerate(hero.data.materials) if m.get('paint') == 'hair'}
+    island = None
     if head_frame:
         K.projection_uvs(hero, head_frame)
-        # the face gets its own island, laid out exactly as the portrait projects (no stretch, the most texels)
+        # the face gets its own island, laid out exactly as the portrait projects (no stretch, the most texels). A body
+        # takes the stored faces, so its UV seams, and with them its exported vertices, match every other body's.
         me = hero.data
         atlas_uv = me.uv_layers['atlas']
-        for p in me.polygons:
-            if p.material_index in face_mats and p.normal.y < -0.3 and me.materials[p.material_index].get('paint') == 'face':
-                for li in p.loop_indices:
-                    atlas_uv.data[li].uv = head_frame.uv(me.vertices[me.loops[li].vertex_index].co)
+        if topo:
+            island = topo['face_island']
+        else:
+            island = [p.index for p in me.polygons if p.material_index in face_mats and p.normal.y < -0.3 and me.materials[p.material_index].get('paint') == 'face']
+        for i in island:
+            for li in me.polygons[i].loop_indices:
+                atlas_uv.data[li].uv = head_frame.uv(me.vertices[me.loops[li].vertex_index].co)
+    if writing:
+        with open(TOPOLOGY, 'w') as f:
+            json.dump({'proxy': spec['proxy'], 'from': spec['id'], 'refine': split, 'face_island': island or []}, f, separators=(',', ':'))
+        log('wrote', TOPOLOGY, len(split), 'refined faces', len(island or []), 'face-island faces')
 
     def density(faces):
         idx = [f.material_index for f in faces]
@@ -176,23 +286,100 @@ def main(opts):
     log('laid out', f'{time.time() - t0:.1f}s')
     atlas, normal = K.bake(hero, size, face_img, ao_samples=int(opts.get('ao', 24)), out_png=png, log=log, hair_img=hair_img, normal_size=int(opts.get('normal', 512)))
     K.final_material(hero, atlas, normal)
+    if base:
+        for name in ('trunk_low', 'trunk_high'):
+            hero.data.attributes.remove(hero.data.attributes[name])
+        B.triangulate(hero, body.proxy_verts)
+        # every vertex keeps its index in the joined mesh, so the game can weld what the export split at UV seams and
+        # index per-vertex data (the face basis) the same way on every body
+        vid = hero.data.attributes.new('_vid', 'INT', 'POINT')
+        vid.data.foreach_set('value', list(range(len(hero.data.vertices))))
+        base_all = hero_positions(body_pos, body_eyes, eye_verts, body_eyes)
+        add_morphs(hero, base_all, [(name, hero_positions(pos, ey, eye_verts, body_eyes)) for name, pos, ey in variants])
     R.bind(rig, [hero])
     C.author(rig, arms_out=spec.get('arms_out', 0.0))
     log('baked', f'{time.time() - t0:.1f}s', 'tris', B.triangles([hero]), 'verts', len(hero.data.vertices))
     if out:
         export(out, size)
         log('wrote', out, os.path.getsize(out), 'bytes', f'{time.time() - t0:.1f}s')
-        if face_meta and spec.get('base'):
-            # the body's kit sidecar: where a photo face goes (src/arena/client/face/) and where gear hangs
-            # (src/arena/client/gear.ts)
+        if face_meta and base:
+            # the body's kit sidecar (version 2): where a photo face goes (src/arena/client/face/), where gear hangs
+            # (src/arena/client/gear.ts), its physique morphs in file order, and what the face basis needs to fit a
+            # photo on this body: its scale against the reference body's and the base face's own group weights
             meta_path = os.path.splitext(out)[0] + '.kit.json'
+            groups = F.group_names()
+            kit = dict(face_meta, version=2, sockets=sockets, morphs=[n for n, _ in heroes.MORPHS], faceScale=round(body.scale * spec.get('head_scale', 1.08), 6), fit=[round(fitted.get(g, 0.0), 3) for g in groups])
             with open(meta_path, 'w') as f:
-                json.dump(dict(face_meta, sockets=sockets), f, separators=(',', ':'))
+                json.dump(kit, f, separators=(',', ':'))
             log('kit meta', meta_path, sum(1 for p in face_meta['landmarks'] if p), 'landmarks', len(sockets or {}), 'sockets')
     if opts.get('sheet'):
-        sheet(opts['sheet'], rig)
+        sheet(opts['sheet'], rig, CAST_SHEET if opts.get('casts') else SHEET)
     if opts.get('render'):
         portrait_render(opts['render'], rig, head)
+
+
+# ------------------------------------------------------------------------------------------------ the face basis
+
+
+def face_basis(opts):
+    """
+    How each of fit_face's target groups moves every vertex of a body, so the game fits a photo the way fit_face fits a
+    portrait (src/arena/client/face/shape.ts). Built on the reference body without a face of its own: each group at
+    full weight, minus the plain body, on the head alone. Every body shares the vertices, so one basis serves all
+    twelve, scaled by each body's faceScale over the reference's.
+
+    Writes <out>.bin: 'PFB1', u32 vertices, u16 groups, then per group u32 n, u16[n] vertex ids, i16[3n] deltas in
+    hundredths of a millimetre, glTF axes (y up, facing +z). And <out>.json: the group names, the reference faceScale,
+    and each MediaPipe landmark bound to the body's surface as [vertex, vertex, vertex, u, v, w] (or null).
+    """
+    t0 = time.time()
+    out = opts['face-basis']
+    spec = heroes.spec(opts.get('base', REFERENCE))
+    topo = load_topology()
+    plain, split = build_body(spec, {}, faces=topo['refine'])
+    scale = plain.scale
+    eyes = B.make_eyes(plain)
+    eye_verts = [B.positions(e) for e in eyes]
+    base_eyes = eye_frames(plain)
+    body_pos = B.positions(plain.mesh)
+    p0 = hero_positions(body_pos, base_eyes, eye_verts, base_eyes)
+    # landmarks: where each lands on this body's own surface, as a triangle of its vertices and barycentric weights
+    me = plain.mesh.data
+    bvh = BVHTree.FromObject(plain.mesh, bpy.context.evaluated_depsgraph_get())
+    marks = []
+    for (x, y, z), ok in zip(plain.lm[0], plain.lm[1]):
+        if not ok:
+            marks.append(None)
+            continue
+        loc, _n, poly, _d = bvh.find_nearest(Vector((x, y, z)))
+        vs = list(me.polygons[poly].vertices)
+        best = None
+        for k in range(1, len(vs) - 1):
+            tri = (vs[0], vs[k], vs[k + 1])
+            bc = F.barycentric(np.array(loc), *(np.array(me.vertices[i].co) for i in tri))
+            if bc is not None and (best is None or min(bc) > min(best[1])):
+                best = (tri, bc)
+        marks.append([int(i) for i in best[0]] + [round(float(w), 5) for w in best[1]])
+    # a face group moves the head only: the proxy scales its fitting offsets by the head's own width and height, so a
+    # bigger head would otherwise nudge every vertex of the body by a few millimetres. Weighted by each vertex's head
+    # weight, the face moves fully and the neck blends; the eyeballs ride the head.
+    head_w = np.concatenate([np.array(B.group_weight(plain.mesh, 'head')), np.ones(len(p0) - len(body_pos))])[:, None]
+    groups = F.group_names()
+    blobs = []
+    for gi, group in enumerate(F.CANDIDATES):
+        v, _ = build_body(spec, {name: 1.0 for name in group if F.TargetService.target_full_path(name)}, scale=scale, faces=split)
+        d = (hero_positions(B.positions(v.mesh), eye_frames(v), eye_verts, base_eyes) - p0) * head_w
+        # glTF axes, hundredths of a millimetre
+        g = np.stack([d[:, 0], d[:, 2], -d[:, 1]], axis=1) * 1e5
+        ids = np.nonzero(np.abs(g).max(axis=1) >= 2)[0]
+        q = np.clip(np.round(g[ids]), -32767, 32767).astype('<i2')
+        blobs.append(struct.pack('<I', len(ids)) + ids.astype('<u2').tobytes() + q.tobytes())
+        log('basis', groups[gi], len(ids), 'vertices', f'max {np.abs(d).max() * 1000:.1f} mm', f'{time.time() - t0:.1f}s')
+    with open(out + '.bin', 'wb') as f:
+        f.write(b'PFB1' + struct.pack('<IH', len(p0), len(groups)) + b''.join(blobs))
+    with open(out + '.json', 'w') as f:
+        json.dump({'version': 1, 'from': spec['id'], 'vertices': len(p0), 'faceScale': round(scale * spec.get('head_scale', 1.08), 6), 'groups': groups, 'landmarks': marks}, f, separators=(',', ':'))
+    log('wrote', out + '.bin', os.path.getsize(out + '.bin'), 'bytes', sum(1 for m in marks if m), 'landmarks', f'{time.time() - t0:.1f}s')
 
 
 def export(path, size):
@@ -212,42 +399,13 @@ def export(path, size):
         export_texcoords=True,
         export_normals=True,
         export_materials='EXPORT',
+        export_morph=True,
+        export_morph_normal=False,
+        export_attributes=True,
     )
 
 
 # ------------------------------------------------------------------------------------------------ generic body parts
-
-
-# every hair style and beard a body carries, switched per hero by its look (PARTS in bake.py and character-look.ts)
-BASE_HAIR = ('crop', 'spiky', 'long', 'buzz', 'short', 'curly', 'swept', 'bob', 'volume')
-BASE_BEARDS = ('full', 'goatee', 'chin_curtain')
-
-
-def base_parts(d, head, body, mats):
-    """The switchable parts of a body: its hair styles and beards, a helmet, armour and a cape (see PARTS)."""
-    out = []
-    hair_props = dict(heroes.BASE_MATS['hair'])
-    for style in BASE_BEARDS:
-        mats.get(f'beard_{style}', **dict(hair_props, part=f'beard:{style}', centre=tuple(head.centre)))
-        b = H.make_beard(d, head, style, mat=f'beard_{style}')
-        if b:
-            b.name = f'beard_{style}'
-            out.append(b)
-    for style in BASE_HAIR:
-        mats.get(f'hair_{style}', **dict(hair_props, part=f'hair:{style}', centre=tuple(head.centre)))
-        h = H.make_hair(d, head, style, mat=f'hair_{style}')
-        if h:
-            h.name = f'hair_{style}'
-            out.append(h)
-    mats.get('helmet', **dict(heroes.BASE_MATS['metal'], part='hair:helmet'))
-    mats.get('crest', **dict(heroes.BASE_MATS['cape'], part='hair:helmet'))
-    out.extend(H.make_helmet(d, head, mat='helmet', crest='crest'))
-    mats.get('armour', **dict(heroes.BASE_MATS['metal'], part='armour'))
-    for side in 'LR':
-        out.extend(gear_pauldron(d, head, body, side=side, mat='armour', layers=2, size=0.14))
-    mats.get('cape_part', **dict(heroes.BASE_MATS['cape'], part='cape'))
-    out.append(gear_cape(d, head, body, mat='cape_part'))
-    return out
 
 
 # ------------------------------------------------------------------------------------------------ gear
@@ -550,16 +708,24 @@ def portrait_render(path, rig, head):
 
 
 SHEET = [('idle', 0), ('run', 0.17), ('slash', 0.2), ('shoot', 0.1), ('cast', 0.3), ('ultimate', 0.5), ('hurt', 0.06), ('fall', 0.9)]
+# each cast pose at its wind-up and its release (--sheet dir --casts)
+CAST_SHEET = [
+    ('cast', 0.15), ('cast', 0.3), ('cast_palms', 0.16), ('cast_palms', 0.3), ('cast_palm', 0.12), ('cast_palm', 0.24),
+    ('cast_fingers', 0.2), ('cast_fingers', 0.4), ('cast_overhead', 0.3), ('cast_overhead', 0.48), ('cast_cross', 0.16),
+    ('cast_cross', 0.3), ('cast_clap', 0.14), ('cast_clap', 0.24), ('cast_slam', 0.16), ('cast_slam', 0.32),
+    ('cast_summon', 0.26), ('cast_summon', 0.46), ('cast_breath', 0.2), ('cast_breath', 0.36), ('cast_spin', 0.22),
+    ('cast_spin', 0.34),
+]
 
 
-def sheet(folder, rig):
+def sheet(folder, rig, poses=SHEET):
     os.makedirs(folder, exist_ok=True)
     scene = bpy.context.scene
     preview_engine(scene)
     _lights(scene)
     scene.render.resolution_x, scene.render.resolution_y = 360, 420
     _camera(scene, (1.9, -3.3, 1.3), (0, 0, 0.95), 50)
-    for i, (name, t) in enumerate(SHEET):
+    for i, (name, t) in enumerate(poses):
         play(rig, name)
         scene.frame_set(round(t * 30) + 1)
         scene.render.filepath = f'{folder}/{i:02d}_{name}_{t}.png'

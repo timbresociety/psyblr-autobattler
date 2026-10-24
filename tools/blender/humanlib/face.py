@@ -256,6 +256,16 @@ def fit_face(human, portrait, lam=4e-4, rounds=4, log=print):
     return fitted
 
 
+def fitted_targets(fitted):
+    """fit_face's weights by group, as weights by target name (a group's targets share its weight)."""
+    return {name: w for group, w in fitted.items() for name in group.split('+')}
+
+
+def group_names():
+    """The candidate groups in order, named as fit_face names them: the face basis's columns (build.face_basis)."""
+    return ['+'.join(g) for g in CANDIDATES]
+
+
 # ------------------------------------------------------------------------------------------------ the face texture
 
 
