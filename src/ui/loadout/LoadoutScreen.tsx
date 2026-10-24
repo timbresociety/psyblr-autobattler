@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Build } from '../../charter/build'
 import { SIZES } from '../../charter/sizes'
 import type { RoleId } from '../../charter/types'
+import { DEMO_HEROES, FACTION_NAME, demoBuild } from '../../arena/demo/roster'
 import { liveDeps, type BuildRecord, type HeroResult, type LoadoutDeps } from '../api'
 import { heroHue } from '../common/hero-look'
 import { HeroPortrait } from '../common/portrait'
@@ -11,6 +12,9 @@ import './loadout.css'
 export const SEARCH_DEBOUNCE_MS = 250
 
 const GATE_LABEL: Record<Build['gate']['state'], string> = { draft: 'Needs a balance check', checking: 'Checking', ready: 'Ready', blocked: 'Blocked' }
+
+/** The 20 heroes every loadout starts with, the same ones staging's row shows (src/arena/demo/roster.ts). */
+const STARTERS = DEMO_HEROES.map((hero) => ({ hero, build: demoBuild(hero) }))
 
 interface Props {
   deps?: LoadoutDeps
@@ -115,13 +119,13 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
       )}
       <section className="panel mine" aria-label="Your heroes">
         <h2 className="section-title">
-          Your heroes {mine && mine.length > 0 && <span className="count">{mine.length}</span>}
+          Your heroes <span className="count">{(mine?.length ?? 0) + STARTERS.length}</span>
         </h2>
         {!mine ? (
           <p className="muted">Loading your heroes…</p>
         ) : mine.length === 0 ? (
           <p className="muted empty">
-            Your loadout is empty. <button className="link-btn" onClick={onForge}>Forge a hero</button>, or add one from the global loadout below.
+            You haven't made a hero of your own yet. <button className="link-btn" onClick={onForge}>Forge one</button>, or add one from the global loadout below.
           </p>
         ) : (
           <ul className="cards">
@@ -166,6 +170,27 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
             })}
           </ul>
         )}
+        <h3 className="field-label starters-head">Starter heroes · {STARTERS.length}</h3>
+        <ul className="cards starters" aria-label="Starter heroes">
+          {STARTERS.map(({ hero, build }) => (
+            <li key={hero.heroName} className={`card role-${build.roleId}`}>
+              <HeroPortrait hero={{ key: `demo:${hero.heroName}`, heroName: build.heroName, roleId: build.roleId, hue: hero.hue, build }} />
+              <div className="card-who">
+                <strong>{build.heroName}</strong>
+                <span className="card-meta">
+                  <RoleBadge role={build.roleId} />
+                  <small>{SIZES[build.sizeClass ?? 'medium'].label}</small>
+                </span>
+                <small className="gate-chip starter">Starter · {FACTION_NAME[hero.faction]}</small>
+              </div>
+              <div className="card-actions">
+                <button className="btn sm ghost" onClick={() => onRemix(build)}>
+                  Remix in Forge
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
       <section className="panel global" aria-label="Global loadout">
         <div className="global-head">

@@ -9,6 +9,8 @@ import type { RoleId } from '../../charter/types.js'
 
 export type DemoFaction = 'mogul' | 'leader'
 
+export const FACTION_NAME: Record<DemoFaction, string> = { mogul: 'Moguls', leader: 'World leaders' }
+
 export interface DemoHero {
   faction: DemoFaction
   heroName: string

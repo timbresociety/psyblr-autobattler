@@ -71,13 +71,17 @@ describe('loadout (R18)', () => {
     expect(d.search).toHaveBeenCalledWith('Jen')
   })
 
-  it('an empty loadout points to the Forge', async () => {
+  it('with none of your own heroes, it points to the Forge and still lists the 20 starters', async () => {
     const h = handlers()
     render(<LoadoutScreen deps={deps({ listBuilds: vi.fn(async () => []) })} {...h} />)
-    expect(await screen.findByText(/Your loadout is empty/)).toBeTruthy()
-    // the header's button and the one in the empty message both go to the Forge
-    const [, inline] = screen.getAllByRole('button', { name: 'Forge a hero' })
-    fireEvent.click(inline)
+    expect(await screen.findByText(/haven't made a hero of your own yet/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Forge one' }))
     expect(h.onForge).toHaveBeenCalled()
+    const starters = within(screen.getByRole('list', { name: 'Starter heroes' })).getAllByRole('listitem')
+    expect(starters).toHaveLength(20)
+    // a starter can't be removed, only remixed into a new hero of your own
+    expect(within(starters[0]).queryByRole('button', { name: /Remove/ })).toBeNull()
+    fireEvent.click(within(starters[0]).getByRole('button', { name: 'Remix in Forge' }))
+    expect(h.onRemix).toHaveBeenCalledWith(expect.objectContaining({ heroName: expect.stringContaining('Musk') }))
   })
 })

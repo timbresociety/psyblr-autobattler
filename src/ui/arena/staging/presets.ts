@@ -1,4 +1,4 @@
-import type { DemoFaction } from '../../../arena/demo/roster.js'
+import { FACTION_NAME, type DemoFaction } from '../../../arena/demo/roster.js'
 import type { Team } from '../../../arena/engine/state.js'
 import type { RoleId } from '../../../charter/types.js'
 import { MAX_PER_SIDE, deployHeroes, type Formation } from './formation.js'
@@ -18,7 +18,7 @@ export const MATCHUPS: readonly { id: MatchupId; label: string; needsFactions: b
   { id: 'random', label: 'Random', needsFactions: false },
 ]
 
-export const FACTION_NAME: Record<DemoFaction, string> = { mogul: 'Moguls', leader: 'World leaders' }
+export { FACTION_NAME }
 
 /** Who stands nearest the middle: those built to take hits, then divers, controllers just behind them, then the back line. */
 const RANK: Record<RoleId, number> = { tank: 0, fighter: 1, assassin: 2, controller: 3, mage: 4, summoner: 5, support: 6, marksman: 7 }

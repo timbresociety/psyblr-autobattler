@@ -24,7 +24,7 @@ import type { GearPiece, GearSlot, HeroLook } from '../../charter/look'
 import { BUILT_IN, wearing, type PieceEntry } from '../../kit/pieces'
 import { resolveGear, type GearGap } from '../../kit/resolve'
 import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
-import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps, type HeroResult } from '../api'
+import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
 import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
 import { PREP_MESSAGES } from '../common/image-prep'
@@ -35,7 +35,6 @@ import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
 import { LookPanel } from './LookPanel'
 import { GearPanel } from './GearPanel'
 import { facePhoto, firstLook, photoColours, resolvedLook, type FaceCandidate } from './look'
-import { LoadoutSearch } from './LoadoutSearch'
 import { RoleSwitcher } from './RoleSwitcher'
 import { SizePicker } from './SizePicker'
 import { SkillCard } from './SkillCard'
@@ -103,7 +102,6 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   // repository lacks
   const [community, setCommunity] = useState<PieceEntry[]>([])
   const [gaps, setGaps] = useState<GearGap[]>([])
-  const [adding, setAdding] = useState(false)
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   // bumped on every change the player makes; an async result started before a change is discarded
   const edits = useRef(0)
@@ -111,7 +109,6 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     edits.current++
   }
   const photoUrls = images.flatMap((img) => (img.status === 'ready' && img.url ? [img.url] : []))
-  const search = useCallback((q: string) => deps.search(q), [deps])
   const say = (text: string) => setMessages((m) => [...m, { from: 'engine', text }])
 
   // previews are object URLs, released when their image goes or the screen does
@@ -236,25 +233,6 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     setNotice(undefined)
     setOffline(false)
     setMessages([])
-  }
-
-  async function addFromLoadout(hero: HeroResult) {
-    if (adding) return
-    setAdding(true)
-    try {
-      const added = await deps.addHero(hero.id)
-      changed()
-      setBuild(added.build)
-      setBuildId(added.id)
-      setHeroName(added.build.heroName)
-      setAlternatives(undefined)
-      setNotice(undefined)
-      say(`Added ${hero.name} to your loadout for free. The look is shared; this build is yours to tune.`)
-    } catch {
-      say(`Couldn't add ${hero.name} right now. Try again in a moment.`)
-    } finally {
-      setAdding(false)
-    }
   }
 
   async function save() {
@@ -440,7 +418,6 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
           }
         }}
         onSend={send}
-        search={!build && <LoadoutSearch query={heroName} search={search} onAdd={addFromLoadout} adding={adding} />}
         refs={<ImageDrop images={images} max={MAX_PHOTOS} onFiles={addImages} onRemove={dropImage} error={imageError} />}
       />
       <section className="workbench">

@@ -14,7 +14,6 @@ interface Props {
   onName: (name: string) => void
   onSend: (text: string) => void
   /** Global loadout matches for the typed name. */
-  search?: ReactNode
   /** The reference image drop zone. */
   refs?: ReactNode
 }
@@ -26,7 +25,7 @@ const EXAMPLES = ['a time-bending samurai who rewinds fights', 'a GPU god who ra
  * Making a hero is conversational first (R13): reference images, a name if you have one, then the hero in plain words.
  * The prompt names the hero when the name is left blank.
  */
-export function ChatPanel({ started, heroName, messages, busy, onName, onSend, search, refs }: Props) {
+export function ChatPanel({ started, heroName, messages, busy, onName, onSend, refs }: Props) {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLOListElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -51,7 +50,6 @@ export function ChatPanel({ started, heroName, messages, busy, onName, onSend, s
         <span className="field-label">Hero name</span>
         <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder={started ? 'Jensen, Goku, Unit 7…' : 'Optional: Jensen, Goku…'} onChange={(e) => onName(e.target.value)} />
       </label>
-      {search}
       {refs}
       <ol className="log" ref={log} aria-live="polite">
         {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is. A sentence is enough: I name it if you haven't, draft the role, the kit and the stats, and you change anything you like.</li>}
