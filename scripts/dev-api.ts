@@ -73,9 +73,11 @@ const IMAGE_TYPES: [number[], string][] = [
   [[0xff, 0xd8, 0xff], 'image/jpeg'],
   [[0x89, 0x50, 0x4e, 0x47], 'image/png'],
   [[0x52, 0x49, 0x46, 0x46], 'image/webp'],
+  // a generated piece's model (src/server/pieces.ts)
+  [[0x67, 0x6c, 0x54, 0x46], 'model/gltf-binary'],
 ]
 
-/** A file from the dev store, typed by its bytes; nothing outside the store can be reached. */
+/** A file from the dev store (a photo or a generated piece), typed by its bytes; nothing outside the store can be reached. */
 async function serveStored(req: IncomingMessage, res: ServerResponse) {
   const path = decodeURIComponent(new URL(req.url!, 'http://dev').pathname.slice(DEV_STORE_PATH.length))
   const root = resolve(DEV_STORE_DIR)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ForgeDeps } from './forge-api'
+import type { PieceDeps } from '../api'
 
 /** The single-use token inside a sign-in link, or undefined when the link has none. */
 export function signInToken(link: string): string | undefined {
@@ -11,10 +11,10 @@ export function signInToken(link: string): string | undefined {
 }
 
 /**
- * Email magic-link sign-in; forging needs an account, the creator does not (KTD5, KTD12). The local dev server sends
- * no email, so it hands the link back and the player can follow it here.
+ * Email magic-link sign-in, asked for only when a player generates something: wearing pieces from the repository needs
+ * no account. The local dev server sends no email, so it hands the link back and the player can follow it here.
  */
-export function SignIn({ deps, onCancel, onSignedIn }: { deps: ForgeDeps; onCancel: () => void; onSignedIn?: () => void }) {
+export function SignIn({ deps, onCancel, onSignedIn }: { deps: Pick<PieceDeps, 'startSignIn' | 'verifySignIn'>; onCancel: () => void; onSignedIn?: () => void }) {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
   const [devLink, setDevLink] = useState<string>()
@@ -30,7 +30,7 @@ export function SignIn({ deps, onCancel, onSignedIn }: { deps: ForgeDeps; onCanc
       setDevLink(started?.devLink)
       setSent(true)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'could not send the link')
+      setError(e instanceof Error ? e.message : "couldn't send the link")
     } finally {
       setBusy(false)
     }
@@ -46,7 +46,7 @@ export function SignIn({ deps, onCancel, onSignedIn }: { deps: ForgeDeps; onCanc
       await deps.verifySignIn(token)
       onSignedIn?.()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'that sign-in link did not work')
+      setError(e instanceof Error ? e.message : "that sign-in link didn't work")
     } finally {
       setBusy(false)
     }
@@ -54,52 +54,42 @@ export function SignIn({ deps, onCancel, onSignedIn }: { deps: ForgeDeps; onCanc
 
   if (sent)
     return (
-      <section className="panel sign-in sent" aria-label="Sign-in link sent">
-        <span className="sign-in-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path d="M3 6.5h18v11H3z M3.5 7l8.5 6.5L20.5 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-          </svg>
-        </span>
-        <h2 className="section-title">Check your inbox</h2>
-        <p className="notice">Check {email} for a sign-in link. It works once, for 15 minutes.</p>
+      <section className="sign-in sent" aria-label="Sign-in link sent">
+        <h3 className="field-label">Check your inbox</h3>
+        <p className="notice">We sent a sign-in link to {email}. It works once, for 15 minutes. Come back here after you follow it.</p>
         {devLink && (
           <div className="dev-link">
             <p className="muted">This is the local dev server, so no email went out. Follow the link from here instead.</p>
-            <button className="btn primary" onClick={follow} disabled={busy}>
+            <button type="button" className="btn primary sm" onClick={follow} disabled={busy}>
               Open sign-in link (dev)
             </button>
           </div>
         )}
         {error && <p className="inline-error">{error}</p>}
         <div className="row">
-          <button className="btn ghost sm" onClick={() => (setSent(false), setDevLink(undefined))}>
+          <button type="button" className="btn ghost sm" onClick={() => (setSent(false), setDevLink(undefined))}>
             Use another email
           </button>
-          <button className="btn quiet sm" onClick={onCancel}>
+          <button type="button" className="btn quiet sm" onClick={onCancel}>
             Back
           </button>
         </div>
       </section>
     )
   return (
-    <form className="panel sign-in" onSubmit={send} aria-label="Sign in">
-      <span className="sign-in-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
-          <path d="M12 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM4.5 20.5c.8-4 3.8-6.5 7.5-6.5s6.7 2.5 7.5 6.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-      </span>
-      <h2 className="section-title">Sign in to forge</h2>
-      <p className="muted">Your first hero is free. We email you a one-time link; no password.</p>
+    <form className="sign-in" onSubmit={send} aria-label="Sign in">
+      <h3 className="field-label">Sign in to generate</h3>
+      <p className="muted">Generating costs credits, so it needs an account. We email you a one-time link, no password.</p>
       <label className="field">
         <span>Email</span>
         <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" />
       </label>
       {error && <p className="inline-error">{error}</p>}
       <div className="row">
-        <button className="btn primary" disabled={busy || !email}>
+        <button className="btn primary sm" disabled={busy || !email}>
           Email me a link
         </button>
-        <button type="button" className="btn quiet" onClick={onCancel}>
+        <button type="button" className="btn quiet sm" onClick={onCancel}>
           Back
         </button>
       </div>

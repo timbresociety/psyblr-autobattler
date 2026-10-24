@@ -14,6 +14,7 @@ const METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE'])
 /** /api/<key> → its module. Each import is a static string, so Vercel's file tracer bundles every route. */
 export const ROUTES: Record<string, () => Promise<RouteModule>> = {
   'admin/hide': () => import('../routes/admin/hide.js'),
+  'assets/search': () => import('../routes/assets/search.js'),
   'auth/session': () => import('../routes/auth/session.js'),
   'auth/start': () => import('../routes/auth/start.js'),
   'auth/verify': () => import('../routes/auth/verify.js'),
@@ -22,13 +23,12 @@ export const ROUTES: Record<string, () => Promise<RouteModule>> = {
   credits: () => import('../routes/credits/index.js'),
   'credits/purchase': () => import('../routes/credits/purchase.js'),
   device: () => import('../routes/device.js'),
-  forge: () => import('../routes/forge/index.js'),
-  'forge/stage': () => import('../routes/forge/stage.js'),
   heroes: () => import('../routes/heroes/index.js'),
   'heroes/package': () => import('../routes/heroes/package.js'),
   'heroes/search': () => import('../routes/heroes/search.js'),
   'payments/webhook': () => import('../routes/payments/webhook.js'),
   'photos/upload': () => import('../routes/photos/upload.js'),
+  pieces: () => import('../routes/pieces/index.js'),
 }
 
 /**

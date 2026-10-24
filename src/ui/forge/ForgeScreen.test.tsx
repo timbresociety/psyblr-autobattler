@@ -7,6 +7,7 @@ import type { GateOutcome } from '../../sim/gate'
 import type { ForgeDeps } from '../api'
 import { offlineChat } from '../api'
 import { ForgeScreen } from './ForgeScreen'
+import { pieceDeps } from './pieces.fixture'
 
 afterEach(cleanup)
 
@@ -29,6 +30,7 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
     createHero: vi.fn(async () => ({ heroId: 'h1', buildId: 'b1' })),
     saveBuild: vi.fn(async (id: string, build: Build) => ({ id, heroId: 'h1', build })),
     listBuilds: vi.fn(async () => []),
+    pieces: pieceDeps(),
     ...over,
   }
 }
@@ -264,6 +266,9 @@ describe('forge from a prompt and reference images', () => {
     const row = (name: string) => within(screen.getByRole('radiogroup', { name }))
     expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Katana')
     expect(row('Head').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
+    // the straw hat isn't in the repository: the community is searched for it, then it's offered for generating
+    expect(await screen.findByRole('button', { name: /straw hat/ })).toBeTruthy()
+    expect(d.pieces.searchPieces).toHaveBeenCalledWith('straw hat', 'head')
     await act(async () => fireEvent.click(row('Head').getByRole('radio', { name: 'Crown' })))
     await act(async () => fireEvent.click(row('Right hand').getByRole('radio', { name: 'Nothing' })))
     expect(row('Head').getByRole('radio', { checked: true }).textContent).toBe('Crown')

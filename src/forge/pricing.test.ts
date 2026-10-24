@@ -1,22 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { FREE_GRANT, HERO_PRICE, MARKUP, STAGE_COST, STAGE_PRICES, TYPICAL, stagePrice } from './pricing.js'
-import { STAGE_ORDER, STAGE_TABLE } from './stages.js'
+import { FREE_GRANT, GENERATION_COST, MARKUP, PACKS, PIECE_PRICE } from './pricing.js'
 
-describe('blended forge pricing (R45, KTD18)', () => {
-  it('a full forge charges about twice its estimated provider cost', () => {
-    const cost = Object.entries(STAGE_COST).reduce((s, [stage, c]) => s + (stage === 'form' ? c! * TYPICAL.formTakeUp : c!), 0)
-    expect(HERO_PRICE).toBe(Math.round(cost * MARKUP))
-    const charged = Object.entries(STAGE_PRICES).reduce((s, [stage, p]) => s + (stage === 'form' ? p! * TYPICAL.formTakeUp : p!), 0)
-    expect(Math.abs(charged - HERO_PRICE)).toBeLessThanOrEqual(STAGE_ORDER.length)
+describe('pricing', () => {
+  it('a generated piece costs twice its estimate, and the free grant covers two', () => {
+    expect(PIECE_PRICE).toBe(Math.round(GENERATION_COST.piece * MARKUP))
+    expect(FREE_GRANT).toBe(2 * PIECE_PRICE)
   })
 
-  it('the motion stage pays for the arena hero as well as the archival one', () => {
-    expect(STAGE_COST.motion!).toBeGreaterThan(STAGE_COST.mesh!)
-  })
-
-  it('the free grant still covers one full hero, form included, with every capped retry', () => {
-    const worst = STAGE_ORDER.reduce((s, stage) => s + stagePrice(stage) * (1 + (STAGE_TABLE[stage].paid ? STAGE_TABLE[stage].retryCap : 0)), 0)
-    expect(FREE_GRANT).toBe(worst)
-    expect(stagePrice('form')).toBeGreaterThan(0)
+  it('every pack buys at least a few pieces, and bigger packs cost less per credit', () => {
+    for (const p of PACKS) expect(p.credits).toBeGreaterThanOrEqual(5 * PIECE_PRICE)
+    const perCredit = PACKS.map((p) => p.amountCents / p.credits)
+    expect([...perCredit].sort((a, b) => b - a)).toEqual(perCredit)
   })
 })

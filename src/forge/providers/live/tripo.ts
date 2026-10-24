@@ -1,4 +1,4 @@
-import type { Asset, Env, MeshProvider, Outcome, RetargetProvider, RigProvider } from '../types.js'
+import type { Asset, Env, MeshProvider, Outcome, PieceProvider, RetargetProvider, RigProvider } from '../types.js'
 import { getJson, httpFailure, postJson, type FetchLike } from './http.js'
 
 /**
@@ -48,6 +48,65 @@ function tripo(env: Env, fetchImpl: FetchLike) {
 }
 
 const asset = (url: string | undefined, format: Asset['format']): Asset | undefined => (url ? { url, format } : undefined)
+
+/** Tripo's v3 task as its task query returns it. */
+interface TripoV3Task {
+  code?: number
+  message?: string
+  data?: { task_id?: string; status?: string; output?: { model_url?: string; rendered_image_url?: string }; error_code?: number; error_message?: string }
+}
+
+/** A refusal on content grounds (Tripo's 2008, content policy) is a decline; anything else failed. */
+function v3Failure(status: number, json: unknown): Outcome<never> {
+  const body = json as TripoV3Task
+  if (body?.code === 2008) return { ok: false, kind: 'declined', reason: body.message ?? 'Tripo declined the prompt on content grounds' }
+  return httpFailure(status, json)
+}
+
+/** The Tripo model version pieces are made with (developers.tripo3d.com, generation, 2026-10). */
+export const TRIPO_PIECE_MODEL = 'v3.1-20260211'
+
+/**
+ * A piece of gear from words (text-to-model) or a picture of it (image-to-model), on Tripo's v3 API: create the task,
+ * then poll /tasks/{id} until its output carries the GLB and a rendered preview.
+ */
+export function tripoPiece(env: Env, fetchImpl: FetchLike = fetch): PieceProvider {
+  const key = env.TRIPO_API_KEY
+  const base = env.TRIPO_BASE_URL || TRIPO_BASE
+  const headers = { authorization: `Bearer ${key ?? ''}` }
+  return {
+    id: 'tripo-piece',
+    capability: 'piece',
+    available: () => !!key,
+    async start(r) {
+      const common = { model: TRIPO_PIECE_MODEL, face_limit: r.faceLimit, texture: true, pbr: true }
+      const [path, body] = r.imageUrl ? ['image-to-model', { ...common, input: r.imageUrl }] : ['text-to-model', { ...common, prompt: r.prompt.slice(0, 1024) }]
+      const { status, json } = await postJson(fetchImpl, `${base}/generation/${path}`, body, headers)
+      const task = json as TripoV3Task
+      if (status !== 200 || task.code !== 0 || !task.data?.task_id) return v3Failure(status, json)
+      return { ok: 'pending', taskId: task.data.task_id }
+    },
+    async poll(taskId) {
+      const { status, json } = await getJson(fetchImpl, `${base}/tasks/${encodeURIComponent(taskId)}`, headers)
+      const task = json as TripoV3Task
+      if (status !== 200 || task.code !== 0 || !task.data) return v3Failure(status, json)
+      switch (task.data.status) {
+        case 'success': {
+          const out = task.data.output
+          return out?.model_url ? { ok: true, value: { url: out.model_url, format: 'glb', preview: out.rendered_image_url } } : { ok: false, kind: 'failed', reason: 'the task finished without a model' }
+        }
+        case 'failed':
+          return task.data.error_code === 2008 ? { ok: false, kind: 'declined', reason: task.data.error_message ?? 'declined on content grounds' } : { ok: false, kind: 'failed', reason: task.data.error_message ?? 'Tripo task failed' }
+        case 'cancelled':
+        case 'banned':
+        case 'expired':
+          return { ok: false, kind: 'declined', reason: task.data.error_message ?? `Tripo task ${task.data.status}` }
+        default:
+          return { ok: 'pending', taskId }
+      }
+    },
+  }
+}
 
 export function tripoMesh(env: Env, fetchImpl: FetchLike = fetch): MeshProvider {
   const t = tripo(env, fetchImpl)

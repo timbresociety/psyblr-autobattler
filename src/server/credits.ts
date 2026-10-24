@@ -48,11 +48,11 @@ export async function balance(db: Db, accountId: string): Promise<number> {
 /** The one-time free grant (R3): once per account, once per IP per day, and under a global daily cap. */
 export async function claimFreeGrant(db: Db, accountId: string, ip: string, now = new Date()): Promise<number> {
   const day = dayBucket(now)
-  if (await freeClaimed(db, accountId)) throw new CreditError('the free hero has already been claimed', 409)
+  if (await freeClaimed(db, accountId)) throw new CreditError('the free credits have already been claimed', 409)
   // count first, then check: concurrent claims each see their own increment
   if ((await bump(db, `grant-ip:${ip}`, day)) > 1) throw new CreditError('a free hero was already claimed from this network today', 429)
-  if ((await bump(db, 'grant-global', day)) > GLOBAL_DAILY_FREE_GRANTS) throw new CreditError('free heroes are paused for today; try again tomorrow', 429)
-  if (!(await credit(db, accountId, 'grant', FREE_GRANT, `free:${accountId}`))) throw new CreditError('the free hero has already been claimed', 409)
+  if ((await bump(db, 'grant-global', day)) > GLOBAL_DAILY_FREE_GRANTS) throw new CreditError('free credits are paused for today; try again tomorrow', 429)
+  if (!(await credit(db, accountId, 'grant', FREE_GRANT, `free:${accountId}`))) throw new CreditError('the free credits have already been claimed', 409)
   return balance(db, accountId)
 }
 

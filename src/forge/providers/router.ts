@@ -8,6 +8,7 @@ export const DEFAULT_ORDER: Record<Capability, string[]> = {
   rig: ['tripo-rig'],
   retarget: ['tripo-retarget'],
   moderation: ['anthropic-moderation'],
+  piece: ['tripo-piece'],
 }
 
 export function isProduction(env: Env): boolean {

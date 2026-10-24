@@ -3,7 +3,8 @@ import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/bu
 import { isGateStale, type GateOptions } from '../sim/gate.js'
 import { cachedGate } from './gate-cache.js'
 import { isOwnPhotoUrl } from './photo-url.js'
-import { gearProblem } from './gear.js'
+import { countUses } from './assets.js'
+import { checkGear, communityIds } from './gear.js'
 import type { Db } from './db.js'
 
 /**
@@ -55,8 +56,6 @@ function validated(raw: unknown): Build {
   if (!result.ok) throw new StoreInputError(`invalid build: ${result.errors.map((e) => e.field).join(', ')}`)
   // a face is a photo like any other: it must have come through the upload endpoint
   if (result.build.look?.face && !isOwnPhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
-  const gear = gearProblem(result.build.look)
-  if (gear) throw new StoreInputError(`gear: ${gear}`)
   return result.build
 }
 
@@ -79,9 +78,16 @@ async function gated(db: Db, build: Build, options?: GateOptions, claim?: number
   return (await cachedGate(db, build, options, claim)).build
 }
 
+/** Every worn piece must be in the repository, at its own URL, in a slot it fits. */
+async function gearChecked(db: Db, build: Build): Promise<Build> {
+  const problem = await checkGear(db, build.look)
+  if (problem) throw new StoreInputError(`gear: ${problem}`)
+  return build
+}
+
 export async function createHero(db: Db, deviceId: string, raw: unknown, photos: string[], gateOptions?: GateOptions): Promise<{ heroId: string; buildId: string }> {
   if (photos.length > MAX_PHOTOS || photos.some((url) => !isOwnPhotoUrl(url))) throw new StoreInputError('photos must be uploaded through the photo endpoint')
-  const build = await gated(db, validated(raw), gateOptions, claimedSteps(raw))
+  const build = await gated(db, await gearChecked(db, validated(raw)), gateOptions, claimedSteps(raw))
   if (build.gate.state === 'blocked') throw new StoreInputError('build is blocked by the balance gate')
   const name = build.heroName.trim()
   if (!name) throw new StoreInputError('hero name is required')
@@ -93,6 +99,8 @@ export async function createHero(db: Db, deviceId: string, raw: unknown, photos:
     [heroId, name, name.toLowerCase(), deviceId, JSON.stringify(photos), JSON.stringify(skills), JSON.stringify(originalBuild)],
   )
   const buildId = await insertBuild(db, heroId, deviceId, originalBuild)
+  // each community piece a new hero wears counts once toward its ranking in the repository
+  await countUses(db, communityIds(build.look))
   return { heroId, buildId }
 }
 
@@ -171,7 +179,7 @@ export async function listBuilds(db: Db, deviceId: string): Promise<BuildRecord[
 /** Save a player's edit: owner only, re-validated and re-gated on the server. */
 export async function saveBuild(db: Db, deviceId: string, buildId: string, raw: unknown, gateOptions?: GateOptions): Promise<BuildRecord> {
   const row = await ownedBuild(db, deviceId, buildId)
-  const build = await gated(db, { ...validated(raw), heroId: row.hero_id }, gateOptions, claimedSteps(raw))
+  const build = await gated(db, await gearChecked(db, { ...validated(raw), heroId: row.hero_id }), gateOptions, claimedSteps(raw))
   await db.query('update builds set build = $1, updated_at = now() where id = $2', [JSON.stringify(build), buildId])
   return { id: buildId, heroId: row.hero_id, build }
 }

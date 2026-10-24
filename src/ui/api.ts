@@ -1,6 +1,8 @@
 import { proposeBuild, requestStats, type Build, type ProposalInput } from '../charter/build.js'
 import { parseStatWishes } from '../charter/chat.js'
+import type { PieceKind } from '../charter/look.js'
 import type { LimitHit } from '../charter/types.js'
+import type { PieceEntry } from '../kit/pieces.js'
 import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
 import { prepareImage, type PreparedImage } from './common/image-prep.js'
@@ -39,6 +41,56 @@ export const UPLOAD_MESSAGES: Record<UploadFailure, string> = {
   server: "Couldn't upload that image right now. Try again in a moment.",
 }
 
+/** Signed in or not; generating a piece needs an account, everything else in the Forge doesn't. */
+export interface SessionView {
+  signedIn: boolean
+  email?: string
+}
+
+export interface CreditsView {
+  balance: number
+  freeGrant: number
+  freeClaimed: boolean
+  packs: { id: string; credits: number; amountCents: number; currency: string }[]
+}
+
+/** What starting a sign-in returns. Only the local dev server adds `devLink`, since it sends no real email. */
+export interface SignInStart {
+  devLink?: string
+}
+
+/** A piece being generated into the asset repository, and the piece once it's there. */
+export interface PieceJob {
+  id: string
+  kind: PieceKind
+  name: string
+  status: 'running' | 'done' | 'failed'
+  error?: string
+  piece?: PieceEntry
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message)
+  }
+}
+
+/** The asset repository from the Forge: search it free, and generate what it lacks (signed in, for credits). */
+export interface PieceDeps {
+  searchPieces(query: string, kind?: PieceKind): Promise<PieceEntry[]>
+  session(): Promise<SessionView>
+  startSignIn(email: string): Promise<SignInStart | void>
+  verifySignIn(token: string): Promise<void>
+  credits(): Promise<CreditsView>
+  claimFree(): Promise<number>
+  purchase(pack: string): Promise<{ url: string }>
+  startPiece(input: { prompt: string; kind: PieceKind; name?: string; imageUrl?: string }): Promise<{ job: PieceJob; balance: number }>
+  pollPiece(id: string): Promise<{ job: PieceJob; balance: number }>
+}
+
 export interface ForgeDeps {
   propose(hero: ProposalInput & { photoUrls?: string[] }): Promise<ProposeResponse>
   chat(build: Build, message: string): Promise<ChatResponse>
@@ -55,6 +107,7 @@ export interface ForgeDeps {
   createHero(build: Build, photoUrls: string[]): Promise<{ heroId: string; buildId: string }>
   saveBuild(id: string, build: Build): Promise<BuildRecord>
   listBuilds(): Promise<BuildRecord[]>
+  pieces: PieceDeps
 }
 
 /** The Loadout: this device's heroes, the global loadout's search and most used heroes, and removing a hero. */
@@ -188,6 +241,36 @@ async function localGate(build: Build): Promise<GateOutcome> {
   }
 }
 
+/** A JSON call with this device's ID and the session cookie; a refusal throws with the server's own words. */
+async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const device = await deviceId()
+  const res = await fetch(path, {
+    ...init,
+    credentials: 'same-origin',
+    headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...deviceHeader(device), ...init.headers },
+  })
+  const json = (await res.json().catch(() => ({}))) as T & { error?: string }
+  if (!res.ok) throw new ApiError(json.error ?? `request failed (${res.status})`, res.status)
+  return json
+}
+
+const send = <T>(path: string, body: unknown) => call<T>(path, { method: 'POST', body: JSON.stringify(body) })
+
+export const livePieceDeps: PieceDeps = {
+  async searchPieces(query, kind) {
+    const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) })
+    return (await call<{ pieces: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces
+  },
+  session: () => call<SessionView>('/api/auth/session'),
+  startSignIn: (email) => send<SignInStart>('/api/auth/start', { email }),
+  verifySignIn: (token) => send('/api/auth/verify', { token }),
+  credits: () => call<CreditsView>('/api/credits'),
+  claimFree: async () => (await send<{ balance: number }>('/api/credits', {})).balance,
+  purchase: (pack) => send<{ url: string }>('/api/credits/purchase', { pack }),
+  startPiece: (input) => send<{ job: PieceJob; balance: number }>('/api/pieces', input),
+  pollPiece: (id) => call<{ job: PieceJob; balance: number }>(`/api/pieces?id=${encodeURIComponent(id)}`),
+}
+
 async function searchHeroes(path: string): Promise<HeroResult[]> {
   const res = await fetch(path)
   if (!res.ok) throw new Error(`search ${res.status}`)
@@ -195,6 +278,7 @@ async function searchHeroes(path: string): Promise<HeroResult[]> {
 }
 
 export const liveDeps: ForgeDeps & LoadoutDeps = {
+  pieces: livePieceDeps,
   async propose(hero) {
     try {
       return await post<ProposeResponse>('/api/charter/propose', { kind: 'propose', hero })

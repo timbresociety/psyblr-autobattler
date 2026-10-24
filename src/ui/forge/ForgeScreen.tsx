@@ -21,7 +21,8 @@ import { POOL_SIZE, deriveSheet, spentPoints } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../../charter/types'
 import type { GearPiece, GearSlot, HeroLook } from '../../charter/look'
-import { BUILT_IN } from '../../kit/pieces'
+import { BUILT_IN, wearing, type PieceEntry } from '../../kit/pieces'
+import { resolveGear, type GearGap } from '../../kit/resolve'
 import { nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from '../../forge/prompt'
 import { liveDeps, UPLOAD_MESSAGES, type BuildRecord, type ForgeDeps, type HeroResult } from '../api'
 import { prefersReducedMotion } from '../arena/hud/format'
@@ -98,6 +99,10 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   const [alternatives, setAlternatives] = useState<Template[]>()
   const [buildId, setBuildId] = useState<string | undefined>(record?.id)
   const [saving, setSaving] = useState(false)
+  // community pieces seen so far (the most worn, search results, generated ones) and what the prompt asked for that the
+  // repository lacks
+  const [community, setCommunity] = useState<PieceEntry[]>([])
+  const [gaps, setGaps] = useState<GearGap[]>([])
   const [adding, setAdding] = useState(false)
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
   // bumped on every change the player makes; an async result started before a change is discarded
@@ -185,9 +190,41 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     return () => document.removeEventListener('paste', onPaste)
   }, [addImages])
 
+  const addCommunity = useCallback((entries: PieceEntry[]) => setCommunity((have) => [...have, ...entries.filter((e) => e.source === 'community' && !have.some((h) => h.id === e.id))]), [])
+  const catalog = useMemo(() => [...BUILT_IN, ...community], [community])
+  useEffect(() => {
+    deps.pieces.searchPieces('').then(addCommunity, () => undefined)
+  }, [deps, addCommunity])
+
+  /**
+   * The prompt's gear against the whole repository: what the built-ins didn't cover is looked up among the community's
+   * pieces, worn where the hero's slot is still free, and whatever is still missing is offered for generating.
+   */
+  async function lookUpGaps(text: string) {
+    const first = resolveGear(text, BUILT_IN)
+    setGaps(first.gaps)
+    if (!first.gaps.length) return
+    const found = (await Promise.all(first.gaps.slice(0, 3).map((g) => deps.pieces.searchPieces(g.phrase, g.kind).catch(() => [] as PieceEntry[])))).flat()
+    if (!found.length) return
+    addCommunity(found)
+    const second = resolveGear(text, [...BUILT_IN, ...found])
+    setGaps(second.gaps)
+    setBuild((b) => {
+      if (!b) return b
+      const { gear: worn, ...rest } = lookOf(b)
+      const gear = { ...worn }
+      for (const slot of Object.keys(second.gear) as GearSlot[]) {
+        const entry = second.gear[slot]!
+        if (entry.source === 'community' && !gear[slot]) gear[slot] = wearing(entry)
+      }
+      return Object.keys(gear).length ? setLook(b, { ...rest, gear }) : b
+    })
+  }
+
   /** A blank slate for the next hero; saved heroes stay in the Loadout. */
   function newHero() {
     changed()
+    setGaps([])
     images.forEach((img) => img.preview && URL.revokeObjectURL(img.preview))
     count.current = 0
     setImages([])
@@ -268,6 +305,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         const forged = sized?.ok ? sized.build : { ...res.build, heroName: name }
         // the prompt and the photo dress it: "a queen in gold armour" is a woman in gold armour, wearing the photo's face
         setBuild(setLook(forged, firstLook(text, forged.roleId, name, heroHue(name), candidate)))
+        void lookUpGaps(text)
         setHeroName(name)
         setOffline(res.offline)
         showLimits(res.limits)
@@ -506,7 +544,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                 </div>
               </section>
               <LookPanel look={resolvedLook(build.look, build.roleId, build.heroName, heroHue(build.heroName))} canFace={!!candidate} onChange={onLook} onFace={onFace} />
-              <GearPanel gear={build.look?.gear} catalog={BUILT_IN} onWear={onWear} />
+              <GearPanel gear={build.look?.gear} catalog={catalog} onWear={onWear} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addCommunity} />
               <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
               <section className="kit" aria-label="Kit">
                 <header className="kit-head">

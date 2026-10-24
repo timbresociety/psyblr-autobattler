@@ -1,10 +1,11 @@
+import type { PieceKind } from '../../charter/look.js'
 import type { ContentFlags } from '../types.js'
 
 /**
  * Every external generator sits behind one interface per capability (KTD2). Adapters never throw for
  * provider-side problems: they return an outcome, and the router decides whether to fall through.
  */
-export type Capability = 'director' | 'image' | 'mesh' | 'rig' | 'retarget' | 'moderation'
+export type Capability = 'director' | 'image' | 'mesh' | 'rig' | 'retarget' | 'moderation' | 'piece'
 
 export type Outcome<T> =
   | { ok: true; value: T }
@@ -46,6 +47,8 @@ export interface ImageProvider extends ProviderBase {
 export interface Asset {
   url: string
   format: 'glb' | 'fbx' | 'png' | 'webp' | 'svg'
+  /** A rendered preview of a model, when the provider makes one. */
+  preview?: string
 }
 
 /** Asynchronous 3D steps: start returns a task, poll returns the asset when done. */
@@ -71,7 +74,18 @@ export interface RetargetRequest {
   presets: string[]
 }
 
+/** One piece of gear for the asset repository, from words or from a picture of it. */
+export interface PieceRequest {
+  prompt: string
+  kind: PieceKind
+  /** A public image of the piece; without one the piece comes from the prompt alone. */
+  imageUrl?: string
+  /** The most triangles worth asking for; the server cuts the result to the slot's budget anyway. */
+  faceLimit: number
+}
+
 export type MeshProvider = TaskProvider<MeshRequest> & { capability: 'mesh' }
+export type PieceProvider = TaskProvider<PieceRequest> & { capability: 'piece' }
 export type RigProvider = TaskProvider<RigRequest> & { capability: 'rig' }
 export type RetargetProvider = TaskProvider<RetargetRequest> & { capability: 'retarget' }
 
@@ -80,6 +94,6 @@ export interface ModerationProvider extends ProviderBase {
   classify(request: { text?: string; imageUrl?: string }): Promise<Outcome<ContentFlags>>
 }
 
-export type AnyProvider = DirectorProvider | ImageProvider | MeshProvider | RigProvider | RetargetProvider | ModerationProvider
+export type AnyProvider = DirectorProvider | ImageProvider | MeshProvider | RigProvider | RetargetProvider | ModerationProvider | PieceProvider
 
 export type Env = Record<string, string | undefined>

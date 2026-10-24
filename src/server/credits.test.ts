@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SCHEMA_SQL, type Db } from './db.js'
-import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, STAGE_PRICES, stagePrice } from '../forge/pricing.js'
+import { FREE_GRANT, GLOBAL_DAILY_FREE_GRANTS, PACKS, PIECE_PRICE } from '../forge/pricing.js'
 import { balance, claimFreeGrant, ledgerBalance, placeHold, settleHold } from './credits.js'
 import { fakePayments, handleStripeEvent, packById, pickPayments, verifyStripeSignature } from './payments.js'
 
@@ -32,14 +32,6 @@ const completed = (id: string, accountId: string, amount: number) => ({
   data: { object: { client_reference_id: accountId, amount_total: amount, currency: 'usd', payment_status: 'paid' } },
 })
 
-describe('pricing', () => {
-  it('the free grant covers one hero with every capped retry, and spec/stats are free', () => {
-    expect(stagePrice('spec')).toBe(0)
-    expect(stagePrice('stats')).toBe(0)
-    // every paid stage, the optional form included, with all three retries
-    expect(FREE_GRANT).toBe(Object.values(STAGE_PRICES).reduce((s, p) => s + (p ?? 0), 0) * 4)
-  })
-})
 
 describe('credit ledger (U8)', () => {
   it('a free grant is once per account', async () => {
@@ -68,22 +60,22 @@ describe('credit ledger (U8)', () => {
   it('holds are idempotent per ref; success charges, failure releases', async () => {
     const a = await account()
     await claimFreeGrant(db, a, '1.1.1.1')
-    await placeHold(db, a, 60, 'f:mesh:1')
-    await placeHold(db, a, 60, 'f:mesh:1')
-    expect(await balance(db, a)).toBe(FREE_GRANT - 60)
-    await settleHold(db, 'f:mesh:1', true)
-    await settleHold(db, 'f:mesh:1', false)
-    expect(await balance(db, a)).toBe(FREE_GRANT - 60)
-    await placeHold(db, a, 50, 'f:motion:1')
-    await settleHold(db, 'f:motion:1', false)
-    await settleHold(db, 'f:motion:1', false)
-    expect(await balance(db, a)).toBe(FREE_GRANT - 60)
+    await placeHold(db, a, PIECE_PRICE, 'piece:1')
+    await placeHold(db, a, PIECE_PRICE, 'piece:1')
+    expect(await balance(db, a)).toBe(FREE_GRANT - PIECE_PRICE)
+    await settleHold(db, 'piece:1', true)
+    await settleHold(db, 'piece:1', false)
+    expect(await balance(db, a)).toBe(FREE_GRANT - PIECE_PRICE)
+    await placeHold(db, a, PIECE_PRICE, 'piece:2')
+    await settleHold(db, 'piece:2', false)
+    await settleHold(db, 'piece:2', false)
+    expect(await balance(db, a)).toBe(FREE_GRANT - PIECE_PRICE)
     expect(await ledgerBalance(db, a)).toBe(await balance(db, a))
   })
 
   it('a hold larger than the balance is refused without a ledger row', async () => {
     const a = await account()
-    await expect(placeHold(db, a, 10, 'f:concept:1')).rejects.toMatchObject({ status: 402 })
+    await expect(placeHold(db, a, 10, 'piece:3')).rejects.toMatchObject({ status: 402 })
     const { rows } = await db.query('select 1 from credit_ledger where account_id = $1', [a])
     expect(rows).toHaveLength(0)
   })

@@ -1,27 +1,13 @@
 import { useEffect, useState } from 'react'
-import type { CreditsView, ForgeDeps } from './forge-api'
+import type { CreditsView, PieceDeps } from '../api'
 
 const money = (cents: number, currency: string) => new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100)
 
-/** The balance as a coin count, for the forge's header. */
-export function CreditChip({ balance }: { balance: number }) {
-  return (
-    <span className="credit-chip" title="Credits">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 2.5 20.5 12 12 21.5 3.5 12z" fill="currentColor" />
-        <path d="M12 6.5 16.6 12 12 17.5 7.4 12z" fill="#1d1206" opacity=".35" />
-      </svg>
-      <b>{balance}</b>
-      <span>credits</span>
-    </span>
-  )
-}
-
 /**
- * The one free hero and prepaid packs (R3, AE2). It shows only when it has something to offer: the unclaimed free
- * credits, or packs when this step costs more than the balance.
+ * Credits for generating, shown only when a piece costs more than the balance: the one free grant if it's unclaimed,
+ * then prepaid packs.
  */
-export function Credits({ deps, balance, need, onBalance }: { deps: ForgeDeps; balance: number; need?: number; onBalance: (n: number) => void }) {
+export function Credits({ deps, balance, need, onBalance, onCancel }: { deps: Pick<PieceDeps, 'credits' | 'claimFree' | 'purchase'>; balance: number; need: number; onBalance: (n: number) => void; onCancel: () => void }) {
   const [view, setView] = useState<CreditsView>()
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -32,7 +18,7 @@ export function Credits({ deps, balance, need, onBalance }: { deps: ForgeDeps; b
     let live = true
     deps.credits().then(
       (v) => live && setView(v),
-      () => live && setError('could not load credits'),
+      () => live && setError("couldn't load credits"),
     )
     return () => {
       live = false
@@ -46,7 +32,7 @@ export function Credits({ deps, balance, need, onBalance }: { deps: ForgeDeps; b
       setView((v) => v && { ...v, freeClaimed: true })
     } catch (e) {
       setRefused(true)
-      setError(e instanceof Error ? e.message : 'could not claim')
+      setError(e instanceof Error ? e.message : "couldn't claim")
     } finally {
       setBusy(false)
     }
@@ -64,38 +50,39 @@ export function Credits({ deps, balance, need, onBalance }: { deps: ForgeDeps; b
       onBalance(fresh.balance)
       setError('')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'purchase failed')
+      setError(e instanceof Error ? e.message : 'the purchase failed')
     } finally {
       setBusy(false)
     }
   }
 
-  const short = need !== undefined && balance < need
   const unclaimed = !!view && !view.freeClaimed && !refused
-  if (!short && !unclaimed && !error) return null
   return (
-    <section className={`panel credits${unclaimed ? ' free' : ''}`} aria-label="Credits">
+    <section className={`credits${unclaimed ? ' free' : ''}`} aria-label="Credits">
       <p className="points">
-        {balance} credits{short ? ` · this step needs ${need}` : ''}
+        {balance} credits · this piece needs {need}
       </p>
       {unclaimed && (
         <div className="free-offer">
-          <p>Your first hero is on us: enough credits for every stage, retries included.</p>
-          <button className="btn primary" onClick={claim} disabled={busy}>
-            Claim your free hero ({view.freeGrant} credits)
+          <p>Your first pieces are on us.</p>
+          <button type="button" className="btn primary sm" onClick={claim} disabled={busy}>
+            Claim {view.freeGrant} free credits
           </button>
         </div>
       )}
-      {short && view && (
+      {view && !unclaimed && (
         <div className="packs">
           {view.packs.map((p) => (
-            <button key={p.id} className="btn" disabled={busy} onClick={() => buy(p.id)}>
+            <button type="button" key={p.id} className="btn sm" disabled={busy} onClick={() => buy(p.id)}>
               Buy {p.credits} credits · {money(p.amountCents, p.currency)}
             </button>
           ))}
         </div>
       )}
       {error && <p className="inline-error">{error}</p>}
+      <button type="button" className="btn quiet sm" onClick={onCancel}>
+        Back
+      </button>
     </section>
   )
 }

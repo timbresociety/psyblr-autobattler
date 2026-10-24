@@ -1,5 +1,5 @@
 import { getDb } from '../../src/server/db.js'
-import { loadHeroPackage } from '../../src/server/forge-publish.js'
+import { loadHeroPackage } from '../../src/server/hero-package.js'
 import { errorResponse } from '../../src/server/http.js'
 
 /** GET /api/heroes/package?id= -> the hero package of a forged hero (R22). Public, like the loadout. */

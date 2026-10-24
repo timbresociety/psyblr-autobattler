@@ -5,6 +5,7 @@ import { proposeBuild, type Build } from '../../charter/build'
 import type { ForgeDeps, HeroResult } from '../api'
 import { offlineChat } from '../api'
 import { ForgeScreen } from './ForgeScreen'
+import { pieceDeps } from './pieces.fixture'
 
 afterEach(cleanup)
 
@@ -24,6 +25,7 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
     createHero: vi.fn(async () => ({ heroId: 'h', buildId: 'b' })),
     saveBuild: vi.fn(async (id: string, build: Build) => ({ id, heroId: jensen.id, build })),
     listBuilds: vi.fn(async () => []),
+    pieces: pieceDeps(),
     ...over,
   }
 }

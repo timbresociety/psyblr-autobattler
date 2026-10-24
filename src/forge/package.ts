@@ -1,5 +1,4 @@
 import { composeRecipe, defaultRecipe, passiveRecipe } from '../arena/recipes/defaults.js'
-import { ARENA_ARTIFACT, ARENA_RETARGET_PREFIX } from './arena-steps.js'
 import type { EffectRecipe } from '../arena/recipes/schema.js'
 import { validateRecipe } from '../arena/recipes/validate.js'
 import { BUILD_SLOTS, type Build } from '../charter/build.js'
@@ -7,8 +6,13 @@ import type { SizeClass } from '../charter/sizes.js'
 import { getTemplate } from '../charter/templates/catalog.js'
 import type { BuildSlot, Delivery } from '../charter/types.js'
 import { basicMotions, motionsFor, playable, type Motion } from './motion/library.js'
-import { EFFECT_SLOT, formSize } from './stages.js'
+import { formSize } from './form.js'
 import type { Forge, SpecSheet, StageId } from './types.js'
+
+// the names the staged Forge stored its outputs under; packages it published still carry them
+const ARENA_ARTIFACT = { focus: 'arena-focus', other: 'arena-other' } as const
+const ARENA_RETARGET_PREFIX = 'arena-retarget'
+const EFFECT_SLOT: Partial<Record<StageId, BuildSlot>> = { active1: 'active1', active2: 'active2', ultimate: 'ultimate' }
 
 /**
  * The hero package (KTD9, KTD13): a versioned manifest any psyblr game can load (R21, R22, R36). The rigged and
