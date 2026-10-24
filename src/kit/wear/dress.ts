@@ -1,7 +1,7 @@
 import { surfaceFrame } from './bind.js'
 import { fieldAt, type BodyFields } from './fields.js'
 import { FINISH_LOOK } from './finish.js'
-import { coverOf, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
+import { coverOf, type ChainGroup, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
 import type { BodyShape } from '../body/shape.js'
 
 /**
@@ -62,6 +62,9 @@ export interface DressedItem {
   finish: Float32Array
   weave: Float32Array
   index: Uint32Array
+  /** Loose cloth: per vertex its chain group (-1 for none), column and level, and the item's groups. */
+  chain?: Float32Array
+  chains?: readonly ChainGroup[]
 }
 
 export interface Dressed {
@@ -141,7 +144,11 @@ export function dress(input: DressInput): Dressed {
     const cover = coverOf(w.item.meta, V)
     for (const cut of cuts[i]) {
       if (!cut.body) continue
-      for (let v = 0; v < V; v++) if (covered(cover, v) && !kept(cut, cut.body[v])) cover.inner[v] = cover.outer[v] = NaN
+      for (let v = 0; v < V; v++) {
+        if (!covered(cover, v) || kept(cut, cut.body[v])) continue
+        cover.inner[v] = cover.outer[v] = NaN
+        cover.hide[v] = 0
+      }
     }
     return cover
   })
@@ -186,7 +193,7 @@ export function dress(input: DressInput): Dressed {
 
   const items: DressedItem[] = worn.map((w, i) => {
     const mesh = evaluateItem(w, lifts[i], body)
-    // a vertex is inside an outer layer that hides when it lies over that layer's cover and beneath its inner surface
+    // a vertex is inside an outer layer when it lies over what that layer hides and beneath its inner surface
     const inside = new Uint8Array(mesh.count)
     const outers = [...covers.filter((_, j) => j > i && rank(worn[j].item.meta.slot) > rank(w.item.meta.slot)), ...rigid.filter((c) => rank(c.slot) > rank(w.item.meta.slot))].filter((c) => c.hides)
     if (outers.length) {
@@ -196,7 +203,7 @@ export function dress(input: DressInput): Dressed {
         const b = tri[k * 3 + 1]
         const c = tri[k * 3 + 2]
         for (const o of outers) {
-          if (!covered(o, a) || !covered(o, b) || !covered(o, c)) continue
+          if (!o.hide[a] || !o.hide[b] || !o.hide[c]) continue
           const ceiling = coverAt(o.inner, a, b, c, st[k * 2], st[k * 2 + 1], 'min')
           if (lifts[i][k] < ceiling) {
             inside[k] = 1
@@ -206,7 +213,7 @@ export function dress(input: DressInput): Dressed {
       }
     }
     let out: Mesh = { ...mesh, inside, fields: cuts[i].map((c) => c.values) }
-    cuts[i].forEach((cut, c) => (out = clip(out, cut, c)))
+    cuts[i].forEach((cut, c) => (out = clip(out, cut, c, w.item.meta.chains)))
     const index: number[] = []
     for (let t = 0; t < out.index.length; t += 3) {
       const a = out.index[t]
@@ -215,12 +222,12 @@ export function dress(input: DressInput): Dressed {
       if (!(out.inside[a] && out.inside[b] && out.inside[c])) index.push(a, b, c)
     }
     const { inside: _inside, fields: _fields, ...rest } = out
-    return { ...rest, index: Uint32Array.from(index), id: w.item.meta.id, slot: w.item.meta.slot }
+    return { ...rest, index: Uint32Array.from(index), id: w.item.meta.id, slot: w.item.meta.slot, ...(rest.chain && w.item.meta.chains ? { chains: w.item.meta.chains } : {}) }
   })
 
-  // the body shows wherever no hiding item covers all three corners of a triangle
+  // the body shows wherever no item hides all three corners of a triangle
   const hidden = new Uint8Array(V)
-  for (const c of [...covers, ...rigid]) if (c.hides) for (let v = 0; v < V; v++) if (covered(c, v)) hidden[v] = 1
+  for (const c of [...covers, ...rigid]) if (c.hides) for (let v = 0; v < V; v++) if (c.hide[v]) hidden[v] = 1
   const T = body.surface.triangles
   const shown: number[] = []
   for (let t = 0; t < T.length / 3; t++) if (!(hidden[T[t * 3]] && hidden[T[t * 3 + 1]] && hidden[T[t * 3 + 2]])) shown.push(t)
@@ -228,7 +235,7 @@ export function dress(input: DressInput): Dressed {
 }
 
 /** An item's mesh mid-dress: whether each vertex is inside an outer layer, and each cut's field per vertex. */
-type Mesh = Omit<DressedItem, 'id' | 'slot'> & { inside: Uint8Array; fields: Float32Array[] }
+type Mesh = Omit<DressedItem, 'id' | 'slot' | 'chains'> & { inside: Uint8Array; fields: Float32Array[] }
 
 /** An item on this body: positions at its lifts, normals turned with the surface, skin blended from the triangle. */
 function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 'inside' | 'fields'> {
@@ -293,7 +300,7 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
     finish.set([look.roughness, look.metalness, look.sheen, look.glow], k * 4)
     weave[k] = look.weave
   }
-  return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index }
+  return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index, ...(item.chain ? { chain: Float32Array.from(item.chain) } : {}) }
 }
 
 /**
@@ -301,7 +308,7 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
  * with the new vertices shared along each crossed edge so the cut has no cracks; everything on a new vertex is blended
  * from its edge (the skin by merging both ends' bones), the other cuts' fields included.
  */
-function clip(mesh: Mesh, cut: Cut, which: number): Mesh {
+function clip(mesh: Mesh, cut: Cut, which: number, groups?: readonly ChainGroup[]): Mesh {
   const field = mesh.fields[which]
   const keep = (v: number) => kept(cut, field[v])
   const sizes = { positions: 3, normals: 3, uv: 2, color: 3, finish: 4, weave: 1 } as const
@@ -312,6 +319,7 @@ function clip(mesh: Mesh, cut: Cut, which: number): Mesh {
   const joints = Array.from(mesh.joints)
   const weights = Array.from(mesh.weights)
   const inside = Array.from(mesh.inside)
+  const chain = mesh.chain ? Array.from(mesh.chain) : undefined
   const edges = new Map<string, number>()
   let count = mesh.count
   const between = (a: number, b: number) => {
@@ -340,8 +348,22 @@ function clip(mesh: Mesh, cut: Cut, which: number): Mesh {
       joints.push(top[j]?.[0] ?? 0)
       weights.push(top[j] ? top[j][1] / sum : 0)
     }
-    // the kept end decides whether the new vertex is inside an outer layer
-    inside.push(keep(a) ? inside[a] : inside[b])
+    // the kept end decides whether the new vertex is inside an outer layer, and which chain it hangs from
+    const near = keep(a) ? a : b
+    inside.push(inside[near])
+    if (chain) {
+      const g = chain[near * 3]
+      if (g >= 0 && chain[a * 3] === chain[b * 3]) {
+        const ua = chain[a * 3 + 1]
+        let ub = chain[b * 3 + 1]
+        // round a closed group the short way
+        const period = groups?.[g]?.closed ? groups[g].columns : 0
+        if (period && Math.abs(ub - ua) > period / 2) ub += ub < ua ? period : -period
+        let u = ua + (ub - ua) * t
+        if (period) u = ((u % period) + period) % period
+        chain.push(g, u, chain[a * 3 + 2] + (chain[b * 3 + 2] - chain[a * 3 + 2]) * t)
+      } else chain.push(chain[near * 3], chain[near * 3 + 1], chain[near * 3 + 2])
+    }
     edges.set(key, count)
     return count++
   }
@@ -379,5 +401,6 @@ function clip(mesh: Mesh, cut: Cut, which: number): Mesh {
     inside: Uint8Array.from(inside),
     fields: fields.map((f) => Float32Array.from(f)),
     index: Uint32Array.from(index),
+    ...(chain ? { chain: Float32Array.from(chain) } : {}),
   }
 }

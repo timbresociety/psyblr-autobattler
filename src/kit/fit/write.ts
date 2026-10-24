@@ -44,6 +44,7 @@ export async function writeItem(file: ItemFile): Promise<Uint8Array> {
     .setAttribute('_CHANNEL', acc('SCALAR', Float32Array.from(item.channel)))
     .setIndices(acc('SCALAR', item.count > 65535 ? Uint32Array.from(item.index) : Uint16Array.from(item.index)))
   if (item.len) prim.setAttribute('_LEN', acc('SCALAR', item.len))
+  if (item.chain) prim.setAttribute('_CHAIN', acc('VEC3', item.chain))
   prim.setExtras(meta as unknown as Record<string, unknown>)
   // a plain material in the first channel's colour, so the file reads in any viewer
   const hex = parseInt(meta.channels[0].color.slice(1), 16)
@@ -72,6 +73,7 @@ export async function readItemFile(source: string | URL | Uint8Array, vertices: 
   }
   const channel = get('_CHANNEL')
   const len = get('_LEN')
+  const chain = get('_CHAIN')
   const item = surfaceItem(
     {
       extras: prim.getExtras(),
@@ -83,6 +85,7 @@ export async function readItemFile(source: string | URL | Uint8Array, vertices: 
       uv: need('TEXCOORD_0'),
       ...(channel ? { channel } : {}),
       ...(len ? { len } : {}),
+      ...(chain ? { chain } : {}),
     },
     vertices,
   )

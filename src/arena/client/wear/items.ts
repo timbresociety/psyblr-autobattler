@@ -54,6 +54,7 @@ export function readItem(file: Gltf): LoadedItem {
   if (!index) throw new Error('item has no index')
   const channel = optional('_channel')
   const len = optional('_len')
+  const chain = g.getAttribute('_chain') ? attr('_chain', 3) : undefined
   const item = surfaceItem(
     {
       extras: g.userData,
@@ -65,6 +66,7 @@ export function readItem(file: Gltf): LoadedItem {
       uv: attr('uv', 2),
       ...(channel ? { channel } : {}),
       ...(len ? { len } : {}),
+      ...(chain ? { chain } : {}),
     },
     BODY_VERTICES,
   )

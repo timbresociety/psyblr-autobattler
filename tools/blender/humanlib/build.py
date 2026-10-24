@@ -586,14 +586,14 @@ def gear_bowtie(d, head, body, mat='bowtie'):
     return [bow, knot]
 
 
-def gear_lapels(d, head, body, mat='jacket', width=0.06, button=None):
-    """Notched lapels along an open jacket's V, from the collar down to the top button."""
+def gear_lapels(d, head, body, mat='jacket', width=0.06, button=None, drop=0.005):
+    """Notched lapels along an open jacket's V, from the collar (`drop` below the neck joint) down to the top button."""
     n = d.neck
     bottom_z = d.waist_z + 0.03 if button is None else button
     torso = {p.index for p in d.obj.data.polygons if d.face_bone(p) in G.TORSO}
     out = []
     for s in (1, -1):
-        top = Vector((s * 0.05, n.y - 0.02, n.z - 0.005))
+        top = Vector((s * 0.05, n.y - 0.02, n.z - drop))
         bot = Vector((s * 0.008, n.y - 0.1, bottom_z))
         path = [top.lerp(bot, t / 8) for t in range(9)]
         widths = [(0.0, width * (1 - t / 8) ** 0.8 + 0.006) if s > 0 else (width * (1 - t / 8) ** 0.8 + 0.006, 0.0) for t in range(9)]

@@ -107,6 +107,82 @@ export function projectOnto(p: V3, a: V3, b: V3, c: V3, na: V3, nb: V3, nc: V3):
   return { s, t, lift, outside }
 }
 
+/** The real roots of c0 + c1 x + c2 x² + c3 x³ between lo and hi, found by bisection between the turning points. */
+function cubicRoots(c0: number, c1: number, c2: number, c3: number, lo: number, hi: number): number[] {
+  const f = (x: number) => c0 + x * (c1 + x * (c2 + x * c3))
+  // the turning points split [lo, hi] into stretches where the cubic only rises or only falls
+  const cuts = [lo]
+  const qa = 3 * c3
+  const qb = 2 * c2
+  if (qa !== 0) {
+    const disc = qb * qb - 4 * qa * c1
+    if (disc > 0) {
+      const r = Math.sqrt(disc)
+      const x1 = (-qb - r) / (2 * qa)
+      const x2 = (-qb + r) / (2 * qa)
+      for (const x of x1 < x2 ? [x1, x2] : [x2, x1]) if (x > lo && x < hi) cuts.push(x)
+    }
+  } else if (qb !== 0) {
+    const x = -c1 / qb
+    if (x > lo && x < hi) cuts.push(x)
+  }
+  cuts.push(hi)
+  const roots: number[] = []
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    let a = cuts[i]
+    let b = cuts[i + 1]
+    let fa = f(a)
+    if (fa * f(b) > 0) continue
+    for (let it = 0; it < 64 && b - a > 1e-12; it++) {
+      const m = (a + b) / 2
+      const fm = f(m)
+      if (fa * fm <= 0) b = m
+      else {
+        a = m
+        fa = fm
+      }
+    }
+    roots.push((a + b) / 2)
+  }
+  return roots
+}
+
+/**
+ * Every exact solution of p = P(s, t) + lift N(s, t) over one triangle with |lift| up to `reach` and (s, t) on the
+ * triangle. With (s, t) eliminated it's a cubic in lift: p - a - lift na must lie in the plane of the triangle's edges
+ * as they stand at that lift. Far from the skin (a gown's hem, a shoe's toe) this finds the bindings Newton's method
+ * from the closest point misses.
+ */
+export function exactOnto(p: V3, a: V3, b: V3, c: V3, na: V3, nb: V3, nc: V3, reach: number): { s: number; t: number; lift: number }[] {
+  const q = sub(p, a)
+  const e1 = sub(b, a)
+  const e2 = sub(c, a)
+  const f1 = sub(nb, na)
+  const f2 = sub(nc, na)
+  const k0 = cross(e1, e2)
+  const k1a = cross(e1, f2)
+  const k1b = cross(f1, e2)
+  const k1: V3 = [k1a[0] + k1b[0], k1a[1] + k1b[1], k1a[2] + k1b[2]]
+  const k2 = cross(f1, f2)
+  const out: { s: number; t: number; lift: number }[] = []
+  for (const lift of cubicRoots(dot(q, k0), dot(q, k1) - dot(na, k0), dot(q, k2) - dot(na, k1), -dot(na, k2), -reach, reach)) {
+    const A: V3 = [e1[0] + lift * f1[0], e1[1] + lift * f1[1], e1[2] + lift * f1[2]]
+    const B: V3 = [e2[0] + lift * f2[0], e2[1] + lift * f2[1], e2[2] + lift * f2[2]]
+    const r: V3 = [q[0] - lift * na[0], q[1] - lift * na[1], q[2] - lift * na[2]]
+    const aa = dot(A, A)
+    const ab = dot(A, B)
+    const bb = dot(B, B)
+    const det = aa * bb - ab * ab
+    if (!(Math.abs(det) > 1e-18)) continue
+    const ar = dot(A, r)
+    const br = dot(B, r)
+    const s = (bb * ar - ab * br) / det
+    const t = (aa * br - ab * ar) / det
+    if (s >= -1e-6 && t >= -1e-6 && s + t <= 1 + 1e-6) out.push({ s, t, lift })
+  }
+  return out
+}
+
 /**
  * A uniform grid over a surface's triangles, for finding the ones near a point. Cells hold every triangle whose
  * bounds (grown by `pad`) touch them.
@@ -208,15 +284,20 @@ export function bindPoints(points: ArrayLike<number>, shape: SurfaceShape, grid 
         const na = get(shape.normals, ia)
         const nb = get(shape.normals, ib)
         const nc = get(shape.normals, ic)
-        const r = projectOnto(p, a, b, c, na, nb, nc)
-        const q = settle(p, a, b, c, na, nb, nc, r.s, r.t)
-        // a millimetre left over costs as much as a centimetre further out
-        const score = q.residual * 10 + Math.abs(q.lift)
-        if (!Number.isFinite(score)) continue
-        if (!best || score < best.score) best = { f, s: q.s, t: q.t, lift: q.lift, score }
+        // the exact solutions on this triangle, or else the nearest miss
+        const exact = exactOnto(p, a, b, c, na, nb, nc, reach)
+        const tries = exact.length ? exact : [projectOnto(p, a, b, c, na, nb, nc)]
+        for (const r of tries) {
+          const q = settle(p, a, b, c, na, nb, nc, r.s, r.t)
+          // a millimetre left over costs as much as ten centimetres further out: an exact binding wins unless it's far
+          const score = q.residual * 100 + Math.abs(q.lift)
+          if (!Number.isFinite(score)) continue
+          if (!best || score < best.score) best = { f, s: q.s, t: q.t, lift: q.lift, score }
+        }
       }
       // a binding found in a small search might lose to a triangle just outside it: search once more, a step wider
-      if (best && best.score > radius) best = undefined
+      // (unless this was the widest search: then the best found stands)
+      if (best && best.score > radius && radius * 2 <= reach + 1e-9) best = undefined
     }
     if (!best) throw new Error(`no surface within ${reach} m of point ${i}`)
     tri.set([T[best.f * 3], T[best.f * 3 + 1], T[best.f * 3 + 2]], i * 3)
