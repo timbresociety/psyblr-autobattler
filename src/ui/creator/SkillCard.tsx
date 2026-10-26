@@ -18,7 +18,7 @@ interface Props {
 export function SkillCard({ build, slot, onEdit, onSwap }: Props) {
   const spec = build.slots[slot]
   const template = getTemplate(spec.templateId)
-  const sheet = deriveSheet(getRole(build.roleId), build.spread).sheet
+  const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
   const tip = renderTooltip(template, spec, sheet, spec.retuneSteps)
   const alternatives = swapAlternatives(build, slot)
   const [flavour, setFlavour] = useState(spec.flavour)

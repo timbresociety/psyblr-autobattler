@@ -1,3 +1,4 @@
+import { SIZES, type SizeClass } from './sizes'
 import type { Attribute, LimitHit, Role, SecondarySheet, SecondaryStat, Spread, Validation } from './types'
 
 export const ATTRIBUTES: readonly Attribute[] = ['strength', 'agility', 'intellect']
@@ -51,8 +52,10 @@ export function validateSpread(role: Role, spread: Spread): Validation {
 
 const round = (value: number) => Math.round(value * 100) / 100
 
-/** Derive the secondary sheet from a role and a spread. Pure and deterministic. */
-export function deriveSheet(role: Role, spread: Spread): { sheet: SecondarySheet; capped: SecondaryStat[] } {
+/** Derive the secondary sheet from a role, a spread and a size class (KTD8). Pure and deterministic. */
+export function deriveSheet(role: Role, spread: Spread, size: SizeClass = 'medium'): { sheet: SecondarySheet; capped: SecondaryStat[] } {
+  const { healthMul, speedMul } = SIZES[size]
+  const caps = { ...role.caps, maxHealth: role.caps.maxHealth * healthMul, moveSpeed: role.caps.moveSpeed * speedMul }
   const sheet = { ...role.base }
   for (const attr of ATTRIBUTES) {
     const gains = ATTRIBUTE_GAINS[attr]
@@ -61,10 +64,12 @@ export function deriveSheet(role: Role, spread: Spread): { sheet: SecondarySheet
       if (gain) sheet[stat] += gain * spread[attr] * role.weights[attr]
     }
   }
+  sheet.maxHealth *= healthMul
+  sheet.moveSpeed *= speedMul
   const capped: SecondaryStat[] = []
   for (const stat of SECONDARY_STATS) {
-    if (sheet[stat] >= role.caps[stat]) {
-      sheet[stat] = role.caps[stat]
+    if (sheet[stat] >= caps[stat]) {
+      sheet[stat] = caps[stat]
       capped.push(stat)
     }
     sheet[stat] = round(Math.max(0, sheet[stat]))

@@ -3,7 +3,7 @@
  * re-calibrated against the real Arena in one place. Bump the version on any change: stored gate
  * results stamped with an older version are re-checked.
  */
-export const CALIBRATION_VERSION = 1
+export const CALIBRATION_VERSION = 2
 
 export const CALIBRATION = {
   /** Seconds per simulation step. */

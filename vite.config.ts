@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite'
 import { configDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { devApi } from './scripts/dev-api'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), devApi()],
   test: {
     exclude: [...configDefaults.exclude, '**/.claude/**', 'docs/**'],
     setupFiles: ['./vitest.setup.ts'],
