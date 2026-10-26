@@ -2,7 +2,7 @@ import { matchTemplate, nearestAlternatives, tokenize } from './match'
 import { isSizeClass, type SizeClass } from './sizes'
 import { ROLE_IDS, getRole, isRoleId } from './roles'
 import { ATTRIBUTES, ATTRIBUTE_GAINS, POOL_SIZE, deriveSheet, spentPoints, validateSpread } from './stats'
-import { hasTemplate, poolFor } from './templates/catalog'
+import { currentTemplate, poolFor } from './templates/catalog'
 import type { Attribute, BuildSlot, LimitHit, RoleId, SecondaryStat, SlotKind, Spread, Template } from './types'
 
 /**
@@ -61,7 +61,10 @@ export interface GateResult {
   catalogVersion?: number
   calibrationVersion?: number
   aiCalibrationVersion?: number
+  /** For a blocked build: the slot carrying it (too strong) or holding it back (too weak). */
   strongestSlot?: BuildSlot
+  /** Why a build was blocked: over the ceiling, or still hopeless after the gate's full lift. */
+  blockedFor?: 'strong' | 'weak'
 }
 
 export interface Build {
@@ -104,6 +107,8 @@ const ROLE_WORDS: Record<RoleId, string[]> = {
   mage: ['mage', 'wizard', 'magic', 'spell', 'sorcerer', 'witch', 'genius', 'scientist'],
   marksman: ['marksman', 'sniper', 'gun', 'rifle', 'archer', 'bow', 'shooter'],
   support: ['support', 'healer', 'heal', 'medic', 'priest', 'protect', 'allies', 'team'],
+  controller: ['controller', 'control', 'disable', 'freeze', 'gravity', 'telekinesis', 'psychic', 'hypnotize', 'puppet', 'chains', 'jailer', 'warden'],
+  summoner: ['summoner', 'summon', 'turret', 'drone', 'drones', 'robot', 'minion', 'construct', 'engineer', 'totem', 'necromancer', 'builder', 'inventor'],
 }
 
 /** Offline role assignment (R9): the role whose pools best fit all the descriptions. Claude does this online. */
@@ -265,14 +270,24 @@ export function requestStats(build: Build, goals: Partial<Record<SecondaryStat, 
   return ok({ ...build, spread }, [...limits, ...statCaps(build, spread)])
 }
 
-/** The swap options offered for a slot (R7). */
+/** The closest swaps for a slot (R7): what the gate suggests when a build is blocked, and the top of the swap menu. */
 export function swapAlternatives(build: Build, slot: BuildSlot): Template[] {
   return nearestAlternatives(build.roleId, SLOT_KIND[slot], build.slots[slot].templateId, describe(build.slots[slot]), otherActive(build.slots, slot))
 }
 
-/** Swap a slot to one of its offered alternatives. Anything else is rejected (R7). */
+/**
+ * Everything a slot can hold instead (the skill library): the role's whole pool for the slot, minus the current pick
+ * and the other active, closest swaps first.
+ */
+export function swapOptions(build: Build, slot: BuildSlot): Template[] {
+  const near = swapAlternatives(build, slot)
+  const taken = new Set([build.slots[slot].templateId, ...otherActive(build.slots, slot), ...near.map((t) => t.id)])
+  return [...near, ...poolFor(build.roleId, SLOT_KIND[slot]).filter((t) => !taken.has(t.id))]
+}
+
+/** Swap a slot to any template its role can hold there. Anything else is rejected (R7). */
 export function swapTemplate(build: Build, slot: BuildSlot, templateId: string): OpResult {
-  const offered = swapAlternatives(build, slot).map((t) => t.id)
+  const offered = swapOptions(build, slot).map((t) => t.id)
   if (!offered.includes(templateId)) return reject(build, [invalidField(`${slot}.templateId`)])
   const slots = { ...build.slots, [slot]: { ...build.slots[slot], templateId, swapped: true, retuneSteps: 0 } }
   return ok({ ...build, slots })
@@ -336,9 +351,9 @@ export function hydrateBuild(raw: unknown): OpResult {
   const slots = {} as Record<BuildSlot, SkillSpec>
   for (const slot of BUILD_SLOTS) {
     const s = rawSlots[slot] ?? {}
-    const templateId = s.templateId
-    if (typeof templateId !== 'string' || !hasTemplate(templateId)) return fail(`${slot}.templateId`)
-    if (!poolFor(roleId, SLOT_KIND[slot]).some((t) => t.id === templateId)) return fail(`${slot}.templateId`)
+    // a template retired from this slot by a catalogue change is replaced by its successor
+    const templateId = typeof s.templateId === 'string' ? currentTemplate(s.templateId, roleId, SLOT_KIND[slot]) : undefined
+    if (!templateId) return fail(`${slot}.templateId`)
     slots[slot] = {
       name: str(s.name, TEXT_LIMITS.name),
       flavour: str(s.flavour, TEXT_LIMITS.flavour),

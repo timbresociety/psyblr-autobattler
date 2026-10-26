@@ -46,6 +46,6 @@ export function sampleBuilds(count: number, seed: number): Build[] {
 
 /** The reference army: a balanced composition of default builds. */
 export function referenceArmy(): Build[] {
-  const roles: RoleId[] = ['tank', 'fighter', 'assassin', 'mage', 'marksman', 'support', 'tank', 'fighter', 'mage', 'marksman']
+  const roles: RoleId[] = ['tank', 'fighter', 'assassin', 'mage', 'marksman', 'support', 'controller', 'summoner', 'tank', 'fighter']
   return roles.map((r, i) => defaultBuild(r, `ref-${r}-${i}`))
 }

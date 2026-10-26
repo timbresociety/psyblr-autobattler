@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Skill Library</title>
+<style>
+  :root {
+    --bg: #f6f3ec; --panel: #fffdf8; --ink: #1d1b17; --muted: #6b655a; --line: #e2dccf;
+    --gen: #1f7a5a; --gen-bg: #e3f3ec; --fix: #8a3b12; --fix-bg: #f8e8dc; --mix: #4b4aa8; --mix-bg: #e7e7f8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161b; --panel: #1b1e25; --ink: #ece8df; --muted: #a39d90; --line: #2c3039;
+      --gen: #6fd3a8; --gen-bg: #1a2e27; --fix: #f0a77a; --fix-bg: #33241b; --mix: #a9a8f5; --mix-bg: #24243c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 40px; line-height: 1.1; margin: 0 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 26px; margin: 56px 0 8px; letter-spacing: -0.01em; }
+  h3 { font-size: 18px; margin: 28px 0 8px; }
+  p { margin: 0 0 14px; max-width: 70ch; }
+  .lede { font-size: 19px; color: var(--muted); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .gen { color: var(--gen); background: var(--gen-bg); }
+  .fix { color: var(--fix); background: var(--fix-bg); }
+  .mix { color: var(--mix); background: var(--mix-bg); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin: 16px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  .cell { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel); }
+  .cell b { display: block; font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .scroll { overflow-x: auto; }
+  code { font: 13px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); padding: 1px 5px; border-radius: 5px; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin: 4px 0; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: 0; }
+  .quad { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; align-items: stretch; max-width: 620px; }
+  .quad .h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); align-self: end; padding: 0 4px; }
+  .quad .v { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; }
+  .quad .cell { min-height: 84px; }
+  small.src { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>The skill library</h1>
+  <p class="lede">A hero used to pick each skill from about three options, and one of its actives was often a dash in disguise. Now every role picks from seven to sixteen options per slot, out of one library of 298 skills, where every skill belongs to exactly one family and only the movement slot can move you.</p>
+  <p>This page maps that library. It covers what the families are, why they don't overlap and which roles reach which ones. And it covers two rules that changed along with it, because flight now costs something and there are eight roles instead of six.</p>
+
+  <h2>Room to choose, in numbers</h2>
+  <p>A kit is one basic attack, two different actives, a passive, an ultimate and a movement skill. Multiply the options and you get how many kits a role can field. A mage had about 3,000 possible kits before this change. It has 288,120 now.</p>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>Role</th><th class="num">Basic</th><th class="num">Active</th><th class="num">Passive</th><th class="num">Ultimate</th><th class="num">Movement</th><th class="num">Possible kits</th></tr></thead>
+      <tbody>
+        <tr><td><span class="swatch" style="background:rgb(242,196,107)"></span>Tank</td><td class="num">8</td><td class="num">16</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">329,280</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(255,143,90)"></span>Fighter</td><td class="num">7</td><td class="num">16</td><td class="num">8</td><td class="num">7</td><td class="num">9</td><td class="num">423,360</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(196,155,255)"></span>Assassin</td><td class="num">7</td><td class="num">15</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">252,105</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(255,122,217)"></span>Mage</td><td class="num">7</td><td class="num">16</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">288,120</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(127,227,255)"></span>Marksman</td><td class="num">7</td><td class="num">14</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">218,491</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(134,240,168)"></span>Support</td><td class="num">8</td><td class="num">16</td><td class="num">7</td><td class="num">7</td><td class="num">7</td><td class="num">329,280</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(214,240,92)"></span>Controller <span class="tag mix">new</span></td><td class="num">7</td><td class="num">16</td><td class="num">7</td><td class="num">7</td><td class="num">8</td><td class="num">329,280</td></tr>
+        <tr><td><span class="swatch" style="background:rgb(64,224,196)"></span>Summoner <span class="tag mix">new</span></td><td class="num">7</td><td class="num">16</td><td class="num">7</td><td class="num">7</td><td class="num">8</td><td class="num">329,280</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>27 of the 298 skills are shared between roles where the fantasy fits both, like a sidearm pistol or a teleport. The rest belong to one role. In the Creator, the swap menu on every skill card now lists the whole library for that slot, grouped by family, with the three closest matches to your description at the top.</p>
+
+  <h2>Ten families, no overlaps</h2>
+  <p>The test for a clean split is simple. Take any effect a skill can have, ask which family it belongs to, and you should get exactly one answer. The ten families get there by asking who the effect is for, which leaves three groups.</p>
+  <ul>
+    <li><b>Against enemies:</b> damage, crowd control, debuffs.</li>
+    <li><b>For you and your allies:</b> buffs, healing and shields, states, cooldowns.</li>
+    <li><b>Changing the world or your body:</b> zones and constructs, transformations, movement.</li>
+  </ul>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>Family</th><th>What it does</th><th>Kinds</th><th class="num">Skills using it</th></tr></thead>
+      <tbody>
+        <tr><td>Damage</td><td>Takes health away, now or over time.</td><td>hit, damage over time, execute (bonus on low health)</td><td class="num">192</td></tr>
+        <tr><td>Crowd control</td><td>Takes something away from an enemy for a while.</td><td>stun, sleep, knock-up, fear, taunt, root, slow, grounded, knockback, pull, silence, disarm, blind, cripple, break</td><td class="num">95</td></tr>
+        <tr><td>Debuffs</td><td>Makes an enemy weaker without stopping it.</td><td>armor shred, spirit shred, vulnerable, wound, mark</td><td class="num">36</td></tr>
+        <tr><td>Buffs</td><td>Makes you or your allies stronger.</td><td>damage, attack speed, move speed, damage reduction, lifesteal, evasion</td><td class="num">61</td></tr>
+        <tr><td>Healing and shields</td><td>Keeps you or your allies alive.</td><td>heal, heal over time, shield, cleanse</td><td class="num">53</td></tr>
+        <tr><td>States</td><td>Puts a hero beyond some rule of the fight.</td><td>unstoppable, stealth, invulnerable</td><td class="num">19</td></tr>
+        <tr><td>Cooldowns</td><td>Brings your other skills back sooner.</td><td>refresh</td><td class="num">12</td></tr>
+        <tr><td>Zones and constructs</td><td>Leaves something in the world that keeps working.</td><td>field (pulses on a beat), trap, wall, turret</td><td class="num">37</td></tr>
+        <tr><td>Transformations</td><td>Changes your body for a while.</td><td>resize to another size class</td><td class="num">2</td></tr>
+        <tr><td>Movement</td><td>Moves you. Movement slot only.</td><td>dash, blink, leap, grapple, sprint</td><td class="num">22</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Most skills mix two families: a slam that stuns and hurts, a totem that heals in pulses. That's fine, and it's where the expression comes from. For grouping, each skill is filed under the family it's named for, in this order: movement, constructs, transformations, control, states, protection, debuffs, cooldowns, buffs, damage.</p>
+
+  <h3>Crowd control, one kind per thing it takes away</h3>
+  <p>Crowd control is the family people argue about most, so each kind takes away exactly one thing. If two kinds took away the same thing, one of them would be redundant.</p>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>Kind</th><th>Takes away</th><th>Ends early</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td>Stun</td><td>everything</td><td>no</td><td>Seismic Slam, Stasis Bolt</td></tr>
+        <tr><td>Sleep</td><td>everything, cheaper than a stun</td><td>on any damage</td><td>Sleep Dart, Lullaby</td></tr>
+        <tr><td>Knock-up</td><td>everything, and lifts the target into the air</td><td>no</td><td>Rising Uppercut, Avalanche</td></tr>
+        <tr><td>Fear</td><td>control: it runs from the caster</td><td>no</td><td>Terrify, Nightmare</td></tr>
+        <tr><td>Taunt</td><td>control: it walks at the caster and attacks it</td><td>no</td><td>War Cry, Grand Challenge</td></tr>
+        <tr><td>Root</td><td>moving</td><td>no</td><td>Tether, Bear Trap</td></tr>
+        <tr><td>Slow</td><td>some move speed</td><td>no</td><td>Frost Nova</td></tr>
+        <tr><td>Grounded</td><td>flight and movement skills</td><td>no</td><td>War Stomp, Net Launcher</td></tr>
+        <tr><td>Knockback, pull</td><td>position</td><td>walls stop it</td><td>Thunderclap, Chain Hook</td></tr>
+        <tr><td>Silence</td><td>skills</td><td>no</td><td>Silence Field, Dark Hex</td></tr>
+        <tr><td>Disarm</td><td>basic attacks</td><td>no</td><td>Pacify, Disarming Strike</td></tr>
+        <tr><td>Blind</td><td>basic attacks land (they miss)</td><td>no</td><td>Smoke Bomb, Flashbang</td></tr>
+        <tr><td>Cripple</td><td>some attack speed</td><td>no</td><td>Crippling Blow</td></tr>
+        <tr><td>Break</td><td>the passive</td><td>no</td><td>Null Zone, Nerve Strike</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Unstoppable and invulnerable heroes shrug all of it off, and a cleanse lifts whatever is on an ally. A mark also shows a stealthed hero to the marker's whole team.</p>
+
+  <h3>Shape is a separate axis</h3>
+  <p>Where a skill lands isn't a family. It's a second choice laid across all ten, anything from a melee arc or a projectile to a beam, a cone, a zone on the ground or an aura around you. A Fireball and a Flame Pillar share a family and differ only in shape, and a stun can arrive as a beam, a shot or a slam. So a skill is its slot, times its shape, times its effects, and that product is where the room to express a character in 3D comes from.</p>
+
+  <h2>Three slot rules</h2>
+  <div class="grid">
+    <div class="cell"><b>Only the movement slot moves you</b>No active, ultimate, basic or passive can dash, blink, leap or grapple you anywhere. The old Gap Rush, Shadow Step, Phantom Rush, Recall Step and Bull Charge either moved to the movement slot or became something else. A test fails the build if one slips back in.</div>
+    <div class="cell"><b>Basic attacks always hit</b>Every basic attack deals damage. It may carry a small rider like a slow, a shred or a wound, but never hard control. Nobody stun-locks you with left clicks.</div>
+    <div class="cell"><b>Every skill costs the same</b>Each slot has a power budget. Control and durations are set by hand, and damage, healing and buff strength scale to fill whatever budget is left. So a skill that stuns for longer hits softer. Ten kinds of control each have a price per second, from 30 for grounded to 110 for a stun.</div>
+  </div>
+  <p>Saved heroes holding a skill that left its slot get a successor automatically, so Gap Rush becomes Haymaker and nothing stored breaks.</p>
+
+  <h2>Eight roles, and why six wasn't enough</h2>
+  <p>The old six (tank, fighter, assassin, mage, marksman, support) answered two questions at once and did neither cleanly. One question is how a hero deals damage. The other is what it does for the team when it isn't dealing damage. Mixing them left holes: a hero built around locking enemies down had no home, so the tank carried "locks enemies down" in its description and the mage carried "zones and control". A hero who fights through turrets and traps had no home at all.</p>
+  <p>So split the two questions and the roles fall out. Damage dealers sort on two axes, how close they fight and whether their damage comes steady or all at once.</p>
+  <div class="quad">
+    <span></span><span class="h">Sustained</span><span class="h">Burst</span>
+    <span class="v">Close</span><div class="cell"><b>Fighter</b>Wins long brawls. Lifesteal, wounds, shred.</div><div class="cell"><b>Assassin</b>Deletes one target, then leaves. Stealth, marks, executes.</div>
+    <span class="v">Far</span><div class="cell"><b>Marksman</b>Steady weapon damage from the back. Shred, marks, traps.</div><div class="cell"><b>Mage</b>Burst and area spells from mid range. Fire on the ground.</div>
+  </div>
+  <p>Everyone else is defined by the main thing they give the team besides damage.</p>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>Role</th><th>Gives the team</th><th class="num">Health</th><th>Signature families</th></tr></thead>
+      <tbody>
+        <tr><td>Tank</td><td>Soaks the damage meant for others and holds space.</td><td class="num">3,800</td><td>protection, taunt, walls, knock-ups</td></tr>
+        <tr><td>Support</td><td>Keeps allies alive and stronger.</td><td class="num">2,000</td><td>healing, shields, buffs, cleanse</td></tr>
+        <tr><td>Controller <span class="tag mix">new</span></td><td>Takes enemies out of the fight.</td><td class="num">1,900</td><td>every kind of crowd control, walls</td></tr>
+        <tr><td>Summoner <span class="tag mix">new</span></td><td>Builds presence on the field that keeps working.</td><td class="num">1,800</td><td>turrets, traps, pulsing totems, walls</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>This isn't a new idea. League of Legends' own class system has a Controller class (its Catchers specialize in locking enemies down, its Enchanters in empowering allies) and a separate Specialist class for champions that don't fit the usual molds. Our Support is their Enchanter, our Controller is their Catcher, and our Summoner covers the construct-heavy corner of their Specialists.</p>
+  <p>The catalogue enforces the split. Controllers own at least 20 skills with crowd control and summoners at least 15 with constructs, and the tests fail if either drifts.</p>
+
+  <h2>How it's balanced: three-a-side, not one-on-one</h2>
+  <p>Every skill is priced before it ever fights. Each slot has a power budget, control and durations are set by hand, and damage, healing and buff strength scale to fill whatever's left. That gets a skill into the right neighbourhood. The fights decide the rest.</p>
+  <p>The balance gate used to settle it with one-on-one duels, and duels turned out to be the wrong test for half this library. A duel can't see a taunt, a wall or a heal for a teammate. It scored a taunt-and-root tank kit at 0% and a stun-and-sleep controller at 6%, even though both pulled their weight in real team fights. Tuning roles to win duels then gave controllers double damage, and in 10v10 matches they out-damaged everyone, CC included.</p>
+  <p>So the gate now plays three-a-side skirmishes. Your hero fights beside two of the default heroes against three others, turn by turn through all eight, 200 fights in all. In skirmishes the same tank kits land between 22% and 43% and the controller kits between 34% and 70%, a spread the role tuning can even out. Each role's damage is tuned on the middle of a sample of its kits, not on one default, so no single kit sets the bar for the whole role. In the browser the fights are shared across several workers, so the check still answers in seconds.</p>
+  <p>The skirmishes also caught a pricing mistake that duels could never see. An area heal, shield or buff gives each of up to three allies its full amount, but the budget charged as if it reached 1.6 of them. A support built on team heals won 63% of skirmishes and one without them won 25%. Team effects now cost 2.4 times a single target, and the two basic attacks that stood far above the rest of their role (Drone Zap at 64% and Staff Strike at 76%) carry a recorded price cut.</p>
+  <p>Big fights needed two rules of their own, because a ten-hero crowd isn't a bigger 3v3. One blast could hit six heroes, so area damage now lands in full on three targets and spreads beyond that, the same way area heals already did. And the AI's fighters and assassins used to dash straight into a crowd and die inside a third of the match, so now they wait for their target to step out of it. Neither rule can fire in a 3v3, so the gate's measurements stay put. In the default matchup the moguls went from winning 19 of 24 against the world leaders to 15 of 24.</p>
+  <p>Two fixes came out of the same digging. Ground skills used to land at the far end of their range, so a 12 m zone missed anyone standing nearer. Now they land on the enemy you aim at, or where your aim meets the floor. And the AI held its crowd skills until three enemies stood together, which never happens in a small fight, so it now settles for however many are left.</p>
+
+  <h2>Flight costs something now</h2>
+  <p>If flying is faster than running, nobody fights on the ground. Deadlock doesn't give flight away either. It's one hero's ability with a duration and a long cooldown, 8 seconds of flight on a 40 second cooldown in early builds, and that hero can't dash while it's up. We let everyone fly, so the cost has to live somewhere else.</p>
+  <ul>
+    <li><b>Slower than running.</b> Flying moves at 75% of ground speed.</li>
+    <li><b>A meter.</b> 100 points. Taking off costs 10, staying up drains 18 a second, and it refills at 30 a second after one second on the ground. From a full meter that's five seconds in the air.</li>
+    <li><b>An empty meter glides you down.</b> You don't fall out of the sky, but you can't stay up.</li>
+    <li><b>Control works in the air.</b> Grounded drags a flyer down and blocks take-off. Root pins a flyer in place.</li>
+  </ul>
+  <p>The player sees the meter under the reticle whenever it isn't full, so you always know how long you've got up there.</p>
+
+  <h2>What you see in a match</h2>
+  <ul>
+    <li>Status chips under every health bar, worst first: Stunned, Rooted, Silenced, Marked and so on. The hero you control shows its own under the reticle.</li>
+    <li>New ability icons for each kind of control, debuff, state and construct, so the HUD reads at a glance.</li>
+    <li>Walls rise out of the floor in their owner's colour and crumble when broken or expired. Turrets turn and fire tracers. Fields glow on the ground and pulse on their beat. Traps are visible to their owner's side only.</li>
+    <li>A stealthed enemy disappears for the player hunting it, until it comes within 3 metres, gets marked, or attacks.</li>
+    <li>The basic attack's reach is drawn on the floor around the hero you control: an arc for a swing, a ring for a shot. It turns gold, along with the reticle, when the next attack would land.</li>
+  </ul>
+
+  <h2>What the AI does with it</h2>
+  <ul>
+    <li>It saves cleanses and unstoppables for when someone they'd free is actually locked down.</li>
+    <li>It loses track of an enemy that goes into stealth, unless the enemy is within 3 metres or marked.</li>
+    <li>It places turrets where the gun reaches its target, and counts control, debuffs and turrets as threats when deciding whether a skill is worth casting into a crowd.</li>
+    <li>Controllers stand just behind the front line, summoners further back with the marksmen.</li>
+  </ul>
+
+  <p><small class="src">Sources: Deadlock flight details from <a href="https://deadlock.wiki/Flight">the Deadlock wiki's Flight page</a> and <a href="https://deadlock.wiki/Vindicta?oldid=2027">an early revision of Vindicta's page</a>, which may differ from the live game. League class structure from <a href="https://wiki.leagueoflegends.com/en-us/Class">the League of Legends wiki</a>. Counts on this page come from the catalogue itself (<code>src/charter/templates</code>).</small></p>
+</main>
+</body>
+</html>

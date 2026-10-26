@@ -3,9 +3,10 @@ import type { Build } from '../../charter/build'
 import type { HeroPackage } from '../../forge/package'
 import type { Preset } from '../../forge/motion/library'
 import { pickAnimation, viewerSource } from '../../ui/forge/viewer'
-import { DEMO_HEROES } from '../demo/roster'
 import { SIZE_SCALE, benchHero } from '../demo/procedural-hero'
 import type { AnimState } from './animation'
+import { characterLook, characterView, heroHue, loadBuild } from './characters'
+import { TEAM_COLORS } from './map'
 
 /**
  * Hero views (U13, KTD9): the arena GLB when the package has one (2K for heroes in focus, 1K for the rest), then the
@@ -25,17 +26,19 @@ export function heroSource(pkg: HeroPackage | undefined, focus: boolean): HeroSo
 
 export interface HeroView {
   root: THREE.Object3D
-  pose: (state: AnimState, t: number, dt: number) => void
+  /** `moving` tells flying from hovering, and running from standing. */
+  pose: (state: AnimState, t: number, dt: number, moving?: boolean) => void
   /** True when the hero's own body failed to load and this is the stand-in. */
   fallback: boolean
+  /** The view plays its own death fall, so the physics corpse should not also tumble it. */
+  animatesDeath?: boolean
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
-  const demo = DEMO_HEROES.find((h) => h.heroName === build.heroName)
-  const hue = demo?.hue ?? (index * 0.137) % 1
-  const hero = benchHero({ hue: fallback ? 0 : hue, sizeClass: build.sizeClass ?? 'medium', textureSize: 512, seed: index + 1 })
+  const hue = heroHue(build.heroName)
+  const hero = benchHero({ hue: fallback ? 0 : hue, sizeClass: build.sizeClass ?? 'medium', textureSize: 512, seed: index + 1, look: 'suit' })
   if (fallback) (hero.mesh.material as THREE.MeshStandardMaterial).color.setRGB(0.55, 0.57, 0.62)
   const root = new THREE.Group()
   root.add(hero.mesh)
@@ -47,6 +50,15 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
       hero.animate(state.kind === 'idle' ? t * 0.2 : t, state.kind === 'fly')
     },
   }
+}
+
+async function arenaCharacter(build: Build, index: number, team: number, renderer: unknown): Promise<HeroView> {
+  const look = characterLook(build, heroHue(build.heroName))
+  const l = await gltf(renderer)
+  const file = await loadBuild(look.build, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
+  const view = characterView(file, look, new THREE.Color(TEAM_COLORS[team]), build)
+  view.root.scale.setScalar(SIZE_SCALE[build.sizeClass ?? 'medium'])
+  return { root: view.root, fallback: false, animatesDeath: true, pose: (state, _t, dt, moving = false) => view.pose(state, dt, moving) }
 }
 
 /** Longest a hero's model may take to load before it fights as a stand-in, so one slow file never holds up Start. */
@@ -111,9 +123,19 @@ async function glbView(source: Extract<HeroSource, { kind: 'glb' }>, build: Buil
 }
 
 /** Load one hero's view, falling back to a procedural body (with `fallback` set) if its GLB fails. */
-export async function loadHeroView(build: Build, pkg: HeroPackage | undefined, index: number, focus: boolean, renderer: unknown): Promise<HeroView> {
+export async function loadHeroView(build: Build, pkg: HeroPackage | undefined, index: number, focus: boolean, renderer: unknown, team = 0): Promise<HeroView> {
   const source = heroSource(pkg, focus)
-  if (source.kind === 'procedural') return proceduralView(build, index, !!pkg)
+  if (source.kind === 'procedural') {
+    // a hero with no forged body wears one of the arena's own rigged, animated builds (R24)
+    if (!pkg) {
+      try {
+        return await arenaCharacter(build, index, team, renderer)
+      } catch {
+        return proceduralView(build, index, false)
+      }
+    }
+    return proceduralView(build, index, true)
+  }
   try {
     return await glbView(source, build, renderer)
   } catch {

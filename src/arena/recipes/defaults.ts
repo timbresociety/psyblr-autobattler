@@ -12,6 +12,7 @@ const CORE: Record<Delivery['kind'], RecipeLayer[]> = {
   self: [{ primitive: 'aura', phase: 'impact', size: 0.6, color: 0 }, { primitive: 'sparks', phase: 'linger', size: 0.5, color: 1 }],
   dash: [{ primitive: 'trail', phase: 'travel', size: 1, color: 0 }, { primitive: 'burst', phase: 'impact', size: 0.6, color: 1, damaging: true }],
   blink: [{ primitive: 'burst', phase: 'charge', size: 0.6, color: 1 }, { primitive: 'burst', phase: 'impact', size: 0.6, color: 0, damaging: true }],
+  leap: [{ primitive: 'trail', phase: 'travel', size: 0.8, color: 0 }, { primitive: 'ring', phase: 'impact', size: 0.8, color: 1, damaging: true }],
   grapple: [{ primitive: 'beam', phase: 'travel', size: 0.3, color: 0 }, { primitive: 'burst', phase: 'impact', size: 0.5, color: 1, damaging: true }],
 }
 
@@ -26,6 +27,7 @@ const DEFAULT_PALETTES: Record<Delivery['kind'], [string, string, string]> = {
   self: ['#fff6c2', '#ffd93d', '#ffffff'],
   dash: ['#ffffff', '#9ad8ff', '#4fb2ff'],
   blink: ['#e6d6ff', '#9a6bff', '#ffffff'],
+  leap: ['#ffe2a6', '#ffb347', '#ffffff'],
   grapple: ['#ffffff', '#c0c0c0', '#ffb84d'],
 }
 

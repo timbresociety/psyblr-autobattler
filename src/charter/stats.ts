@@ -1,4 +1,4 @@
-import { SIZES, type SizeClass } from './sizes'
+import { SIZES, sizeHealth, type SizeClass } from './sizes'
 import type { Attribute, LimitHit, Role, SecondarySheet, SecondaryStat, Spread, Validation } from './types'
 
 export const ATTRIBUTES: readonly Attribute[] = ['strength', 'agility', 'intellect']
@@ -54,7 +54,8 @@ const round = (value: number) => Math.round(value * 100) / 100
 
 /** Derive the secondary sheet from a role, a spread and a size class (KTD8). Pure and deterministic. */
 export function deriveSheet(role: Role, spread: Spread, size: SizeClass = 'medium'): { sheet: SecondarySheet; capped: SecondaryStat[] } {
-  const { healthMul, speedMul } = SIZES[size]
+  const { speedMul } = SIZES[size]
+  const healthMul = sizeHealth(role.id, size)
   const caps = { ...role.caps, maxHealth: role.caps.maxHealth * healthMul, moveSpeed: role.caps.moveSpeed * speedMul }
   const sheet = { ...role.base }
   for (const attr of ATTRIBUTES) {

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { putImage } from '@vercel/blob'
+import { fakeMode } from '../forge/providers/router'
+import type { Env } from '../forge/providers/types'
 
 /**
  * Reference photo upload (U10). The real type is read from the content bytes, the size is capped, and the
@@ -30,4 +32,15 @@ export async function uploadPhoto(bytes: Uint8Array, deps: { put?: PutFn } = {})
   if (!detectImageType(bytes)) throw new PhotoError('only JPEG, PNG or WebP photos are accepted')
   const { url } = await (deps.put ?? vercelPut)(`heroes/${randomUUID()}.webp`, bytes)
   return { url }
+}
+
+/**
+ * Development only: with fake providers on and no Blob token, a photo comes back as a data URL instead of a stored file,
+ * so reference photos work on the local dev server. Production never takes this path (fakeMode is off there).
+ */
+export const devPut: PutFn = async (_pathname, body) => ({ url: `data:image/${detectImageType(body)};base64,${Buffer.from(body).toString('base64')}` })
+
+/** Where uploads go: Vercel Blob when it is configured, else the dev path when fakes are on, else Blob (which fails). */
+export function pickPut(env: Env): PutFn | undefined {
+  return !env.BLOB_READ_WRITE_TOKEN && fakeMode(env) ? devPut : undefined
 }

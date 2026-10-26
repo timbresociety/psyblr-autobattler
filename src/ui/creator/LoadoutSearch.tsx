@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
+import type { RoleId } from '../../charter/types'
 import type { HeroResult } from '../api'
+import { HeroPortrait } from '../common/portrait'
+import { RoleBadge } from '../common/RoleIcon'
 
 export const SEARCH_DEBOUNCE_MS = 250
 
@@ -43,28 +46,35 @@ export function LoadoutSearch({ query, search, onAdd, adding = false }: Props) {
     <div className="loadout-search" aria-label="Global loadout">
       {failed && (
         <p className="inline-error">
-          Couldn't reach the global loadout. <button className="ghost" onClick={() => setAttempt((n) => n + 1)}>Retry</button>
+          Couldn't reach the global loadout.{' '}
+          <button className="link-btn" onClick={() => setAttempt((n) => n + 1)}>
+            Retry
+          </button>
         </p>
       )}
       {results.length > 0 && (
-        <ul>
-          {results.map((hero) => (
-            <li key={hero.id}>
-              {hero.photo ? <img src={hero.photo} alt="" /> : <span className="dot">{hero.name.slice(0, 1)}</span>}
-              <span className="who">
-                <strong>{hero.name}</strong>
-                <small>
-                  {hero.roleId} · used {hero.useCount}×
-                </small>
-              </span>
-              <button onClick={() => onAdd(hero)} disabled={adding}>
-                Add free
-              </button>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="field-label">Already in the global loadout</p>
+          <ul>
+            {results.map((hero) => (
+              <li key={hero.id} className="match">
+                <HeroPortrait hero={{ key: `hero:${hero.id}`, heroName: hero.name, roleId: hero.roleId as RoleId }} photo={hero.photo} />
+                <span className="who">
+                  <strong>{hero.name}</strong>
+                  <span className="match-meta">
+                    <RoleBadge role={hero.roleId as RoleId} />
+                    <small>used {hero.useCount}×</small>
+                  </span>
+                </span>
+                <button className="btn sm primary" onClick={() => onAdd(hero)} disabled={adding}>
+                  Add free
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <button className="ghost" onClick={() => setDismissed(query)}>
+      <button className="btn sm ghost own" onClick={() => setDismissed(query)}>
         Build my own
       </button>
     </div>

@@ -15,7 +15,7 @@ const input = {
 
 const valid = {
   roleId: 'mage',
-  templates: { basic: 'mage-arcane-bolt', active1: 'mage-recall-step', active2: 'mage-fireball', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
+  templates: { basic: 'mage-arcane-bolt', active1: 'mage-chrono-rewind', active2: 'mage-fireball', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
   spread: { strength: 6, agility: 6, intellect: 18 },
 }
 
@@ -25,7 +25,7 @@ describe('proposeHero', () => {
     const result = await proposeHero(input, { callModel: call })
     expect(result.offline).toBe(false)
     expect(result.build.roleId).toBe('mage')
-    expect(result.build.slots.active1.templateId).toBe('mage-recall-step')
+    expect(result.build.slots.active1.templateId).toBe('mage-chrono-rewind')
     expect(result.build.slots.active1.name).toBe('Rewind')
     expect(result.build.gate.state).toBe('draft')
   })
