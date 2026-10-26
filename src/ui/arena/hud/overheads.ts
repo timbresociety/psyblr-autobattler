@@ -1,7 +1,7 @@
-import type { Team } from '../../../arena/engine/state'
-import { segmentPct } from './format'
-import { statusKey, type HeroStatus } from './status'
-import { FAR_METRES, distanceScale, type ScreenPoint } from './world'
+import type { Team } from '../../../arena/engine/state.js'
+import { segmentPct } from './format.js'
+import { statusKey, type HeroStatus } from './status.js'
+import { FAR_METRES, distanceScale, type ScreenPoint } from './world.js'
 
 /**
  * A health bar over every living hero, both sides (R38): team colour, a tick every 250 health, shields as a white

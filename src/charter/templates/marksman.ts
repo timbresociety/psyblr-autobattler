@@ -1,4 +1,4 @@
-import { active, ai, at, basic, blind, buff, execute, field, ground, mark, movement, move, passive, phys, push, refresh, root, shred, slow, trap, ultimate, wound } from './dsl'
+import { active, ai, at, basic, blind, buff, execute, field, ground, mark, movement, move, passive, phys, push, refresh, root, shred, slow, trap, ultimate, wound } from './dsl.js'
 
 /** Marksman: steady weapon damage from long range. Armour shred, marks, traps and nets to keep divers off. */
 export const MARKSMAN = [

@@ -1,5 +1,5 @@
-import type { StatGoal } from './build'
-import type { SecondaryStat } from './types'
+import type { StatGoal } from './build.js'
+import type { SecondaryStat } from './types.js'
 
 /** Plain words the offline parser understands, each mapped to the stats it moves. */
 const STAT_WORDS: [RegExp, SecondaryStat][] = [

@@ -1,7 +1,7 @@
-import { SIZES, type SizeClass } from '../../../charter/sizes'
-import { ENGINE } from '../../engine/calibration'
-import type { MatchEvent } from '../../engine/events'
-import type { RecipeLayer } from '../../recipes/schema'
+import { SIZES, type SizeClass } from '../../../charter/sizes.js'
+import { ENGINE } from '../../engine/calibration.js'
+import type { MatchEvent } from '../../engine/events.js'
+import type { RecipeLayer } from '../../recipes/schema.js'
 
 /**
  * How big each effect layer is in the world (R11, KTD11). Sizes come from the engine event that carried the hit

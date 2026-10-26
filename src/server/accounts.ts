@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import type { Db } from './db'
-import type { EmailSender } from './email'
+import type { Db } from './db.js'
+import type { EmailSender } from './email.js'
 
 /**
  * Email magic-link sign-in (KTD5). Tokens and session IDs are stored only as hashes. Emails are normalised so

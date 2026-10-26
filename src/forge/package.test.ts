@@ -1,11 +1,11 @@
 import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it } from 'vitest'
-import { BUILD_SLOTS, proposeBuild } from '../charter/build'
-import { SCHEMA_SQL } from '../server/db'
-import { isOwnForgeAssetUrl } from '../server/photo-url'
-import { defaultRecipe, passiveRecipe } from '../arena/recipes/defaults'
-import { getTemplate } from '../charter/templates/catalog'
-import { PACKAGE_VERSION, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from './package'
+import { BUILD_SLOTS, proposeBuild } from '../charter/build.js'
+import { SCHEMA_SQL } from '../server/db.js'
+import { isOwnForgeAssetUrl } from '../server/photo-url.js'
+import { defaultRecipe, passiveRecipe } from '../arena/recipes/defaults.js'
+import { getTemplate } from '../charter/templates/catalog.js'
+import { PACKAGE_VERSION, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from './package.js'
 
 const build = proposeBuild({ heroName: 'Test', roleId: 'mage', skills: {} }).build
 const url = (p: string) => `https://blob.test/forge/${p}`

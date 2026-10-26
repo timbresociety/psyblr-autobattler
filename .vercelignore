@@ -1,0 +1,12 @@
+# Never upload local secrets; .env.example documents the variables instead.
+.env*
+!.env.example
+# Asset pipelines, balance tools and docs are not part of the app.
+tools/
+docs/
+dist/
+coverage/
+*.log
+.dev-store/
+# Route tests run locally; the deployment never needs them.
+routes/**/*.test.ts

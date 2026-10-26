@@ -1,6 +1,6 @@
-import type { BuildSlot, RoleId, Template } from '../../charter/types'
+import type { BuildSlot, RoleId, Template } from '../../charter/types.js'
 
-export { heroHue } from '../../arena/client/character-look'
+export { heroHue } from '../../arena/client/character-look.js'
 
 /**
  * What the front end needs to draw a hero without a renderer: its suit colour, its role colour, and which of the

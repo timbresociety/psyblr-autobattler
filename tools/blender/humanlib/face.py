@@ -474,3 +474,20 @@ def hair_texture(img, rgb, oval, skin, mesh_lm, frame, out_path):
     light = np.median(pix[plum >= np.percentile(plum, 80)], axis=0)
     save_rgba(np.concatenate([np.clip(rgb, 0, 1), alpha[..., None]], axis=2), out_path)
     return tuple(float(x) for x in base), tuple(float(x) for x in light)
+
+
+def face_meta(frame, mesh_lm, atlas_size):
+    """
+    What the game needs to put a player's photo on this body's face: the head frame (front-on, Blender x and z in
+    metres, which are glTF x and y) and where the body's own face landmarks sit in it, in pixels of a frame.res-square
+    patch with y down. The game warps a photo onto those landmarks, then paints each front-facing skin triangle of the
+    atlas from the patch, so it needs no knowledge of how the atlas was packed.
+    """
+    px = frame.to_px(mesh_lm[0])
+    landmarks = [[round(float(x), 2), round(float(y), 2)] if ok else None for (x, y), ok in zip(px, mesh_lm[1])]
+    return {
+        'version': 1,
+        'atlas': atlas_size,
+        'frame': {'cx': frame.cx, 'cz': frame.cz, 'size': frame.size, 'res': frame.res},
+        'landmarks': landmarks,
+    }

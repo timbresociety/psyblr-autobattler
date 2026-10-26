@@ -1,4 +1,4 @@
-import type { ContentFlags } from './types'
+import type { ContentFlags } from './types.js'
 
 /** The keyword half of the content floor (R25, KTD10); the moderation adapter is the other half. */
 export const OFFENDING: Record<'sexual' | 'minors' | 'endorsement', RegExp> = {

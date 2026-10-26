@@ -1,10 +1,10 @@
-import { sizeHealth } from '../../charter/sizes'
-import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types'
-import { DT, ENGINE, ticks } from './calibration'
-import type { MatchEvent } from './events'
-import { clamp, distance, normalize, scale, sub, type Vec3 } from './maths'
-import { next } from './rng'
-import type { HeroSetup, HeroState, MatchState, Stat } from './state'
+import { sizeHealth } from '../../charter/sizes.js'
+import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types.js'
+import { DT, ENGINE, ticks } from './calibration.js'
+import type { MatchEvent } from './events.js'
+import { clamp, distance, normalize, scale, sub, type Vec3 } from './maths.js'
+import { next } from './rng.js'
+import type { HeroSetup, HeroState, MatchState, Stat } from './state.js'
 
 /**
  * Effects and statuses (U4), ported from the 2D balance model with the same numbers, in ticks. Damage, healing,
@@ -67,10 +67,13 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   const passive = sourceSetup.kit.passive
   const always = (passive.trigger ?? 'always') === 'always'
   for (const e of passive.effects) if (always && e.kind === 'execute' && hpFraction(target) * 100 < e.thresholdPct) amount *= 1 + e.bonusPct / 100
+  // an assassin's trait: the wounded take more
+  const lowHp = sourceSetup.mods?.lowHpBonus
+  if (lowHp && hpFraction(target) < 0.5) amount *= 1 + lowHp
   const sheet = ctx.setups[target.id].sheet
   // shreds take flat points off the resist; vulnerability and the attacker's team's marks add damage taken
   const shred = strongest(target, type === 'physical' ? 'armorShred' : 'spiritShred')
-  const resist = clamp((type === 'physical' ? sheet.armor : sheet.magicResist) - shred, ENGINE.resistFloor, 75)
+  const resist = clamp((type === 'physical' ? sheet.armor : sheet.magicResist) - shred, ENGINE.resistFloor, ENGINE.resistCap)
   const marked = target.debuffs.some((d) => d.type === 'mark' && ctx.match.heroes[d.source]?.team === source.team) ? strongest(target, 'mark') : 0
   const exposed = Math.min(ENGINE.vulnerableCap, (strongest(target, 'vulnerable') + marked) / 100)
   amount *= (1 - resist / 100) * (1 - Math.min(0.8, sumBuff(target, 'damageReduction'))) * (1 + exposed)
@@ -139,7 +142,10 @@ function clearControl(hero: HeroState, now: number) {
 /** Apply one non-movement effect of a template to the enemies it hit (or the allies it reaches, or a field's). */
 export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slot: BuildSlot, e: Effect, hit: HeroState[], area?: Area) {
   const now = ctx.match.tick
-  const sheet = ctx.setups[caster.id].sheet
+  const { sheet, mods } = ctx.setups[caster.id]
+  // a support's trait strengthens what it gives; a controller's makes its control last
+  const healPower = 1 + (mods?.healPower ?? 0)
+  const held = (seconds: number) => ticks(seconds * (1 + (mods?.controlPower ?? 0)))
   const executeBonus = (u: HeroState) => template.effects.reduce((b, x) => (x.kind === 'execute' && hpFraction(u) * 100 < x.thresholdPct ? b + x.bonusPct / 100 : b), 0)
   switch (e.kind) {
     case 'damage': {
@@ -154,7 +160,7 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     }
     case 'heal': {
       const targets = friendlyTargets(ctx, caster, template, e.target, area)
-      const amount = magnitude(e, sheet.spiritPower) * share(targets.length)
+      const amount = magnitude(e, sheet.spiritPower) * share(targets.length) * healPower
       for (const u of targets) {
         if (e.overTime) u.hots.push({ perSecond: amount / e.overTime, until: now + ticks(e.overTime) })
         else if (u === caster) heal(u, amount)
@@ -169,7 +175,7 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     case 'shield': {
       const targets = friendlyTargets(ctx, caster, template, e.target, area)
       for (const u of targets) {
-        u.shield += magnitude(e, sheet.spiritPower) * share(targets.length)
+        u.shield += magnitude(e, sheet.spiritPower) * share(targets.length) * healPower
         u.shieldUntil = Math.max(u.shieldUntil, now + ticks(e.duration))
       }
       break
@@ -177,21 +183,21 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     case 'stun':
       for (const u of hit) {
         if (immune(u, now)) continue
-        u.stunnedUntil = Math.max(u.stunnedUntil, now + ticks(e.duration))
+        u.stunnedUntil = Math.max(u.stunnedUntil, now + held(e.duration))
         status(ctx, u, 'stun', u.stunnedUntil)
       }
       break
     case 'slow':
       for (const u of hit) {
         if (u.invulnerableUntil > now) continue
-        u.slows.push({ pct: e.pct, until: now + ticks(e.duration), ...(e.stat === 'attack' ? { stat: 'attack' as const } : {}) })
-        status(ctx, u, e.stat === 'attack' ? 'cripple' : 'slow', now + ticks(e.duration))
+        u.slows.push({ pct: e.pct, until: now + held(e.duration), ...(e.stat === 'attack' ? { stat: 'attack' as const } : {}) })
+        status(ctx, u, e.stat === 'attack' ? 'cripple' : 'slow', now + held(e.duration))
       }
       break
     case 'control':
       for (const u of hit) {
         if (immune(u, now)) continue
-        u.cc[e.type] = Math.max(u.cc[e.type], now + ticks(e.duration))
+        u.cc[e.type] = Math.max(u.cc[e.type], now + held(e.duration))
         if (e.type === 'fear') u.fearFrom = caster.id
         if (e.type === 'taunt') u.tauntBy = caster.id
         status(ctx, u, e.type, u.cc[e.type])
@@ -200,7 +206,7 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     case 'knockup':
       for (const u of hit) {
         if (immune(u, now)) continue
-        const n = ticks(e.duration)
+        const n = held(e.duration)
         u.knockback = undefined
         u.launch = { from: now, until: now + n, height: e.height, base: u.position.y }
         u.stunnedUntil = Math.max(u.stunnedUntil, now + n)

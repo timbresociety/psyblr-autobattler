@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { BUDGET_TOLERANCE, SLOT_BUDGETS, normalizeTemplate, scaleMagnitudes, scoreTemplate, validateTemplate } from './budget'
-import type { Template } from './types'
+import { BUDGET_TOLERANCE, SLOT_BUDGETS, normalizeTemplate, scaleMagnitudes, scoreTemplate, validateTemplate } from './budget.js'
+import type { Template } from './types.js'
 
 const nova: Template = {
   id: 'test-nova',

@@ -1,6 +1,6 @@
-import { geometryMultiplier, missingGeometry } from './geometry'
-import { ALL_SIZE_CLASSES } from './sizes'
-import type { ControlType, DebuffType, Delivery, Effect, SecondarySheet, SlotKind, StateType, Template, Validation, LimitHit } from './types'
+import { geometryMultiplier, missingGeometry } from './geometry.js'
+import { ALL_SIZE_CLASSES } from './sizes.js'
+import type { ControlType, DebuffType, Delivery, Effect, SecondarySheet, SlotKind, StateType, Template, Validation, LimitHit } from './types.js'
 
 /**
  * Power budget (KTD2). Every template in a slot is worth the same budget, measured on a reference sheet.

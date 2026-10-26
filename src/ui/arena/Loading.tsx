@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { DIVERSITY_MIN, STACK_THRESHOLD, TEAM_BONUS } from '../../charter/synergy'
+import { TRAITS, TRAIT_TIERS } from '../../charter/traits'
 
 /** One line each, read in the second it takes a hero to load. Every one is true of the game as built. */
 export const LOADING_TIPS = [
   'Keys 1 to 0 take over your heroes. Tab hands one back to the AI.',
   'P pauses the fight. Esc frees the mouse.',
-  `${DIVERSITY_MIN} different roles on one side light the mixed-army bonus: +${Math.round(TEAM_BONUS * 100)}% damage.`,
-  `More than ${STACK_THRESHOLD} heroes of one role weaken each other.`,
+  `Every role is a synergy: ${TRAIT_TIERS.join(', ')} heroes of one role light its tiers.`,
+  `${TRAITS.tank.name}: ${TRAIT_TIERS[1]} tanks harden the whole side, not only themselves.`,
+  `${TRAITS.assassin.name}: ${TRAIT_TIERS[1]} assassins start the fight unseen.`,
   'Timber barricades break under fire. The stone of the ruins never does.',
-  'A gold ring around R means that hero’s ultimate is ready.',
+  'A glowing ring around R means that hero’s ultimate is ready.',
   'Fly the free camera with W A S D, Space to rise and Z to sink.',
   'If the hero you steer falls, the camera goes back to watching.',
 ] as const

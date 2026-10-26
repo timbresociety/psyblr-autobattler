@@ -1,12 +1,17 @@
 import * as THREE from 'three'
-import type { Build } from '../../charter/build'
-import type { HeroPackage } from '../../forge/package'
-import type { Preset } from '../../forge/motion/library'
-import { pickAnimation, viewerSource } from '../../ui/forge/viewer'
-import { SIZE_SCALE, benchHero } from '../demo/procedural-hero'
-import type { AnimState } from './animation'
-import { characterLook, characterView, heroHue, loadBuild } from './characters'
-import { TEAM_COLORS } from './map'
+import type { Build } from '../../charter/build.js'
+import type { HeroPackage } from '../../forge/package.js'
+import type { Preset } from '../../forge/motion/library.js'
+import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
+import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
+import type { AnimState } from './animation.js'
+import type { SizeClass } from '../../charter/sizes.js'
+import { formSize } from '../../forge/form.js'
+import { modelFor } from './character-look.js'
+import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
+import { heroAtlas } from './face/hero-face.js'
+import { loadGear } from './gear.js'
+import { TEAM_COLORS } from './map.js'
 
 /**
  * Hero views (U13, KTD9): the arena GLB when the package has one (2K for heroes in focus, 1K for the rest), then the
@@ -32,6 +37,8 @@ export interface HeroView {
   fallback: boolean
   /** The view plays its own death fall, so the physics corpse should not also tumble it. */
   animatesDeath?: boolean
+  /** The hero's size class right now: a transformation swaps in its form's body, or grows the model if it has none. */
+  setSize?: (size: SizeClass) => void
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
@@ -53,12 +60,48 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
 }
 
 async function arenaCharacter(build: Build, index: number, team: number, renderer: unknown): Promise<HeroView> {
-  const look = characterLook(build, heroHue(build.heroName))
+  const hue = heroHue(build.heroName)
+  const look = characterLook(build, hue)
   const l = await gltf(renderer)
-  const file = await loadBuild(look.build, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
-  const view = characterView(file, look, new THREE.Color(TEAM_COLORS[team]), build)
-  view.root.scale.setScalar(SIZE_SCALE[build.sizeClass ?? 'medium'])
-  return { root: view.root, fallback: false, animatesDeath: true, pose: (state, _t, dt, moving = false) => view.pose(state, dt, moving) }
+  const load = (body: Parameters<typeof loadBuild>[0]) => loadBuild(body, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
+  const color = new THREE.Color(TEAM_COLORS[team])
+  // a photo face is painted into the hero's own atlas first; without one (or if it fails) the shared atlas serves
+  const dressed = async (shape: Build) => {
+    const shapeLook = characterLook(shape, hue)
+    const file = await load(shapeLook.build)
+    const [atlas, gear] = await Promise.all([heroAtlas(file, shapeLook), loadGear(shapeLook.build, shapeLook.gear, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
+    return characterView(file, shapeLook, color, build, atlas, gear)
+  }
+  const chosen = build.sizeClass ?? 'medium'
+  const view = await dressed(build)
+  view.root.scale.setScalar(SIZE_SCALE[chosen])
+  // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up); a demo hero,
+  // whose model is its own, grows instead
+  const form = formSize(build)
+  const formView = form && !modelFor(build.heroName) ? await dressed({ ...build, sizeClass: form }).catch(() => undefined) : undefined
+  const root = new THREE.Group()
+  root.add(view.root)
+  if (formView) {
+    formView.root.scale.setScalar(SIZE_SCALE[form!])
+    formView.root.visible = false
+    root.add(formView.root)
+  }
+  let size = chosen
+  return {
+    root,
+    fallback: false,
+    animatesDeath: true,
+    pose: (state, _t, dt, moving = false) => (formView?.root.visible ? formView : view).pose(state, dt, moving),
+    setSize: (next) => {
+      if (next === size) return
+      size = next
+      const transformed = next !== chosen
+      if (formView) {
+        formView.root.visible = transformed
+        view.root.visible = !transformed
+      } else view.root.scale.setScalar(SIZE_SCALE[next])
+    },
+  }
 }
 
 /** Longest a hero's model may take to load before it fights as a stand-in, so one slow file never holds up Start. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { renderTooltip } from './tooltip'
-import type { SecondarySheet, Template } from './types'
+import { renderTooltip } from './tooltip.js'
+import type { SecondarySheet, Template } from './types.js'
 
 const rewind: Template = {
   id: 'test-recall',
@@ -71,7 +71,7 @@ describe('tooltips', () => {
 
 describe('passive tooltips', () => {
   it('an always-on passive buff reads as permanent', async () => {
-    const { getTemplate } = await import('./templates/catalog')
+    const { getTemplate } = await import('./templates/catalog.js')
     const tip = renderTooltip(getTemplate('tank-thick-hide'), { name: 'Thick Hide', flavour: '' }, sheet(40))
     expect(tip.lines[0]).toMatch(/damage reduction$/)
   })

@@ -1,10 +1,10 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { float, fract, instancedBufferAttribute, length, positionLocal, smoothstep, time, uv, vec3 } from 'three/tsl'
-import { DEMO_HEROES } from '../demo/roster'
-import { benchHero, type BenchHero } from '../demo/procedural-hero'
-import { summarizeFrames, type FrameSummary } from './frames'
-import { createRenderer, type Backend } from './render/renderer'
+import { DEMO_HEROES } from '../demo/roster.js'
+import { benchHero, type BenchHero } from '../demo/procedural-hero.js'
+import { summarizeFrames, type FrameSummary } from './frames.js'
+import { createRenderer, type Backend } from './render/renderer.js'
 
 /**
  * The performance bench (U1): 20 distinct heroes running and flying, about 50,000 additive particles, and synthetic

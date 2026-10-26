@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { ROLE_IDS } from '../charter/roles'
-import { SIZE_CLASSES } from '../charter/sizes'
-import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from './calibration'
-import { defaultBuild } from './fixtures'
-import { isGateStale, runGate, winRateVsField } from './gate'
-import { CATALOG_VERSION } from '../charter/templates/catalog'
+import { ROLE_IDS } from '../charter/roles.js'
+import { SIZE_CLASSES } from '../charter/sizes.js'
+import { AI_CALIBRATION_VERSION, CALIBRATION_VERSION } from './calibration.js'
+import { defaultBuild } from './fixtures.js'
+import { isGateStale, runGate, winRateVsField } from './gate.js'
+import { CATALOG_VERSION } from '../charter/templates/catalog.js'
 
 describe('gate on the 3D engine (U6, KTD6)', () => {
   // CPU time of this process, so other test files running in parallel do not count against the budget

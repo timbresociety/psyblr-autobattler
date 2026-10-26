@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, cleanse, cripple, disarm, execute, field, ground, heal, knockup, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, stun, ultimate, resize, unstoppable, wound } from './dsl'
+import { active, ai, at, basic, buff, cleanse, cripple, disarm, execute, field, ground, heal, knockup, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, stun, ultimate, resize, unstoppable, wound } from './dsl.js'
 
 /** Fighter: wins long close-range brawls. Sustained melee damage, lifesteal, wounds and armour shred, staying power. */
 export const FIGHTER = [

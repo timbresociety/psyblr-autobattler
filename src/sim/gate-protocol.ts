@@ -1,5 +1,5 @@
-import type { Build } from '../charter/build'
-import { runGate, scoreVsField, type GateOptions, type GateOutcome } from './gate'
+import type { Build } from '../charter/build.js'
+import { runGate, scoreVsField, type GateOptions, type GateOutcome } from './gate.js'
 
 /** The message the creator posts to the gate worker, and the pure handler both the worker and tests use. */
 export interface GateRequest {

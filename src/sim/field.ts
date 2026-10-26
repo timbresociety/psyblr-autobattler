@@ -1,10 +1,10 @@
-import { BUILD_SLOTS, SLOT_KIND, otherActive, type Build } from '../charter/build'
-import { ROLE_IDS, getRole } from '../charter/roles'
-import { ATTRIBUTES } from '../charter/stats'
-import { poolFor } from '../charter/templates/catalog'
-import type { RoleId } from '../charter/types'
-import { defaultBuild } from './fixtures'
-import { createRng, type Rng } from './rng'
+import { BUILD_SLOTS, SLOT_KIND, otherActive, type Build } from '../charter/build.js'
+import { ROLE_IDS, getRole } from '../charter/roles.js'
+import { ATTRIBUTES } from '../charter/stats.js'
+import { poolFor } from '../charter/templates/catalog.js'
+import type { RoleId } from '../charter/types.js'
+import { defaultBuild } from './fixtures.js'
+import { createRng, type Rng } from './rng.js'
 
 /** A seeded random legal build for a role: templates from its pools and a spread that spends the pool within caps. */
 export function randomBuild(roleId: RoleId, rng: Rng, heroName = `${roleId}-random`): Build {

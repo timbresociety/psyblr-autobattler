@@ -1,9 +1,9 @@
 import * as THREE from 'three'
-import type { BuildSlot } from '../../../charter/types'
-import { ENGINE } from '../../engine/calibration'
-import type { MatchEvent } from '../../engine/events'
-import type { ArenaController } from '../match-view'
-import type { SpriteSpec } from './vfx'
+import type { BuildSlot } from '../../../charter/types.js'
+import { ENGINE } from '../../engine/calibration.js'
+import type { MatchEvent } from '../../engine/events.js'
+import type { ArenaController } from '../match-view.js'
+import type { SpriteSpec } from './vfx.js'
 
 /**
  * What skills leave in the world, drawn (the skill library's zones and constructs): walls that rise out of the floor

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { hydrateBuild } from '../../charter/build'
-import { GATE_CEILING, winRateVsField } from '../../sim/gate'
-import { DEMO_HEROES, demoRoster } from './roster'
+import { hydrateBuild } from '../../charter/build.js'
+import { GATE_CEILING, winRateVsField } from '../../sim/gate.js'
+import { DEMO_HEROES, demoRoster } from './roster.js'
 
 describe('demo roster (U1)', () => {
   it('has 10 moguls and 10 leaders with unique names', () => {

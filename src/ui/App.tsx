@@ -1,16 +1,57 @@
-import { lazy, Suspense, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { CreatorScreen } from './creator/CreatorScreen'
+import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import type { Build } from '../charter/build'
+import type { BuildRecord } from './api'
+import { Token, Wordmark } from './brand/Brand'
+import { ForgeScreen } from './forge/ForgeScreen'
+import { LoadoutScreen } from './loadout/LoadoutScreen'
 import './theme.css'
-
-// the Forge (and the sim it prices sizes with) loads only when its tab opens
-const ForgeScreen = lazy(() => import('./forge/ForgeScreen').then((m) => ({ default: m.ForgeScreen })))
 
 // the arena bench (U1) opens on its own with `?bench` and loads three's WebGPU build only there
 const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
 // the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
 
-type Tab = 'forge' | 'creator' | 'arena'
+type Tab = 'arena' | 'forge' | 'loadout'
+type Theme = 'light' | 'dark'
+
+const THEME_KEY = 'psyblr.theme'
+
+/** The mode index.html chose before the first paint: the visitor's own choice, or else their system's. */
+const currentTheme = (): Theme => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
+
+/** Light or dark: a choice made here sticks on this browser; until then the system's setting decides, live. */
+function useTheme(): [Theme, () => void] {
+  const [theme, setTheme] = useState<Theme>(currentTheme)
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+  useEffect(() => {
+    const system = window.matchMedia?.('(prefers-color-scheme: light)')
+    if (!system) return
+    const follow = (e: MediaQueryListEvent) => {
+      let chosen: string | null = null
+      try {
+        chosen = localStorage.getItem(THEME_KEY)
+      } catch {
+        // storage can be blocked; the system setting still decides
+      }
+      if (!chosen) setTheme(e.matches ? 'light' : 'dark')
+    }
+    system.addEventListener('change', follow)
+    return () => system.removeEventListener('change', follow)
+  }, [])
+  const toggle = () =>
+    setTheme((t) => {
+      const next = t === 'light' ? 'dark' : 'light'
+      try {
+        localStorage.setItem(THEME_KEY, next)
+      } catch {
+        // the choice lasts for this visit when storage is blocked
+      }
+      return next
+    })
+  return [theme, toggle]
+}
 
 const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[] = [
   {
@@ -27,7 +68,7 @@ const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[]
   {
     id: 'forge',
     label: 'Forge',
-    hint: 'Generate a hero',
+    hint: 'Make a hero',
     icon: (
       <>
         <path fill="currentColor" d="M2 9h14.6c2.6 0 4.6.8 5.4 1.8-1.3.6-3.1 1-5.4 1.3v.4c0 1.6-1.5 2.7-3.6 3V17h2.2c.9 0 1.5.6 1.5 1.5V20H5v-1.5c0-.9.6-1.5 1.5-1.5h2.2v-1.5C5.6 15.1 3.3 13.4 2 11z" />
@@ -36,14 +77,17 @@ const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[]
     ),
   },
   {
-    id: 'creator',
-    label: 'Creator',
-    hint: 'Tune a hero’s kit',
+    id: 'loadout',
+    label: 'Loadout',
+    hint: 'Your heroes',
     icon: (
-      <>
-        <path fill="currentColor" d="M10 2l2.1 6.1L18 10l-5.9 2L10 18l-2.1-6L2 10l5.9-1.9z" />
-        <path fill="currentColor" opacity=".7" d="M18.5 13.5l1 2.6 2.5 1-2.5 1-1 2.6-1-2.6-2.5-1 2.5-1z" />
-      </>
+      <g fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round">
+        <rect x="3" y="5" width="7" height="14" rx="1.5" />
+        <rect x="14" y="5" width="7" height="14" rx="1.5" />
+        <path d="M5.5 15h2M16.5 15h2" strokeLinecap="round" />
+        <circle cx="6.5" cy="10" r="1.6" fill="currentColor" stroke="none" />
+        <circle cx="17.5" cy="10" r="1.6" fill="currentColor" stroke="none" />
+      </g>
     ),
   },
 ]
@@ -60,26 +104,40 @@ export function App() {
 }
 
 function initialTab(): Tab {
-  // a sign-in link, or coming back from buying credits, always opens the Forge: only forging needs an account
   const q = new URLSearchParams(window.location.search)
-  return q.has('signin') || q.has('purchase') || q.has('forge') ? 'forge' : q.has('arena') ? 'arena' : 'creator'
+  return q.has('arena') ? 'arena' : q.has('loadout') ? 'loadout' : 'forge'
 }
 
 /** The tab lives in the address bar, so a reload comes back to the same screen. */
 function rememberTab(tab: Tab) {
   const q = new URLSearchParams(window.location.search)
-  q.delete('arena')
-  q.delete('forge')
-  if (tab !== 'creator') q.set(tab, '')
+  for (const t of TABS) q.delete(t.id)
+  if (tab !== 'forge') q.set(tab, '')
   const search = q.toString().replace(/=(?=&|$)/g, '')
   window.history.replaceState(window.history.state, '', `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`)
 }
 
+/** What the Forge opens with: a hero from the Loadout, a copy to remix, or a blank slate. A new key starts it over. */
+interface ForgeOpen {
+  key: number
+  record?: BuildRecord
+  initial?: Build
+}
+
 function Screens() {
   const [tab, setTab] = useState<Tab>(initialTab)
+  const [theme, toggleTheme] = useTheme()
+  const [forge, setForge] = useState<ForgeOpen>({ key: 0 })
+  // the Forge stays mounted once opened, so leaving it for the Arena or the Loadout never loses an unsaved hero
+  const [forgeKept, setForgeKept] = useState(tab === 'forge')
   const open = (next: Tab) => {
     setTab(next)
     rememberTab(next)
+    if (next === 'forge') setForgeKept(true)
+  }
+  const openInForge = (next: Omit<ForgeOpen, 'key'>) => {
+    setForge((f) => ({ key: f.key + 1, ...next }))
+    open('forge')
   }
   // arrow keys move along the tabs (the ARIA tabs pattern); Home and End jump to either end
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
@@ -94,11 +152,9 @@ function Screens() {
     <>
       <header className="topbar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true">
-            <span>P</span>
-          </span>
+          <Token className="brand-token" />
           <span className="brand-word">
-            <b>psyblr</b>
+            <Wordmark className="brand-wordmark" />
             <small>autobattler</small>
           </span>
         </div>
@@ -117,20 +173,40 @@ function Screens() {
             </button>
           ))}
         </nav>
+        <div className="topbar-end">
+          <button className="theme-toggle" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              {theme === 'light' ? (
+                <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z" fill="currentColor" />
+              ) : (
+                <g fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+                  <circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none" />
+                  <path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" />
+                </g>
+              )}
+            </svg>
+          </button>
+        </div>
       </header>
-      <div id="screen" key={tab} className="screen" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        {tab === 'arena' ? (
+      <div id="screen" className="screen" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+        {tab === 'arena' && (
           <Suspense fallback={<p className="screen-loading">Loading the Arena…</p>}>
             <ArenaScreen />
           </Suspense>
-        ) : tab === 'forge' ? (
-          <Suspense fallback={<p className="screen-loading">Loading the Forge…</p>}>
-            <ForgeScreen />
-          </Suspense>
-        ) : (
-          <CreatorScreen />
+        )}
+        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixOf(build) })} onForge={() => openInForge({})} />}
+        {forgeKept && (
+          <div className="kept" hidden={tab !== 'forge'}>
+            <ForgeScreen key={forge.key} record={forge.record} initial={forge.initial} />
+          </div>
         )}
       </div>
     </>
   )
+}
+
+/** A remix starts a new hero: the same kit and stats, its own name, and no tie to the original. */
+function remixOf(build: Build): Build {
+  const { heroId: _original, ...rest } = build
+  return { ...rest, heroName: `${build.heroName} Remix`.slice(0, 60), gate: { state: 'draft' } }
 }

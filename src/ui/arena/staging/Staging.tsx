@@ -2,13 +2,13 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { Team } from '../../../arena/engine/state'
 import { shortName } from '../hud/format'
 import { RoleIcon } from '../../common/RoleIcon'
-import { ArmyPanel, DetailsPanel } from './Panels'
+import { DetailsPanel, TraitPanel } from './Panels'
 import { Board2D, initialsOf } from './Board2D'
 import { Board3D, canDraw3D, type Board3DHandle } from './Board3D'
 import { refine, type Reason } from './board-math'
 import type { BoardState } from './board-scene'
 import { MAX_PER_SIDE, deployHeroes, emptyFormation, move, place, remove, type Formation } from './formation'
-import { bust, demoLoadout, liveLoadout, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
+import { bust, demoLoadout, liveLoadout, onCharacters, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
 import { FACTION_NAME, MATCHUPS, defaultLineup, hasFactions, lineupName, matchup, type MatchupId } from './presets'
 import './staging.css'
 
@@ -69,16 +69,19 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const swallowClickUntil = useRef(0)
   const starting = useRef(false)
   // the busts are drawn from the arena's own characters; until their files load, a stand-in figure shows
-  const [, setCharactersLoaded] = useState(false)
+  const [, setCharactersLoaded] = useState(0)
   useEffect(() => {
     let live = true
-    void preloadBusts().then((ok) => ok && live && setCharactersLoaded(true))
+    void preloadBusts().then((ok) => ok && live && setCharactersLoaded((n) => n + 1))
+    // bodies the row needs beyond the preload, and photo faces, arrive later: redraw the busts as they do
+    const stop = onCharacters(() => live && setCharactersLoaded((n) => n + 1))
     return () => {
       live = false
+      stop()
     }
   }, [])
 
-  // the player's own heroes (made in the Creator or forged) join the demo roster (R2); appended, so a formation
+  // the player's own heroes (made in the Forge or added in the Loadout) join the demo roster (R2); appended, so a formation
   // already on the board keeps pointing at the same heroes, and shown first in the row
   useEffect(() => {
     if (initial) return
@@ -307,7 +310,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         </button>
       </header>
 
-      <ArmyPanel builds={sideBuilds} title={editing === side ? 'Your army' : 'Enemy army'} />
+      <TraitPanel builds={sideBuilds} title={editing === side ? 'Your army' : 'Enemy army'} />
 
       <div className="staging-board">
         <div className="board-frame">
@@ -393,7 +396,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         </div>
       </div>
 
-      <DetailsPanel view3d={!flat} build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} />
+      <DetailsPanel view3d={!flat} build={details !== undefined ? loadout[details]?.build : undefined} entry={details !== undefined ? loadout[details] : undefined} portrait={details !== undefined && loadout[details] ? bust(loadout[details], details) : undefined} army={sideBuilds} />
 
       <div className={`bust-row${dragging ? ' drop-off' : ''}`} role="list" aria-label="Loadout">
         {dragging && (
@@ -403,7 +406,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         )}
         {loadout.length === 0 && (
           <p className="muted">
-            No heroes yet. <a href="?">Make one in the Creator</a> or{' '}
+            No heroes yet. <a href="?">Make one in the Forge</a>, <a href="?loadout">add some in the Loadout</a> or{' '}
             <button className="link-btn" onClick={() => setLoadout(demoLoadout())}>
               use the demo roster
             </button>

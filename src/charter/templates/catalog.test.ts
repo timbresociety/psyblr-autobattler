@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { BUDGET_TOLERANCE, scoreTemplate, targetBudget, validateTemplate } from '../budget'
-import { FAMILIES, familiesOf } from '../families'
-import { ROLE_IDS } from '../roles'
-import type { ControlType, DebuffType, Effect, RoleId, SlotKind, StateType } from '../types'
-import { CATALOG, currentTemplate, defaultTemplate, getTemplate, poolFor } from './catalog'
+import { BUDGET_TOLERANCE, scoreTemplate, targetBudget, validateTemplate } from '../budget.js'
+import { FAMILIES, familiesOf } from '../families.js'
+import { ROLE_IDS } from '../roles.js'
+import type { ControlType, DebuffType, Effect, RoleId, SlotKind, StateType } from '../types.js'
+import { CATALOG, currentTemplate, defaultTemplate, getTemplate, poolFor } from './catalog.js'
 
 const SLOT_KINDS: SlotKind[] = ['basic', 'active', 'passive', 'ultimate', 'movement']
 

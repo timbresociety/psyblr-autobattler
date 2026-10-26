@@ -1,7 +1,7 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
-import type { MatchEvent } from '../engine/events'
-import type { Vec3 } from '../engine/maths'
-import type { MatchState } from '../engine/state'
+import type { MatchEvent } from '../engine/events.js'
+import type { Vec3 } from '../engine/maths.js'
+import type { MatchState } from '../engine/state.js'
 
 /**
  * Cosmetic physics (U15, KTD12): Rapier makes hits look physical and never decides anything. A launched hero tumbles

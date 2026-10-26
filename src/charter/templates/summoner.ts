@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, field, ground, heal, knockup, mark, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, trap, turret, ultimate, wall, wound } from './dsl'
+import { active, ai, at, basic, buff, field, ground, heal, knockup, mark, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, trap, turret, ultimate, wall, wound } from './dsl.js'
 
 /** Summoner: fights through what it leaves on the field. Turrets, traps, totems that pulse, walls. */
 export const SUMMONER = [

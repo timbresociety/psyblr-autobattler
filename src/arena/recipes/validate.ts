@@ -1,4 +1,4 @@
-import { PHASES, PRIMITIVES, RECIPE_VERSION, type EffectRecipe } from './schema'
+import { PHASES, PRIMITIVES, RECIPE_VERSION, type EffectRecipe } from './schema.js'
 
 const HEX = /^#[0-9a-f]{6}$/i
 

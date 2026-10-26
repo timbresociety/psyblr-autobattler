@@ -1,4 +1,4 @@
-import type { RoleId } from './types'
+import type { RoleId } from './types.js'
 
 /**
  * Size classes (R14, KTD8). Players pick any class for any role. Medium is the baseline the catalogue was

@@ -1,6 +1,6 @@
-import { BUILD_SLOTS } from '../../charter/build'
-import type { BuildSlot } from '../../charter/types'
-import { AIM_STEPS, slotBit, type Command } from '../engine/state'
+import { BUILD_SLOTS } from '../../charter/build.js'
+import type { BuildSlot } from '../../charter/types.js'
+import { AIM_STEPS, slotBit, type Command } from '../engine/state.js'
 
 /**
  * Keyboard and mouse (U17, KTD16). WASD moves relative to the camera, Space flies up, Z flies down, Shift fires the

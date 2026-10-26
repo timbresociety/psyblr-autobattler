@@ -1,8 +1,8 @@
 import { PerspectiveCamera } from 'three'
 import { describe, expect, it } from 'vitest'
-import { ENGINE } from '../../../arena/engine/calibration'
-import { BOARD_FOV, ZOOM_LEAN, applyView, clampView, elevation, fitDistance, floorPoint, homeView, judge, limitsFor, matchSlots, orbit, pan, pick, reasonText, toNdc, toScreen, wrapAngle, zoom, type Standee, type View } from './board-math'
-import { MAX_PER_SIDE, deployHeroes, emptyFormation, place } from './formation'
+import { ENGINE } from '../../../arena/engine/calibration.js'
+import { BOARD_FOV, ZOOM_LEAN, applyView, clampView, elevation, fitDistance, floorPoint, homeView, judge, limitsFor, matchSlots, orbit, pan, pick, reasonText, toNdc, toScreen, wrapAngle, zoom, type Standee, type View } from './board-math.js'
+import { MAX_PER_SIDE, deployHeroes, emptyFormation, place } from './formation.js'
 
 const { halfWidth: W, halfLength: L } = ENGINE.arena
 

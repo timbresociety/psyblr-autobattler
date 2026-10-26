@@ -8,14 +8,15 @@ import {
   proposeBuild,
   requestStats,
   setAttribute,
+  setSize,
   swapAlternatives,
   swapOptions,
   swapTemplate,
-} from './build'
-import { getRole } from './roles'
-import { POOL_SIZE, spentPoints } from './stats'
-import { getTemplate } from './templates/catalog'
-import type { Build } from './build'
+} from './build.js'
+import { getRole } from './roles.js'
+import { POOL_SIZE, spentPoints } from './stats.js'
+import { getTemplate } from './templates/catalog.js'
+import type { Build } from './build.js'
 
 const kameSkills = {
   basic: { name: 'Ki Shot', flavour: 'fires small energy blasts' },
@@ -49,7 +50,7 @@ describe('proposeBuild', () => {
 
 describe('inferRole', () => {
   it('matches whole words only', async () => {
-    const { inferRole } = await import('./build')
+    const { inferRole } = await import('./build.js')
     // "skills" must not count as the assassin word "kill", nor "health" as the support word "heal"
     expect(inferRole('Professor', { active1: { name: 'Lecture', flavour: 'many skills and good health' } })).not.toBe('assassin')
   })
@@ -114,6 +115,22 @@ describe('requestStats (AE2)', () => {
     const result = requestStats(before, { moveSpeed: 'more', armor: 'less' })
     expect(result.ok && result.build.spread.agility).toBeGreaterThan(before.spread.agility)
     expect(result.ok && result.build.spread.strength).toBeLessThan(before.spread.strength)
+  })
+})
+
+describe('setSize (R14)', () => {
+  it('picks any of the five classes, keeps medium implicit, and refuses colossal', () => {
+    const big = setSize(mage(), 'huge')
+    expect(big.ok && big.build.sizeClass).toBe('huge')
+    const back = big.ok ? setSize(big.build, 'medium') : big
+    expect(back.ok && 'sizeClass' in back.build).toBe(false)
+    expect(setSize(mage(), 'colossal').ok).toBe(false)
+  })
+
+  it('sends the balance check back to draft, since size changes the numbers', () => {
+    const ready = { ...mage(), gate: { state: 'ready' as const, winRate: 0.5 } }
+    const small = setSize(ready, 'small')
+    expect(small.ok && small.build.gate.state).toBe('draft')
   })
 })
 
@@ -216,8 +233,8 @@ describe('hydrateBuild (R4)', () => {
 
 describe('setStatTarget (drag a detailed stat, AE4)', () => {
   it('dragging armor up finds a legal spread with more armor', async () => {
-    const { setStatTarget } = await import('./build')
-    const { deriveSheet } = await import('./stats')
+    const { setStatTarget } = await import('./build.js')
+    const { deriveSheet } = await import('./stats.js')
     const build = mage()
     const before = deriveSheet(getRole('mage'), build.spread).sheet.armor
     const result = setStatTarget(build, 'armor', before + 5)
@@ -229,8 +246,8 @@ describe('setStatTarget (drag a detailed stat, AE4)', () => {
   })
 
   it('dragging a stat past its cap stops at the closest reachable value and names the limit', async () => {
-    const { setStatTarget } = await import('./build')
-    const { deriveSheet } = await import('./stats')
+    const { setStatTarget } = await import('./build.js')
+    const { deriveSheet } = await import('./stats.js')
     const build = mage()
     const cap = getRole('mage').caps.armor
     const result = setStatTarget(build, 'armor', cap + 50)
@@ -244,7 +261,7 @@ describe('setStatTarget (drag a detailed stat, AE4)', () => {
   })
 
   it('a stat no attribute feeds cannot be dragged and says so', async () => {
-    const { setStatTarget } = await import('./build')
+    const { setStatTarget } = await import('./build.js')
     const result = setStatTarget(mage(), 'fireRate', 99)
     expect(result.ok).toBe(true)
   })

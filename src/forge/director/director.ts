@@ -1,9 +1,9 @@
-import { BUILD_SLOTS, proposeBuild, type Build } from '../../charter/build'
-import { route, type Registry } from '../providers/router'
-import type { DirectorProvider } from '../providers/types'
-import type { SkillTheme, SpecSheet } from '../types'
-import { fakeDirectorBrain } from './fake'
-import { DIRECTOR_SCHEMA, parseDirectorOutput, type DirectorInput, type DirectorOutput, type DraftSpec } from './schema'
+import { BUILD_SLOTS, proposeBuild, type Build } from '../../charter/build.js'
+import { route, type Registry } from '../providers/router.js'
+import type { DirectorProvider } from '../providers/types.js'
+import type { SkillTheme, SpecSheet } from '../types.js'
+import { fakeDirectorBrain } from './fake.js'
+import { DIRECTOR_SCHEMA, parseDirectorOutput, type DirectorInput, type DirectorOutput, type DraftSpec } from './schema.js'
 
 /** The cultural director's instructions (R7, R8, R9, R10). Player text arrives only as data (KTD4). */
 export const DIRECTOR_SYSTEM = `You are the cultural director of a hero forge for a 3D arena brawler.

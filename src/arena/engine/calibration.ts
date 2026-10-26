@@ -51,6 +51,8 @@ export const ENGINE = {
   flight: { max: 100, takeoff: 10, drain: 18, refill: 30, refillDelay: 1 },
   /** Shreds can't push a resist below this. */
   resistFloor: -20,
+  /** No armor or spirit resist takes more than this percentage off a hit. */
+  resistCap: 75,
   /** More damage taken (vulnerable, marks) stacks to at most this fraction. */
   vulnerableCap: 0.5,
   /** Healing taken can be cut (wound) by at most this fraction. */

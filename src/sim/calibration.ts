@@ -1,5 +1,5 @@
-import { AI_CALIBRATION_VERSION } from '../arena/ai/calibration'
-import { ENGINE_CALIBRATION_VERSION } from '../arena/engine/calibration'
+import { AI_CALIBRATION_VERSION } from '../arena/ai/calibration.js'
+import { ENGINE_CALIBRATION_VERSION } from '../arena/engine/calibration.js'
 
 /**
  * The versions a gate result is stamped with (KTD6). The balance model is the 3D arena engine fighting with the demo

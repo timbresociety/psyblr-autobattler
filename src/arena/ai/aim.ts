@@ -1,9 +1,9 @@
-import { chest } from '../engine/deliveries'
-import { ENGINE } from '../engine/calibration'
-import { distance, sub, wrapAngle, yawPitch, type Vec3 } from '../engine/maths'
-import { next } from '../engine/rng'
-import type { BrainState, HeroState, MatchState } from '../engine/state'
-import { AI } from './calibration'
+import { chest } from '../engine/deliveries.js'
+import { ENGINE } from '../engine/calibration.js'
+import { distance, sub, wrapAngle, yawPitch, type Vec3 } from '../engine/maths.js'
+import { next } from '../engine/rng.js'
+import type { BrainState, HeroState, MatchState } from '../engine/state.js'
+import { AI } from './calibration.js'
 
 /**
  * Human-like aim (KTD7): the hand lags behind the target, overshoots when it swings to a new one, settles, jitters a

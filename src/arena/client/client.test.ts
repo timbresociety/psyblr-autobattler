@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createAnimator, onEvents, settle } from './animation'
-import { createClock, frame } from './loop'
-import { createStore } from './store'
-import { createHero, emptyMatch, prepareHero } from '../engine/state'
-import { defaultBuild } from '../../sim/fixtures'
+import { createAnimator, onEvents, settle } from './animation.js'
+import { createClock, frame } from './loop.js'
+import { createStore } from './store.js'
+import { createHero, emptyMatch, prepareHero } from '../engine/state.js'
+import { defaultBuild } from '../../sim/fixtures.js'
 
 describe('arena client core (U13)', () => {
   it('runs two ticks per frame at 30 fps and one every other frame at 120 fps', () => {

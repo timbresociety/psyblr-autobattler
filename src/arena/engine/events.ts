@@ -1,6 +1,6 @@
-import type { SizeClass } from '../../charter/sizes'
-import type { BuildSlot } from '../../charter/types'
-import type { Vec3 } from './maths'
+import type { SizeClass } from '../../charter/sizes.js'
+import type { BuildSlot } from '../../charter/types.js'
+import type { Vec3 } from './maths.js'
 
 /** What happened in a tick, for the client to draw and sound (KTD3, KTD9). The engine never reads its own events. */
 export type MatchEvent =

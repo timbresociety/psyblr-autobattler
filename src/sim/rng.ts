@@ -1,5 +1,5 @@
 /** Seeded random numbers (mulberry32), so every simulated fight is reproducible (KTD6). */
-import { next, rngState } from '../arena/engine/rng'
+import { next, rngState } from '../arena/engine/rng.js'
 
 export type Rng = () => number
 

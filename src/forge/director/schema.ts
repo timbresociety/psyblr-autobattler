@@ -1,10 +1,10 @@
-import { BUILD_SLOTS } from '../../charter/build'
-import { ROLE_IDS, isRoleId } from '../../charter/roles'
-import { SIZE_CLASSES, isSizeClass, type SizeClass } from '../../charter/sizes'
-import type { BuildSlot, RoleId } from '../../charter/types'
-import { LOOK_PRIMITIVES } from '../../arena/recipes/looks'
-import type { RecipeLook } from '../../arena/recipes/schema'
-import type { ChatTurn, ContentFlags, Suggestion, Tone } from '../types'
+import { BUILD_SLOTS } from '../../charter/build.js'
+import { ROLE_IDS, isRoleId } from '../../charter/roles.js'
+import { SIZE_CLASSES, isSizeClass, type SizeClass } from '../../charter/sizes.js'
+import type { BuildSlot, RoleId } from '../../charter/types.js'
+import { LOOK_PRIMITIVES } from '../../arena/recipes/looks.js'
+import type { RecipeLook } from '../../arena/recipes/schema.js'
+import type { ChatTurn, ContentFlags, Suggestion, Tone } from '../types.js'
 
 export interface DirectorInput {
   prompt: string

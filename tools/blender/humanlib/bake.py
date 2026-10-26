@@ -14,7 +14,8 @@ import bpy
 import numpy as np
 
 REGIONS = ['skin', 'suit', 'trim', 'pants', 'glove', 'boot', 'hair', 'metal', 'eye', 'iris', 'brow', 'cape', 'baked', 'baked_gloss', 'baked_metal']
-PARTS = ['base', 'hair:crop', 'hair:spiky', 'hair:long', 'hair:helmet', 'armour', 'cape']
+# new parts go on the end, so every model built before them keeps its part indices
+PARTS = ['base', 'hair:crop', 'hair:spiky', 'hair:long', 'hair:helmet', 'armour', 'cape', 'hair:buzz', 'hair:short', 'hair:curly', 'hair:swept', 'hair:bob', 'hair:volume', 'beard:full', 'beard:goatee', 'beard:chin_curtain']
 
 
 def srgb_to_linear(c):

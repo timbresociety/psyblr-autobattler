@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { color, dot, float, max, mix, mx_fractal_noise_float, normalize, positionLocal, pow, smoothstep, time, uniform, vec3 } from 'three/tsl'
-import { ENGINE } from '../engine/calibration'
-import { paintedMaterial } from './ruins'
-import { sceneryMaterial, surroundings } from './scenery'
+import { ENGINE } from '../engine/calibration.js'
+import { paintedMaterial } from './ruins.js'
+import { sceneryMaterial, surroundings } from './scenery.js'
 
 /**
  * The arena (R1, R25): a floating island in a dusk sky, paved and split into two near-mirror halves like Dire and

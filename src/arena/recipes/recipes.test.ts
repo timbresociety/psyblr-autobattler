@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { Delivery } from '../../charter/types'
-import { fakeDirectorBrain } from '../../forge/director/fake'
-import { composeRecipe, defaultRecipe, passiveRecipe } from './defaults'
-import { lookFor } from './looks'
-import type { EffectRecipe } from './schema'
-import { validateRecipe } from './validate'
+import type { Delivery } from '../../charter/types.js'
+import { fakeDirectorBrain } from '../../forge/director/fake.js'
+import { composeRecipe, defaultRecipe, passiveRecipe } from './defaults.js'
+import { lookFor } from './looks.js'
+import type { EffectRecipe } from './schema.js'
+import { validateRecipe } from './validate.js'
 
 const KINDS: Delivery['kind'][] = ['melee', 'projectile', 'beam', 'cone', 'zone', 'self', 'aura', 'dash', 'blink', 'grapple']
 

@@ -1,12 +1,12 @@
-import { lookFor } from '../../arena/recipes/looks'
-import { inferRole } from '../../charter/build'
-import { tokenize } from '../../charter/match'
-import type { SizeClass } from '../../charter/sizes'
-import type { RoleId } from '../../charter/types'
-import { keywordFlags } from '../keywords'
-import type { Suggestion, Tone } from '../types'
-import { findCulture, type CultureEntry } from './culture'
-import type { DirectorInput, DirectorOutput, DraftSkill } from './schema'
+import { lookFor } from '../../arena/recipes/looks.js'
+import { inferRole } from '../../charter/build.js'
+import { tokenize } from '../../charter/match.js'
+import type { SizeClass } from '../../charter/sizes.js'
+import type { RoleId } from '../../charter/types.js'
+import { keywordFlags } from '../keywords.js'
+import type { Suggestion, Tone } from '../types.js'
+import { findCulture, type CultureEntry } from './culture.js'
+import type { DirectorInput, DirectorOutput, DraftSkill } from './schema.js'
 
 /**
  * The offline director brain (KTD4): reads tone, fills blindspots from the culture table, and drafts a spec

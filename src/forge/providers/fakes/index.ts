@@ -1,5 +1,7 @@
-import { keywordFlags } from '../../keywords'
-import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, RetargetProvider, RigProvider } from '../types'
+import { keywordFlags } from '../../keywords.js'
+import { PIECE_KINDS, type PieceKind } from '../../../charter/look.js'
+import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, PieceProvider, RetargetProvider, RigProvider } from '../types.js'
+import { placeholderPiece } from './piece-model.js'
 
 /**
  * Deterministic fakes (KTD3): the offline path and every test. Same input, same output. Assets are tiny
@@ -97,6 +99,30 @@ export function fakeRetarget(script: FakeScript = {}): RetargetProvider {
   return fakeTask('fake-retarget', 'retarget', (r, h) => ({ url: `fake://motion/${h}-${(r as { presets: string[] }).presets.join('+')}.glb`, format: 'glb' }), script, (r: { riggedUrl: string; presets: string[] }) => `${r.riggedUrl}|${r.presets.join(',')}`) as RetargetProvider
 }
 
+/**
+ * A fake piece: the task id carries its kind and prompt, so any instance can finish it (a serverless poll rarely lands
+ * on the instance that started it). The first poll returns a stand-in model for the kind and a labelled preview.
+ */
+export function fakePiece(script: FakeScript = {}): PieceProvider {
+  return {
+    id: 'fake-piece',
+    capability: 'piece',
+    available: () => true,
+    async start(request) {
+      const blocked = scripted(request.prompt, script)
+      if (blocked) return blocked
+      return { ok: 'pending', taskId: `piece-${request.kind}-${hash(`${request.kind}:${request.prompt}:${request.imageUrl ?? ''}`)}-${encodeURIComponent(request.prompt.slice(0, 40))}` }
+    },
+    async poll(taskId) {
+      const [, kind, h, label = ''] = /^piece-([a-z]+)-([0-9a-f]{8})-?(.*)$/.exec(taskId) ?? []
+      if (!(PIECE_KINDS as readonly string[]).includes(kind)) return { ok: false, kind: 'failed', reason: 'unknown fake piece task' }
+      const glb = await placeholderPiece(kind as PieceKind)
+      const url = `data:model/gltf-binary;base64,${Buffer.from(glb).toString('base64')}`
+      return { ok: true, value: { url, format: 'glb', preview: svg(decodeURIComponent(label) || kind, COLORS[parseInt(h, 16) % COLORS.length]) } }
+    },
+  }
+}
+
 export { keywordFlags }
 
 export function fakeModeration(): ModerationProvider {
@@ -111,5 +137,5 @@ export function fakeModeration(): ModerationProvider {
 }
 
 export function allFakes(script: FakeScript = {}) {
-  return [fakeDirector(script), fakeImage(script), fakeMesh(script), fakeRig(script), fakeRetarget(script), fakeModeration()]
+  return [fakeDirector(script), fakeImage(script), fakeMesh(script), fakeRig(script), fakeRetarget(script), fakeModeration(), fakePiece(script)]
 }

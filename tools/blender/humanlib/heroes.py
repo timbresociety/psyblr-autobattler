@@ -323,22 +323,48 @@ def base(macro, height, portrait, **more):
     return out
 
 
-BASES = {
-    'athletic': base(caucasian(gender=1.0, age=age(30), muscle=0.78, weight=0.5), 1.86, 'base_male'),
-    'lithe': base(caucasian(gender=0.0, age=age(28), muscle=0.6, weight=0.42), 1.76, 'base_female'),
-    'heavy': base(caucasian(gender=1.0, age=age(34), muscle=0.88, weight=0.82), 1.92, 'base_male', arms_out=10),
-    'lean': base(caucasian(gender=0.85, age=age(26), muscle=0.58, weight=0.32), 1.84, 'base_male'),
+
+
+# ------------------------------------------------------------------------------------------------ a body per size
+
+# MakeHuman macros per size class. Every body is drawn at the same 1.8 m nominal height, so the game's size scale alone
+# sets how big a hero is, and with it the hitbox (R23); the macros give each class the proportions that read as that
+# size: a compact tiny build with a bigger head, an agile small one, an athletic medium, a broad large, a brawler's huge,
+# and a titan for the colossal transformation. Tiny is a compact adult, never a child (the content floor).
+SIZE_SHAPES = {
+    'tiny': dict(height=0.12, weight=0.55, muscle=0.6, proportions=0.25, head=1.14),
+    'small': dict(height=0.32, weight=0.42, muscle=0.6, proportions=0.45, head=1.1),
+    'medium': dict(height=0.5, weight=0.5, muscle=0.75, proportions=0.6, head=1.08),
+    'large': dict(height=0.72, weight=0.68, muscle=0.88, proportions=0.75, head=1.05),
+    'huge': dict(height=0.9, weight=0.84, muscle=0.98, proportions=0.85, head=1.02, arms_out=10),
+    'colossal': dict(height=1.0, weight=0.95, muscle=1.0, proportions=1.0, head=0.98, arms_out=14),
 }
+
+# the skin is tinted per hero, so the base head takes an even mix rather than any one ancestry's features
+EVEN = dict(asian=0.34, caucasian=0.33, african=0.33)
+
+
+def body_spec(gender, size):
+    sh = SIZE_SHAPES[size]
+    macro = dict(race=dict(EVEN), gender=1.0 if gender == 'm' else 0.0, age=age(28), muscle=sh['muscle'], weight=sh['weight'], height=sh['height'], proportions=sh['proportions'])
+    more = dict(head_scale=sh['head'])
+    if 'arms_out' in sh:
+        more['arms_out'] = sh['arms_out']
+    return base(macro, 1.8, 'base_male' if gender == 'm' else 'base_female', **more)
+
+
+# m-tiny … f-colossal: the bodies every hero without a model of its own wears (character-look.ts picks one)
+BODIES = {f'{g}-{size}': body_spec(g, size) for g in ('m', 'f') for size in SIZE_SHAPES}
 
 
 def spec(key):
     if key in HEROES:
         out = dict(HEROES[key])
-    elif key in BASES:
-        out = dict(BASES[key])
+    elif key in BODIES:
+        out = dict(BODIES[key])
         out['base'] = True
     else:
-        raise KeyError(f'no hero or base called {key!r}')
+        raise KeyError(f'no hero or body called {key!r}')
     out['id'] = key
     out.setdefault('proxy', 'male1591' if out['macro'].get('gender', 1.0) >= 0.5 else 'female1605')
     return out

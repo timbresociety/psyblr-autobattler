@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import type { CoverPiece } from '../engine/cover'
-import { rockGeometry, sceneryMaterial } from './scenery'
-import { grassTexture, travertine } from './textures'
+import type { CoverPiece } from '../engine/cover.js'
+import { rockGeometry, sceneryMaterial } from './scenery.js'
+import { grassTexture, travertine } from './textures.js'
 
 /**
  * The ruins on screen (R25), built from the engine's own cover pieces so every wall the audience sees is a wall the

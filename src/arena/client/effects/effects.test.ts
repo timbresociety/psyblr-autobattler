@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { capsule, createHero, prepareHero } from '../../engine/state'
-import { defaultBuild } from '../../../sim/fixtures'
-import { defaultRecipe } from '../../recipes/defaults'
+import { capsule, createHero, prepareHero } from '../../engine/state.js'
+import { defaultBuild } from '../../../sim/fixtures.js'
+import { defaultRecipe } from '../../recipes/defaults.js'
 import * as THREE from 'three'
-import { baseSize, coneYaw, formScale, hitFeel, layerSize } from './sizing'
-import { ring, take } from './ring'
+import { baseSize, coneYaw, formScale, hitFeel, layerSize } from './sizing.js'
+import { ring, take } from './ring.js'
 
 describe('effect kit runtime (U14)', () => {
   it("draws a zone's damaging ring at exactly its radius, with glow outside it", () => {

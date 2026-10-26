@@ -1,5 +1,5 @@
-import type { Delivery } from '../../charter/types'
-import { RECIPE_VERSION, type EffectRecipe, type Primitive, type RecipeLayer, type RecipeLook } from './schema'
+import type { Delivery } from '../../charter/types.js'
+import { RECIPE_VERSION, type EffectRecipe, type Primitive, type RecipeLayer, type RecipeLook } from './schema.js'
 
 /** Each delivery kind's core layers: what shows the hit area, and where. */
 const CORE: Record<Delivery['kind'], RecipeLayer[]> = {

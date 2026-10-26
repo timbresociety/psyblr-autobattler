@@ -1,6 +1,6 @@
-import { retuneFactor } from '../../charter/budget'
-import { SIZES } from '../../charter/sizes'
-import type { Effect, SecondarySheet, Template } from '../../charter/types'
+import { retuneFactor } from '../../charter/budget.js'
+import { SIZES } from '../../charter/sizes.js'
+import type { Effect, SecondarySheet, Template } from '../../charter/types.js'
 
 /**
  * The few numbers a skill card shows big, read off the same template, sheet and retune as its tooltip (R6): what it
@@ -88,7 +88,7 @@ export function headline(template: Template, sheet: SecondarySheet, retuneSteps 
   const reach = d.kind !== 'self' && d.kind !== 'aura' ? { label: 'Range', value: n(d.range), unit: 'm' } : d.radius ? { label: 'Radius', value: n(d.radius), unit: 'm' } : undefined
   const second = reach ?? (effects[1] ? magnitude(effects[1], sheet, factor) : undefined)
   if (second) out.push(second)
-  if (template.cooldown > 0) out.push({ label: 'Cooldown', value: n(template.cooldown * (1 - sheet.cooldownReduction / 100)), unit: 's' })
+  if (template.cooldown > 0) out.push({ label: 'Cooldown', value: n(template.cooldown * (1 - Math.min(40, sheet.cooldownReduction) / 100)), unit: 's' })
   else if (effects[1] && second !== undefined && second === reach && out.length < 3) out.push(magnitude(effects[1], sheet, factor))
   return out.slice(0, 3)
 }

@@ -1,4 +1,4 @@
-import type { Delivery } from './types'
+import type { Delivery } from './types.js'
 
 /**
  * Per-skill hit geometry (R43, KTD3). Each delivery carries what its kind needs; these defaults are what the template

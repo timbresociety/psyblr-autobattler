@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, cleanse, field, heal, invulnerable, knockup, passive, pull, push, refresh, shield, silence, slow, spirit, spiritShred, stun, ultimate } from './dsl'
+import { active, ai, at, basic, buff, cleanse, field, heal, invulnerable, knockup, passive, pull, push, refresh, shield, silence, slow, spirit, spiritShred, stun, ultimate } from './dsl.js'
 
 /** Mage: burst and area spell damage from mid range. Fire on the ground, spirit shred, a little control to land it. */
 export const MAGE = [

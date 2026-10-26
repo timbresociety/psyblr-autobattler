@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { armyModifiers } from '../../charter/synergy'
-import { defaultBuild } from '../../sim/fixtures'
-import { createMatch } from '../engine/match'
-import { attachControls } from './controls'
-import type { ArenaController } from './match-view'
+import { armyModifiers } from '../../charter/traits.js'
+import { defaultBuild } from '../../sim/fixtures.js'
+import { createMatch } from '../engine/match.js'
+import { attachControls } from './controls.js'
+import type { ArenaController } from './match-view.js'
 
 /** A canvas whose pointer lock is granted (or refused) the way a browser would, with the lock change event after. */
 function stage(grant: boolean) {

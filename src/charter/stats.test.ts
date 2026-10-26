@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { ROLES, ROLE_IDS, getRole } from './roles'
-import { ATTRIBUTES, POOL_SIZE, SECONDARY_STATS, deriveSheet, spentPoints, validateSpread } from './stats'
-import type { Spread } from './types'
+import { ROLES, ROLE_IDS, getRole } from './roles.js'
+import { ATTRIBUTES, POOL_SIZE, SECONDARY_STATS, deriveSheet, spentPoints, validateSpread } from './stats.js'
+import type { Spread } from './types.js'
 
 const full: Spread = { strength: 10, agility: 10, intellect: 10 }
 

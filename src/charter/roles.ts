@@ -1,4 +1,4 @@
-import type { Role, RoleId, SecondarySheet } from './types'
+import type { Role, RoleId, SecondarySheet } from './types.js'
 
 /** Units: health points, armor/resist/lifesteal/cooldown reduction in %, speed in m/s, rates per second. */
 const sheet = (s: SecondarySheet): SecondarySheet => s

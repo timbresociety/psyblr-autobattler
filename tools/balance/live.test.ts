@@ -3,7 +3,7 @@ import { aiCommands } from '../../src/arena/ai/brain'
 import { DEMO_HEROES, demoBuild } from '../../src/arena/demo/roster'
 import { LIVE_PROFILE, createMatch, matchRules } from '../../src/arena/engine/match'
 import { tick } from '../../src/arena/engine/tick'
-import { armyModifiers } from '../../src/charter/synergy'
+import { armyModifiers } from '../../src/charter/traits'
 import type { Build } from '../../src/charter/build'
 import { deployHeroes } from '../../src/ui/arena/staging/formation'
 

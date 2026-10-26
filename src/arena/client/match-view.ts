@@ -1,28 +1,28 @@
 import * as THREE from 'three'
-import { BUILD_SLOTS } from '../../charter/build'
-import type { BuildSlot } from '../../charter/types'
-import type { HeroPackage } from '../../forge/package'
-import { aiCommands } from '../ai/brain'
-import { ENGINE } from '../engine/calibration'
-import type { MatchEvent } from '../engine/events'
-import type { Vec3 } from '../engine/maths'
-import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match'
-import { capsule, type Command, type Team } from '../engine/state'
-import { tick } from '../engine/tick'
-import { createAnimator, onEvents, settle, type Animator } from './animation'
-import { Cameras } from './camera'
-import { TEAM_COLORS } from './map'
-import { handBack, releaseIfDead, take } from './takeover'
-import { loadHeroView, type HeroView } from './heroes'
-import { createClock, frame } from './loop'
-import { atmosphere, buildMap, lights, type ArenaMap } from './map'
-import { buildRuins } from './ruins'
-import { CosmeticPhysics, PHYSICS } from './physics'
-import { atLeast, createGuard, observe, type QualityLevel } from './quality'
-import { createRangeIndicator } from './range'
-import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer'
-import { createStore, type Store } from './store'
-import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status'
+import { BUILD_SLOTS } from '../../charter/build.js'
+import type { BuildSlot } from '../../charter/types.js'
+import type { HeroPackage } from '../../forge/package.js'
+import { aiCommands } from '../ai/brain.js'
+import { ENGINE } from '../engine/calibration.js'
+import type { MatchEvent } from '../engine/events.js'
+import type { Vec3 } from '../engine/maths.js'
+import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
+import { capsule, type Command, type Team } from '../engine/state.js'
+import { tick } from '../engine/tick.js'
+import { createAnimator, onEvents, settle, type Animator } from './animation.js'
+import { Cameras } from './camera.js'
+import { TEAM_COLORS } from './map.js'
+import { handBack, releaseIfDead, take } from './takeover.js'
+import { loadHeroView, type HeroView } from './heroes.js'
+import { createClock, frame } from './loop.js'
+import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
+import { buildRuins } from './ruins.js'
+import { CosmeticPhysics, PHYSICS } from './physics.js'
+import { atLeast, createGuard, observe, type QualityLevel } from './quality.js'
+import { createRangeIndicator } from './range.js'
+import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer.js'
+import { createStore, type Store } from './store.js'
+import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status.js'
 
 /**
  * A live match in the browser (U13, KTD15): the engine and the AI tick at 60 Hz on a fixed clock, heroes are drawn
@@ -32,7 +32,7 @@ import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status'
 export interface MatchSetup {
   teams: [Combatant[], Combatant[]]
   formations?: [Vec3[]?, Vec3[]?]
-  /** Forged heroes' packages, by hero index; demo and Creator heroes have none. */
+  /** Forged heroes' packages, by hero index; demo heroes and heroes made in the Forge have none. */
   packages?: (HeroPackage | undefined)[]
   seed: number
   /** The side the streamer staged first and may control (R2, R14). */
@@ -360,6 +360,7 @@ function drawHeroes(
     const at = { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
     const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
     const view = views[i]
+    view.setSize?.(h.size)
     // under load, heroes far from the camera animate every other frame
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
     const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
