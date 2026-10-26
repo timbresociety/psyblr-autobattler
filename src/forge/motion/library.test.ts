@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CATALOG } from '../../charter/templates/catalog'
-import { MOVEMENT_SET, TRIPO_PRESETS, basicMotions, motionsFor, playable, presetsNeeded } from './library'
+import { FLIGHT_SET, MOVEMENT_SET, TRIPO_PRESETS, basicMotions, motionsFor, playable, presetsNeeded } from './library'
 
 describe('motion library (U6)', () => {
   it('every catalogue template resolves to 1-3 motions, each with a Tripo preset fallback', () => {
@@ -25,6 +25,18 @@ describe('motion library (U6)', () => {
     const [, uppercut] = basicMotions('melee')
     expect(playable(uppercut)).toEqual({ kind: 'preset', preset: 'slash' })
     expect(playable({ ...uppercut, clipUrl: 'https://clips/uppercut.glb' })).toEqual({ kind: 'clip', url: 'https://clips/uppercut.glb' })
+  })
+
+  it('every hero gets five flight motions, each playing its fallback preset until clips are licensed (R32)', () => {
+    expect(FLIGHT_SET.map((m) => m.label)).toEqual(['Take off', 'Hover', 'Fly', 'Air dash', 'Land'])
+    expect(FLIGHT_SET.map((m) => playable(m))).toEqual([
+      { kind: 'preset', preset: 'jump' },
+      { kind: 'preset', preset: 'fall' },
+      { kind: 'preset', preset: 'dive' },
+      { kind: 'preset', preset: 'dive' },
+      { kind: 'preset', preset: 'fall' },
+    ])
+    expect(presetsNeeded([...MOVEMENT_SET, ...FLIGHT_SET])).toEqual(expect.arrayContaining(['dive', 'fall']))
   })
 
   it('the presets needed for retargeting are deduplicated', () => {

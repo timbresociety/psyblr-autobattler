@@ -3,7 +3,8 @@ import { getTemplate } from '../../../charter/templates/catalog'
 import { playable } from '../../../forge/motion/library'
 import { effectShape, motionOptions, numbered, type EffectShape } from '../../../forge/package'
 import { stagePrice } from '../../../forge/pricing'
-import { EFFECT_SLOT, STAGE_TABLE } from '../../../forge/stages'
+import { EFFECT_SLOT, STAGE_TABLE, formSize, stageOf } from '../../../forge/stages'
+import { SIZES } from '../../../charter/sizes'
 import type { Forge, StageId } from '../../../forge/types'
 
 const HeroViewer = lazy(() => import('../HeroViewer').then((m) => ({ default: m.HeroViewer })))
@@ -16,6 +17,7 @@ export const STAGE_TITLE: Record<StageId, string> = {
   active1: 'Active 1',
   active2: 'Active 2',
   ultimate: 'Passive and ultimate',
+  form: 'Transformation form',
   stats: 'Stat split',
 }
 
@@ -28,6 +30,8 @@ interface Props {
   onRetry: () => void
   onConfirm: () => void
   onChoose: (choice: Record<string, unknown>) => void
+  /** Optional stages (the form) can be skipped at no charge. */
+  onSkip?: () => void
 }
 
 function Picks({ label, urls, chosen, onPick, busy }: { label: string; urls: string[]; chosen: number; onPick: (i: number) => void; busy: boolean }) {
@@ -43,8 +47,8 @@ function Picks({ label, urls, chosen, onPick, busy }: { label: string; urls: str
 }
 
 /** A paid generation stage: generate, look, pick, retry within the cap, confirm (R4, R11-R18). */
-export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, onConfirm, onChoose }: Props) {
-  const s = forge.stages[stage]
+export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, onConfirm, onChoose, onSkip }: Props) {
+  const s = stageOf(forge, stage)
   const price = stagePrice(stage)
   const left = STAGE_TABLE[stage].retryCap - s.retriesUsed
   const choice = (s.inputs.choice ?? {}) as Record<string, number>
@@ -57,6 +61,7 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
     if (s.status !== 'ready') return null
     if (stage === 'concept') return <Picks label="Concept sheet" urls={numbered(s.artifacts, 'sheet')} chosen={choice.sheet ?? 0} onPick={(i) => onChoose({ sheet: i })} busy={busy} />
     if (stage === 'mesh') return <Suspense fallback={<p className="muted">Loading 3D…</p>}><HeroViewer label={forge.spec!.heroName} meshUrl={s.artifacts.mesh} /></Suspense>
+    if (stage === 'form') return <Suspense fallback={<p className="muted">Loading 3D…</p>}><HeroViewer label={`${forge.spec!.heroName} transformed`} meshUrl={s.artifacts['form-mesh']} /></Suspense>
     if (stage === 'motion') {
       const options = motionOptions(forge, 'basic')
       const chosen = options[choice.basic ?? 0] ?? options[0]
@@ -102,6 +107,11 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
 
   return (
     <div className="stage-body">
+      {stage === 'form' && (
+        <p className="muted">
+          The form your hero takes when its ultimate transforms it, shown at {SIZES[formSize(forge.build) ?? 'colossal'].label} size, the same size as its hitbox in the arena.
+        </p>
+      )}
       {slot && <p className="muted">{forge.build!.slots[slot].name || getTemplate(forge.build!.slots[slot].templateId).name}: {getTemplate(forge.build!.slots[slot].templateId).name}</p>}
       {(s.status === 'draft' || s.status === 'failed') && (
         <>
@@ -109,6 +119,11 @@ export function GenerateStage({ forge, stage, balance, busy, onStart, onRetry, o
           <button className="primary" disabled={busy || balance < price} onClick={s.status === 'failed' ? onRetry : onStart}>
             {s.status === 'failed' ? 'Try again' : 'Generate'} · {price} credits
           </button>
+          {onSkip && (
+            <button disabled={busy} onClick={onSkip}>
+              Skip, no form
+            </button>
+          )}
         </>
       )}
       {s.status === 'generating' && (

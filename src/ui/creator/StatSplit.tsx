@@ -2,6 +2,7 @@ import { getRole } from '../../charter/roles'
 import { POOL_SIZE, SECONDARY_STATS, deriveSheet, spentPoints } from '../../charter/stats'
 import type { Build } from '../../charter/build'
 import type { SecondaryStat } from '../../charter/types'
+import { LOCOMOTION_HINT } from '../../charter/locomotion'
 import { STAT_LABEL } from './labels'
 
 /** The always-visible stat split (R14): drag any detailed stat; the engine solves the points underneath. */
@@ -23,7 +24,9 @@ export function StatSplit({ build, onTarget }: { build: Build; onTarget: (stat: 
           const shown = Math.round(sheet[stat] * 10) / 10
           return (
             <li key={stat} className="stat">
-              <label htmlFor={`stat-${stat}`}>{STAT_LABEL[stat]}</label>
+              <label htmlFor={`stat-${stat}`} title={stat === 'moveSpeed' ? LOCOMOTION_HINT : undefined}>
+                {STAT_LABEL[stat]}
+              </label>
               <input
                 id={`stat-${stat}`}
                 type="range"

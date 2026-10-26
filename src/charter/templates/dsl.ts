@@ -1,3 +1,5 @@
+import { GEOMETRY_DEFAULTS, coneArc } from '../geometry'
+import type { SizeClass } from '../sizes'
 import type { AiHint, Delivery, Effect, RoleId, ScalingStat, SlotKind, Template, PassiveTrigger } from '../types'
 
 /** Compact authoring helpers. Magnitudes are rough shapes: the catalogue normalizes them to the slot budget (KTD2). */
@@ -21,12 +23,16 @@ export const buff = (stat: 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduc
   kind: 'buff', stat, pct, duration, target,
 })
 export const execute = (thresholdPct: number, bonusPct: number): Effect => ({ kind: 'execute', thresholdPct, bonusPct })
+/** Transform into another size class for `duration` seconds (KTD14). */
+export const resize = (sizeClass: SizeClass, duration: number): Effect => ({ kind: 'resize', sizeClass, duration })
 
 export const at = {
-  melee: (range = 2.5): Delivery => ({ kind: 'melee', range }),
-  proj: (range: number, radius?: number): Delivery => ({ kind: 'projectile', range, ...(radius ? { radius } : {}) }),
-  beam: (range: number): Delivery => ({ kind: 'beam', range }),
-  cone: (range: number, radius: number): Delivery => ({ kind: 'cone', range, radius }),
+  melee: (range = 2.5, arcDegrees: number = GEOMETRY_DEFAULTS.meleeArc): Delivery => ({ kind: 'melee', range, arcDegrees }),
+  proj: (range: number, radius?: number, speed: number = GEOMETRY_DEFAULTS.speed, projectileRadius: number = GEOMETRY_DEFAULTS.projectileRadius): Delivery => ({
+    kind: 'projectile', range, ...(radius ? { radius } : {}), speed, projectileRadius,
+  }),
+  beam: (range: number, width: number = GEOMETRY_DEFAULTS.width): Delivery => ({ kind: 'beam', range, width }),
+  cone: (range: number, radius: number, arcDegrees = coneArc(range, radius)): Delivery => ({ kind: 'cone', range, radius, arcDegrees }),
   zone: (range: number, radius: number): Delivery => ({ kind: 'zone', range, radius }),
   self: (): Delivery => ({ kind: 'self', range: 0 }),
   aura: (radius: number): Delivery => ({ kind: 'aura', range: 0, radius }),

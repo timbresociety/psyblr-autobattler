@@ -1,3 +1,4 @@
+import { lookFor } from '../../arena/recipes/looks'
 import { inferRole } from '../../charter/build'
 import { tokenize } from '../../charter/match'
 import type { SizeClass } from '../../charter/sizes'
@@ -90,7 +91,10 @@ export function fakeDirectorBrain(raw: Record<string, unknown>): DirectorOutput 
   const heroName = heroNameOf(input, culture)
   const lean = culture[0] ? (tone === 'meme' ? culture[0].memeLean : culture[0].heroicLean) : 'a hero forged from your prompt'
   const slots: DraftSkill['slot'][] = ['active1', 'active2', 'ultimate', 'passive', 'basic', 'movement']
-  const skills: DraftSkill[] = slots.map((slot, i) => ({ slot, name: themes[i].replace(/\b\w/g, (c) => c.toUpperCase()), theme: themes[i] }))
+  const skills: DraftSkill[] = slots.map((slot, i) => {
+    const look = lookFor(themes[i])
+    return { slot, name: themes[i].replace(/\b\w/g, (c) => c.toUpperCase()), theme: themes[i], ...(look ? { look } : {}) }
+  })
   const role: RoleId = inferRole(`${heroName} ${input.prompt}`, Object.fromEntries(skills.map((s) => [s.slot, { name: s.name, flavour: s.theme }])))
   const flags = keywordFlags(text, culture.some((c) => c.realPerson))
 

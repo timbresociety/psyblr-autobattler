@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, type Build } from '../charter/build'
-import { buildPackage, validatePackage, type HeroPackage } from '../forge/package'
+import { buildPackage, isLegacyMotion, upgradePackage, validatePackage, type HeroPackage, type HeroPackageV1 } from '../forge/package'
 import { confirm } from '../forge/stages'
 import type { Forge } from '../forge/types'
-import { runGate } from '../sim/gate'
 import type { Db } from './db'
 import { ForgeError, commit, presetBatches, type RunnerDeps } from './forge-runner'
+import { cachedGate } from './gate-cache'
 import { blobStoreId, isOwnForgeAssetUrl } from './photo-url'
 import { NotFoundError } from './store'
 
@@ -15,7 +15,7 @@ import { NotFoundError } from './store'
  */
 export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forge> {
   if (!forge.build || !forge.spec) throw new ForgeError('nothing to publish', 409)
-  const gate = runGate({ ...forge.build, gate: { state: 'checking' } }, deps.gateOptions)
+  const gate = await cachedGate(deps.db, { ...forge.build, gate: { state: 'checking' } }, deps.gateOptions)
   if (gate.state === 'blocked') {
     const stats = forge.stages.stats
     const blocked: Forge = {
@@ -25,7 +25,7 @@ export async function publishForge(deps: RunnerDeps, forge: Forge): Promise<Forg
     return commit(deps.db, forge, blocked)
   }
   const build: Build = gate.build
-  const pkg = buildPackage(forge, build, presetBatches(forge))
+  const pkg = buildPackage(forge, build, presetBatches(forge, { flight: !isLegacyMotion(forge) }))
   const strict = blobStoreId(deps.registry.env) !== undefined
   const problems = validatePackage(pkg, strict ? (url) => isOwnForgeAssetUrl(url, deps.registry.env) : undefined)
   if (problems.length) throw new ForgeError(`the hero package is incomplete: ${problems.join('; ')}`, 409)
@@ -57,8 +57,9 @@ export async function loadHeroPackage(db: Db, heroId: string, fetchImpl: typeof 
   const { rows } = await db.query<{ package_url: string | null }>('select package_url from heroes where id = $1 and not hidden', [heroId])
   const url = rows[0]?.package_url
   if (!url) throw new NotFoundError('this hero has no forge package')
-  if (url.startsWith('data:application/json;base64,')) return JSON.parse(Buffer.from(url.slice(29), 'base64').toString('utf8'))
+  // packages stored before version 2 are upgraded as they load (AE7)
+  if (url.startsWith('data:application/json;base64,')) return upgradePackage(JSON.parse(Buffer.from(url.slice(29), 'base64').toString('utf8')))
   const res = await fetchImpl(url)
   if (!res.ok) throw new Error(`package download failed: ${res.status}`)
-  return (await res.json()) as HeroPackage
+  return upgradePackage((await res.json()) as HeroPackageV1)
 }

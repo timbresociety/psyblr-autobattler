@@ -24,6 +24,18 @@ const clip = (id: string, label: string, fallbackPreset: Preset): Motion => ({ i
 /** Locomotion every hero gets (the movement stage). */
 export const MOVEMENT_SET: Motion[] = [preset('idle', 'Idle'), preset('walk', 'Walk'), preset('run', 'Run'), preset('jump', 'Jump'), preset('fall', 'Fall'), preset('turn', 'Turn')]
 
+/**
+ * Flight every hero gets (R32): take-off, hover, flying, air dash and landing on the Mixamo skeleton. Until clips
+ * are licensed each plays its nearest Tripo preset, which retargets onto any humanoid rig.
+ */
+export const FLIGHT_SET: Motion[] = [
+  clip('fly-takeoff', 'Take off', 'jump'),
+  clip('fly-hover', 'Hover', 'fall'),
+  clip('fly-forward', 'Fly', 'dive'),
+  clip('fly-air-dash', 'Air dash', 'dive'),
+  clip('fly-land', 'Land', 'fall'),
+]
+
 const BY_DELIVERY: Record<Template['delivery']['kind'], Motion[]> = {
   melee: [preset('slash', 'Slash'), clip('uppercut', 'Rising uppercut', 'slash'), clip('spin-strike', 'Spin strike', 'slash')],
   projectile: [preset('shoot', 'Shoot'), clip('cast-forward', 'One-hand cast', 'shoot'), clip('two-hand-blast', 'Two-hand blast', 'shoot')],

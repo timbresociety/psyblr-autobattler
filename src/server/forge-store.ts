@@ -1,3 +1,4 @@
+import { withAllStages } from '../forge/stages'
 import type { Forge } from '../forge/types'
 import type { Db } from './db'
 import { NotFoundError } from './store'
@@ -12,7 +13,8 @@ export async function insertForge(db: Db, forge: Forge): Promise<void> {
 export async function loadForge(db: Db, id: string, accountId: string): Promise<Forge> {
   const { rows } = await db.query<{ state: Forge; version: number }>('select state, version from forges where id = $1 and account_id = $2', [id, accountId])
   if (!rows.length) throw new NotFoundError('forge not found')
-  return { ...rows[0].state, version: rows[0].version }
+  // forges saved before a stage existed get it filled in as a draft (the form stage arrived with the arena)
+  return withAllStages({ ...rows[0].state, version: rows[0].version })
 }
 
 /** Save `next` only if the row is still at `expected`. Returns the saved forge, or undefined when another request won. */

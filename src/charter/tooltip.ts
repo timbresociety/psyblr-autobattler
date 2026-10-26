@@ -1,4 +1,5 @@
 import { retuneFactor } from './budget'
+import { SIZES } from './sizes'
 import type { Effect, SecondarySheet, Template } from './types'
 
 /** What the player authored for a skill: the name and flavour shown on top of the template (R3, R5). */
@@ -45,6 +46,8 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
       return `+${num(effect.pct * factor)}% ${effect.stat.replace(/([A-Z])/g, ' $1').toLowerCase()}${permanent ? '' : ` for ${num(effect.duration)} s`}${effect.target === 'allies' ? ' to allies' : ''}`
     case 'execute':
       return `+${num(effect.bonusPct * factor)}% damage to targets under ${num(effect.thresholdPct)}% health`
+    case 'resize':
+      return `Becomes ${SIZES[effect.sizeClass].label} for ${num(effect.duration)} s`
   }
 }
 
@@ -56,6 +59,10 @@ export function renderTooltip(template: Template, skill: SkillText, sheet: Secon
   const lines = template.effects.map((effect) => effectLine(effect, sheet, factor, permanent))
   if (template.delivery.kind !== 'self' && template.delivery.kind !== 'aura') lines.push(`Range ${num(template.delivery.range)} m`)
   if (template.delivery.radius) lines.push(`Radius ${num(template.delivery.radius)} m`)
+  const d = template.delivery
+  if (d.speed) lines.push(`Shot speed ${num(d.speed)} m/s, ${num(d.projectileRadius ?? 0)} m wide`)
+  if (d.arcDegrees) lines.push(`Arc ${num(d.arcDegrees)}°`)
+  if (d.width) lines.push(`Beam width ${num(d.width)} m`)
   if (template.cooldown > 0) lines.push(`Cooldown ${num(template.cooldown * (1 - sheet.cooldownReduction / 100))} s`)
   if (template.trigger && template.trigger !== 'always') lines.push(`Triggers ${template.trigger.replace(/([A-Z])/g, ' $1').toLowerCase()}`)
   const title = skill.name.trim() || template.name

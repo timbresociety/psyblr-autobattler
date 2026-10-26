@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { BUILD_SLOTS, MAX_PHOTOS, hydrateBuild, type Build } from '../charter/build'
-import { isGateStale, runGate, type GateOptions } from '../sim/gate'
+import { isGateStale, type GateOptions } from '../sim/gate'
+import { cachedGate } from './gate-cache'
 import { isOwnPhotoUrl } from './photo-url'
 import type { Db } from './db'
 
@@ -52,14 +53,14 @@ function validated(raw: unknown): Build {
   return result.build
 }
 
-/** Run the balance gate on the server, so a saved Ready is never taken from the client. */
-function gated(build: Build, options?: GateOptions): Build {
-  return runGate(build, options).build
+/** Run the balance gate on the server, so a saved Ready is never taken from the client; repeats come from the cache. */
+async function gated(db: Db, build: Build, options?: GateOptions): Promise<Build> {
+  return (await cachedGate(db, build, options)).build
 }
 
 export async function createHero(db: Db, deviceId: string, raw: unknown, photos: string[], gateOptions?: GateOptions): Promise<{ heroId: string; buildId: string }> {
   if (photos.length > MAX_PHOTOS || photos.some((url) => !isOwnPhotoUrl(url))) throw new StoreInputError('photos must be uploaded through the photo endpoint')
-  const build = gated(validated(raw), gateOptions)
+  const build = await gated(db, validated(raw), gateOptions)
   if (build.gate.state === 'blocked') throw new StoreInputError('build is blocked by the balance gate')
   const name = build.heroName.trim()
   if (!name) throw new StoreInputError('hero name is required')
@@ -125,7 +126,7 @@ export async function listBuilds(db: Db, deviceId: string): Promise<BuildRecord[
 /** Save a player's edit: owner only, re-validated and re-gated on the server. */
 export async function saveBuild(db: Db, deviceId: string, buildId: string, raw: unknown, gateOptions?: GateOptions): Promise<BuildRecord> {
   const row = await ownedBuild(db, deviceId, buildId)
-  const build = gated({ ...validated(raw), heroId: row.hero_id }, gateOptions)
+  const build = await gated(db, { ...validated(raw), heroId: row.hero_id }, gateOptions)
   await db.query('update builds set build = $1, updated_at = now() where id = $2', [JSON.stringify(build), buildId])
   return { id: buildId, heroId: row.hero_id, build }
 }

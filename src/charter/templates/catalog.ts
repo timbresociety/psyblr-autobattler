@@ -8,8 +8,8 @@ import { SHARED } from './shared'
 import { SUPPORT } from './support'
 import { TANK } from './tank'
 
-/** Bump when template numbers change, so stored gate results can be re-checked. */
-export const CATALOG_VERSION = 1
+/** Bump when template or role numbers change, so stored gate results can be re-checked. */
+export const CATALOG_VERSION = 3
 
 export const RAW_TEMPLATES: readonly Template[] = [...TANK, ...FIGHTER, ...ASSASSIN, ...MAGE, ...MARKSMAN, ...SUPPORT, ...SHARED]
 

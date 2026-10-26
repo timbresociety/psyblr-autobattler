@@ -1,16 +1,20 @@
 import { randomUUID } from 'node:crypto'
+import { composeRecipe, passiveRecipe } from '../arena/recipes/defaults'
+import { lookFor } from '../arena/recipes/looks'
 import { BUILD_SLOTS, allocate, hydrateBuild, setStatTarget, swapTemplate, type Build } from '../charter/build'
 import { isSizeClass } from '../charter/sizes'
 import { getTemplate } from '../charter/templates/catalog'
-import type { BuildSlot, SecondaryStat } from '../charter/types'
+import type { BuildSlot, Delivery, SecondaryStat } from '../charter/types'
 import { buildSpec, runDirector } from '../forge/director/director'
 import { applyFloor, imageBreach } from '../forge/director/floor'
-import { MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
+import { ARENA_BUDGET, arenaAsset } from '../forge/arena-asset'
+import { ARENA_ARTIFACT, ARENA_STEP, arenaRetargetBatch, arenaRetargetStep } from '../forge/arena-steps'
+import { FLIGHT_SET, MOVEMENT_SET, basicMotions, motionsFor, presetsNeeded } from '../forge/motion/library'
 import { effectShape, numbered, pick } from '../forge/package'
 import { stagePrice } from '../forge/pricing'
 import { pollTask, route, type Registry, type Routed } from '../forge/providers/router'
 import type { Asset, ImageProvider, ImageRequest, MeshProvider, RetargetProvider, RigProvider, TaskProvider } from '../forge/providers/types'
-import { EFFECT_SLOT, STAGE_TABLE, begin, choose, confirm, createForge, editInputs, fail, retry, succeed } from '../forge/stages'
+import { EFFECT_SLOT, STAGE_TABLE, begin, choose, confirm, createForge, editInputs, fail, formSize, retry, skip, succeed } from '../forge/stages'
 import type { Forge, SpecSheet, StageId, StageState, StepState, Transition } from '../forge/types'
 import { placeHold, settleHold } from './credits'
 import type { Db } from './db'
@@ -36,6 +40,8 @@ export type CopyFn = (pathname: string, sourceUrl: string) => Promise<string>
 
 export interface RunnerDeps {
   db: Db
+  /** Turns the arena hero's rigged GLB into its 2K and 1K versions (U2); tests pass a fake. */
+  packArena?: (url: string) => Promise<{ focus: string; other: string }>
   registry: Registry
   copy: CopyFn
   /** Publishes the forged hero at the stats confirm (U10). */
@@ -145,6 +151,7 @@ export type ForgeAction =
   | { type: 'start'; stage: StageId }
   | { type: 'retry'; stage: StageId }
   | { type: 'confirm'; stage: StageId }
+  | { type: 'skip'; stage: StageId }
 
 export async function act(deps: RunnerDeps, forge: Forge, action: ForgeAction): Promise<Forge> {
   switch (action.type) {
@@ -157,6 +164,8 @@ export async function act(deps: RunnerDeps, forge: Forge, action: ForgeAction): 
     case 'start':
     case 'retry':
       return generate(deps, forge, action.stage, action.type)
+    case 'skip':
+      return commit(deps.db, forge, must(skip(forge, action.stage)))
     case 'confirm': {
       const next = must(confirm(forge, action.stage))
       if (action.stage === 'stats') {
@@ -275,10 +284,12 @@ async function generate(deps: RunnerDeps, forge: Forge, stage: StageId, kind: 's
 // Steps
 
 /** Retarget batches: every preset the hero's motions need, at most 5 per call (KTD1, KTD7). */
-export function presetBatches(forge: Forge): string[][] {
+export function presetBatches(forge: Forge, { flight = true }: { flight?: boolean } = {}): string[][] {
   const build = forge.build!
   const motions = [
     ...MOVEMENT_SET,
+    // motion stages finished before flight existed retargeted without it; their batches must be rebuilt the same way
+    ...(flight ? FLIGHT_SET : []),
     ...basicMotions(forge.spec!.basicStyle),
     ...(['active1', 'active2', 'ultimate', 'movement'] as const).flatMap((slot) => motionsFor(getTemplate(build.slots[slot].templateId))),
   ]
@@ -295,8 +306,13 @@ export function planSteps(forge: Forge, stage: StageId): StepState[] {
       return [step('sheet')]
     case 'mesh':
       return [step('mesh')]
-    case 'motion':
-      return [step('rig'), ...presetBatches(forge).map((_, i) => step(`retarget-${i}`))]
+    case 'motion': {
+      // the archival rig, then the arena hero: a low-poly mesh, its own rig and motions, then packing (R35, KTD10)
+      const batches = presetBatches(forge)
+      return [step('rig'), ...batches.map((_, i) => step(`retarget-${i}`)), step(ARENA_STEP.mesh), step(ARENA_STEP.rig), ...batches.map((_, i) => step(arenaRetargetStep(i))), step(ARENA_STEP.pack)]
+    }
+    case 'form':
+      return [step('form-concept'), step('form-mesh')]
     case 'active1':
     case 'active2':
       return [step('effect')]
@@ -311,8 +327,15 @@ export function planSteps(forge: Forge, stage: StageId): StepState[] {
 function stageRecord(forge: Forge, stage: StageId): Record<string, unknown> {
   const slot = EFFECT_SLOT[stage]
   if (!slot) return {}
-  const record: Record<string, unknown> = { effect: { slot, shape: effectShape(forge.build!.slots[slot].templateId) } }
-  if (stage === 'ultimate') record.passive = { visual: forge.spec!.passiveVisual, element: forge.spec!.passiveElement ?? null, shape: effectShape(forge.build!.slots.passive.templateId) }
+  const shape = effectShape(forge.build!.slots[slot].templateId)
+  const skill = forge.spec!.skills.find((s) => s.slot === slot)
+  // the look comes from the director, or from the skill's own words; the recipe's hit layer is sized to the real area (R11)
+  const recipe = composeRecipe(shape.delivery as Delivery['kind'], skill?.look ?? lookFor(`${skill?.theme ?? ''} ${forge.build!.slots[slot].name}`))
+  const record: Record<string, unknown> = { effect: { slot, shape, recipe } }
+  if (stage === 'ultimate') {
+    const s = forge.spec!
+    record.passive = { visual: s.passiveVisual, element: s.passiveElement ?? null, shape: effectShape(forge.build!.slots.passive.templateId), recipe: passiveRecipe(s.passiveVisual, lookFor(s.passiveElement ?? s.description)) }
+  }
   return record
 }
 
@@ -341,7 +364,33 @@ function chosenSheet(forge: Forge): string {
   return sheets[pick(forge, 'concept', 'sheet')] ?? sheets[0]
 }
 
-type StepValue = { urls: string[] } | Asset
+type StepValue = { urls: string[] } | Asset | { assets: Record<string, Asset> }
+
+/**
+ * The default arena packer: fetch the rigged arena GLB and turn it into its 2K and 1K versions (U2). Fake provider
+ * URLs have no file behind them, so they pass through unchanged.
+ */
+async function packArena(url: string): Promise<{ focus: string; other: string }> {
+  if (!/^https?:/.test(url)) return { focus: url, other: url }
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`could not fetch the arena hero (${response.status})`)
+  const result = await arenaAsset(new Uint8Array(await response.arrayBuffer()))
+  if (!result.ok) throw new Error(`the arena hero has ${result.triangles} triangles, over the ${ARENA_BUDGET.maxTriangles} budget`)
+  const dataUrl = (bytes: Uint8Array) => `data:model/gltf-binary;base64,${Buffer.from(bytes).toString('base64')}`
+  return { focus: dataUrl(result.focus), other: dataUrl(result.other) }
+}
+
+/** The transformed form: a creature or giant, drawn as one clean concept the mesh provider can build (R34). */
+function formRequest(forge: Forge): ImageRequest {
+  const s = forge.spec!
+  const ultimate = forge.build!.slots.ultimate
+  const size = formSize(forge.build)
+  return {
+    kind: 'sheet',
+    prompt: [HOUSE_STYLE, `Full-body concept of the form ${s.heroName} takes with "${ultimate.name || getTemplate(ultimate.templateId).name}": ${ultimate.visual || ultimate.flavour || s.description}.`, size ? `It towers at ${size} size.` : '', extra(forge, 'form')].filter(Boolean).join(' '),
+    references: [chosenSheet(forge)],
+  }
+}
 
 async function startStep(deps: RunnerDeps, forge: Forge, stage: StageId, name: string): Promise<Routed<StepValue>> {
   const r = deps.registry
@@ -351,6 +400,21 @@ async function startStep(deps: RunnerDeps, forge: Forge, stage: StageId, name: s
   if (name === 'passive') return image(passiveRequest(forge))
   if (name === 'mesh') return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: true, faceLimit: 20_000 }))
   if (name === 'rig') return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: forge.stages.mesh.artifacts.mesh, skeleton: 'mixamo' }))
+  const output = (stepName: string) => forge.stages[stage].steps.find((s) => s.name === stepName)?.outputs
+  if (name === ARENA_STEP.mesh) return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: chosenSheet(forge), quad: false, faceLimit: ARENA_BUDGET.maxTriangles }))
+  if (name === ARENA_STEP.rig) return route<RigProvider, StepValue>(r, 'rig', (p) => p.start({ modelUrl: output(ARENA_STEP.mesh)![ARENA_STEP.mesh], skeleton: 'mixamo' }))
+  const arenaBatch = arenaRetargetBatch(name)
+  if (arenaBatch !== undefined) return route<RetargetProvider, StepValue>(r, 'retarget', (p) => p.start({ riggedUrl: output(ARENA_STEP.rig)![ARENA_STEP.rig], presets: presetBatches(forge)[arenaBatch] }))
+  if (name === ARENA_STEP.pack) {
+    try {
+      const packed = await (deps.packArena ?? packArena)(output(ARENA_STEP.rig)![ARENA_STEP.rig])
+      return { ok: true, provider: ARENA_STEP.pack, value: { assets: { [ARENA_ARTIFACT.focus]: { url: packed.focus, format: 'glb' }, [ARENA_ARTIFACT.other]: { url: packed.other, format: 'glb' } } } }
+    } catch (e) {
+      return { ok: false, kind: 'failed', reasons: [{ provider: ARENA_STEP.pack, kind: 'failed', reason: e instanceof Error ? e.message : String(e) }] }
+    }
+  }
+  if (name === 'form-concept') return image(formRequest(forge))
+  if (name === 'form-mesh') return route<MeshProvider, StepValue>(r, 'mesh', (p) => p.start({ imageUrl: output('form-concept')!['form-concept-0'], quad: false, faceLimit: ARENA_BUDGET.maxTriangles }))
   const batch = /^retarget-(\d+)$/.exec(name)
   if (batch) {
     const rigged = forge.stages.motion.steps.find((s) => s.name === 'rig')?.outputs?.rig
@@ -368,7 +432,8 @@ function extension(url: string, fallback: string): string {
 /** Copy every output into Blob under forge/<id>/<stage>/<attempt>/ and screen images (KTD1, KTD10). */
 async function collect(deps: RunnerDeps, forge: Forge, stage: StageId, name: string, value: StepValue): Promise<{ outputs: Record<string, string> } | { breach: string }> {
   const base = `forge/${forge.id}/${stage}/${forge.stages[stage].attempt}`
-  const entries: [string, string, string][] = 'urls' in value ? value.urls.map((u, i) => [`${name}-${i}`, u, extension(u, 'png')]) : [[name, value.url, value.format]]
+  const entries: [string, string, string][] =
+    'urls' in value ? value.urls.map((u, i) => [`${name}-${i}`, u, extension(u, 'png')]) : 'assets' in value ? Object.entries(value.assets).map(([key, a]) => [key, a.url, a.format]) : [[name, value.url, value.format]]
   if ('urls' in value) {
     const breaches = await Promise.all(entries.map(([, url]) => imageBreach(deps.registry, url, forge.spec!.flags.realPerson)))
     const breach = breaches.find(Boolean)

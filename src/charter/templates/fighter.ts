@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, heal, movement, passive, phys, push, shield, slow, spirit, stun, ultimate, move } from './dsl'
+import { active, ai, at, basic, buff, heal, movement, passive, phys, push, shield, slow, spirit, stun, ultimate, move, resize } from './dsl'
 
 export const FIGHTER = [
   basic({ id: 'fighter-combo-strikes', name: 'Combo Strikes', roles: ['fighter'], tags: ['melee', 'combo', 'punch', 'kick', 'martial-arts', 'fist'], delivery: at.melee(2.5), effects: [phys(8, 1)], ai: ai('always', 1) }),
@@ -17,7 +17,7 @@ export const FIGHTER = [
   passive({ id: 'fighter-momentum', name: 'Momentum', roles: ['fighter'], tags: ['momentum', 'combo', 'crit', 'flurry', 'third-hit'], delivery: at.melee(2.5), effects: [phys(20, 0.4)], trigger: 'everyThirdHit', ai: ai('always', 0) }),
   passive({ id: 'fighter-battle-trance', name: 'Battle Trance', roles: ['fighter'], tags: ['trance', 'adrenaline', 'second-wind', 'low-health', 'speed'], delivery: at.self(), effects: [buff('attackSpeed', 40, 4), buff('moveSpeed', 20, 4)], trigger: 'lowHealth', ai: ai('always', 0) }),
 
-  ultimate({ id: 'fighter-super-form', name: 'Super Form', roles: ['fighter'], tags: ['transform', 'super', 'saiyan', 'power-up', 'form', 'gear', 'awaken'], delivery: at.self(), effects: [buff('damage', 30, 10), buff('attackSpeed', 30, 10), buff('moveSpeed', 20, 10)], cooldown: 70, ai: ai('engage', 9) }),
+  ultimate({ id: 'fighter-super-form', name: 'Super Form', roles: ['fighter'], tags: ['transform', 'super', 'saiyan', 'power-up', 'form', 'gear', 'awaken'], delivery: at.self(), effects: [resize('large', 10), buff('damage', 30, 10), buff('attackSpeed', 30, 10), buff('moveSpeed', 20, 10)], cooldown: 70, ai: ai('engage', 9) }),
   ultimate({ id: 'fighter-meteor-combo', name: 'Meteor Combo', roles: ['fighter'], tags: ['combo', 'meteor', 'barrage', 'finisher', 'stun', 'rush'], delivery: at.melee(3), effects: [stun(1), phys(200, 1.6)], cooldown: 60, ai: ai('finisher', 9, { targetHealthBelow: 0.6 }) }),
   ultimate({ id: 'fighter-limit-break', name: 'Limit Break', roles: ['fighter'], tags: ['limit-break', 'explosion', 'dash', 'nova', 'burst'], delivery: at.zone(12, 4), effects: [move(12), phys(140, 1.2)], cooldown: 65, ai: ai('engage', 8, { minTargets: 2 }) }),
 

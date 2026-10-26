@@ -1,15 +1,21 @@
+import { composeRecipe, defaultRecipe, passiveRecipe } from '../arena/recipes/defaults'
+import { ARENA_ARTIFACT, ARENA_RETARGET_PREFIX } from './arena-steps'
+import type { EffectRecipe } from '../arena/recipes/schema'
+import { validateRecipe } from '../arena/recipes/validate'
 import { BUILD_SLOTS, type Build } from '../charter/build'
+import type { SizeClass } from '../charter/sizes'
 import { getTemplate } from '../charter/templates/catalog'
-import type { BuildSlot } from '../charter/types'
+import type { BuildSlot, Delivery } from '../charter/types'
 import { basicMotions, motionsFor, playable, type Motion } from './motion/library'
-import { EFFECT_SLOT } from './stages'
+import { EFFECT_SLOT, formSize } from './stages'
 import type { Forge, SpecSheet, StageId } from './types'
 
 /**
- * The hero package (KTD9): a versioned manifest any psyblr game can load (R21, R22). The rigged and retargeted
- * models are GLB; the quad FBX is kept only as an archival source.
+ * The hero package (KTD9, KTD13): a versioned manifest any psyblr game can load (R21, R22, R36). The rigged and
+ * retargeted models are GLB; the quad FBX is kept only as an archival source. Version 2 adds the arena-ready hero,
+ * an effect recipe per skill and an optional transformation form; version 1 packages are upgraded when loaded.
  */
-export const PACKAGE_VERSION = 1
+export const PACKAGE_VERSION = 2
 
 export interface PackageAsset {
   url: string
@@ -19,12 +25,15 @@ export interface PackageAsset {
 export interface SlotPackage {
   templateId: string
   motion: { id: string; label: string; play: ReturnType<typeof playable> }
-  /** Effect sprites, shaped to the mechanic (R18); basic, movement and passive slots carry none here. */
-  effect?: { sprites: string[]; chosen: number; shape: EffectShape }
+  /** Effect sprites and recipe, shaped to the mechanic (R18, R33); basic, movement and passive slots carry none here. */
+  effect?: { sprites: string[]; chosen: number; shape: EffectShape; recipe?: EffectRecipe }
 }
 
-export interface HeroPackage {
-  packageVersion: typeof PACKAGE_VERSION
+type Motions = (PackageAsset & { presets: string[] })[]
+
+/** Version 1, as stored before the arena: no arena hero, no recipes, no form. */
+export interface HeroPackageV1 {
+  packageVersion: 1
   forgeId: string
   heroName: string
   spec: SpecSheet
@@ -35,10 +44,21 @@ export interface HeroPackage {
     front: string
     quadMesh: PackageAsset
     rigged: PackageAsset
-    motions: (PackageAsset & { presets: string[] })[]
+    motions: Motions
   }
   slots: Record<BuildSlot, SlotPackage>
   passive: { visual: 'aura' | 'body-element'; element?: string; sprites: string[] }
+}
+
+export interface HeroPackage extends Omit<HeroPackageV1, 'packageVersion' | 'assets' | 'passive'> {
+  packageVersion: typeof PACKAGE_VERSION
+  assets: HeroPackageV1['assets'] & {
+    /** The arena-ready hero (R24, R35): 2K for heroes in focus, 1K for the rest, and its own motions. */
+    arena: { focus: PackageAsset; other: PackageAsset; motions: Motions }
+  }
+  passive: HeroPackageV1['passive'] & { recipe: EffectRecipe }
+  /** The transformation's form (R22, R34), shown at the size class its ultimate reaches (KTD14). */
+  form?: { mesh: PackageAsset; sizeClass: SizeClass }
 }
 
 export type EffectShape = { delivery: string; range: number; radius?: number }
@@ -77,6 +97,9 @@ export function motionOptions(forge: Pick<Forge, 'build' | 'spec'>, slot: BuildS
 }
 
 
+/** A motion stage approved before the arena hero existed: it has only the archival rig and motions. */
+export const isLegacyMotion = (forge: Forge) => !forge.stages.motion.artifacts[ARENA_ARTIFACT.focus]
+
 /** Assemble the manifest from an approved forge. `presetBatches` are the retarget calls, in step order. */
 export function buildPackage(forge: Forge, build: Build, presetBatches: string[][]): HeroPackage {
   const spec = forge.spec!
@@ -90,11 +113,19 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
     const chosen = options[stage ? pick(forge, stage, 'motion') : slot === 'basic' ? pick(forge, 'motion', 'basic') : 0] ?? options[0]
     const entry: SlotPackage = { templateId: build.slots[slot].templateId, motion: { id: chosen.id, label: chosen.label, play: playable(chosen) } }
     if (stage) {
-      const record = forge.stages[stage].inputs.effect as { shape: EffectShape } | undefined
-      entry.effect = { sprites: numbered(forge.stages[stage].artifacts, 'effect'), chosen: pick(forge, stage, 'effect'), shape: record?.shape ?? effectShape(build.slots[slot].templateId) }
+      const record = forge.stages[stage].inputs.effect as { shape: EffectShape; recipe?: EffectRecipe } | undefined
+      const shape = record?.shape ?? effectShape(build.slots[slot].templateId)
+      entry.effect = { sprites: numbered(forge.stages[stage].artifacts, 'effect'), chosen: pick(forge, stage, 'effect'), shape, recipe: record?.recipe ?? composeRecipe(shape.delivery as Delivery['kind']) }
     }
     slots[slot] = entry
   }
+  const passiveRecord = forge.stages.ultimate.inputs.passive as { recipe?: EffectRecipe } | undefined
+  const form = forge.stages.form
+  const formMesh = form && !form.inputs.skipped ? form.artifacts['form-mesh'] : undefined
+  const size = formSize(build)
+  const arenaMotions = numbered(motion, ARENA_RETARGET_PREFIX)
+  const rigged = { url: motion.rig, format: format(motion.rig ?? '', 'glb') }
+  const archival = presetBatches.map((presets, i) => ({ url: motion[`retarget-${i}`], format: format(motion[`retarget-${i}`] ?? '', 'glb'), presets }))
   return {
     packageVersion: PACKAGE_VERSION,
     forgeId: forge.id,
@@ -106,11 +137,49 @@ export function buildPackage(forge: Forge, build: Build, presetBatches: string[]
       sheet,
       front: sheet[pick(forge, 'concept', 'sheet')] ?? sheet[0],
       quadMesh: { url: forge.stages.mesh.artifacts.mesh, format: 'fbx' },
-      rigged: { url: motion.rig, format: format(motion.rig ?? '', 'glb') },
-      motions: presetBatches.map((presets, i) => ({ url: motion[`retarget-${i}`], format: format(motion[`retarget-${i}`] ?? '', 'glb'), presets })),
+      rigged,
+      motions: archival,
+      // a legacy forge fights with its rigged model, as an upgraded version 1 package does
+      arena: isLegacyMotion(forge)
+        ? { focus: rigged, other: rigged, motions: archival }
+        : {
+            focus: { url: motion[ARENA_ARTIFACT.focus], format: 'glb' },
+            other: { url: motion[ARENA_ARTIFACT.other], format: 'glb' },
+            motions: presetBatches.map((presets, i) => ({ url: arenaMotions[i], format: 'glb' as const, presets })),
+          },
     },
     slots,
-    passive: { visual: spec.passiveVisual, ...(spec.passiveElement ? { element: spec.passiveElement } : {}), sprites: numbered(forge.stages.ultimate.artifacts, 'passive') },
+    passive: {
+      visual: spec.passiveVisual,
+      ...(spec.passiveElement ? { element: spec.passiveElement } : {}),
+      sprites: numbered(forge.stages.ultimate.artifacts, 'passive'),
+      recipe: passiveRecord?.recipe ?? passiveRecipe(spec.passiveVisual),
+    },
+    ...(formMesh && size ? { form: { mesh: { url: formMesh, format: format(formMesh, 'glb') }, sizeClass: size } } : {}),
+  }
+}
+
+/**
+ * Any stored package as version 2 (KTD13, AE7). A version 1 hero fights with its rigged model as its arena hero,
+ * the default recipe for each skill's delivery, and no form.
+ */
+export function upgradePackage(raw: HeroPackageV1 | HeroPackage): HeroPackage {
+  if (raw.packageVersion === PACKAGE_VERSION) return raw as HeroPackage
+  const v1 = raw as HeroPackageV1
+  // a damaged stored package still loads; validatePackage reports what it lacks
+  const slots = Object.fromEntries(
+    BUILD_SLOTS.map((slot) => {
+      const s = v1.slots?.[slot]
+      return [slot, s?.effect ? { ...s, effect: { ...s.effect, recipe: s.effect.recipe ?? defaultRecipe(getTemplate(s.templateId).delivery.kind) } } : s]
+    }),
+  ) as HeroPackage['slots']
+  const assets = v1.assets ?? ({} as HeroPackageV1['assets'])
+  return {
+    ...v1,
+    packageVersion: PACKAGE_VERSION,
+    assets: { ...assets, arena: { focus: assets.rigged, other: assets.rigged, motions: assets.motions ?? [] } },
+    slots,
+    passive: { ...v1.passive, recipe: passiveRecipe(v1.passive?.visual === 'body-element' ? 'body-element' : 'aura') },
   }
 }
 
@@ -122,6 +191,19 @@ export function validatePackage(pkg: HeroPackage, isAllowedUrl: (url: string) =>
     else if (!isAllowedUrl(value)) problems.push(`${label} is not a forge asset`)
   }
   if (pkg.packageVersion !== PACKAGE_VERSION) problems.push('wrong package version')
+  const arena = pkg.assets.arena
+  if (!arena) problems.push('missing arena hero')
+  else {
+    url('arena hero', arena.focus?.url)
+    url('arena hero (1K)', arena.other?.url)
+    if (arena.focus?.format !== 'glb' || arena.other?.format !== 'glb') problems.push('arena hero must be GLB')
+    arena.motions.forEach((m, i) => url(`arena motion batch ${i}`, m.url))
+  }
+  if (pkg.passive.recipe && validateRecipe(pkg.passive.recipe).length) problems.push('passive recipe is invalid')
+  if (pkg.form) {
+    url('form mesh', pkg.form.mesh.url)
+    if (pkg.form.sizeClass !== formSize(pkg.build)) problems.push("form size does not match the ultimate's transformation")
+  }
   if (pkg.skeleton !== 'mixamo') problems.push('unknown skeleton')
   if (!pkg.assets.sheet.length) problems.push('missing sheet')
   pkg.assets.sheet.forEach((s, i) => url(`sheet ${i}`, s))
@@ -136,6 +218,7 @@ export function validatePackage(pkg: HeroPackage, isAllowedUrl: (url: string) =>
     if (!s?.motion) problems.push(`missing ${slot} motion`)
     if (effectStage(slot) && !s?.effect?.sprites.length) problems.push(`missing ${slot} effect`)
     s?.effect?.sprites.forEach((e, i) => url(`${slot} effect ${i}`, e))
+    if (effectStage(slot) && (!s?.effect?.recipe || validateRecipe(s.effect.recipe).length)) problems.push(`${slot} recipe is missing or invalid`)
   }
   if (pkg.passive.visual !== 'aura' && pkg.passive.visual !== 'body-element') problems.push('passive visual must be an aura or a body element')
   if (!pkg.passive.sprites.length) problems.push('missing passive visual')
