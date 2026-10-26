@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { FormMark } from '../../../charter/skill-look.js'
 import { metaChannel } from '../character-look.js'
 import type { FaceMeta } from './patch.js'
 
@@ -9,11 +10,11 @@ import type { FaceMeta } from './patch.js'
  * So this needs nothing from the atlas packer, however it split the face into islands.
  */
 
-type Surface = HTMLCanvasElement | OffscreenCanvas
+export type Surface = HTMLCanvasElement | OffscreenCanvas
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 type Sized = CanvasImageSource & { width: number; height: number }
 
-function surface(w: number, h: number): Surface {
+export function surface(w: number, h: number): Surface {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h)
   const c = document.createElement('canvas')
   c.width = w
@@ -105,6 +106,12 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
   ctx.globalCompositeOperation = 'source-over'
 
   // 2. the photo face, triangle by triangle, feathered by the patch's own alpha
+  drawPatch(ctx, faces, toPatch, toAtlas, patch)
+  return out
+}
+
+/** A front-on patch drawn into the atlas over the given triangles, each from where its corners sit in the patch. */
+function drawPatch(ctx: Ctx, faces: number[][], toPatch: (i: number) => number[], toAtlas: (i: number) => number[], patch: Sized) {
   for (const [a, b, c] of faces) {
     const s = [...toPatch(a), ...toPatch(b), ...toPatch(c)]
     const d = [...toAtlas(a), ...toAtlas(b), ...toAtlas(c)]
@@ -118,5 +125,62 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
     ctx.drawImage(patch, 0, 0)
     ctx.restore()
   }
+}
+
+/** Where on each cheek a form's whiskers run, as strokes in the body's own landmark pixels: from the nose outward. */
+export function whiskerStrokes(landmarks: FaceMeta['landmarks']): { from: [number, number]; to: [number, number]; width: number }[] {
+  const out: { from: [number, number]; to: [number, number]; width: number }[] = []
+  // MediaPipe's nose wing, inner cheek and outer cheek, on each side
+  for (const [nose, cheek, outer] of [[129, 205, 123], [358, 425, 352]]) {
+    const n = landmarks[nose]
+    const c = landmarks[cheek]
+    const o = landmarks[outer]
+    if (!n || !c || !o) continue
+    const a: [number, number] = [n[0] + (c[0] - n[0]) * 0.55, n[1] + (c[1] - n[1]) * 0.55]
+    const len = Math.hypot(o[0] - a[0], o[1] - a[1])
+    if (len < 1) continue
+    // three strokes fanning a little apart toward the ear
+    const px = -(o[1] - a[1]) / len
+    const py = (o[0] - a[0]) / len
+    for (const k of [-1, 0, 1]) out.push({ from: [a[0] + px * k * len * 0.2, a[1] + py * k * len * 0.2], to: [o[0] + px * k * len * 0.32, o[1] + py * k * len * 0.32], width: len * 0.07 })
+  }
   return out
+}
+
+/**
+ * Paint a form's marks onto an atlas made for this body: drawn front-on at the body's own face landmarks, then laid
+ * over the face's triangles like the photo, so they follow the face whatever the atlas packer did.
+ */
+export function paintMarks(canvas: Surface, geometry: THREE.BufferGeometry, meta: FaceMeta, marks: FormMark) {
+  const P = 512
+  const frame = meta.frame
+  const patch = surface(P, P)
+  const p = patch.getContext('2d') as Ctx
+  const k = P / frame.res
+  p.strokeStyle = 'rgba(24, 14, 10, 0.85)'
+  p.lineCap = 'round'
+  if (marks === 'whiskers')
+    for (const w of whiskerStrokes(meta.landmarks)) {
+      p.lineWidth = w.width * k
+      p.beginPath()
+      p.moveTo(w.from[0] * k, w.from[1] * k)
+      p.lineTo(w.to[0] * k, w.to[1] * k)
+      p.stroke()
+    }
+  const pos = geometry.getAttribute('position')
+  const nrm = geometry.getAttribute('normal')
+  const uv = geometry.getAttribute('uv')
+  const metaUv = geometry.getAttribute(metaChannel(geometry))
+  const index = geometry.getIndex()
+  const count = index ? index.count : pos.count
+  const vertex = (i: number) => (index ? index.getX(i) : i)
+  const half = frame.size / 2
+  const inFace = (i: number) => Math.floor(metaUv.getX(i)) === 0 && nrm.getZ(i) > 0.15 && Math.abs(pos.getX(i) - frame.cx) < half && Math.abs(pos.getY(i) - frame.cz) < half
+  const faces: number[][] = []
+  for (let t = 0; t < count; t += 3) {
+    const tri = [vertex(t), vertex(t + 1), vertex(t + 2)]
+    if (tri.every(inFace)) faces.push(tri)
+  }
+  const ctx = canvas.getContext('2d') as Ctx
+  drawPatch(ctx, faces, (i) => [((pos.getX(i) - frame.cx) / frame.size + 0.5) * P, (0.5 - (pos.getY(i) - frame.cz) / frame.size) * P], (i) => [uv.getX(i) * canvas.width, uv.getY(i) * canvas.height], patch)
 }

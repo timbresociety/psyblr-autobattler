@@ -1,4 +1,4 @@
-import { PHASES, PRIMITIVES, RECIPE_VERSION, type EffectRecipe } from './schema.js'
+import { PHASES, PRIMITIVES, RECIPE_VERSION, STYLES, type EffectRecipe } from './schema.js'
 
 const HEX = /^#[0-9a-f]{6}$/i
 
@@ -17,6 +17,7 @@ export function validateRecipe(recipe: EffectRecipe): string[] {
     if (!(layer.size > 0 && layer.size <= 3)) problems.push(`layer ${i}: size must be in (0, 3]`)
     if (layer.damaging && layer.size > 1) problems.push(`layer ${i}: a damaging layer cannot be drawn bigger than its hit area`)
     if (![0, 1, 2].includes(layer.color)) problems.push(`layer ${i}: colour must be 0, 1 or 2`)
+    if (layer.style !== undefined && !STYLES[layer.primitive]?.includes(layer.style)) problems.push(`layer ${i}: ${layer.primitive} has no style "${layer.style}"`)
   }
   return problems
 }

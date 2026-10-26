@@ -9,7 +9,8 @@ export type MatchEvent =
   | { type: 'impact'; hero: number; slot: BuildSlot; at: Vec3; radius: number; arcDegrees?: number; width?: number; range: number }
   | { type: 'hit'; source: number; target: number; slot: BuildSlot; amount: number; heavy: boolean }
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
-  | { type: 'resize'; hero: number; phase: 'start' | 'end'; size: SizeClass }
+  /** A transformation began or ended; `size` is the class the hero has now (a form may keep its own). */
+  | { type: 'form'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }
   /** A shot or blast struck a piece of cover; breakable pieces report their health left. */
   | { type: 'cover-hit'; index: number; at: Vec3; health: number }

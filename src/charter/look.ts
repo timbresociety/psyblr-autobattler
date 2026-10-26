@@ -1,8 +1,18 @@
+import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
+import { PRINT_SCALE, isPrintId, type PrintId } from '../kit/wear/prints.js'
+import type { Physique } from '../kit/body/shape.js'
+import { hydrateSkillLook, type SkillLook } from './skill-look.js'
+import type { BuildSlot } from './types.js'
+
 /**
  * A hero's look (cosmetic only: no number in the game reads it). The body comes from the hero's size and this look's
- * gender (public/heroes/<m|f>-<size>.glb); hair, a beard, armour, cape and a colour per region dress it; a photo face,
- * with the 478 landmarks the Forge found on it, is warped onto the body's own face wherever the hero is drawn; and
- * gear from the asset repository hangs in the body's sockets.
+ * gender (public/heroes/<m|f>-<size>.glb), shaped by its physique; a photo face, with the 478 landmarks the Forge
+ * found on it, is warped onto the body's own face wherever the hero is drawn; and what it wears comes from the
+ * wardrobe: hair, a beard, one item in each of six slots, and gear on the face and in the hands, each in its own
+ * colours and cuts.
+ *
+ * Looks saved before the wardrobe (hair style, armour and cape switches, a colour per body region, gear in sockets)
+ * still load: `outfitOf` reads them into wardrobe items.
  */
 
 export type Gender = 'm' | 'f'
@@ -46,10 +56,16 @@ export interface FacePhoto {
   width: number
   height: number
   points: number[]
+  /** 0 to 1: how much of the photo's shape the face takes (the picture itself is always laid on whole); all of it when absent. */
+  strength?: number
 }
 
 export interface HeroLook {
   gender: Gender
+  /** Weight, muscle and age (each 0 to 1); the body as made when absent. */
+  physique?: Physique
+  /** What the hero wears, slot by slot. When absent, the fields below dress it (looks from before the wardrobe). */
+  wear?: Partial<Record<LookSlot, Worn>>
   hair: HairStyle
   /** Facial hair; none when absent. */
   beard?: BeardStyle
@@ -59,14 +75,61 @@ export interface HeroLook {
   face?: FacePhoto
   /** Rigid pieces in the body's sockets: a hat, glasses, a weapon in each hand, something on the back. */
   gear?: Partial<Record<GearSlot, GearPiece>>
+  /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
+  skills?: Partial<Record<BuildSlot, SkillLook>>
 }
 
 export const FACE_POINTS = 478
+
+// ------------------------------------------------------------------------------------------------ the wardrobe
+
+/** Where something is worn: hair and beard, the six wardrobe slots, and gear on the face and in either hand. */
+export const LOOK_SLOTS = ['hair', 'beard', 'head', 'upper', 'lower', 'full', 'back', 'feet', 'face', 'hand_r', 'hand_l'] as const
+export type LookSlot = (typeof LOOK_SLOTS)[number]
+
+/** The six wardrobe slots. A full-body item replaces the upper and lower ones. */
+export const WEAR_SLOTS = ['head', 'upper', 'lower', 'full', 'back', 'feet'] as const satisfies readonly LookSlot[]
+export type WearSlot = (typeof WEAR_SLOTS)[number]
+
+/** One item as this hero wears it: which item, and the colours, finishes and cuts that make it theirs. */
+export interface Worn {
+  id: string
+  /** Where its file lives: a built-in item, a built-in piece, or one a player generated. */
+  url: string
+  /** '#rrggbb' per channel; the item's own where absent or null. */
+  colors?: (string | null)[]
+  finishes?: (Finish | null)[]
+  /** 0 (shortest) to 1 (as made), for the knobs the item allows. */
+  knobs?: Partial<Record<Knob, number>>
+  /** A pattern over one of its channels. */
+  print?: WornPrint
+}
+
+/** A pattern on a worn item: one of the built-in prints, or a picture the player uploaded, repeated over the cloth. */
+export interface WornPrint {
+  /** A built-in print (src/kit/wear/prints.ts); exactly one of this and `url`. */
+  id?: PrintId
+  /** A picture uploaded through the photo endpoint. */
+  url?: string
+  /** '#rrggbb' a built-in print is inked in, over the channel's own colour; a deeper shade of that colour when absent. */
+  ink?: string
+  /** Repeats per metre of cloth (PRINT_SCALE); the print's default when absent. */
+  scale?: number
+  /** The channel it covers; the first when absent. */
+  channel?: number
+}
+
+export const wearUrl = (id: string) => `/kit/wear/${id}.glb`
+export const pieceUrl = (id: string) => `/kit/pieces/${id}.glb`
 
 const HEX = /^#[0-9a-f]{6}$/
 const PIECE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/
 // a built-in piece, one the dev server stored, or one in a Blob store; the server checks which (src/server/gear.ts)
 const PIECE_URL = /^(\/kit\/pieces\/[a-z0-9_-]+\.glb|\/dev-store\/pieces\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/pieces\/[0-9a-f-]{36}\.glb)$/
+// a wardrobe item: built in, a built-in piece, or one a player generated (the dev server's or a Blob store's)
+const ITEM_URL = /^(\/kit\/(wear|pieces)\/[a-z0-9_-]+\.glb|\/dev-store\/(wear|pieces)\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/(wear|pieces)\/[0-9a-f-]{36}\.glb)$/
+// a picture uploaded through the photo endpoint, at the dev server or in a Blob store; the server checks which
+const PHOTO_URL = /^(\/dev-store\/heroes\/[0-9a-f-]{36}\.webp|https:\/\/[a-z0-9.-]+\/heroes\/[0-9a-f-]{36}(-[A-Za-z0-9]+)?\.webp)$/
 const isFiniteIn = (v: unknown, max: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max
 
 /** Rebuild a look from untrusted input, keeping only what it knows; an invalid face is dropped, not the whole look. */
@@ -88,8 +151,15 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     const limit = Math.max(face.width, face.height)
     if (face.points.every((p) => isFiniteIn(p, limit))) {
       look.face = { url: face.url, width: face.width, height: face.height, points: face.points.map((p) => Math.round((p as number) * 10) / 10) }
+      if (isFiniteIn(face.strength, 1) && face.strength < 1) look.face.strength = Math.round(face.strength * 100) / 100
     }
   }
+  const physique = input.physique as Record<string, unknown> | undefined
+  if (physique && typeof physique === 'object' && isFiniteIn(physique.weight, 1) && isFiniteIn(physique.muscle, 1) && isFiniteIn(physique.age, 1)) {
+    look.physique = { weight: physique.weight, muscle: physique.muscle, age: physique.age }
+  }
+  const wear = hydrateWear(input.wear)
+  if (wear) look.wear = wear
   const gearIn = input.gear as Record<string, Record<string, unknown> | undefined> | undefined
   if (gearIn && typeof gearIn === 'object') {
     const gear: NonNullable<HeroLook['gear']> = {}
@@ -100,7 +170,86 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     }
     if (Object.keys(gear).length) look.gear = gear
   }
+  const skillsIn = input.skills as Record<string, unknown> | undefined
+  if (skillsIn && typeof skillsIn === 'object') {
+    const skills: NonNullable<HeroLook['skills']> = {}
+    for (const slot of SKILL_SLOTS) {
+      const kept = hydrateSkillLook(skillsIn[slot])
+      if (kept) skills[slot] = kept
+    }
+    if (Object.keys(skills).length) look.skills = skills
+  }
   return look
+}
+
+// the build's slots (build.ts imports this module, so they're listed here)
+const SKILL_SLOTS: readonly BuildSlot[] = ['basic', 'active1', 'active2', 'passive', 'ultimate', 'movement']
+
+/** A wardrobe from untrusted input: well-formed items in known slots (the server checks they exist), or none at all. */
+function hydrateWear(raw: unknown): HeroLook['wear'] | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const input = raw as Record<string, Record<string, unknown> | undefined>
+  const wear: NonNullable<HeroLook['wear']> = {}
+  for (const slot of LOOK_SLOTS) {
+    const w = input[slot]
+    if (!w || typeof w.id !== 'string' || !PIECE_ID.test(w.id) || typeof w.url !== 'string' || !ITEM_URL.test(w.url)) continue
+    const item: Worn = { id: w.id, url: w.url }
+    if (Array.isArray(w.colors) && w.colors.length <= 4) item.colors = w.colors.map((c) => (typeof c === 'string' && HEX.test(c.toLowerCase()) ? c.toLowerCase() : null))
+    if (Array.isArray(w.finishes) && w.finishes.length <= 4) item.finishes = w.finishes.map((f) => ((FINISHES as readonly unknown[]).includes(f) ? (f as Finish) : null))
+    const knobs = w.knobs as Record<string, unknown> | undefined
+    if (knobs && typeof knobs === 'object') {
+      const kept: Partial<Record<Knob, number>> = {}
+      for (const k of KNOBS) if (isFiniteIn(knobs[k], 1)) kept[k] = Math.round((knobs[k] as number) * 1000) / 1000
+      if (Object.keys(kept).length) item.knobs = kept
+    }
+    const print = hydratePrint(w.print)
+    if (print) item.print = print
+    wear[slot] = item
+  }
+  // a full-body item replaces the upper and lower ones
+  if (wear.full) {
+    delete wear.upper
+    delete wear.lower
+  }
+  // an empty wardrobe is kept: a hero who took everything off stays that way
+  return wear
+}
+
+/** A print from untrusted input: a known print or an uploaded picture's URL (not both), on one of four channels. */
+function hydratePrint(raw: unknown): WornPrint | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const p = raw as Record<string, unknown>
+  const id = isPrintId(p.id) ? p.id : undefined
+  const url = typeof p.url === 'string' && PHOTO_URL.test(p.url) ? p.url : undefined
+  if (!id === !url) return undefined
+  const print: WornPrint = id ? { id } : { url }
+  if (id && typeof p.ink === 'string' && HEX.test(p.ink.toLowerCase())) print.ink = p.ink.toLowerCase()
+  if (typeof p.scale === 'number' && Number.isFinite(p.scale)) print.scale = Math.round(Math.min(PRINT_SCALE.max, Math.max(PRINT_SCALE.min, p.scale)) * 10) / 10
+  if (Number.isInteger(p.channel) && (p.channel as number) > 0 && (p.channel as number) < 4) print.channel = p.channel as number
+  return print
+}
+
+/**
+ * What a look wears, slot by slot. A wardrobe look wears its own; a look from before the wardrobe is read into
+ * wardrobe items: its hair style and beard, a long-sleeve top, trousers and boots in its suit, trim, trouser and boot
+ * colours (armour becomes a breastplate over the top), its cape, and its gear in the matching slots.
+ */
+export function outfitOf(look: HeroLook): Partial<Record<LookSlot, Worn>> {
+  if (look.wear) return look.wear
+  const c = look.colors
+  const tinted = (id: string, ...colors: (string | undefined)[]): Worn => ({ id, url: wearUrl(id), colors: colors.map((x) => x ?? null) })
+  const out: Partial<Record<LookSlot, Worn>> = {}
+  if (look.hair === 'helmet') out.head = tinted('legion_helm', c.metal, c.trim)
+  else if (look.hair !== 'none') out.hair = tinted(`hair_${look.hair}`, c.hair)
+  if (look.beard) out.beard = tinted(`beard_${look.beard}`, c.hair)
+  out.upper = look.armour ? tinted('breastplate', c.metal, c.suit) : tinted('longsleeve', c.suit, c.trim)
+  out.lower = tinted('trousers', c.pants)
+  out.feet = tinted('boots', c.boot)
+  if (look.cape) out.back = tinted('cape', c.cape)
+  for (const [slot, piece] of Object.entries(look.gear ?? {}) as [GearSlot, GearPiece][]) {
+    out[slot] = { id: piece.id, url: piece.url, ...(piece.color ? { colors: [piece.color] } : {}) }
+  }
+  return out
 }
 
 /** '#rrggbb' from 0 to 1 sRGB channels. */

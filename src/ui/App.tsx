@@ -1,13 +1,14 @@
 import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
-import type { Build } from '../charter/build'
+import { remixBuild, type Build } from '../charter/build'
 import type { BuildRecord } from './api'
-import { Token, Wordmark } from './brand/Brand'
+import { BrandMark } from './brand/BrandMark'
 import { ForgeScreen } from './forge/ForgeScreen'
 import { LoadoutScreen } from './loadout/LoadoutScreen'
 import './theme.css'
 
 // the arena bench (U1) opens on its own with `?bench` and loads three's WebGPU build only there
 const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
+const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./dev/WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
 // the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
 
@@ -93,6 +94,13 @@ const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[]
 ]
 
 export function App() {
+  if (WardrobeScreen && new URLSearchParams(window.location.search).has('wardrobe')) {
+    return (
+      <Suspense fallback={<p className="screen-loading">Loading the wardrobe…</p>}>
+        <WardrobeScreen />
+      </Suspense>
+    )
+  }
   if (new URLSearchParams(window.location.search).has('bench')) {
     return (
       <Suspense fallback={<p className="screen-loading">Loading the bench…</p>}>
@@ -151,13 +159,7 @@ function Screens() {
   return (
     <>
       <header className="topbar">
-        <div className="brand">
-          <Token className="brand-token" />
-          <span className="brand-word">
-            <Wordmark className="brand-wordmark" />
-            <small>autobattler</small>
-          </span>
-        </div>
+        <BrandMark label="autobattler" paused={tab === 'arena'} />
         <nav className="tabs" role="tablist" aria-label="Screens" onKeyDown={onKeyDown}>
           {TABS.map((t) => (
             <button key={t.id} id={`tab-${t.id}`} className="tab" role="tab" aria-selected={tab === t.id} aria-controls="screen" tabIndex={tab === t.id ? 0 : -1} onClick={() => open(t.id)}>
@@ -194,7 +196,7 @@ function Screens() {
             <ArenaScreen />
           </Suspense>
         )}
-        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixOf(build) })} onForge={() => openInForge({})} />}
+        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixBuild(build) })} onForge={() => openInForge({})} />}
         {forgeKept && (
           <div className="kept" hidden={tab !== 'forge'}>
             <ForgeScreen key={forge.key} record={forge.record} initial={forge.initial} />
@@ -203,10 +205,4 @@ function Screens() {
       </div>
     </>
   )
-}
-
-/** A remix starts a new hero: the same kit and stats, its own name, and no tie to the original. */
-function remixOf(build: Build): Build {
-  const { heroId: _original, ...rest } = build
-  return { ...rest, heroName: `${build.heroName} Remix`.slice(0, 60), gate: { state: 'draft' } }
 }

@@ -1,12 +1,12 @@
 import * as THREE from 'three'
-import { GEAR_SLOTS, type GearSlot, type HeroLook } from '../../charter/look.js'
-import { bodyKit, bodyKitNow } from './body-kit.js'
+import { GEAR_SLOTS, type GearSlot } from '../../charter/look.js'
 import type { Gltf } from './character-look.js'
 
 /**
- * Gear on a body: each piece is its own small model (public/kit/pieces/ or a player's generated one), hung on a socket
- * the Blender pipeline placed on the body's bones (tools/blender/humanlib/sockets.py). The piece follows every clip
- * through its bone, so nothing is rigged per piece, and any piece fits any body.
+ * Rigid pieces on a body: each is its own small model (public/kit/pieces/ or a player's generated one), hung on a
+ * socket the Blender pipeline placed on the body's bones (tools/blender/humanlib/sockets.py). The piece follows every
+ * clip through its bone, so nothing is rigged per piece, and any piece fits any body. Loading lives with the rest of
+ * the wardrobe (wear/items.ts).
  */
 
 type Vec3 = [number, number, number]
@@ -66,7 +66,7 @@ export function hangSockets(model: THREE.Object3D, sockets: BodySockets): Partia
 }
 
 /** A piece's materials with its 'primary' one in the player's colour (a glowing one glows in it too). */
-function tinted(material: THREE.Material, color: string): THREE.Material {
+export function tinted(material: THREE.Material, color: string): THREE.Material {
   if (!/^primary/.test(material.name)) return material
   const m = material.clone() as THREE.MeshStandardMaterial
   m.color?.setStyle(color, THREE.SRGBColorSpace)
@@ -74,23 +74,24 @@ function tinted(material: THREE.Material, color: string): THREE.Material {
   return m
 }
 
-/** What a hero's gear needs to be drawn: its body's sockets and every worn piece's model. */
-export interface LoadedGear {
-  sockets: BodySockets
-  files: Map<string, Gltf>
+/** A rigid piece to hang: the node name it takes, the socket it goes in, its model, and its primary colour. */
+export interface Piece {
+  name: string
+  socket: GearSlot
+  file: Gltf
+  color?: string
 }
 
-/** Hang each worn piece on its socket. Pieces share their geometry with the loaded file; tinted materials are copies. */
-export function wearGear(model: THREE.Object3D, gear: HeroLook['gear'], loaded: LoadedGear): THREE.Object3D[] {
-  const hung = hangSockets(model, loaded.sockets)
+/** Hang each piece on its socket. Pieces share their geometry with the loaded file; tinted materials are copies. */
+export function hangPieces(model: THREE.Object3D, pieces: readonly Piece[], sockets: BodySockets): THREE.Object3D[] {
+  if (!pieces.length) return []
+  const hung = hangSockets(model, sockets)
   const worn: THREE.Object3D[] = []
-  for (const slot of GEAR_SLOTS) {
-    const piece = gear?.[slot]
-    const socket = hung[slot]
-    const file = piece ? loaded.files.get(piece.url) : undefined
-    if (!piece || !socket || !file) continue
-    const obj = file.scene.clone(true)
-    obj.name = `gear:${slot}`
+  for (const piece of pieces) {
+    const socket = hung[piece.socket]
+    if (!socket) continue
+    const obj = piece.file.scene.clone(true)
+    obj.name = `gear:${piece.name}`
     obj.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (!mesh.isMesh) return
@@ -101,52 +102,4 @@ export function wearGear(model: THREE.Object3D, gear: HeroLook['gear'], loaded: 
     worn.push(obj)
   }
   return worn
-}
-
-const pieces = new Map<string, Promise<Gltf | undefined>>()
-const ready = new Map<string, Gltf | undefined>()
-
-/** A piece's model, loaded once; undefined when it can't load (the hero goes without it, never without a fight). */
-export function loadPiece(url: string, load: (url: string) => Promise<Gltf>): Promise<Gltf | undefined> {
-  let piece = pieces.get(url)
-  if (!piece) {
-    piece = load(url)
-      .catch(() => undefined)
-      .then((file) => {
-        ready.set(url, file)
-        return file
-      })
-    pieces.set(url, piece)
-  }
-  return piece
-}
-
-const wornUrls = (gear: HeroLook['gear']) => [...new Set(GEAR_SLOTS.flatMap((slot) => (gear?.[slot] ? [gear[slot]!.url] : [])))]
-
-/** Everything a hero's gear needs; undefined when it wears none or its body has no sockets. */
-export async function loadGear(body: string, gear: HeroLook['gear'], load: (url: string) => Promise<Gltf>): Promise<LoadedGear | undefined> {
-  const urls = wornUrls(gear)
-  if (!urls.length) return undefined
-  const [kit, ...files] = await Promise.all([bodyKit(body), ...urls.map((url) => loadPiece(url, load))])
-  if (!kit?.sockets) return undefined
-  return { sockets: kit.sockets, files: new Map(urls.flatMap((url, i) => (files[i] ? [[url, files[i]!] as const] : []))) }
-}
-
-/**
- * The same from what has already loaded, for drawing in one go (the roster's busts): null while anything is still on
- * its way, calling `changed` as each piece lands; undefined when there's nothing to wear.
- */
-export function gearNow(body: string, gear: HeroLook['gear'], load: (url: string) => Promise<Gltf>, changed: () => void): LoadedGear | undefined | null {
-  const urls = wornUrls(gear)
-  if (!urls.length) return undefined
-  const kit = bodyKitNow(body, changed)
-  let waiting = kit === null
-  for (const url of urls) {
-    if (ready.has(url)) continue
-    waiting = true
-    void loadPiece(url, load).then(changed)
-  }
-  if (waiting) return null
-  if (!kit?.sockets) return undefined
-  return { sockets: kit.sockets, files: new Map(urls.flatMap((url) => (ready.get(url) ? [[url, ready.get(url)!] as const] : []))) }
 }

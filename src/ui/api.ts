@@ -1,13 +1,16 @@
 import { requestStats, type Build } from '../charter/build.js'
 import { parseStatWishes } from '../charter/chat.js'
-import type { LookColor, PieceKind } from '../charter/look.js'
+import type { PieceKind, WearSlot } from '../charter/look.js'
 import { floorBreach, offlineReading, readingText, type Reading, type ReadInput } from '../forge/reading.js'
 import type { LimitHit } from '../charter/types.js'
 import type { PieceEntry } from '../kit/pieces.js'
+import type { ItemSlot } from '../kit/wear/item.js'
+import type { LibraryEntry } from '../kit/wear/library.js'
 import type { GateOutcome } from '../sim/gate.js'
 import type { SliceRequest, SliceResult } from '../sim/gate-protocol.js'
 import { prepareImage, type PreparedImage } from './common/image-prep.js'
 import type { FaceFinding } from './forge/face/find.js'
+import type { OutfitColours } from './forge/outfit.js'
 
 /**
  * Forge and Loadout I/O. Every Forge call has an offline path, so making a hero keeps working without the API (R13):
@@ -67,14 +70,19 @@ export interface SignInStart {
   devLink?: string
 }
 
-/** A piece being generated into the asset repository, and the piece once it's there. */
+/** A piece or garment being generated into the asset repository, and what it made once it's there. */
 export interface PieceJob {
   id: string
-  kind: PieceKind
+  /** A piece's kind, or a garment's slot. */
+  kind: PieceKind | WearSlot
+  /** Set for a garment job. */
+  slot?: WearSlot
   name: string
   status: 'running' | 'done' | 'failed'
   error?: string
   piece?: PieceEntry
+  /** The finished garment, as the wardrobe lists it. */
+  item?: LibraryEntry
 }
 
 export class ApiError extends Error {
@@ -89,6 +97,8 @@ export class ApiError extends Error {
 /** The asset repository from the Forge: search it free, and generate what it lacks (signed in, for credits). */
 export interface PieceDeps {
   searchPieces(query: string, kind?: PieceKind): Promise<PieceEntry[]>
+  /** The wardrobe's items for a search: the built-ins that match, then the community's garments and pieces. */
+  searchItems(query: string, slot?: ItemSlot): Promise<LibraryEntry[]>
   /** Whether generating is switched on for this deployment. */
   generationReady(): Promise<boolean>
   session(): Promise<SessionView>
@@ -97,7 +107,8 @@ export interface PieceDeps {
   credits(): Promise<CreditsView>
   claimFree(): Promise<number>
   purchase(pack: string): Promise<{ url: string }>
-  startPiece(input: { prompt: string; kind: PieceKind; name?: string; imageUrl?: string }): Promise<{ job: PieceJob; balance: number }>
+  /** A piece of gear for a kind, or with a slot instead, a garment for that wardrobe slot. */
+  startPiece(input: { prompt: string; kind?: PieceKind; slot?: WearSlot; name?: string; imageUrl?: string }): Promise<{ job: PieceJob; balance: number }>
   pollPiece(id: string): Promise<{ job: PieceJob; balance: number }>
 }
 
@@ -105,7 +116,7 @@ export interface ForgeDeps {
   /** The Forge's reading of a hero before it builds: its look, gear, kit and questions (src/forge/reading.ts). */
   read(input: ReadRequest): Promise<ReadResponse>
   /** The outfit's colours on a prepared image, read away from the face; empty when it can't be read. */
-  outfitColours(image: Blob, face?: FaceFinding): Promise<Partial<Record<LookColor, string>>>
+  outfitColours(image: Blob, face?: FaceFinding): Promise<OutfitColours>
   chat(build: Build, message: string): Promise<ChatResponse>
   runGate(build: Build): Promise<GateOutcome>
   /** Decode, shrink and re-encode a reference image before it is uploaded. */
@@ -273,6 +284,10 @@ export const livePieceDeps: PieceDeps = {
   async searchPieces(query, kind) {
     const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) })
     return (await call<{ pieces: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces
+  },
+  async searchItems(query, slot) {
+    const params = new URLSearchParams({ q: query, ...(slot ? { slot } : {}) })
+    return (await call<{ items: LibraryEntry[] }>(`/api/assets/items?${params}`)).items
   },
   generationReady: async () => (await call<{ ready: boolean }>('/api/pieces')).ready,
   session: () => call<SessionView>('/api/auth/session'),

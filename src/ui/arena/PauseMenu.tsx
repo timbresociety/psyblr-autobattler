@@ -43,7 +43,7 @@ export function VolumeControl({ compact = false }: { compact?: boolean }) {
 }
 
 /** P pauses the match (U18, AE9): the engine freezes until Resume. */
-export function PauseMenu({ onResume, onRestart, onBack }: { onResume: () => void; onRestart: () => void; onBack: () => void }) {
+export function PauseMenu({ onResume, onRestart, onBack, back = 'Back to staging' }: { onResume: () => void; onRestart: () => void; onBack: () => void; back?: string }) {
   return (
     <div className="arena-overlay pause-menu hud-screen" role="dialog" aria-label="Paused">
       <div className="hud-menu">
@@ -59,7 +59,7 @@ export function PauseMenu({ onResume, onRestart, onBack }: { onResume: () => voi
             Restart with this setup
           </button>
           <button className="hud-btn big" onClick={onBack}>
-            Back to staging
+            {back}
           </button>
         </div>
         <VolumeControl />

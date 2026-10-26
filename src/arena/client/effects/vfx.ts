@@ -266,6 +266,8 @@ export interface SpriteSpec {
   alpha?: number
   /** Only fly upward and outward (0-1 bias), for dust and debris. */
   up?: number
+  /** An atlas cell by number, in place of `kind`: a motif on the motif sheet. */
+  cell?: number
 }
 
 /**
@@ -289,6 +291,8 @@ export class SpritePool {
     private readonly capacity: number,
     atlas: THREE.Texture,
     blending: THREE.Blending,
+    /** Cells per side of the atlas: 2 for the effect sprites, 4 for the motif sheet. */
+    grid = 2,
   ) {
     const attr = (n: number) => {
       const a = new THREE.InstancedBufferAttribute(new Float32Array(capacity * n), n)
@@ -322,8 +326,9 @@ export class SpritePool {
     material.scaleNode = mix(tm.z, tm.w, age).mul(live)
     material.rotationNode = ex.z.mul(t)
     const cell = ex.w
-    // the canvas is flipped on upload, so the atlas's top row (glow, smoke) sits at v 0.5-1
-    const cellUV = uv().mul(0.5).add(vec2(mod(cell, 2).mul(0.5), float(1).sub(floor(cell.div(2))).mul(0.5)))
+    const g = float(grid)
+    // the canvas is flipped on upload, so the atlas's top row (glow, smoke) sits at the top of v
+    const cellUV = uv().div(g).add(vec2(mod(cell, g).div(g), g.sub(1).sub(floor(cell.div(g))).div(g)))
     const tex = texture(atlas, cellUV)
     const fade = smoothstep(0, 0.12, age).mul(float(1).sub(age).pow(1.3))
     material.colorNode = vec4(col.xyz.mul(tex.xyz), 1)
@@ -362,7 +367,7 @@ export class SpritePool {
     const life = spec.life * (0.7 + this.rnd() * 0.6)
     const grow = 0.8 + this.rnd() * 0.4
     this.timing.setXYZW(i, now, life, spec.size[0] * grow, spec.size[1] * grow)
-    this.extra.setXYZW(i, spec.gravity ?? 0, spec.drag ?? 0, (spec.spin ?? 0) * (this.rnd() < 0.5 ? -1 : 1), CELL[spec.kind])
+    this.extra.setXYZW(i, spec.gravity ?? 0, spec.drag ?? 0, (spec.spin ?? 0) * (this.rnd() < 0.5 ? -1 : 1), spec.cell ?? CELL[spec.kind])
     this.tint.setXYZW(i, spec.color.r, spec.color.g, spec.color.b, spec.alpha ?? 1)
   }
 
@@ -383,7 +388,8 @@ export class Trail {
 
   constructor(
     private readonly length: number,
-    private readonly width: number,
+    /** Metres across at the head; a reused trail takes the width of its new shot. */
+    public width: number,
     color: THREE.Color,
   ) {
     this.positions = new Float32Array(length * 2 * 3)
@@ -474,4 +480,455 @@ export function arcGeometry(inner: number, outer: number, start: number, length:
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
   g.setIndex(index)
   return g
+}
+
+// ---------------------------------------------------------------------------------------------- skill looks
+
+/**
+ * The motif sheet: sixteen little pictures in white, four by four, in the order of MOTIFS (src/charter/skill-look.ts),
+ * for trails that shed coins, notes, leaves or code.
+ */
+export function motifAtlas(): THREE.CanvasTexture {
+  return canvas(512, (ctx, size) => {
+    const c = size / 4
+    ctx.fillStyle = ctx.strokeStyle = '#ffffff'
+    ctx.shadowColor = 'rgba(255,255,255,0.8)'
+    ctx.shadowBlur = 6
+    ctx.lineCap = ctx.lineJoin = 'round'
+    const cells: ((x: CanvasRenderingContext2D) => void)[] = [
+      // coin
+      (x) => {
+        x.beginPath(), x.arc(0, 0, 40, 0, Math.PI * 2), x.fill()
+        x.globalCompositeOperation = 'destination-out'
+        x.lineWidth = 5
+        x.beginPath(), x.arc(0, 0, 31, 0, Math.PI * 2), x.stroke()
+        x.font = 'bold 46px sans-serif'
+        x.textAlign = 'center'
+        x.textBaseline = 'middle'
+        x.fillText('$', 0, 3)
+      },
+      // note
+      (x) => {
+        x.save(), x.translate(-12, 26), x.rotate(-0.4), x.beginPath(), x.ellipse(0, 0, 17, 12, 0, 0, Math.PI * 2), x.fill(), x.restore()
+        x.lineWidth = 7
+        x.beginPath(), x.moveTo(3, 22), x.lineTo(3, -40), x.quadraticCurveTo(30, -26, 26, -2), x.stroke()
+      },
+      // leaf
+      (x) => {
+        x.beginPath(), x.moveTo(0, 44), x.quadraticCurveTo(-42, 0, 0, -44), x.quadraticCurveTo(42, 0, 0, 44), x.fill()
+        x.globalCompositeOperation = 'destination-out'
+        x.lineWidth = 4
+        x.beginPath(), x.moveTo(0, 40), x.lineTo(0, -36), x.stroke()
+      },
+      // petal
+      (x) => {
+        x.beginPath(), x.moveTo(0, 42), x.bezierCurveTo(-46, 10, -30, -40, -6, -36), x.lineTo(0, -26), x.lineTo(6, -36), x.bezierCurveTo(30, -40, 46, 10, 0, 42), x.fill()
+      },
+      // snowflake
+      (x) => {
+        x.lineWidth = 6
+        for (let k = 0; k < 6; k++) {
+          x.save(), x.rotate((k * Math.PI) / 3)
+          x.beginPath(), x.moveTo(0, 0), x.lineTo(0, -44), x.moveTo(0, -24), x.lineTo(-13, -36), x.moveTo(0, -24), x.lineTo(13, -36), x.stroke()
+          x.restore()
+        }
+      },
+      // feather
+      (x) => {
+        x.rotate(0.5)
+        x.beginPath(), x.moveTo(0, 46), x.quadraticCurveTo(-30, 0, 0, -46), x.quadraticCurveTo(26, 0, 0, 46), x.fill()
+        x.globalCompositeOperation = 'destination-out'
+        x.lineWidth = 3
+        x.beginPath(), x.moveTo(0, 46), x.lineTo(0, -42), x.stroke()
+        for (let k = -3; k <= 3; k++) x.beginPath(), x.moveTo(0, k * 11), x.lineTo(-18, k * 11 - 10), x.stroke()
+      },
+      // star
+      (x) => {
+        x.beginPath()
+        for (let k = 0; k < 10; k++) {
+          const r = k % 2 ? 19 : 46
+          const a = (k * Math.PI) / 5 - Math.PI / 2
+          x.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+        }
+        x.fill()
+      },
+      // skull
+      (x) => {
+        x.beginPath(), x.arc(0, -8, 36, 0, Math.PI * 2), x.fill()
+        x.fillRect(-20, 16, 40, 24)
+        x.globalCompositeOperation = 'destination-out'
+        x.beginPath(), x.arc(-14, -6, 10, 0, Math.PI * 2), x.arc(14, -6, 10, 0, Math.PI * 2), x.fill()
+        x.fillRect(-3, 26, 6, 14), x.fillRect(-15, 26, 5, 14), x.fillRect(10, 26, 5, 14)
+      },
+      // heart
+      (x) => {
+        x.beginPath(), x.moveTo(0, 40), x.bezierCurveTo(-60, -4, -26, -54, 0, -20), x.bezierCurveTo(26, -54, 60, -4, 0, 40), x.fill()
+      },
+      // bolt
+      (x) => {
+        x.beginPath(), x.moveTo(10, -46), x.lineTo(-22, 6), x.lineTo(-2, 6), x.lineTo(-12, 46), x.lineTo(24, -10), x.lineTo(4, -10), x.closePath(), x.fill()
+      },
+      // code
+      (x) => {
+        x.font = 'bold 50px monospace'
+        x.textAlign = 'center'
+        x.textBaseline = 'middle'
+        x.fillText('01', 0, 2)
+      },
+      // card
+      (x) => {
+        x.lineWidth = 6
+        x.beginPath(), x.roundRect(-28, -42, 56, 84, 8), x.stroke()
+        x.beginPath(), x.moveTo(0, -18), x.lineTo(14, 0), x.lineTo(0, 18), x.lineTo(-14, 0), x.closePath(), x.fill()
+      },
+      // bubble
+      (x) => {
+        x.lineWidth = 6
+        x.beginPath(), x.arc(0, 0, 38, 0, Math.PI * 2), x.stroke()
+        x.beginPath(), x.arc(-13, -13, 9, 0, Math.PI * 2), x.fill()
+      },
+      // flame
+      (x) => {
+        x.beginPath(), x.moveTo(0, 44), x.bezierCurveTo(-46, 30, -26, -16, 0, -46), x.bezierCurveTo(4, -20, 40, -4, 30, 24), x.bezierCurveTo(24, 40, 10, 44, 0, 44), x.fill()
+        x.globalCompositeOperation = 'destination-out'
+        x.beginPath(), x.moveTo(0, 40), x.bezierCurveTo(-18, 30, -10, 8, 2, -4), x.bezierCurveTo(6, 12, 18, 18, 12, 32), x.closePath(), x.fill()
+      },
+      // rune
+      (x) => {
+        x.lineWidth = 7
+        x.beginPath(), x.moveTo(-14, 44), x.lineTo(-14, -44), x.lineTo(18, -18), x.lineTo(-14, 4), x.lineTo(20, 44), x.stroke()
+      },
+      // shuriken
+      (x) => {
+        x.beginPath()
+        for (let k = 0; k < 8; k++) {
+          const r = k % 2 ? 11 : 46
+          const a = (k * Math.PI) / 4
+          x.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+        }
+        x.fill()
+        x.globalCompositeOperation = 'destination-out'
+        x.beginPath(), x.arc(0, 0, 6, 0, Math.PI * 2), x.fill()
+      },
+    ]
+    cells.forEach((draw, i) => {
+      ctx.save()
+      ctx.translate((i % 4) * c + c / 2, Math.floor(i / 4) * c + c / 2)
+      draw(ctx)
+      ctx.restore()
+    })
+  })
+}
+
+/** Chain links one after another along v, tiling, for grapples: the beam cylinder runs v along its length. */
+export function chainTexture(): THREE.CanvasTexture {
+  return canvas(
+    256,
+    (ctx, s) => {
+      ctx.strokeStyle = 'rgba(255,255,255,1)'
+      ctx.shadowColor = 'rgba(255,255,255,0.7)'
+      ctx.shadowBlur = 8
+      for (let k = 0; k < 4; k++) {
+        const y = (k + 0.5) * (s / 4)
+        // a link seen face on, then one edge on
+        ctx.lineWidth = k % 2 ? 10 : 14
+        ctx.beginPath()
+        if (k % 2) ctx.ellipse(s / 2, y, s / 18, s / 7, 0, 0, Math.PI * 2)
+        else ctx.ellipse(s / 2, y, s / 4.5, s / 7, 0, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+    },
+    true,
+  )
+}
+
+/** A whirlpool seen from above: spiral arms that fade toward the eye and the rim. */
+export function vortexTexture(): THREE.CanvasTexture {
+  return canvas(512, (ctx, s) => {
+    ctx.translate(s / 2, s / 2)
+    ctx.lineCap = 'round'
+    for (let arm = 0; arm < 5; arm++) {
+      for (let k = 0; k < 60; k++) {
+        const t = k / 60
+        const a = arm * ((Math.PI * 2) / 5) + t * Math.PI * 2.4
+        const r = s * (0.06 + 0.42 * t)
+        ctx.strokeStyle = `rgba(255,255,255,${(Math.sin(t * Math.PI) * 0.9).toFixed(3)})`
+        ctx.lineWidth = 4 + 16 * t
+        ctx.beginPath()
+        ctx.arc(0, 0, r, a, a + 0.12)
+        ctx.stroke()
+      }
+    }
+  })
+}
+
+/** A spinning disc: a hot core and a bright serrated rim. */
+export function discTexture(): THREE.CanvasTexture {
+  return canvas(256, (ctx, s) => {
+    ctx.translate(s / 2, s / 2)
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s / 2)
+    g.addColorStop(0, 'rgba(255,255,255,0.9)')
+    g.addColorStop(0.55, 'rgba(255,255,255,0.35)')
+    g.addColorStop(0.8, 'rgba(255,255,255,0.9)')
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    for (let k = 0; k <= 48; k++) {
+      const a = (k / 48) * Math.PI * 2
+      const r = (k % 2 ? 0.44 : 0.5) * s
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r)
+    }
+    ctx.fill()
+  })
+}
+
+/** A flying crescent: bright along its outer edge (v = 1) and in its middle, tapering to points at both ends. */
+export function crescentTexture(): THREE.CanvasTexture {
+  return canvas(256, (ctx, s) => {
+    const along = ctx.createLinearGradient(0, 0, s, 0)
+    along.addColorStop(0, 'rgba(255,255,255,0)')
+    along.addColorStop(0.5, 'rgba(255,255,255,1)')
+    along.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = along
+    ctx.fillRect(0, 0, s, s)
+    ctx.globalCompositeOperation = 'destination-in'
+    const across = ctx.createLinearGradient(0, 0, 0, s)
+    across.addColorStop(0, 'rgba(0,0,0,1)')
+    across.addColorStop(0.2, 'rgba(0,0,0,0.8)')
+    across.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = across
+    ctx.fillRect(0, 0, s, s)
+  })
+}
+
+/** A crescent standing upright with its convex side along +z, ready to fly: `lookAt` aims it. */
+export function crescentGeometry(inner = 0.55, span = Math.PI * 0.9, segments = 28): THREE.BufferGeometry {
+  const pos: number[] = []
+  const uvs: number[] = []
+  const index: number[] = []
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments
+    const a = -span / 2 + span * t
+    for (const [r, v] of [
+      [inner, 0],
+      [1, 1],
+    ]) {
+      pos.push(0, Math.sin(a) * r, Math.cos(a) * r - 0.5)
+      uvs.push(t, v)
+    }
+    if (i < segments) {
+      const k = i * 2
+      index.push(k, k + 1, k + 2, k + 1, k + 3, k + 2)
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  g.setIndex(index)
+  return g
+}
+
+/** A rough rock for meteors: an icosphere with its corners pushed in and out. */
+export function rockGeometry(): THREE.BufferGeometry {
+  const g = new THREE.IcosahedronGeometry(1, 1)
+  const p = g.getAttribute('position')
+  const rnd = seeded(13)
+  const bumps = new Map<string, number>()
+  for (let i = 0; i < p.count; i++) {
+    // the same corner shared by several faces moves once, so the rock stays closed
+    const key = `${p.getX(i).toFixed(3)},${p.getY(i).toFixed(3)},${p.getZ(i).toFixed(3)}`
+    const k = bumps.get(key) ?? 0.78 + rnd() * 0.22
+    bumps.set(key, k)
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k, p.getZ(i) * k)
+  }
+  g.computeVertexNormals()
+  return g
+}
+
+/**
+ * Where a ribbon's points are at `age` seconds: point i of n, written into `out`. A path can say how many points it
+ * wants: a few for a jagged lightning bolt, many for a smooth spiral.
+ */
+export type RibbonPath = ((i: number, n: number, age: number, out: THREE.Vector3) => void) & { points?: number }
+
+export interface Ribbon {
+  path: RibbonPath
+  color: THREE.Color
+  width: number
+  born: number
+  life: number
+  points: number
+  /** Thin to nothing at the far end, like a streak. */
+  taper: boolean
+  flicker: boolean
+  /** Full strength until its last moment, instead of fading over its whole life (tails that last a form). */
+  steady: boolean
+  live: boolean
+}
+
+/** How long a steady ribbon takes to fade out at the end of its life. */
+const STEADY_FADE = 0.3
+
+/**
+ * Camera-facing ribbons along paths that move: lightning arcs struck again many times a second, spirals turning
+ * round a beam, streaks. Every ribbon lives in one buffer, so the lot is a single draw call; a full pool gives its
+ * oldest ribbon to the newest.
+ */
+export class RibbonPool {
+  readonly mesh: THREE.Mesh
+  private readonly positions: Float32Array
+  private readonly colors: Float32Array
+  private readonly ribbons: Ribbon[] = []
+  private next = 0
+  private readonly geo = new THREE.BufferGeometry()
+  private readonly p = new THREE.Vector3()
+  private readonly q = new THREE.Vector3()
+  private readonly side = new THREE.Vector3()
+  private readonly view = new THREE.Vector3()
+
+  constructor(
+    private readonly capacity: number,
+    private readonly points = 64,
+    blending: THREE.Blending = THREE.AdditiveBlending,
+  ) {
+    const verts = capacity * points * 2
+    this.positions = new Float32Array(verts * 3)
+    this.colors = new Float32Array(verts * 4)
+    const index: number[] = []
+    for (let r = 0; r < capacity; r++)
+      for (let i = 0; i < points - 1; i++) {
+        const a = (r * points + i) * 2
+        index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+      }
+    this.geo.setIndex(index)
+    this.geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage))
+    this.geo.setAttribute('color', new THREE.BufferAttribute(this.colors, 4).setUsage(THREE.DynamicDrawUsage))
+    this.mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending, depthWrite: false, side: THREE.DoubleSide }))
+    this.mesh.frustumCulled = false
+    this.mesh.renderOrder = 3
+  }
+
+  spawn(path: RibbonPath, color: THREE.Color, width: number, life: number, now: number, options: { taper?: boolean; flicker?: boolean; steady?: boolean } = {}): Ribbon {
+    const points = Math.min(this.points, Math.max(2, path.points ?? this.points))
+    const ribbon: Ribbon = { path, color: color.clone(), width, born: now, life, points, taper: !!options.taper, flicker: !!options.flicker, steady: !!options.steady, live: true }
+    if (this.ribbons.length < this.capacity) this.ribbons.push(ribbon)
+    else this.ribbons[this.next] = ribbon
+    this.next = (this.next + 1) % this.capacity
+    return ribbon
+  }
+
+  /** End a ribbon early: a steady one fades out over its last moment. Harmless if its slot was already given away. */
+  end(ribbon: Ribbon, now: number) {
+    ribbon.life = Math.min(ribbon.life, now - ribbon.born + STEADY_FADE)
+  }
+
+  live() {
+    return this.ribbons.filter((r) => r.live).length
+  }
+
+  update(now: number, camera: THREE.Camera) {
+    const n = this.points
+    const pos = this.positions
+    const col = this.colors
+    for (let r = 0; r < this.ribbons.length; r++) {
+      const ribbon = this.ribbons[r]
+      if (!ribbon.live) continue
+      const base = r * n * 2
+      const age = now - ribbon.born
+      if (age >= ribbon.life) {
+        ribbon.live = false
+        for (let v = 0; v < n * 2; v++) col[(base + v) * 4 + 3] = 0
+        continue
+      }
+      const m = ribbon.points
+      const fade = (ribbon.steady ? Math.min(1, (ribbon.life - age) / STEADY_FADE) : 1 - age / ribbon.life) * (ribbon.flicker ? 0.55 + 0.45 * Math.sin(age * 90 + r) ** 2 : 1)
+      const { r: cr, g: cg, b: cb } = ribbon.color
+      for (let i = 0; i < n; i++) {
+        const v = (base + i * 2) * 3
+        const c = (base + i * 2) * 4
+        if (i >= m) {
+          // the slot's unused points fold onto the last one, unseen
+          pos.copyWithin(v, v - 6, v)
+          col[c + 3] = col[c + 7] = 0
+          continue
+        }
+        ribbon.path(i, m, age, this.p)
+        if (i < m - 1) ribbon.path(i + 1, m, age, this.q)
+        else {
+          ribbon.path(i - 1, m, age, this.q)
+          this.q.subVectors(this.p, this.q).add(this.p)
+        }
+        this.view.subVectors(camera.position, this.p)
+        this.side.subVectors(this.q, this.p).cross(this.view)
+        const along = ribbon.taper ? 1 - i / (m - 1) : 1
+        if (this.side.lengthSq() > 1e-12) this.side.normalize().multiplyScalar((ribbon.width * along) / 2)
+        const { x, y, z } = this.p
+        const s = this.side
+        pos[v] = x + s.x
+        pos[v + 1] = y + s.y
+        pos[v + 2] = z + s.z
+        pos[v + 3] = x - s.x
+        pos[v + 4] = y - s.y
+        pos[v + 5] = z - s.z
+        const alpha = fade * along ** 1.5
+        col[c] = col[c + 4] = cr
+        col[c + 1] = col[c + 5] = cg
+        col[c + 2] = col[c + 6] = cb
+        col[c + 3] = col[c + 7] = alpha
+      }
+    }
+    this.geo.getAttribute('position').needsUpdate = true
+    this.geo.getAttribute('color').needsUpdate = true
+  }
+}
+
+/** A cheap repeatable hash in [-1, 1], for lightning that jitters the same way within a strike. */
+export function jitter(a: number, b: number, c: number): number {
+  const x = Math.sin(a * 127.1 + b * 311.7 + c * 74.7) * 43758.5453
+  return (x - Math.floor(x)) * 2 - 1
+}
+
+/**
+ * A lightning path from a to b, struck again `rate` times a second: each strike bends the middle up to `reach` metres
+ * off the straight line, never the ends.
+ */
+export function lightning(a: THREE.Vector3, b: THREE.Vector3, reach: number, seed: number, rate = 22): RibbonPath {
+  const along = new THREE.Vector3().subVectors(b, a)
+  const n1 = new THREE.Vector3(along.z, 0, -along.x)
+  if (n1.lengthSq() < 1e-8) n1.set(1, 0, 0)
+  n1.normalize()
+  const n2 = new THREE.Vector3().crossVectors(along, n1).normalize()
+  const path: RibbonPath = (i, n, age, out) => {
+    const t = i / (n - 1)
+    const strike = Math.floor(age * rate)
+    const bend = Math.sin(Math.PI * t) * reach
+    out.copy(a).addScaledVector(along, t).addScaledVector(n1, jitter(seed, strike, i) * bend).addScaledVector(n2, jitter(seed + 7, strike, i) * bend)
+  }
+  // a dozen kinks read as a bolt; more turns it into noise
+  path.points = 12
+  return path
+}
+
+/** A spiral round the line from a to b, `turns` times over its length, turning `spin` times a second. */
+export function spiral(a: THREE.Vector3, b: THREE.Vector3, radius: number, turns: number, spin: number, phase = 0): RibbonPath {
+  const along = new THREE.Vector3().subVectors(b, a)
+  const n1 = new THREE.Vector3(along.z, 0, -along.x)
+  if (n1.lengthSq() < 1e-8) n1.set(1, 0, 0)
+  n1.normalize()
+  const n2 = new THREE.Vector3().crossVectors(along, n1).normalize()
+  const path: RibbonPath = (i, n, age, out) => {
+    const t = i / (n - 1)
+    const angle = phase + t * turns * Math.PI * 2 + age * spin * Math.PI * 2
+    out.copy(a).addScaledVector(along, t).addScaledVector(n1, Math.cos(angle) * radius).addScaledVector(n2, Math.sin(angle) * radius)
+  }
+  // about ten points a turn keeps it round
+  path.points = Math.ceil(turns * 10) + 1
+  return path
+}
+
+/** A straight line from a to b that stays put: a streak, laid with a handful of points so it can taper. */
+export function straight(a: THREE.Vector3, b: THREE.Vector3): RibbonPath {
+  const path: RibbonPath = (i, n, _age, out) => out.lerpVectors(a, b, i / (n - 1))
+  path.points = 8
+  return path
 }

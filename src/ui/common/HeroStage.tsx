@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { characterLook, classicCharacterMaterial, paintModel, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
+import { characterLook, classicCharacterMaterial, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
-import { loadGear, wearGear } from '../../arena/client/gear.js'
+import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
+import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
+import { loadWear } from '../../arena/client/wear/items.js'
 import type { HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
 import type { Build } from '../../charter/build'
@@ -29,6 +31,10 @@ export interface HeroStageProps {
   size?: SizeClass
   /** With `size`, rings the plinth with the hit capsule's real radius (the Forge's size picker). */
   hitbox?: boolean
+  /** Holds the hero at this angle (radians, 0 facing the camera) instead of turning it slowly; a drag still turns it. */
+  facing?: number
+  /** Plays everything, clips and cloth, at this fraction of real time: slow motion for a dev bench. */
+  speed?: number
   label: string
   className?: string
 }
@@ -69,9 +75,9 @@ function radialTexture(stops: [number, string][]): THREE.CanvasTexture {
 
 const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2).translate(0, y, 0)
 
-/** A neutral figure for the empty stage: a generic body, no cape or armour, short hair. */
+/** A neutral figure for the empty stage: a generic body, nothing worn. */
 function standInLook(): CharacterLook {
-  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', hair: 'crop', armour: false, cape: false }
+  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', outfit: {} }
 }
 
 function disposeModel(model: THREE.Object3D) {
@@ -81,14 +87,18 @@ function disposeModel(model: THREE.Object3D) {
     if (!mesh.isMesh) return
     // the painted geometry is ours; its buffers are shared with the cached file, which only this renderer uploaded
     mesh.geometry.dispose()
+    // so is each clone's skeleton (the outfit's own, when its cloth hangs on bones of its own)
+    ;(o as THREE.SkinnedMesh).skeleton?.dispose()
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m)
   })
   materials.forEach((m) => m.dispose())
 }
 
-export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, className = '' }: HeroStageProps) {
+export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing, speed = 1, label, className = '' }: HeroStageProps) {
   const host = useRef<HTMLDivElement>(null)
   const live = useRef<Live | undefined>(undefined)
+  const pace = useRef({ facing, speed })
+  pace.current = { facing, speed }
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const reduced = useRef(prefersReducedMotion())
@@ -136,7 +146,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     const shadow = new THREE.Mesh(flat(new THREE.CircleGeometry(0.62, 48), 0.006), new THREE.MeshBasicMaterial({ map: radialTexture([[0, 'rgba(0,0,0,0.8)'], [0.55, 'rgba(0,0,0,0.3)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false }))
     const turntable = new THREE.Group()
     const sizer = new THREE.Group()
-    turntable.rotation.y = START_ANGLE
+    turntable.rotation.y = pace.current.facing ?? START_ANGLE
     turntable.add(sizer)
     sizer.add(shadow)
     scene.add(glow, ring, hitbox, turntable)
@@ -218,14 +228,14 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
       if (!visible) return
       acc += dt
       if (acc < 1 / FPS && !dragging) return
-      const step = acc
+      const step = acc * pace.current.speed
       acc = 0
       const calm = reduced.current
       if (!calm) state.mixer?.update(step)
       if (!dragging && Math.abs(spin) > 0.01) {
         turntable.rotation.y += spin * step
         spin *= Math.pow(0.04, step)
-      } else if (!dragging && !calm && performance.now() > resumeAt) {
+      } else if (!dragging && !calm && pace.current.facing === undefined && performance.now() > resumeAt) {
         turntable.rotation.y += step * 0.26
       }
       if (Math.abs(state.scale - state.targetScale) > 0.002) {
@@ -237,6 +247,11 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
       // reduced motion: nothing moves on its own, so only changes are drawn
       if (calm && !state.dirty && !dragging) return
       state.dirty = false
+      // the outfit's loose cloth swings with the turntable and the idle, or holds still under reduced motion
+      if (state.model) {
+        if (calm) restClothOn(state.model)
+        else settleCloth(state.model, step)
+      }
       renderer.render(scene, camera)
     })
 
@@ -274,17 +289,17 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const [atlas, gear] = look ? await Promise.all([heroAtlas(file, painted), loadGear(painted.build, painted.gear, modelFile)]) : [null, undefined]
-        return { file, atlas, gear }
+        const [atlas, wear] = look ? await Promise.all([heroAtlas(file, painted), loadWear(painted.build, painted.outfit, modelFile)]) : [null, undefined]
+        return { file, atlas, wear }
       })
       .then(
-      ({ file, atlas, gear }) => {
+      ({ file, atlas, wear }) => {
         if (cancelled || live.current !== state) return
         const model = cloneSkinned(file.scene)
-        // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
+        // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-        paintModel(model, painted, (map, normalMap) => (look ? classicCharacterMaterial(map, normalMap) : empty), atlas)
-        if (gear) wearGear(model, painted.gear, gear)
+        const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
+        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty) }, atlas)
         if (state.model) {
           state.mixer?.stopAllAction()
           state.sizer.remove(state.model)
@@ -328,7 +343,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, label, 
     const mixer = state.mixer
     action.reset()
     action.setLoop(THREE.LoopOnce, 1)
-    action.clampWhenFinished = false
+    // held on its last frame while idle fades back in: let go, the body would blend toward its bind pose meanwhile
+    action.clampWhenFinished = true
     action.fadeIn(0.12).play()
     idle.fadeOut(0.12)
     const done = (e: { action: THREE.AnimationAction }) => {

@@ -37,6 +37,8 @@ export interface MatchSetup {
   seed: number
   /** The side the streamer staged first and may control (R2, R14). */
   side: Team
+  /** Heroes the AI leaves standing, by index: a training dummy that only takes hits. */
+  idle?: readonly number[]
 }
 
 export interface HudHero {
@@ -360,7 +362,7 @@ function drawHeroes(
     const at = { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
     const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
     const view = views[i]
-    view.setSize?.(h.size)
+    view.setForm?.(h.formUntil > 0, h.size)
     // under load, heroes far from the camera animate every other frame
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
     const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
@@ -373,6 +375,7 @@ function drawHeroes(
     if (fallen) {
       view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
       view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
+      view.settle?.(scaled, far)
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
@@ -380,6 +383,8 @@ function drawHeroes(
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
+    // the outfit's loose cloth swings once the hero stands where it's drawn
+    view.settle?.(scaled, far)
     return at
   })
 }
@@ -507,6 +512,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
       prev = arena.match.heroes.map((h) => ({ ...h.position }))
       const commands = aiCommands(arena)
+      for (const i of setup.idle ?? []) commands[i] = undefined
       const human = arena.match.human
       if (human !== undefined) commands[human] = hooks.human?.()
       const events = tick(arena.match, arena.setups, commands, rules)

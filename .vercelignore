@@ -10,3 +10,5 @@ coverage/
 .dev-store/
 # Route tests run locally; the deployment never needs them.
 routes/**/*.test.ts
+# Scratch work (scripts, screenshots, cookies from checks) stays on this machine.
+.scratch/

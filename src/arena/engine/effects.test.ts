@@ -88,7 +88,7 @@ describe('AI casts transformations (review #2)', () => {
     const f = fight([withSlot(defaultBuild('tank'), 'ultimate', 'tank-titan-form')], [defaultBuild('fighter')])
     const me = f.m.heroes[0]
     me.cooldowns.ultimate = 0
-    f.run(60 * 30, () => f.events.some((e) => e.type === 'resize' && e.hero === 0 && e.phase === 'start'))
-    expect(f.events.some((e) => e.type === 'resize' && e.hero === 0 && e.phase === 'start')).toBe(true)
+    f.run(60 * 30, () => f.events.some((e) => e.type === 'form' && e.hero === 0 && e.phase === 'start'))
+    expect(f.events.some((e) => e.type === 'form' && e.hero === 0 && e.phase === 'start')).toBe(true)
   })
 })

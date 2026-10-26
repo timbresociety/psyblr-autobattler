@@ -32,7 +32,7 @@ const SYNONYMS: Record<string, string[]> = {
   yanks: ['pull'],
   hook: ['hook', 'grapple'],
   chain: ['chain', 'hook'],
-  saiyan: ['saiyan', 'transform', 'super'],
+  saiyan: ['saiyan', 'transform', 'ascend'],
   transforms: ['transform'],
   transformation: ['transform'],
   powers: ['power-up'],

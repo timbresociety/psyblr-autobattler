@@ -5,8 +5,9 @@ model inside the wheel, so nothing else is downloaded.
 
     uv run --python 3.12 --with mediapipe==0.10.14 --with numpy --with pillow python tools/textures/landmarks.py in.png out.json [--overlay out.png]
 
-With `--portrait out.webp`, the image is first squared to 768 px and saved as the portrait the character pipeline reads
-(tools/blender/portraits/<hero>.webp), and the landmarks are measured on that.
+With `--portrait out.webp`, the image is first squared to 768 px and saved as a portrait, and the landmarks are measured
+on that. A body's portrait lives in tools/blender/portraits/; a demo hero's goes to public/kit/faces/<id>.webp with its
+landmarks in tools/blender/portraits/<id>.lm.json (scripts/demo-faces.ts reads both).
 """
 
 import json

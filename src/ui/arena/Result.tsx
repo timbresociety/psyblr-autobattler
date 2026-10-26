@@ -48,7 +48,7 @@ function MvpCard({ hero, info, seconds }: { hero: HudHero; info?: HudHeroInfo; s
 }
 
 /** The end of a match (U18): winner, reason, the MVP, per-hero numbers, and a rematch from the same staging. */
-export function Result({ state, side, heroes, onRematch, onBack }: { state: HudState; side: 0 | 1; heroes?: readonly HudHeroInfo[]; onRematch: () => void; onBack: () => void }) {
+export function Result({ state, side, heroes, onRematch, onBack, back = 'Back to staging' }: { state: HudState; side: 0 | 1; heroes?: readonly HudHeroInfo[]; onRematch: () => void; onBack: () => void; back?: string }) {
   const outcome = state.winner === 'draw' ? 'draw' : state.winner === side ? 'win' : 'loss'
   const title = outcome === 'draw' ? 'Draw' : outcome === 'win' ? 'Your side wins' : 'Enemy side wins'
   const ranked = [...state.heroes].sort((a, b) => b.damageDealt - a.damageDealt)
@@ -95,7 +95,7 @@ export function Result({ state, side, heroes, onRematch, onBack }: { state: HudS
           Rematch
         </button>
         <button className="hud-btn big" onClick={onBack}>
-          Back to staging
+          {back}
         </button>
       </div>
     </div>

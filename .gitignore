@@ -10,3 +10,4 @@ tools/balance/out/
 .vercel
 .dev-store/
 __pycache__/
+.scratch/

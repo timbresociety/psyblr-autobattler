@@ -73,11 +73,12 @@ class Body:
         return (h if end == 'head' else t).copy()
 
 
-def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0):
+def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, scale=None):
     """
     A human from MPFB: `macro` overrides the default macro dict (gender, age, muscle, weight, proportions, height,
     race), `targets` maps target names to weights, `proxy` names the topology. Scaled so the top of the head is at
-    `height` metres. `extra(human)` may load more targets before the rig and proxy are fitted (face fitting).
+    `height` metres, or by `scale` exactly when given (a variant of a body keeps that body's scale, so subtracting the
+    two leaves only the change). `extra(human)` may load more targets before the rig and proxy are fitted (face fitting).
     """
     clear_scene()
     m = TargetService.get_default_macro_info_dict()
@@ -141,8 +142,7 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0):
             Jn = np.array(J)
             lm = (Jn + (lm[0] - Jn) * head_scale, lm[1])
         joints['head'] = (joints['head'][0], J + (joints['head'][1] - J) * head_scale)
-    top = max(v.co.z for v in hires.data.vertices)
-    s = height / top
+    s = scale if scale is not None else height / max(v.co.z for v in hires.data.vertices)
     S = Matrix.Scale(s, 4)
     for o in (mesh, hires):
         o.data.transform(S)
@@ -168,28 +168,39 @@ def group_weight(obj, name):
     return out
 
 
-def refine_head(body, levels=1):
+def face_polygons(body):
+    """The proxy faces a likeness needs refined: front-facing faces of the head (the scalp hides under hair)."""
+    obj = body.mesh
+    head_w = group_weight(obj, 'head')
+    return sorted(p.index for p in obj.data.polygons if all(head_w[v] > 0.5 for v in p.vertices) and p.normal.y < -0.25)
+
+
+def refine_head(body, faces=None, levels=1):
     """
     Give the face the density a likeness needs: subdivide the proxy's face and pull every head vertex onto the
     high-res MakeHuman surface, so nose, lips and jaw keep their real shape. Neighbouring neck faces take the split
     edges as n-gons (triangulated on export), so nothing cracks.
+
+    `faces` lists the proxy faces to split. The bodies pass the stored list (topology.json), so every body built on that
+    proxy comes out with the same vertices in the same order; without it the face is picked by its normals, which
+    depend on the shape. Returns the faces it split.
     """
     obj = body.mesh
-    head_w = group_weight(obj, 'head')
-    neck_w = group_weight(obj, 'neck_01')
+    if faces is None:
+        faces = face_polygons(body)
+    # the proxy's own vertices come first; refining appends the split points after them (triangulate reads this)
+    body.proxy_verts = len(obj.data.vertices)
     bm = bmesh.new()
     bm.from_mesh(obj.data)
-    bm.verts.ensure_lookup_table()
-    # only the face itself (front-facing head faces): the scalp hides under hair and the back of the head reads fine
-    bm.normal_update()
-    faces = [f for f in bm.faces if all(head_w[v.index] > 0.5 for v in f.verts) and f.normal.y < -0.25]
-    edges = list({e for f in faces for e in f.edges})
+    bm.faces.ensure_lookup_table()
+    picked = [bm.faces[i] for i in faces]
+    # sorted, so the new vertices are made in the same order on every body
+    edges = sorted({e for f in picked for e in f.edges}, key=lambda e: e.index)
     for _ in range(levels):
         res = bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=True, smooth=0.0)
-        new_edges = [e for e in res['geom'] if isinstance(e, bmesh.types.BMEdge)]
-        edges = new_edges
+        edges = [e for e in res['geom'] if isinstance(e, bmesh.types.BMEdge)]
     bvh = body.bvh()
-    zmin = min(v.co.z for f in faces for v in f.verts) - 0.02
+    zmin = min(v.co.z for f in picked for v in f.verts) - 0.02
     for v in bm.verts:
         if v.co.z < zmin:
             continue
@@ -199,7 +210,43 @@ def refine_head(body, levels=1):
     bm.to_mesh(obj.data)
     bm.free()
     obj.data.update()
-    del neck_w
+    return list(faces)
+
+
+def triangulate(obj, corners):
+    """
+    Split every face into triangles the same way on every body: a quad along its first diagonal, an n-gon as a fan
+    from one of its `corners` (vertex indices below that are the proxy's own; the rest were split points) whose
+    neighbours are corners too, so no sliver lies along a split edge. Left to the exporter, each quad would take its
+    shorter diagonal, which depends on the shape.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) == 4], quad_method='FIXED')
+    for f in [f for f in bm.faces if len(f.verts) > 4]:
+        v = [l.vert for l in f.loops]
+        n = len(v)
+        real = [i for i in range(n) if v[i].index < corners]
+        clear = [i for i in real if v[i - 1].index < corners and v[(i + 1) % n].index < corners]
+        o = min(clear or real or [0], key=lambda i: v[i].index)
+        v = v[o:] + v[:o]
+        for k in range(2, n - 1):
+            # cut the triangle (v0, v[k-1], v[k]) off; carry on with whichever side still has more than three corners
+            nf, _ = bmesh.utils.face_split(f, v[0], v[k])
+            if len(nf.verts) > 3:
+                f = nf
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
+def positions(obj):
+    """An object's vertex positions as an (n, 3) array."""
+    import numpy as np
+
+    a = np.empty(len(obj.data.vertices) * 3)
+    obj.data.vertices.foreach_get('co', a)
+    return a.reshape(-1, 3)
 
 
 def make_eyes(body, iris_dir=Vector((0, -1, 0)), segments=12, rings=8):
@@ -207,9 +254,11 @@ def make_eyes(body, iris_dir=Vector((0, -1, 0)), segments=12, rings=8):
     out = []
     for i, (c, r) in enumerate(body.eyes):
         bm = bmesh.new()
-        bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=rings, radius=r * 0.97)
+        # made at unit size and scaled after: the generator's vertex order depends on the radius, and every body's
+        # eyes must match vertex for vertex
+        bmesh.ops.create_uvsphere(bm, u_segments=segments, v_segments=rings, radius=1.0)
         rot = Vector((0, 0, 1)).rotation_difference(iris_dir).to_matrix().to_4x4()
-        bmesh.ops.transform(bm, matrix=Matrix.Translation(c) @ rot, verts=bm.verts)
+        bmesh.ops.transform(bm, matrix=Matrix.Translation(c) @ rot @ Matrix.Scale(r * 0.97, 4), verts=bm.verts)
         me = bpy.data.meshes.new('eye')
         bm.to_mesh(me)
         bm.free()

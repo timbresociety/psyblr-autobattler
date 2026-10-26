@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hydrateBuild } from './build.js'
-import { scoreTemplate } from './budget.js'
+import { scoreTemplate, validateTemplate } from './budget.js'
 import { missingGeometry } from './geometry.js'
 import { LOCOMOTION_HINT, locomotion } from './locomotion.js'
 import { ALL_SIZE_CLASSES, SIZE_CLASSES, isAnySizeClass, isSizeClass } from './sizes.js'
@@ -8,8 +8,10 @@ import { proposeBuild } from './build.js'
 import { getRole } from './roles.js'
 import { deriveSheet } from './stats.js'
 import { CATALOG, getTemplate } from './templates/catalog.js'
-import { at, phys, resize, ultimate, ai } from './templates/dsl.js'
+import { at, form, phys, resize, ultimate, ai } from './templates/dsl.js'
 import { renderTooltip } from './tooltip.js'
+import type { Template } from './types.js'
+import { transformOf } from '../forge/form.js'
 
 describe('six size classes (R44, AE10)', () => {
   it('offers five choosable classes and keeps colossal for transformations', () => {
@@ -36,16 +38,52 @@ describe('transformations resize the hero (R23, R29)', () => {
     expect(scoreTemplate(ultimate({ ...base, effects: [resize('huge', 8), phys(100)] }))).toBeLessThan(scoreTemplate(grown))
   })
 
-  it('every transform-tagged ultimate carries a resize, and Titan Form goes colossal', () => {
+  it('every transform-tagged ultimate carries a resize or a form, and Titan Form goes colossal', () => {
     const transforms = CATALOG.filter((t) => t.tags.includes('transform'))
     expect(transforms.length).toBeGreaterThan(0)
-    for (const t of transforms) expect(t.effects.some((e) => e.kind === 'resize'), t.id).toBe(true)
+    for (const t of transforms) expect(transformOf(t), t.id).toBeDefined()
     expect(getTemplate('tank-titan-form').effects).toContainEqual({ kind: 'resize', sizeClass: 'colossal', duration: 8 })
   })
 
   it("Titan Form's tooltip states its target class and duration", () => {
     const sheet = deriveSheet(getRole('tank'), getRole('tank').defaultSpread).sheet
     expect(renderTooltip(getTemplate('tank-titan-form'), { name: 'Fox Titan', flavour: '' }, sheet).lines).toContain('Becomes Colossal for 8 s')
+  })
+})
+
+describe('a transformation grows the hero, keeps its size or shrinks it (R23)', () => {
+  const base = { id: 'x', name: 'X', roles: ['fighter' as const], tags: ['x'], delivery: at.self(), cooldown: 60, ai: ai('engage', 1) }
+  const problems = (t: Template) => {
+    const v = validateTemplate(t)
+    return v.ok ? [] : v.errors.map((e) => e.field)
+  }
+
+  it('the catalogue has one of each: shrink, keep, grow huge and grow colossal', () => {
+    expect(transformOf(getTemplate('assassin-shrink-form'))).toEqual({ size: 'tiny', duration: 8 })
+    expect(transformOf(getTemplate('fighter-ascended-form'))).toEqual({ duration: 10 })
+    expect(transformOf(getTemplate('fighter-avatar-form'))).toEqual({ size: 'huge', duration: 8 })
+    expect(transformOf(getTemplate('tank-titan-form'))?.size).toBe('colossal')
+    expect(transformOf(getTemplate('fighter-haymaker'))).toBeUndefined()
+  })
+
+  it('marking a power-up as a form changes no number', () => {
+    const plain = ultimate({ ...base, effects: [phys(100)] })
+    expect(scoreTemplate(ultimate({ ...base, effects: [form(10), phys(100)] }))).toBeCloseTo(scoreTemplate(plain), 9)
+  })
+
+  it('is something a hero does to itself, once per skill', () => {
+    expect(problems(ultimate({ ...base, effects: [form(10), phys(100)] }))).toEqual([])
+    expect(problems(ultimate({ ...base, delivery: at.proj(20), effects: [form(10), phys(100)] }))).toContain('effects.transformation')
+    expect(problems(ultimate({ ...base, delivery: at.proj(20), effects: [resize('huge', 8), phys(100)] }))).toContain('effects.transformation')
+    expect(problems(ultimate({ ...base, effects: [resize('huge', 8), form(8), phys(100)] }))).toContain('effects.transformation')
+  })
+
+  it('tooltips say what happens to the size', () => {
+    const sheet = deriveSheet(getRole('fighter'), getRole('fighter').defaultSpread).sheet
+    const lines = (id: string) => renderTooltip(getTemplate(id), { name: '', flavour: '' }, sheet).lines
+    expect(lines('assassin-shrink-form')).toContain('Becomes Tiny for 8 s')
+    expect(lines('fighter-avatar-form')).toContain('Becomes Huge for 8 s')
+    expect(lines('fighter-ascended-form')).toContain('Transforms for 10 s, keeping its size')
   })
 })
 

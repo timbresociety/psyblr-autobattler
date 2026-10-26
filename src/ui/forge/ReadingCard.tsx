@@ -1,38 +1,47 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { BUILD_SLOTS, MAX_CHAT, TEXT_LIMITS } from '../../charter/build'
-import type { HeroLook, LookColor, PieceKind } from '../../charter/look'
+import type { HeroLook, LookColor } from '../../charter/look'
+import { ELEMENT_LABEL, FORM_LABEL, formOf } from '../../charter/skill-look'
 import { SIZE_CLASSES, SIZES } from '../../charter/sizes'
 import { getTemplate } from '../../charter/templates/catalog'
+import { lookFromWords, templateWords } from '../../arena/recipes/looks'
+import { FORM_TEMPLATES, formChange, transformOf } from '../../forge/form'
 import { PIECE_PRICE } from '../../forge/pricing'
-import { answerQuestion, editReadingSkill, templateBlurb, withRole, type Reading, type ReadingSource } from '../../forge/reading'
+import { answerQuestion, editReadingSkill, formAnswer, templateBlurb, withForm, withRole, type Reading, type ReadingSource } from '../../forge/reading'
+import { atRung, canReach, type WearWish } from '../../forge/wardrobe-read'
+import type { LibraryEntry } from '../../kit/wear/library'
 import { SkillIcon } from '../common/SkillIcon'
+import { BodyPanel } from './BodyPanel'
 import { SLOT_LABEL } from './labels'
-import type { GearChoice } from './look'
-import { LookPanel } from './LookPanel'
+import { bodyAfter, isGap, wishesAfter } from './look'
 import { RoleSwitcher } from './RoleSwitcher'
+import { LOOK_SLOT_LABEL, RUNGS, RUNG_LABEL } from './wardrobe'
+import { WardrobePanel } from './WardrobePanel'
 
 const SOURCE_LABEL: Record<ReadingSource, string> = { 'claude-code': 'Read by your Claude Code', claude: 'Read by Claude', offline: 'Read offline' }
-const KIND_LABEL: Record<PieceKind, string> = { head: 'Head', face: 'Face', hand: 'Hand', offhand: 'Off-hand', back: 'Back' }
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 interface Props {
   reading: Reading
   /** The plinth, previewing the look as the card changes it. */
   stage: ReactNode
-  gear: GearChoice[]
-  /** The look as drawn, every colour filled in. */
+  /** The look the reading dresses the hero in, as drawn: every colour filled in. */
   look: HeroLook & { colors: Record<LookColor, string> }
+  /** Every item the card can offer: the library, then the community's items seen so far. */
+  catalog: readonly LibraryEntry[]
   canFace: boolean
   onChange: (reading: Reading) => void
-  onGear: (index: number, wear: boolean) => void
 }
 
 /**
  * The Forge's reading of a hero, before anything is built: what it understood, what it couldn't tell, and every part
- * of it to change. The look rows are the Look panel's own; the kit shows each slot's name and what it does in the
- * player's words, beside the engine mechanic that will carry it. The plinth shows the look as it changes.
+ * of it to change. The body and wardrobe are the editor's own panels, writing back into the reading; the wishes show
+ * what each answers and the rung it sits on; the kit shows each slot's name, what it does in the player's words, how
+ * it looks, and the engine mechanic that will carry it. The plinth shows the look as it changes.
  */
-export function ReadingCard({ reading, stage, gear, look, canFace, onChange, onGear }: Props) {
+export function ReadingCard({ reading, stage, look, catalog, canFace, onChange }: Props) {
   const asks = reading.questions.length
+  const setWish = (wish: WearWish, next: WearWish | undefined) => onChange({ ...reading, wear: next ? reading.wear.map((w) => (w === wish ? next : w)) : reading.wear.filter((w) => w !== wish) })
   return (
     <>
       <section className="showcase reading" aria-label="Reading">
@@ -75,44 +84,34 @@ export function ReadingCard({ reading, stage, gear, look, canFace, onChange, onG
           </div>
         </div>
       </section>
-      <LookPanel
-        look={look}
-        canFace={canFace}
-        onChange={({ colors, beard, ...rest }) => onChange({ ...reading, look: { ...reading.look, ...rest, ...(beard ? { beard } : {}), colors: { ...reading.look.colors, ...(colors ?? {}) } } })}
-        onFace={(on) => onChange({ ...reading, look: { ...reading.look, wearFace: on } })}
-      />
-      <section className="look-panel reading-gear" aria-label="Gear as read">
+      <BodyPanel look={look} canFace={canFace} onLook={(change) => onChange(bodyAfter(reading, look, change(look)))} onFace={(on) => onChange({ ...reading, look: { ...reading.look, wearFace: on } })} />
+      <section className="look-panel reading-wear" aria-label="Wardrobe as read">
         <header className="look-head">
-          <h2 className="section-title">Gear</h2>
-          <p className="muted">Everything in the repository is free to wear. What it lacks, you can generate once the hero is built.</p>
+          <h2 className="section-title">Wardrobe as read</h2>
+          <p className="muted">Anything in the library is free to wear, recolour and restyle. What it lacks, you generate once the hero is built, {PIECE_PRICE} credits each.</p>
         </header>
-        {gear.length === 0 ? (
-          <p className="muted">Nothing to wear yet. Name a hat, a weapon or wings in a correction, or pick pieces after you build.</p>
+        {reading.wear.length === 0 ? (
+          <p className="muted">Nothing named, so the role dresses the hero. Name a kimono, a hat or a sword in a correction, or pick below.</p>
         ) : (
           <ul className="wishes">
-            {gear.map((c, i) => (
-              <li key={c.wish.phrase} className={`wish${c.wear ? ' on' : ''}${c.entry ? ' found' : ' missing'}`}>
-                <span className="wish-kind">{KIND_LABEL[c.wish.kind]}</span>
-                <b className="wish-phrase">{c.wish.phrase}</b>
-                <span className="wish-status">{c.entry ? `${c.entry.name}, free from the repository` : `Not in the repository yet. Generate it after you build, ${PIECE_PRICE} credits.`}</span>
-                <label className="wish-toggle">
-                  <input type="checkbox" checked={c.wear} onChange={(e) => onGear(i, e.target.checked)} />
-                  {c.entry ? 'Wear' : 'Generate later'}
-                </label>
-              </li>
+            {reading.wear.map((wish) => (
+              <WishRow key={wish.slot} wish={wish} entry={wish.item ? catalog.find((e) => e.id === wish.item) : undefined} gap={isGap(wish, catalog)} onChange={(next) => setWish(wish, next)} />
             ))}
           </ul>
         )}
       </section>
+      <WardrobePanel look={look} catalog={catalog} onLook={(change) => onChange({ ...reading, wear: wishesAfter(reading, look, change(look), catalog) })} />
       <section className="look-panel reading-kit" aria-label="Kit as read">
         <header className="look-head">
           <h2 className="section-title">Kit</h2>
-          <p className="muted">Your names and what each skill does, in your words. The engine carries each on one of its mechanics and sets every number.</p>
+          <p className="muted">Your names, what each skill does in your words, and how it looks. The engine carries each on one of its mechanics and sets every number.</p>
         </header>
         <ul className="read-skills">
           {BUILD_SLOTS.map((slot) => {
             const skill = reading.kit[slot]
             const template = getTemplate(skill.template)
+            const kind = template.delivery.kind
+            const seen = skill.look ?? lookFromWords({ own: [skill.name, skill.does].filter(Boolean).join(' '), ...templateWords(template), kind, slot })
             return (
               <li key={slot} className="read-skill">
                 <SkillIcon template={template} slot={slot} size="sm" />
@@ -121,13 +120,60 @@ export function ReadingCard({ reading, stage, gear, look, canFace, onChange, onG
                 <input className="read-does" aria-label={`What ${SLOT_LABEL[slot]} does`} value={skill.does} placeholder="What it does, in your words" maxLength={TEXT_LIMITS.flavour} onChange={(e) => onChange(editReadingSkill(reading, slot, { does: e.target.value }))} />
                 <span className="read-mechanic" title={template.tags.join(', ')}>
                   Engine: {templateBlurb(template)}
+                  {seen && (
+                    <span className="read-look" aria-label={`${SLOT_LABEL[slot]} look`}>
+                      {ELEMENT_LABEL[seen.element]} · {FORM_LABEL[formOf(seen, kind)]}
+                    </span>
+                  )}
                 </span>
+                {slot === 'ultimate' && transformOf(template) && (
+                  <div className="seg read-form" role="radiogroup" aria-label="Transformation size">
+                    {FORM_TEMPLATES.map((t) => (
+                      <button key={t.id} type="button" role="radio" aria-checked={t.id === template.id} className={t.id === template.id ? 'on' : ''} title={formAnswer(t, reading).label} onClick={() => t.id !== template.id && onChange(withForm(reading, t.id))}>
+                        {upper(formChange(t, reading.look.size))}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </li>
             )
           })}
         </ul>
       </section>
     </>
+  )
+}
+
+/** One wish as read: where it goes, its words, what answers it, the rungs it can sit on, and a way to drop it. */
+function WishRow({ wish, entry, gap, onChange }: { wish: WearWish; entry?: LibraryEntry; gap: boolean; onChange: (next: WearWish | undefined) => void }) {
+  const status = wish.bare
+    ? 'Nothing here, on purpose'
+    : gap
+      ? `Not in the library yet. Generate it once the hero is built.${entry ? ` ${entry.name} stands in until then.` : ''}`
+      : `${entry!.name}${entry!.source === 'community' ? ', from the community' : ''}`
+  return (
+    <li className={`wish${wish.bare ? ' bare' : gap ? ' missing' : ' found'}`}>
+      <span className="wish-kind">{LOOK_SLOT_LABEL[wish.slot]}</span>
+      <span className="wish-words">
+        <b className="wish-phrase">{wish.phrase}</b>
+        <span className="wish-status">{status}</span>
+      </span>
+      {!wish.bare && (
+        <div className="rungs" role="group" aria-label={`${wish.phrase} rungs`}>
+          {RUNGS.map((r) => (
+            <button key={r} type="button" aria-current={r === wish.rung ? 'step' : undefined} className={`rung${r === wish.rung ? ' on here' : ''}`} disabled={r !== wish.rung && !canReach(wish, r)} onClick={() => r !== wish.rung && onChange(atRung(wish, r))}>
+              {RUNG_LABEL[r]}
+              <small>{r === 'generate' ? `${PIECE_PRICE} credits` : 'Free'}</small>
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button" className="wish-remove" aria-label={`Remove ${wish.phrase}`} title="Let the role dress this slot" onClick={() => onChange(undefined)}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </button>
+    </li>
   )
 }
 

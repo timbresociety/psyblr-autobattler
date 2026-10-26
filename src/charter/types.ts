@@ -97,6 +97,11 @@ export type Effect =
   | { kind: 'execute'; thresholdPct: number; bonusPct: number }
   /** A transformation: the hero takes another size class for a while, up or down (R23, KTD14). */
   | { kind: 'resize'; sizeClass: SizeClass; duration: number }
+  /**
+   * A transformation that keeps the hero's size: it marks a power-up as a form, so the hero's form look plays for
+   * `duration` seconds. It changes no number; the template's other effects carry the power.
+   */
+  | { kind: 'form'; duration: number }
   | { kind: 'control'; type: ControlType; duration: number }
   /** Launch into the air and hold there, helpless, for `duration` seconds. */
   | { kind: 'knockup'; height: number; duration: number }

@@ -33,6 +33,14 @@ export function isOwnPhotoUrl(url: string, env: Record<string, string | undefine
   return isStoreUrl(url, UPLOADED, env)
 }
 
+/** A demo hero's portrait, served with the game (public/kit/faces): a remix of a starter keeps its face. */
+const BUILT_IN_FACE = /^\/kit\/faces\/[a-z0-9_-]+\.webp$/
+
+/** A face a saved hero may wear: a photo uploaded through the photo endpoint, or a demo hero's portrait. */
+export function isFacePhotoUrl(url: string, env: Record<string, string | undefined> = process.env): boolean {
+  return BUILT_IN_FACE.test(url) || isOwnPhotoUrl(url, env)
+}
+
 const FORGE_ASSET = /^forge\/[0-9a-f-]{36}\/[a-z0-9]+\/\d+\/[a-z0-9-]+\.(png|webp|svg|glb|fbx|json)$|^forge\/[0-9a-f-]{36}\/package\.json$/
 
 /** Forge outputs live under forge/<forgeId>/ in this deployment's store (KTD9); nothing else is accepted. */
@@ -40,11 +48,14 @@ export function isOwnForgeAssetUrl(url: string, env: Record<string, string | und
   return isStoreUrl(url, FORGE_ASSET, env)
 }
 
-const PIECE = /^pieces\/[0-9a-f-]{36}\.(glb|webp)$/
-/** A generated piece's model or thumbnail, stored by the dev server itself (see dev-store.ts). */
-const DEV_PIECE = /^\/dev-store\/pieces\/[0-9a-f-]{36}\.(glb|webp)$/
+const PIECE = /^(pieces|wear)\/[0-9a-f-]{36}\.(glb|webp)$/
+/** A generated piece's or garment's model or thumbnail, stored by the dev server itself (see dev-store.ts). */
+const DEV_PIECE = /^\/dev-store\/(pieces|wear)\/[0-9a-f-]{36}\.(glb|webp)$/
 
-/** Generated pieces live under pieces/ in this deployment's store, published by the piece job (src/server/pieces.ts). */
+/**
+ * Generated pieces live under pieces/ and generated garments under wear/ in this deployment's store, both published by
+ * the piece job (src/server/pieces.ts).
+ */
 export function isOwnPieceUrl(url: string, env: Record<string, string | undefined> = process.env): boolean {
   if (devStoreActive(env) && DEV_PIECE.test(url)) return true
   return isStoreUrl(url, PIECE, env)

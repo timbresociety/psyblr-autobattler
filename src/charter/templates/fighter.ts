@@ -1,4 +1,4 @@
-import { active, ai, at, basic, buff, cleanse, cripple, disarm, execute, field, ground, heal, knockup, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, stun, ultimate, resize, unstoppable, wound } from './dsl.js'
+import { active, ai, at, basic, buff, cleanse, cripple, disarm, execute, field, form, ground, heal, knockup, movement, move, passive, phys, push, refresh, shield, shred, slow, spirit, stun, ultimate, resize, unstoppable, wound } from './dsl.js'
 
 /** Fighter: wins long close-range brawls. Sustained melee damage, lifesteal, wounds and armour shred, staying power. */
 export const FIGHTER = [
@@ -33,7 +33,11 @@ export const FIGHTER = [
   passive({ id: 'fighter-killing-spree', name: 'Killing Spree', roles: ['fighter'], tags: ['spree', 'kill', 'reset', 'momentum', 'rampage'], delivery: at.self(), effects: [heal(200, 0.5), refresh(5)], trigger: 'onKill', ai: ai('always', 0) }),
   passive({ id: 'fighter-ferocity', name: 'Ferocity', roles: ['fighter'], tags: ['ferocity', 'fast', 'flurry', 'speed', 'relentless'], delivery: at.self(), effects: [buff('attackSpeed', 8, 1), buff('damage', 4, 1)], trigger: 'always', ai: ai('always', 0) }),
 
-  ultimate({ id: 'fighter-super-form', name: 'Super Form', roles: ['fighter'], tags: ['transform', 'super', 'saiyan', 'power-up', 'form', 'gear', 'awaken'], delivery: at.self(), effects: [resize('large', 10), buff('damage', 30, 10), buff('attackSpeed', 30, 10), buff('moveSpeed', 20, 10)], cooldown: 70, ai: ai('engage', 9) }),
+  ultimate({ id: 'fighter-super-form', name: 'Super Form', roles: ['fighter'], tags: ['transform', 'super', 'power-up', 'form', 'gear', 'giant'], delivery: at.self(), effects: [resize('large', 10), buff('damage', 30, 10), buff('attackSpeed', 30, 10), buff('moveSpeed', 20, 10)], cooldown: 70, ai: ai('engage', 9) }),
+  // a power-up that keeps the hero's own size: the form marks it a transformation, the buffs carry it (R23)
+  ultimate({ id: 'fighter-ascended-form', name: 'Ascended Form', roles: ['fighter', 'mage', 'marksman'], tags: ['transform', 'ascend', 'saiyan', 'awaken', 'aura', 'power-up', 'form', 'golden'], delivery: at.self(), effects: [form(10), buff('damage', 30, 10), buff('attackSpeed', 30, 10), heal(80, 0.4)], cooldown: 70, ai: ai('engage', 9) }),
+  // grows huge: a bigger body and reach, tougher while it lasts (R23)
+  ultimate({ id: 'fighter-avatar-form', name: 'Avatar Form', roles: ['fighter', 'tank'], tags: ['transform', 'avatar', 'beast', 'tailed-beast', 'spirit', 'giant', 'form'], delivery: at.self(), effects: [resize('huge', 8), buff('damage', 25, 8), buff('damageReduction', 30, 8), heal(100, 0.5)], cooldown: 70, ai: ai('engage', 9) }),
   ultimate({ id: 'fighter-meteor-combo', name: 'Meteor Combo', roles: ['fighter'], tags: ['combo', 'meteor', 'barrage', 'finisher', 'stun', 'rush'], delivery: at.melee(3), effects: [stun(1), phys(200, 1.6)], cooldown: 60, ai: ai('finisher', 9, { targetHealthBelow: 0.6 }) }),
   ultimate({ id: 'fighter-limit-break', name: 'Limit Break', roles: ['fighter'], tags: ['limit-break', 'explosion', 'nova', 'burst', 'knock-up', 'aura'], delivery: at.aura(4.5), effects: [knockup(1), phys(140, 1.2)], cooldown: 65, ai: ai('engage', 8, { minTargets: 2 }) }),
   ultimate({ id: 'fighter-bloodbath', name: 'Bloodbath', roles: ['fighter'], tags: ['bloodbath', 'lifesteal', 'vampire', 'frenzy', 'carnage'], delivery: at.self(), effects: [buff('lifesteal', 60, 6), buff('attackSpeed', 40, 6), unstoppable(1)], cooldown: 70, ai: ai('engage', 9) }),

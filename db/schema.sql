@@ -107,11 +107,12 @@ create table if not exists gate_cache (
   created_at timestamptz not null default now()
 );
 
--- The asset repository's community pieces: gear players generated, free for everyone to wear (Forge plan, Phase C).
+-- The asset repository's community pieces: gear and garments players generated, free for everyone to wear (Forge plan,
+-- Phase C).
 -- Built-in pieces ship with the game (src/kit/pieces.gen.ts) and are never stored here.
 create table if not exists assets (
   id text primary key,
-  kind text not null check (kind in ('head', 'face', 'hand', 'offhand', 'back')),
+  kind text not null check (kind in ('head', 'face', 'hand', 'offhand', 'back', 'upper', 'lower', 'full', 'feet')),
   name text not null,
   name_lower text not null,
   tags text[] not null default '{}',
@@ -125,6 +126,15 @@ create table if not exists assets (
   created_at timestamptz not null default now()
 );
 create index if not exists assets_kind on assets (kind, use_count desc);
+-- Garments players generated share the table (the wardrobe plan, step 9): a garment's kind is its wardrobe slot, and
+-- meta holds what the fit made of it, its colour channels and the cuts it allows. A piece of gear has no meta.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'assets_kind_check' and pg_get_constraintdef(oid) like '%''feet''%') then
+    alter table assets drop constraint if exists assets_kind_check;
+    alter table assets add constraint assets_kind_check check (kind in ('head', 'face', 'hand', 'offhand', 'back', 'upper', 'lower', 'full', 'feet'));
+  end if;
+end $$;
+alter table assets add column if not exists meta jsonb;
 
 -- One row per piece being generated (Phase D). The browser polls; each poll moves the job along, and a job that
 -- finishes is claimed by exactly one poll ('finishing') before its model is cleaned up and published.
@@ -143,3 +153,5 @@ create table if not exists piece_jobs (
   updated_at timestamptz not null default now()
 );
 create index if not exists piece_jobs_account on piece_jobs (account_id, created_at desc);
+-- A garment job names the wardrobe slot it's for, and its kind is that slot too; a piece job has no slot.
+alter table piece_jobs add column if not exists slot text;

@@ -4,7 +4,8 @@ import { SCHEMA_SQL, type Db } from './db.js'
 import { NotFoundError, OwnershipError, addHero, clearHeroPhotos, createHero, deleteBuild, getBuild, hideHero, isKnownDevice, issueDeviceId, listBuilds, popularHeroes, saveBuild, searchHeroes } from './store.js'
 import { CATALOG_VERSION } from '../charter/templates/catalog.js'
 import { defaultBuild } from '../sim/fixtures.js'
-import { setAttribute } from '../charter/build.js'
+import { remixBuild, setAttribute } from '../charter/build.js'
+import { DEMO_HEROES, demoBuild } from '../arena/demo/roster.js'
 
 let db: Db
 
@@ -60,6 +61,15 @@ describe('photo faces', () => {
     await expect(createHero(db, owner, build('https://evil.example/face.webp'), [], quickGate)).rejects.toThrow(/face photo/)
     const ok = await createHero(db, owner, build('https://teststore.public.blob.vercel-storage.com/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp'), [], quickGate)
     expect((await getBuild(db, owner, ok.buildId)).build.look?.face?.points).toHaveLength(956)
+  })
+
+  it('a remix of a demo hero keeps its portrait: the game serves those itself', async () => {
+    const owner = await issueDeviceId(db)
+    const remix = remixBuild(demoBuild(DEMO_HEROES[0]))
+    const saved = await createHero(db, owner, remix, [], quickGate)
+    expect((await getBuild(db, owner, saved.buildId)).build.look).toEqual(remix.look)
+    const elsewhere = { ...remix, look: { ...remix.look!, face: { ...remix.look!.face!, url: '/kit/faces/../../secret.webp' } } }
+    await expect(createHero(db, owner, elsewhere, [], quickGate)).rejects.toThrow(/face photo/)
   })
 })
 

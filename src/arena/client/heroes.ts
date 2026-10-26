@@ -6,11 +6,13 @@ import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
 import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
 import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
-import { formSize } from '../../forge/form.js'
-import { modelFor } from './character-look.js'
+import { formSize, formSlot } from '../../forge/form.js'
+import type { FormBody } from '../../charter/skill-look.js'
+import { formLookOf, skillLookOf } from '../recipes/looks.js'
+import { formCharacterLook } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
-import { loadGear } from './gear.js'
+import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
 
 /**
@@ -37,8 +39,13 @@ export interface HeroView {
   fallback: boolean
   /** The view plays its own death fall, so the physics corpse should not also tumble it. */
   animatesDeath?: boolean
-  /** The hero's size class right now: a transformation swaps in its form's body, or grows the model if it has none. */
-  setSize?: (size: SizeClass) => void
+  /**
+   * Whether the hero is transformed, and its size class now: a transformation swaps in its form's body (its size and
+   * the form's body changes), or grows the model if it has none.
+   */
+  setForm?: (transformed: boolean, size: SizeClass) => void
+  /** Swing the outfit's loose cloth once the hero stands where it's drawn this frame (see CharacterView.settle). */
+  settle?: (dt: number, far?: boolean, still?: boolean) => boolean
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
@@ -66,43 +73,60 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const load = (body: Parameters<typeof loadBuild>[0]) => loadBuild(body, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
   const color = new THREE.Color(TEAM_COLORS[team])
   // a photo face is painted into the hero's own atlas first; without one (or if it fails) the shared atlas serves
-  const dressed = async (shape: Build) => {
-    const shapeLook = characterLook(shape, hue)
+  const dressed = async (shape: Build, body?: FormBody) => {
+    const shapeLook = formCharacterLook(characterLook(shape, hue), body)
     const file = await load(shapeLook.build)
-    const [atlas, gear] = await Promise.all([heroAtlas(file, shapeLook), loadGear(shapeLook.build, shapeLook.gear, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
-    return characterView(file, shapeLook, color, build, atlas, gear)
+    const [atlas, wear] = await Promise.all([heroAtlas(file, shapeLook), loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
+    return characterView(file, shapeLook, color, build, atlas, wear)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
   view.root.scale.setScalar(SIZE_SCALE[chosen])
-  // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up); a demo hero,
-  // whose model is its own, grows instead
+  // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up), dressed in
+  // the same look with the form's own changes (gold hair, a chakra cloak); if that fails, the hero grows instead
+  const slot = formSlot(build)
+  const formLook = slot ? formLookOf(skillLookOf(build, slot)) : undefined
   const form = formSize(build)
-  const formView = form && !modelFor(build.heroName) ? await dressed({ ...build, sizeClass: form }).catch(() => undefined) : undefined
+  const formView = form || formLook?.body ? await dressed({ ...build, sizeClass: form ?? chosen }, formLook?.body).catch(() => undefined) : undefined
+  const formScale = SIZE_SCALE[form ?? chosen]
   const root = new THREE.Group()
   root.add(view.root)
   if (formView) {
-    formView.root.scale.setScalar(SIZE_SCALE[form!])
+    formView.root.scale.setScalar(formScale)
     formView.root.visible = false
     root.add(formView.root)
   }
   let size = chosen
+  // a swell eases from the hero's own size into the form's over a moment; a snap is there at once
+  let grown = 1
+  const shown = () => (formView?.root.visible ? formView : view)
   return {
     root,
     fallback: false,
     animatesDeath: true,
-    pose: (state, _t, dt, moving = false) => (formView?.root.visible ? formView : view).pose(state, dt, moving),
-    setSize: (next) => {
-      if (next === size) return
-      size = next
-      const transformed = next !== chosen
+    pose: (state, _t, dt, moving = false) => {
+      if (grown < 1 && formView?.root.visible) {
+        grown = Math.min(1, grown + dt / SWELL_SECONDS)
+        formView.root.scale.setScalar(SIZE_SCALE[chosen] + (formScale - SIZE_SCALE[chosen]) * (1 - (1 - grown) ** 3))
+      }
+      shown().pose(state, dt, moving)
+    },
+    settle: (dt, far, still) => shown().settle(dt, far, still),
+    setForm: (transformed, next) => {
       if (formView) {
+        if (formView.root.visible === transformed) return
         formView.root.visible = transformed
         view.root.visible = !transformed
-      } else view.root.scale.setScalar(SIZE_SCALE[next])
+        grown = transformed && formLook?.growth === 'swell' && form && form !== chosen ? 0 : 1
+        if (grown === 1) formView.root.scale.setScalar(formScale)
+      } else if (next !== size) view.root.scale.setScalar(SIZE_SCALE[next])
+      size = next
     },
   }
 }
+
+/** How long a form takes to swell into its new size: short, so what's drawn stays what can be hit. */
+export const SWELL_SECONDS = 0.3
 
 /** Longest a hero's model may take to load before it fights as a stand-in, so one slow file never holds up Start. */
 export const LOAD_TIMEOUT_MS = 20_000

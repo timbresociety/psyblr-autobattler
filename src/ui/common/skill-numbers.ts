@@ -29,7 +29,7 @@ const DEBUFF_LABEL = { armorShred: 'Armour', spiritShred: 'Spirit resist', vulne
 const STATE_LABEL = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable', cleanse: 'Cleanse' } as const
 
 /** Most telling first: damage, then healing and shields, then control, then the rest. */
-const ORDER: Effect['kind'][] = ['damage', 'turret', 'heal', 'shield', 'stun', 'knockup', 'control', 'wall', 'slow', 'debuff', 'pull', 'execute', 'resize', 'state', 'mobility', 'buff', 'displace', 'refresh', 'field', 'trap']
+const ORDER: Effect['kind'][] = ['damage', 'turret', 'heal', 'shield', 'stun', 'knockup', 'control', 'wall', 'slow', 'debuff', 'pull', 'execute', 'resize', 'form', 'state', 'mobility', 'buff', 'displace', 'refresh', 'field', 'trap']
 
 function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headline {
   switch (effect.kind) {
@@ -53,6 +53,8 @@ function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headl
       return { label: `Under ${n(effect.thresholdPct)}%`, value: `+${n(effect.bonusPct * factor)}`, unit: '%' }
     case 'resize':
       return { label: 'Becomes', value: SIZES[effect.sizeClass].label, unit: `${n(effect.duration)} s` }
+    case 'form':
+      return { label: 'Transforms', value: n(effect.duration), unit: 's' }
     case 'control':
       return { label: CONTROL_LABEL[effect.type], value: n(effect.duration), unit: 's' }
     case 'knockup':

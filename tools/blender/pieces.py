@@ -46,7 +46,8 @@ PALETTE = {
     'leather': dict(color='#3d2416', roughness=0.62),
     'black': dict(color='#0b0b0d', roughness=0.45),
     'ivory': dict(color='#e3d7bb', roughness=0.5),
-    'glass': dict(color='#16202a', roughness=0.04, alpha=0.4),
+    # clear enough to see the eyes behind, which is most of a face
+    'glass': dict(color='#22303c', roughness=0.04, alpha=0.18),
     'string': dict(color='#ddd6c8', roughness=0.85),
     'feather': dict(color='#f1efe9', roughness=0.85),
 }
@@ -355,6 +356,92 @@ def pistol(p):
     p.paint(transform(rod(bm, -0.012, 0.012, 0.0055, seg=8), Matrix.Translation(V((0, -0.172, 0.0515))) @ Matrix.Rotation(math.pi / 2, 4, 'X')), 'black')
 
 
+@piece('microphone', 'Microphone', 'hand', ['microphone', 'mic', 'singer', 'rapper', 'karaoke', 'pop star', 'idol', 'mc'], primary='#1c1c20')
+def microphone(p):
+    bm = p.bm
+    p.paint(lathe(bm, [(0, -0.09), (0.013, -0.088), (0.016, 0.0), (0.019, 0.07), (0.021, 0.085)], seg=16), 'primary', smooth=True)
+    p.paint(lathe(bm, [(0.0215, 0.082), (0.024, 0.088), (0.024, 0.097), (0.0215, 0.1)], seg=18), 'gold', smooth=True)
+    p.paint(ball(bm, V((0, 0, 0.122)), 0.03, seg=16, rings_=8), 'steel', smooth=True)
+
+
+@piece('scythe', 'Scythe', 'hand', ['scythe', 'reaper', 'grim reaper', 'death', 'reaper scythe'], primary='#3b2f4a')
+def scythe(p):
+    bm = p.bm
+    path = [V((0.006 * math.sin(i * 1.1), 0.004 * math.cos(i * 0.8), -0.8 + i * 0.1)) for i in range(18)]
+    p.paint(tube(bm, path, [0.016] * 18, seg=9), 'wood', smooth=True)
+    p.paint(rod(bm, -0.11, 0.11, 0.0185, seg=10), 'primary', smooth=True)
+    top = path[-1].z
+    # the blade: a long crescent from the top of the haft out toward the fingertips (-y), its spine above, its edge under
+    spine = [(-0.74 * i / 12, top + 0.04 - 0.19 * (i / 12) ** 2) for i in range(13)]
+    edge = [(y, z - 0.11 * (1 - i / 12) ** 1.3 - 0.003) for i, (y, z) in enumerate(spine)]
+    blade = slab(bm, spine + edge[::-1], 0.008, axis='x')
+    p.paint(blade, 'steel')
+    for v in {v for f in blade for v in f.verts}:
+        # thin toward the edge
+        v.co.x *= 0.35 if v.co.z < top + 0.04 - 0.19 * (v.co.y / -0.74) ** 2 - 0.03 else 1.0
+    p.paint(box(bm, (-0.021, -0.03, top - 0.06), (0.021, 0.03, top + 0.05)), 'dark_steel')
+    # held upright, like the staff
+    p.tilt = math.radians(-55)
+    transform(list(bm.faces), Matrix.Rotation(p.tilt, 4, 'X'))
+
+
+@piece('rifle', 'Rifle', 'hand', ['rifle', 'sniper rifle', 'assault rifle', 'long gun', 'sniper', 'soldier', 'hunter', 'musket'], primary='#4a3526')
+def rifle(p):
+    bm = p.bm
+    # like the pistol: the barrel out over the fist toward the fingertips (-y), the grip down through the fist, and the
+    # stock back over the wrist (+y), high enough to clear it
+    along = Matrix.Rotation(math.pi / 2, 4, 'X')
+    p.paint(box(bm, (-0.017, -0.16, 0.03), (0.017, 0.12, 0.085)), 'dark_steel')
+    p.paint(transform(rod(bm, 0.0, 0.5, 0.009, seg=10), Matrix.Translation(V((0, -0.16, 0.064))) @ along), 'black')
+    p.paint(slab(bm, [(-0.16, 0.03), (-0.42, 0.036), (-0.42, 0.06), (-0.16, 0.07)], 0.03, axis='x'), 'primary')
+    p.paint(slab(bm, [(0.12, 0.085), (0.36, 0.07), (0.37, -0.0), (0.33, -0.005), (0.12, 0.045)], 0.034, axis='x'), 'primary')
+    p.paint(slab(bm, [(0.06, 0.035), (0.025, 0.035), (0.035, -0.07), (0.075, -0.065)], 0.026, axis='x'), 'primary')
+    p.paint(box(bm, (-0.012, -0.095, -0.075), (0.012, -0.055, 0.03)), 'black')
+    p.paint(transform(rod(bm, 0.0, 0.2, 0.016, seg=12), Matrix.Translation(V((0, -0.1, 0.115))) @ along), 'black')
+    for y in (-0.14, -0.26):
+        p.paint(box(bm, (-0.006, y, 0.085), (0.006, y + 0.02, 0.1)), 'black')
+    p.paint(transform(torus(bm, V((0, 0, 0)), 0.02, 0.003, seg=14, rseg=5), Matrix.Translation(V((0, -0.035, 0.02))) @ Matrix.Rotation(math.pi / 2, 4, 'Y')), 'dark_steel')
+
+
+@piece('spellbook', 'Spellbook', 'hand', ['spellbook', 'grimoire', 'magic book', 'tome', 'book', 'necronomicon', 'scholar'], primary='#5b1f6e')
+def spellbook(p):
+    bm = p.bm
+    # held by its foot: it stands up out of the fist, covers to either side (x), spine toward the palm (+y)
+    w, h, d, z0 = 0.15, 0.21, 0.05, -0.04
+    for x0, x1 in ((-d / 2, -d / 2 + 0.007), (d / 2 - 0.007, d / 2)):
+        p.paint(box(bm, (x0, -w / 2 - 0.006, z0), (x1, w / 2, z0 + h)), 'primary')
+    p.paint(box(bm, (-d / 2, w / 2 - 0.004, z0), (d / 2, w / 2 + 0.004, z0 + h)), 'primary')
+    p.paint(box(bm, (-d / 2 + 0.007, -w / 2 - 0.002, z0 + 0.004), (d / 2 - 0.007, w / 2 - 0.002, z0 + h - 0.004)), 'ivory')
+    for side in (1, -1):
+        for zc in (z0 + 0.012, z0 + h - 0.012):
+            p.paint(box(bm, (side * d / 2 - 0.002, -w / 2 - 0.007, zc - 0.012), (side * d / 2 + 0.002 * side, -w / 2 + 0.017, zc + 0.012)), 'gold')
+        p.paint(ball(bm, V((side * (d / 2 + 0.002), 0, z0 + h / 2)), 0.016, seg=12, rings_=6, scale=(0.4, 1, 1)), 'gold', smooth=True)
+    p.paint(box(bm, (-d / 2 - 0.002, -w / 2 - 0.012, z0 + h / 2 - 0.012), (d / 2 + 0.002, -w / 2 - 0.004, z0 + h / 2 + 0.012)), 'gold')
+
+
+@piece('electric_guitar', 'Electric guitar', 'hand', ['electric guitar', 'guitar', 'bass guitar', 'rock star', 'rocker', 'musician', 'band'], primary='#c4162a')
+def electric_guitar(p):
+    bm = p.bm
+    # carried by the neck: the neck rises out of the fist to the headstock, the body hangs below, its face to the side (+x)
+    p.paint(box(bm, (-0.011, -0.022, -0.17), (0.011, 0.022, 0.27)), 'wood')
+    p.paint(box(bm, (0.011, -0.021, -0.17), (0.016, 0.021, 0.26)), 'black')
+    p.paint(slab(bm, [(-0.024, 0.26), (0.03, 0.27), (0.04, 0.43), (-0.008, 0.44), (-0.03, 0.38)], 0.016, axis='x'), 'black')
+    c = -0.37
+    outline = []
+    for i in range(48):
+        t = 2 * math.pi * i / 48
+        st, ct = math.sin(t), math.cos(t)
+        r = (0.165 if st < 0 else 0.135) * (1 - 0.12 * math.exp(-((st / 0.25) ** 2)))
+        # two horns either side of the neck, and the cutaway between them
+        horn = 0.055 * math.exp(-(((t - (math.pi / 2 - 0.62)) / 0.2) ** 2)) + 0.045 * math.exp(-(((t - (math.pi / 2 + 0.62)) / 0.2) ** 2)) - 0.035 * math.exp(-(((t - math.pi / 2) / 0.2) ** 2))
+        outline.append((r * ct, c + 0.2 * st + horn))
+    p.paint(slab(bm, outline, 0.044, axis='x'), 'primary')
+    for z in (-0.3, -0.36):
+        p.paint(box(bm, (0.021, -0.034, z - 0.01), (0.026, 0.034, z + 0.01)), 'black')
+    p.paint(box(bm, (0.021, -0.036, -0.46), (0.028, 0.036, -0.44)), 'steel')
+    p.paint(box(bm, (0.0165, -0.017, -0.45), (0.0185, 0.017, 0.255)), 'string')
+
+
 # off-hand pieces: the left hand only
 
 
@@ -433,6 +520,73 @@ def quiver(p):
         p.paint(transform(slab(bm, [(y - 0.012, 0.36), (y + 0.012, 0.36), (y + 0.012, 0.44), (y - 0.012, 0.43)], 0.002, axis='x', offset=x), tilt), 'feather')
 
 
+@piece('bat_wings', 'Bat wings', 'back', ['bat wings', 'demon wings', 'devil wings', 'dragon wings', 'vampire wings', 'succubus'], primary='#3a2433')
+def bat_wings(p):
+    bm = p.bm
+    for side in (1, -1):
+        # the arm rises up and out to a wrist, fingers fan down from it, and skin stretches between them, scalloped
+        shoulder = V((side * 0.06, 0.07, 0.04))
+        wrist = V((side * 0.42, 0.16, 0.38))
+        p.paint(tube(bm, [shoulder, shoulder.lerp(wrist, 0.5) + V((0, 0.02, 0.06)), wrist], [0.026, 0.018, 0.013], seg=8), 'leather', smooth=True)
+        tips = [V((side * 0.78, 0.21, 0.24)), V((side * 0.8, 0.22, -0.08)), V((side * 0.6, 0.2, -0.33)), V((side * 0.33, 0.15, -0.44))]
+        for t in tips:
+            p.paint(tube(bm, [wrist, wrist.lerp(t, 0.5) + V((0, 0.02, 0.02)), t], [0.011, 0.008, 0.004], seg=6, tip=True), 'leather', smooth=True)
+        waist = V((side * 0.07, 0.06, -0.3))
+        edges = list(zip(tips, tips[1:])) + [(tips[-1], waist)]
+        for a, b in edges:
+            pts = []
+            for i in range(9):
+                u = i / 8
+                q = a.lerp(b, u)
+                pts.append(q.lerp(wrist, 0.22 * math.sin(math.pi * u)))
+            verts = [bm.verts.new(q) for q in pts]
+            w = bm.verts.new(wrist)
+            p.paint([bm.faces.new((w, verts[i], verts[i + 1])) for i in range(8)], 'primary')
+        p.paint([bm.faces.new((bm.verts.new(shoulder), bm.verts.new(wrist), bm.verts.new(waist)))], 'primary')
+
+
+@piece('twin_swords', 'Twin swords', 'back', ['twin swords', 'dual swords', 'two swords', 'swords on back', 'dual katanas', 'twin katanas', 'ninja swords'], primary='#1d1d24')
+def twin_swords(p):
+    bm = p.bm
+    for side in (1, -1):
+        # two sheathed katanas crossed on the back, hilts up over the shoulders, one lying over the other
+        sword = p.paint(rod(bm, -0.62, 0.12, 0.016, 0.014, seg=10, ry=1.5), 'primary', smooth=True)
+        sword += p.paint(rod(bm, -0.64, -0.62, 0.017, seg=10, ry=1.5), 'gold', smooth=True)
+        sword += p.paint(rod(bm, 0.12, 0.132, 0.032, seg=16, ry=1.2), 'dark_steel')
+        sword += p.paint(rod(bm, 0.132, 0.36, 0.013, seg=10, ry=1.3), 'leather', smooth=True)
+        sword += p.paint(rod(bm, 0.36, 0.372, 0.0145, seg=10, ry=1.3), 'gold', smooth=True)
+        transform(sword, Matrix.Translation(V((0, 0.05 if side > 0 else 0.085, 0.02))) @ Matrix.Rotation(side * math.radians(32), 4, 'Y'))
+
+
+@piece('backpack', 'Backpack', 'back', ['backpack', 'rucksack', 'adventurer pack', 'hiking pack', 'school bag', 'bag'], primary='#46603f')
+def backpack(p):
+    bm = p.bm
+
+    def soft(lo, hi, r, mat):
+        faces = box(bm, lo, hi)
+        edges = list({e for f in faces for e in f.edges})
+        bmesh.ops.bevel(bm, geom=edges, offset=r, segments=2, affect='EDGES', profile=0.5)
+        return p.paint([f for f in bm.faces if f.material_index == 0 and f.calc_center_median().x >= lo[0] - 1e-6 and f.calc_center_median().x <= hi[0] + 1e-6 and lo[1] - 1e-6 <= f.calc_center_median().y <= hi[1] + 1e-6 and lo[2] - 1e-6 <= f.calc_center_median().z <= hi[2] + 1e-6], mat, smooth=True)
+
+    soft((-0.15, 0.0, -0.26), (0.15, 0.15, 0.13), 0.03, 'primary')
+    soft((-0.11, 0.15, -0.22), (0.11, 0.2, -0.04), 0.015, 'primary')
+    p.paint(box(bm, (-0.155, -0.004, 0.08), (0.155, 0.158, 0.145)), 'leather')
+    for x in (-0.07, 0.07):
+        p.paint(box(bm, (x - 0.015, 0.154, -0.02), (x + 0.015, 0.162, 0.1)), 'leather')
+        p.paint(box(bm, (x - 0.012, 0.16, -0.03), (x + 0.012, 0.166, -0.012)), 'steel')
+    p.paint(transform(rod(bm, -0.17, 0.17, 0.045, seg=14), Matrix.Translation(V((0, 0.08, 0.19))) @ Matrix.Rotation(math.pi / 2, 4, 'Y')), 'ivory', smooth=True)
+
+
+@piece('back_shield', 'Shield on the back', 'back', ['shield on back', 'shield on the back', 'back shield', 'slung shield'], primary='#8f1d22')
+def back_shield(p):
+    bm = p.bm
+    # a round shield slung across the back, its face out (+y), tipped a touch
+    out = Matrix.Translation(V((0, 0.05, -0.06))) @ Matrix.Rotation(math.radians(8), 4, 'Y') @ Matrix.Rotation(-math.pi / 2, 4, 'X')
+    p.paint(transform(lathe(bm, [(0, 0.012), (0.27, 0.01), (0.29, 0.0), (0.29, -0.012), (0, -0.012)], seg=32), out), 'primary')
+    p.paint(transform(torus(bm, V((0, 0, 0)), 0.29, 0.012, seg=32, rseg=6), out), 'steel', smooth=True)
+    p.paint(transform(ball(bm, V((0, 0, 0.012)), 0.06, seg=16, rings_=8, scale=(1, 1, 0.6)), out), 'steel', smooth=True)
+
+
 # head pieces: on the hairline at the front, the head about 0.19 m across and 0.24 m deep there
 
 
@@ -492,11 +646,11 @@ def halo(p):
 # face pieces: on the lens plane between the eyes, the eyes 0.033 m to either side
 
 
-@piece('glasses', 'Glasses', 'face', ['glasses', 'spectacles', 'specs', 'nerd', 'scholar'], primary='#1c1c20')
+@piece('glasses', 'Round glasses', 'face', ['round glasses', 'glasses', 'spectacles', 'specs', 'nerd', 'scholar'], primary='#1c1c20')
 def glasses(p):
     bm = p.bm
     for s in (1, -1):
-        p.paint(transform(torus(bm, V((0, 0, 0)), 0.024, 0.0028, seg=20, rseg=5), Matrix.Translation(V((s * 0.033, 0, 0))) @ Matrix.Rotation(math.pi / 2, 4, 'X')), 'primary', smooth=True)
+        p.paint(transform(torus(bm, V((0, 0, 0)), 0.024, 0.002, seg=20, rseg=5), Matrix.Translation(V((s * 0.033, 0, 0))) @ Matrix.Rotation(math.pi / 2, 4, 'X')), 'primary', smooth=True)
         p.paint(transform(lathe(bm, [(0, 0.001), (0.0225, 0.0), (0, -0.001)], seg=20), Matrix.Translation(V((s * 0.033, 0, 0))) @ Matrix.Rotation(math.pi / 2, 4, 'X')), 'glass', smooth=True)
         p.paint(tube(bm, [V((s * 0.057, 0, 0.004)), V((s * 0.096, 0.06, 0.004)), V((s * 0.098, 0.125, -0.006))], [0.0022, 0.002, 0.002], seg=5), 'primary', smooth=True)
     p.paint(tube(bm, [V((-0.0095, 0, 0.008)), V((0, -0.002, 0.011)), V((0.0095, 0, 0.008))], [0.002, 0.002, 0.002], seg=5), 'primary', smooth=True)
@@ -532,6 +686,30 @@ def visor(p):
         out = V((math.sin(a), -math.cos(a), 0))
         sections.append([c + V((0, 0, 0.016)), c + out * 0.004 + V((0, 0, 0.012)), c + out * 0.004 + V((0, 0, -0.014)), c + V((0, 0, -0.018))])
     p.paint(sweep(bm, sections), 'primary', smooth=True)
+
+
+@piece('square_glasses', 'Square glasses', 'face', ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], primary='#1c1c20')
+def square_glasses(p):
+    bm = p.bm
+    w, h, t = 0.027, 0.018, 0.0022
+    for s in (1, -1):
+        cx = s * 0.034
+        for lo, hi in (((cx - w, -t, h - t), (cx + w, t, h + t)), ((cx - w, -t, -h - t), (cx + w, t, -h + t)), ((cx - w - t, -t, -h), (cx - w + t, t, h)), ((cx + w - t, -t, -h), (cx + w + t, t, h))):
+            p.paint(box(bm, lo, hi), 'primary')
+        p.paint(slab(bm, [(cx - w + t, -h + t), (cx + w - t, -h + t), (cx + w - t, h - t), (cx - w + t, h - t)], 0.0015, axis='y'), 'glass')
+        p.paint(tube(bm, [V((s * (0.034 + w), 0, 0.008)), V((s * 0.096, 0.06, 0.006)), V((s * 0.098, 0.125, -0.006))], [0.0024, 0.0022, 0.0022], seg=5), 'primary', smooth=True)
+    p.paint(box(bm, (-0.034 + w, -0.002, 0.006), (0.034 - w, 0.002, 0.011)), 'primary')
+
+
+@piece('scouter', 'Scouter', 'face', ['scouter', 'power scanner', 'saiyan scouter', 'power level', 'dragon ball scouter'], primary='#3df27a', emit=1.3)
+def scouter(p):
+    bm = p.bm
+    # a pod over the left ear and an arm out to a glowing lens before the left eye (+x)
+    ear = V((0.096, 0.095, -0.012))
+    p.paint(transform(lathe(bm, [(0, -0.012), (0.022, -0.01), (0.025, 0.0), (0.022, 0.01), (0, 0.012)], seg=16), Matrix.Translation(ear) @ Matrix.Rotation(math.pi / 2, 4, 'Y')), 'ivory', smooth=True)
+    p.paint(tube(bm, [ear + V((0.004, -0.012, 0.012)), V((0.09, 0.02, 0.02)), V((0.066, -0.014, 0.02))], [0.0045, 0.0042, 0.004], seg=6), 'ivory', smooth=True)
+    p.paint(box(bm, (0.014, -0.017, 0.016), (0.066, -0.011, 0.024)), 'ivory')
+    p.paint(slab(bm, [(0.016, -0.012), (0.062, -0.012), (0.062, 0.016), (0.024, 0.016)], 0.003, axis='y', offset=-0.014), 'primary')
 
 
 # ------------------------------------------------------------------------------------------------ build, export, thumbnails

@@ -1,7 +1,7 @@
 import { keywordFlags } from '../../keywords.js'
-import { PIECE_KINDS, type PieceKind } from '../../../charter/look.js'
+import { PIECE_KINDS, WEAR_SLOTS, type PieceKind, type WearSlot } from '../../../charter/look.js'
 import type { Asset, DirectorProvider, ImageProvider, MeshProvider, ModerationProvider, Outcome, PieceProvider, RetargetProvider, RigProvider } from '../types.js'
-import { placeholderPiece } from './piece-model.js'
+import { placeholderGarment, placeholderPiece } from './piece-model.js'
 
 /**
  * Deterministic fakes (KTD3): the offline path and every test. Same input, same output. Assets are tiny
@@ -100,8 +100,9 @@ export function fakeRetarget(script: FakeScript = {}): RetargetProvider {
 }
 
 /**
- * A fake piece: the task id carries its kind and prompt, so any instance can finish it (a serverless poll rarely lands
- * on the instance that started it). The first poll returns a stand-in model for the kind and a labelled preview.
+ * A fake piece: the task id carries its kind (or a garment's slot) and prompt, so any instance can finish it (a
+ * serverless poll rarely lands on the instance that started it). The first poll returns a stand-in model for the kind
+ * or slot and a labelled preview.
  */
 export function fakePiece(script: FakeScript = {}): PieceProvider {
   return {
@@ -111,14 +112,18 @@ export function fakePiece(script: FakeScript = {}): PieceProvider {
     async start(request) {
       const blocked = scripted(request.prompt, script)
       if (blocked) return blocked
-      return { ok: 'pending', taskId: `piece-${request.kind}-${hash(`${request.kind}:${request.prompt}:${request.imageUrl ?? ''}`)}-${encodeURIComponent(request.prompt.slice(0, 40))}` }
+      const [what, where] = request.slot ? ['garment', request.slot] : ['piece', request.kind]
+      return { ok: 'pending', taskId: `${what}-${where}-${hash(`${where}:${request.prompt}:${request.imageUrl ?? ''}`)}-${encodeURIComponent(request.prompt.slice(0, 40))}` }
     },
     async poll(taskId) {
-      const [, kind, h, label = ''] = /^piece-([a-z]+)-([0-9a-f]{8})-?(.*)$/.exec(taskId) ?? []
-      if (!(PIECE_KINDS as readonly string[]).includes(kind)) return { ok: false, kind: 'failed', reason: 'unknown fake piece task' }
-      const glb = await placeholderPiece(kind as PieceKind)
+      const [, what, where, h, label = ''] = /^(piece|garment)-([a-z]+)-([0-9a-f]{8})-?(.*)$/.exec(taskId) ?? []
+      const n = parseInt(h, 16)
+      let glb: Uint8Array
+      if (what === 'garment' && (WEAR_SLOTS as readonly string[]).includes(where)) glb = await placeholderGarment(where as WearSlot, [COLORS[n % COLORS.length], COLORS[(n + 2) % COLORS.length]])
+      else if (what === 'piece' && (PIECE_KINDS as readonly string[]).includes(where)) glb = await placeholderPiece(where as PieceKind)
+      else return { ok: false, kind: 'failed', reason: 'unknown fake piece task' }
       const url = `data:model/gltf-binary;base64,${Buffer.from(glb).toString('base64')}`
-      return { ok: true, value: { url, format: 'glb', preview: svg(decodeURIComponent(label) || kind, COLORS[parseInt(h, 16) % COLORS.length]) } }
+      return { ok: true, value: { url, format: 'glb', preview: svg(decodeURIComponent(label) || where, COLORS[n % COLORS.length]) } }
     },
   }
 }

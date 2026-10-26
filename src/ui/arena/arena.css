@@ -127,6 +127,9 @@
 .hud-dmg { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; will-change: transform, opacity; white-space: nowrap; font: 800 italic 22px/1 var(--hud-display); color: #fff; -webkit-text-stroke: 1px rgba(var(--surface-rgb), 0.75); paint-order: stroke fill; text-shadow: 0 2px 0 rgba(var(--surface-rgb), 0.65), 0 0 10px rgba(var(--shade-rgb), calc(0.45 * var(--shade-a))); }
 .hud-dmg.own { color: #ffe36e; }
 .hud-dmg.heavy { font-size: 32px; color: #ff9a3c; text-shadow: 0 2px 0 rgba(70, 14, 0, 0.75), 0 0 16px rgba(255, 120, 40, 0.85); }
+/* a move's name called out in its own colours: the look's core for the letters, its glow around them */
+.hud-callout { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; will-change: transform, opacity; white-space: nowrap; font: 900 italic 24px/1 var(--hud-display); letter-spacing: 0.05em; text-transform: uppercase; color: var(--call-core, #fff); -webkit-text-stroke: 1px rgba(var(--surface-rgb), 0.8); paint-order: stroke fill; text-shadow: 0 2px 0 rgba(var(--surface-rgb), 0.7), 0 0 12px var(--call-glow, #7ad0ff), 0 0 26px var(--call-glow, #7ad0ff); }
+.hud-callout.fixed { font-size: 34px; letter-spacing: 0.08em; }
 
 /* ── score banner ────────────────────────────────────────────────────────── */
 /* equal plates either side keep the clock dead centre even when the sides are uneven */

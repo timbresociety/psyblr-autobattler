@@ -1,6 +1,6 @@
 """
-The eleven clips every arena character plays (idle, run, fly, hover, slash, shoot, cast, ultimate, hurt, stunned,
-fall), keyframed by script on the game rig. The poses are the ones first authored for the T-posed mannequin; the
+The clips every arena character plays (idle, run, fly, hover, slash, shoot, cast, ultimate, hurt, stunned, fall, and
+the ten cast poses a skill's look can pick: see CAST_POSES), keyframed by script on the game rig. The poses are the ones first authored for the T-posed mannequin; the
 rig's per-bone T-pose corrections (rig.py) make the same numbers mean the same thing on MakeHuman's A-posed body.
 
 Poses: bone -> (x, y, z) degrees, applied in armature space about the bone's head, in the order y, then x, then z. The
@@ -107,7 +107,7 @@ def make_action(rig, name, keys, fps=30, loop=True):
 
 def author(rig, arms_out=0.0):
     """
-    Key all eleven clips. `arms_out` widens the relaxed arm angle (degrees) for broad or heavy bodies, so hands clear
+    Key every clip. `arms_out` widens the relaxed arm angle (degrees) for broad or heavy bodies, so hands clear
     the hips and belly.
     """
     lower = 72 - arms_out
@@ -222,5 +222,67 @@ def author(rig, arms_out=0.0):
     flat = merged(both(arm=(0, 15, 10), forearm=(0, 0, -20)), {'hips': (-90, 0, 0), 'spine': (-4, 0, 0), 'head': (-12, 0, 22), 'thigh_L': (8, -10, 0), 'thigh_R': (22, -8, 0), 'shin_R': (32, 0, 0)})
     make_action(rig, 'fall', [(0, down, 0, 0), (0.2, buckle, -0.1, 0.1), (0.55, flat, -0.86, 0.6), (1.2, flat, -0.86, 0.6)], loop=False)
 
+    cast_poses(rig, down, stance)
 
-CLIPS = ['idle', 'run', 'fly', 'hover', 'slash', 'shoot', 'cast', 'ultimate', 'hurt', 'stunned', 'fall']
+
+def cast_poses(rig, down, stance):
+    """
+    The cast poses beside `cast` (the hip charge): how a skill's look delivers it (src/charter/skill-look.ts). Each
+    lands its release between 0.24 and 0.48 s, inside a cast, and returns to the guard.
+    """
+    guard_l = {'upper_arm_L': (-30, 60, 0), 'forearm_L': (0, 0, -70)}
+
+    # palms forward: arms flung wide and back, then both palms driven forward together (a Galick Gun)
+    wide = merged(stance, both(arm=(-15, 15, 25), forearm=(0, 0, -50)), {'spine': (-8, 0, 0), 'chest': (-6, 0, 0), 'head': (-4, 0, 0)})
+    drive = merged(stance, both(arm=(-86, 86, -14), forearm=(0, 0, -6)), {'spine': (10, 0, 0), 'chest': (6, 0, 0)})
+    make_action(rig, 'cast_palms', [(0, down, 0, 0), (0.16, wide, -0.04, 0.03), (0.3, drive, -0.06, -0.08), (0.45, drive, -0.06, -0.08), (0.62, down, 0, 0)], loop=False)
+
+    # one palm: the right hand coils at the hip and pushes out while the left pulls back
+    coil = merged(stance, {'upper_arm_R': (25, 75, 12), 'forearm_R': (0, 0, -100), 'upper_arm_L': (-35, 62, 0), 'forearm_L': (0, 0, -95), 'spine': (0, 0, -25), 'chest': (0, 0, -12)})
+    push = merged(stance, {'upper_arm_R': (-88, 88, -4), 'forearm_R': (0, 0, -4), 'upper_arm_L': (10, 72, -40), 'forearm_L': (0, 0, -110), 'spine': (6, 0, 18), 'chest': (4, 0, 10)})
+    make_action(rig, 'cast_palm', [(0, down, 0, 0), (0.12, coil, -0.03, 0.02), (0.24, push, -0.05, -0.1), (0.4, push, -0.05, -0.1), (0.56, down, 0, 0)], loop=False)
+
+    # two fingers: fingertips held to the brow to charge, then the arm snaps out to point (a Special Beam Cannon)
+    brow = over(down, guard_l, {'upper_arm_R': (-115, 50, -30), 'forearm_R': (0, 0, -140), 'head': (6, 0, 0), 'spine': (2, 0, -8)})
+    point = over(down, guard_l, {'upper_arm_R': (-90, 90, 0), 'forearm_R': (0, 0, 0), 'chest': (0, 0, -12), 'head': (0, 0, 10)})
+    make_action(rig, 'cast_fingers', [(0, down, 0, 0), (0.16, brow, 0, 0), (0.3, brow, 0, 0), (0.38, point, 0, -0.03), (0.52, point, 0, -0.03), (0.68, down, 0, 0)], loop=False)
+
+    # overhead: both arms raised to gather above the head, then the whole body hurls it forward (a Spirit Bomb)
+    raised = merged(both(arm=(0, -72, 0), forearm=(0, 0, -12), thigh=(0, -8, 0)), {'spine': (-10, 0, 0), 'chest': (-6, 0, 0), 'head': (-22, 0, 0)})
+    hurl = merged(stance, both(arm=(-70, 86, -6), forearm=(0, 0, -8)), {'spine': (22, 0, 0), 'chest': (8, 0, 0), 'head': (6, 0, 0)})
+    make_action(rig, 'cast_overhead', [(0, down, 0, 0), (0.2, raised, 0.02, 0.04), (0.34, raised, 0.02, 0.04), (0.46, hurl, -0.08, -0.1), (0.6, hurl, -0.08, -0.1), (0.78, down, 0, 0)], loop=False)
+
+    # cross burst: forearms crossed before the chest in a half crouch, then flung wide as the body opens
+    cross = merged(both(arm=(-55, 78, -48), forearm=(0, 0, -115), thigh=(-30, -10, 0), shin=(45, 0, 0)), {'spine': (14, 0, 0), 'chest': (6, 0, 0), 'head': (8, 0, 0)})
+    fling = merged(both(arm=(-8, -25, 22), forearm=(0, 0, -6), thigh=(-6, -12, 0), shin=(8, 0, 0)), {'spine': (-14, 0, 0), 'chest': (-8, 0, 0), 'head': (-18, 0, 0)})
+    make_action(rig, 'cast_cross', [(0, down, 0, 0), (0.16, cross, -0.12, 0), (0.3, fling, 0.04, 0), (0.46, fling, 0.04, 0), (0.62, down, 0, 0)], loop=False)
+
+    # clap: arms swung open, then the hands meet in front of the chest
+    spread = merged(stance, both(arm=(-35, 12, 35), forearm=(0, 0, -15)), {'spine': (-4, 0, 0)})
+    clap = merged(stance, both(arm=(-84, 84, -16), forearm=(0, 0, -20)), {'spine': (8, 0, 0), 'chest': (4, 0, 0)})
+    make_action(rig, 'cast_clap', [(0, down, 0, 0), (0.14, spread, 0, 0), (0.24, clap, -0.03, -0.03), (0.4, clap, -0.03, -0.03), (0.56, down, 0, 0)], loop=False)
+
+    # ground slam: a hop with the fists raised, then down into a crouch with both fists driven into the ground
+    hop = merged(both(arm=(0, -60, 0), forearm=(0, 0, -45), thigh=(-40, -8, 0), shin=(70, 0, 0), foot=(20, 0, 0)), {'spine': (-6, 0, 0), 'head': (-10, 0, 0)})
+    slam = merged(both(arm=(-62, 82, -8), forearm=(0, 0, -12), thigh=(-75, -16, 0), shin=(118, 0, 0), foot=(-38, 0, 0)), {'spine': (42, 0, 0), 'chest': (10, 0, 0), 'head': (-14, 0, 0)})
+    make_action(rig, 'cast_slam', [(0, down, 0, 0), (0.16, hop, 0.22, -0.05), (0.3, slam, -0.36, -0.12), (0.5, slam, -0.36, -0.12), (0.72, down, 0, 0)], loop=False)
+
+    # summon: the right arm raised high to call, then swept down to point where it arrives
+    call = merged(stance, guard_l, {'upper_arm_R': (-20, -62, 0), 'forearm_R': (0, 0, -8), 'spine': (-6, 0, 0), 'head': (-14, 0, 0)})
+    sweep = merged(stance, guard_l, {'upper_arm_R': (-55, 86, -4), 'forearm_R': (0, 0, -4), 'spine': (12, 0, 6), 'head': (8, 0, 0)})
+    make_action(rig, 'cast_summon', [(0, down, 0, 0), (0.2, call, 0.02, 0), (0.32, call, 0.02, 0), (0.44, sweep, -0.04, -0.06), (0.58, sweep, -0.04, -0.06), (0.74, down, 0, 0)], loop=False)
+
+    # breath: a deep draw back with the chest lifted, then the head and chest thrust forward to breathe it out
+    draw = merged(down, both(arm=(16, 0, 10)), {'spine': (-10, 0, 0), 'chest': (-12, 0, 0), 'neck': (-12, 0, 0), 'head': (-18, 0, 0)})
+    blow = merged(down, both(arm=(24, 0, 14), thigh=(-12, -6, 0), shin=(20, 0, 0)), {'spine': (16, 0, 0), 'chest': (10, 0, 0), 'neck': (14, 0, 0), 'head': (8, 0, 0)})
+    make_action(rig, 'cast_breath', [(0, down, 0, 0), (0.2, draw, 0.02, 0.04), (0.34, blow, -0.04, -0.08), (0.54, blow, -0.04, -0.08), (0.7, down, 0, 0)], loop=False)
+
+    # spin: a full turn with the arms out, low on the knees. The turn ends on 360 degrees, not 0, so no key flips sides
+    out = merged(both(arm=(0, 8, 0), forearm=(0, 0, -10), thigh=(-14, -10, 0), shin=(24, 0, 0)), {'spine': (6, 0, 0)})
+    turn = lambda deg: merged(out, {'hips': (0, 0, deg)})
+    make_action(rig, 'cast_spin', [(0, down, 0, 0), (0.1, turn(0), -0.05, 0), (0.22, turn(120), -0.05, 0), (0.34, turn(240), -0.05, 0), (0.46, turn(360), -0.05, 0), (0.62, merged(down, {'hips': (0, 0, 360)}), 0, 0)], loop=False)
+
+
+# the cast poses a skill look can pick, beside the hip charge (`cast`)
+CAST_POSES = ['cast_palms', 'cast_palm', 'cast_fingers', 'cast_overhead', 'cast_cross', 'cast_clap', 'cast_slam', 'cast_summon', 'cast_breath', 'cast_spin']
+CLIPS = ['idle', 'run', 'fly', 'hover', 'slash', 'shoot', 'cast', 'ultimate', 'hurt', 'stunned', 'fall'] + CAST_POSES

@@ -19,7 +19,7 @@ export type Rgb = [number, number, number]
 
 /** A body's face data, from its kit sidecar (public/heroes/<body>.kit.json), written by the Blender pipeline. */
 export interface FaceMeta {
-  version: 1
+  version: 1 | 2
   atlas: number
   /** The front-on head frame: centre (x, z) and width in metres, landmarks in pixels of a res-square patch. */
   frame: { cx: number; cz: number; size: number; res: number }

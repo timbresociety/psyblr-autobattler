@@ -1,9 +1,16 @@
 """
-The arena's characters (R24): a MakeHuman (MPFB) body per hero, rigged and animated for the game, dressed, given hair
-and a face from a generated portrait, baked into one textured mesh and exported as a GLB.
+The arena's bodies (R24): twelve MakeHuman (MPFB) bodies, one per gender and size class, rigged and animated for the
+game, each with a face from a generated portrait and its physique morphs, baked into one textured mesh and exported as
+a GLB. Everything a hero wears, hair and beards included, is a wardrobe item bound over them (tools/blender/wardrobe.py).
 
-    Blender -b --python tools/blender/human.py -- --hero huang --out public/heroes/huang.glb [--sheet dir] [--render png]
-    Blender -b --python tools/blender/human.py -- --base m-medium --out public/heroes/m-medium.glb   (writes m-medium.kit.json too)
+    Blender -b --python tools/blender/human.py -- --base m-medium --out public/heroes/m-medium.glb [--sheet dir] [--render png]   (writes m-medium.kit.json too)
+    Blender -b --python tools/blender/human.py -- --face-basis public/kit/face-basis   (the face basis, .bin and .json)
+    Blender -b --python tools/blender/human.py -- --face-fits src/arena/client/face/blender-fits.json   (fit_face on each demo portrait, for shape.test.ts)
+
+Every body shares one surface. The proxy faces it refines and the faces of its photo island are stored in
+humanlib/topology.json, written once from the reference body:
+
+    Blender -b --python tools/blender/human.py -- --base m-medium --write-topology --out public/heroes/m-medium.glb
 
 One-time landmark binding (ties MediaPipe's face landmarks to the MakeHuman mesh; writes humanlib/face_bind.json):
 

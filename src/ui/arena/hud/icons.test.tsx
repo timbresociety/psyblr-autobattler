@@ -55,6 +55,8 @@ describe('ability icons from the kit (R38)', () => {
     expect(iconFor(byName('Grapple Hook'))).toBe('grapple')
     expect(iconFor(byName('Meteor Storm'))).toBe('zone')
     expect(iconFor(byName('Super Form'))).toBe('resize')
+    // a form that keeps the hero's size is still a transformation
+    for (const name of ['Ascended Form', 'Shrink Form', 'Avatar Form']) expect(iconFor(byName(name)), name).toBe('resize')
     expect(toneFor(byName('Fireball'))).toBe('spirit')
     expect(toneFor(byName('Heavy Strike'))).toBe('phys')
     expect(toneFor(byName('Healing Burst'))).toBe('heal')

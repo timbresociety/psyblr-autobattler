@@ -30,7 +30,7 @@ const CONTROL_ICON = { root: 'root', silence: 'silence', disarm: 'disarm', sleep
 export function iconFor(t: Kit): IconKey {
   const d = t.delivery.kind
   const find = <K extends Template['effects'][number]['kind']>(kind: K) => t.effects.find((e): e is Extract<Template['effects'][number], { kind: K }> => e.kind === kind)
-  if (has(t, 'resize')) return 'resize'
+  if (has(t, 'resize') || has(t, 'form')) return 'resize'
   if (d === 'grapple') return 'grapple'
   if (d === 'blink') return 'blink'
   if (d === 'dash') return 'dash'

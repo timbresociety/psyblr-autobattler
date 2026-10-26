@@ -6,10 +6,14 @@ import { deriveSheet } from '../../charter/stats'
 import { getTemplate } from '../../charter/templates/catalog'
 import { renderTooltip } from '../../charter/tooltip'
 import type { BuildSlot } from '../../charter/types'
+import { elementLook, type SkillLook } from '../../charter/skill-look'
+import { skillLookOf } from '../../arena/recipes/looks'
+import { transformOf } from '../../forge/form'
 import { toneFor } from '../arena/hud/icons'
 import { headline } from '../common/skill-numbers'
 import { SkillIcon } from '../common/SkillIcon'
 import { SLOT_LABEL } from './labels'
+import { FormCard, SkillLookRow } from './SkillLook'
 
 interface Props {
   build: Build
@@ -18,10 +22,12 @@ interface Props {
   onSwap: (slot: BuildSlot, templateId: string) => void
   /** The player is looking at this skill: the preview hero can show it. */
   onPreview?: (slot: BuildSlot) => void
+  /** Change how the skill looks (free, and never a number); without it the card shows no look controls. */
+  onLook?: (slot: BuildSlot, change: (look: SkillLook) => SkillLook) => void
 }
 
 /** One skill: the player's name, flavour and visuals on top of the engine's mechanic and its real numbers (R3, R6, R7). */
-export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
+export function SkillCard({ build, slot, onEdit, onSwap, onPreview, onLook }: Props) {
   const spec = build.slots[slot]
   const template = getTemplate(spec.templateId)
   const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
@@ -35,6 +41,8 @@ export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
   const [pending, setPending] = useState<string | undefined>()
   const [lastSeen, setLastSeen] = useState(spec.flavour)
   const hover = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // the look the skill is drawn with: the player's own, or the one its words and template give it
+  const look = skillLookOf(build, slot) ?? elementLook('energy')
   if (spec.flavour !== lastSeen) {
     setLastSeen(spec.flavour)
     setFlavour(spec.flavour)
@@ -124,6 +132,12 @@ export function SkillCard({ build, slot, onEdit, onSwap, onPreview }: Props) {
         </div>
       )}
       <input className="visual" aria-label={`${SLOT_LABEL[slot]} visuals`} value={spec.visual} placeholder="Look: animation, aura, effects" maxLength={200} onChange={(e) => onEdit(slot, { visual: e.target.value })} />
+      {onLook && (
+        <>
+          <SkillLookRow slot={slot} look={look} kind={template.delivery.kind} onLook={(change) => onLook(slot, change)} />
+          {transformOf(template) && <FormCard build={build} look={look} onSwap={(id) => onSwap(slot, id)} onLook={(change) => onLook(slot, change)} />}
+        </>
+      )}
     </article>
   )
 }

@@ -25,7 +25,7 @@ def gltf(v):
 
 def body_sockets(rig, head, mesh):
     scale = round(head.half_width / PIECE_HEAD_HALF_WIDTH, 4)
-    # a hat sits where make_top_hat puts one: on the hairline at the front, centred a touch behind the head's middle
+    # a hat sits on the hairline at the front, centred a touch behind the head's middle
     hat_z = head.hairline(Vector((0, head.front, head.eyes.z)), 0.0) + 0.005
     lens_y = min(head.front + 0.006, head.eye_l.y - head.eye_r_radius - 0.008)
     out = {

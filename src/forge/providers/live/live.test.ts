@@ -22,7 +22,7 @@ const TRIPO = { TRIPO_API_KEY: 'k' }
 
 describe('network guard', () => {
   it('tests cannot reach the network without a mocked fetch', async () => {
-    await expect(fetch('https://openapi.tripo3d.com/v3/task')).rejects.toThrow(/network disabled/)
+    await expect(fetch('https://openapi.tripo3d.ai/v3/task')).rejects.toThrow(/network disabled/)
   })
 })
 
@@ -111,20 +111,20 @@ describe('Anthropic adapters (U4)', () => {
   })
 })
 
-describe('Tripo pieces on the v3 API (developers.tripo3d.com, 2026-10)', () => {
+describe('Tripo pieces on the v3 API (developers.tripo3d.ai, 2026-10)', () => {
   it('makes a piece from words with text-to-model, and a success poll returns the model and its preview', async () => {
     const f = mockFetch(json(200, { code: 0, data: { task_id: 'task_1' } }), json(200, { code: 0, data: { task_id: 'task_1', status: 'success', progress: 100, output: { model_url: 'https://cdn.tripo3d.ai/m.glb', rendered_image_url: 'https://cdn.tripo3d.ai/p.png' } } }))
     const piece = tripoPiece(TRIPO, f)
     expect(await piece.start({ prompt: 'a straw hat', kind: 'head', faceLimit: 20000 })).toEqual({ ok: 'pending', taskId: 'task_1' })
-    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.com/v3/generation/text-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, prompt: 'a straw hat' } })
+    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.ai/v3/generation/text-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, prompt: 'a straw hat' } })
     expect(await piece.poll('task_1')).toEqual({ ok: true, value: { url: 'https://cdn.tripo3d.ai/m.glb', format: 'glb', preview: 'https://cdn.tripo3d.ai/p.png' } })
-    expect(f.calls[1].url).toBe('https://openapi.tripo3d.com/v3/tasks/task_1')
+    expect(f.calls[1].url).toBe('https://openapi.tripo3d.ai/v3/tasks/task_1')
   })
 
   it('models a piece from a picture with image-to-model, the picture passed as input', async () => {
     const f = mockFetch(json(200, { code: 0, data: { task_id: 'task_2' } }))
     await tripoPiece(TRIPO, f).start({ prompt: 'this sword', kind: 'hand', imageUrl: 'https://store.public.blob.vercel-storage.com/heroes/x.webp', faceLimit: 20000 })
-    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.com/v3/generation/image-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, input: 'https://store.public.blob.vercel-storage.com/heroes/x.webp' } })
+    expect(f.calls[0]).toEqual({ url: 'https://openapi.tripo3d.ai/v3/generation/image-to-model', body: { model: TRIPO_PIECE_MODEL, face_limit: 20000, texture: true, pbr: true, input: 'https://store.public.blob.vercel-storage.com/heroes/x.webp' } })
   })
 
   it('reads a content refusal as a decline, a running task as pending, and anything else as a failure', async () => {
