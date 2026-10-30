@@ -34,7 +34,7 @@ export function ArenaScreen() {
 const DUMMY_HEALTH = 5
 
 /** Turn a staged formation into the engine's teams, formations and per-hero packages. */
-function matchSetup(staged: StagingResult): MatchSetup {
+export function matchSetup(staged: StagingResult): MatchSetup {
   const side = (s: 0 | 1) => staged.formation[s].map((p) => staged.loadout[p.hero])
   const teams = ([0, 1] as const).map((s) => armyModifiers(side(s).map((e) => e.build))) as MatchSetup['teams']
   const formations = ([0, 1] as const).map((s) => staged.formation[s].map((p) => ({ x: p.x, y: 0, z: p.z }))) as MatchSetup['formations']
@@ -153,7 +153,7 @@ function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged
   )
 }
 
-function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRematch, back }: { controller: ArenaController; staged: StagingResult; locked: boolean; help: boolean; onHelp: (on: boolean) => void; paused: boolean; onLeave: () => void; onRematch: () => void; back: string }) {
+export function Live({ controller, staged, locked, help, onHelp, paused, onLeave, onRematch, back }: { controller: ArenaController; staged: StagingResult; locked: boolean; help: boolean; onHelp: (on: boolean) => void; paused: boolean; onLeave: () => void; onRematch: () => void; back: string }) {
   const state: HudState = useSyncExternalStore(controller.store.subscribe, controller.store.get)
   const builds = useMemo(() => staged.formation[staged.side].map((p) => staged.loadout[p.hero].build), [staged])
   // names, portraits and each skill's icon never change during a match: built once, not at 10 Hz

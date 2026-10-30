@@ -8,6 +8,8 @@ import './theme.css'
 
 // the arena bench (U1) opens on its own with `?bench` and loads three's WebGPU build only there
 const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
+// so does the soak test, with `?soak`: real 10v10s back to back for ten minutes, graded on frame time and memory
+const SoakScreen = lazy(() => import('./arena/SoakScreen').then((m) => ({ default: m.SoakScreen })))
 const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./dev/WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
 // the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
@@ -98,6 +100,13 @@ export function App() {
     return (
       <Suspense fallback={<p className="screen-loading">Loading the wardrobe…</p>}>
         <WardrobeScreen />
+      </Suspense>
+    )
+  }
+  if (new URLSearchParams(window.location.search).has('soak')) {
+    return (
+      <Suspense fallback={<p className="screen-loading">Loading the soak test…</p>}>
+        <SoakScreen />
       </Suspense>
     )
   }
