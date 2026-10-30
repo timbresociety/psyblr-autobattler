@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jensen up close</title>
+<style>
+:root { --bg: #f6f5f8; --card: #ffffff; --ink: #17161c; --muted: #5d5a66; --line: #e3e0ea; --stage: #101016; }
+@media (prefers-color-scheme: dark) { :root { --bg: #0d0c11; --card: #17161d; --ink: #f1eff6; --muted: #a7a3b3; --line: #2a2833; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 40px 16px 64px; }
+h1 { font-size: 30px; letter-spacing: -0.02em; margin: 0 0 12px; }
+h2 { font-size: 19px; margin: 0 0 6px; }
+.lede { max-width: 760px; color: var(--muted); margin: 0 0 10px; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin-top: 20px; }
+section p { max-width: 820px; margin: 6px 0; }
+figure { margin: 12px 0 0; background: var(--stage); border-radius: 12px; padding: 8px; }
+figure img { display: block; width: 100%; height: auto; border-radius: 8px; }
+figcaption { color: #c9c5d4; font-size: 12.5px; padding: 6px 4px 0; }
+.small img { max-width: 720px; margin: 0 auto; }
+ul { margin: 6px 0; padding-left: 20px; max-width: 820px; }
+li { margin: 4px 0; }
+code { font-size: 13px; }
+.muted { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+<h1>Jensen, up close</h1>
+<p class="lede">You said the Forge looked bad, and up close it did. So I shot Jensen the way the creator shows him and fixed what stood out, worst first. Five fixes landed today on <code>feat/forge-creator</code>, and nothing is pushed.</p>
+<p class="lede">In every picture the top row is Jensen earlier today and the bottom row is Jensen now.</p>
+
+<section>
+<h2>He stood in a permanent shrug</h2>
+<p>This one hit every hero we have, in the arena too.</p>
+<p>The motion library's shoulder bone starts closer to the neck than ours does, so when the performer relaxes, their shoulder bone points 2° above level while ours points 10° below. Our retargeter copied the direction each bone points. Every hero stood with their shoulders hitched 12° and the joints 4 cm high, which made the necks look short and turned jackets and tees into coat hangers.</p>
+<p>Now each collarbone copies how far the performer moved from their own relaxed shoulder. Standing still, the shoulders sit where the body was built to hold them, and they lift about 3° on a walk and 10° on a run, the way a real runner's do.</p>
+<figure><img src="img/2026-10-30-body.jpg" alt="Jensen's bust and full body before and after, square raised shoulders above, sloped relaxed shoulders and grained leather below"><figcaption>The bust from three sides, then the full body. Top row before, bottom row now.</figcaption></figure>
+</section>
+
+<section>
+<h2>His glasses floated, and his hair came to a point</h2>
+<p>Glasses and hats hang on fixed points that the build pipeline puts on the plain body. Jensen's age and weight lower his head by 19 mm. But the points stayed where they were, so his glasses sat on his eyebrows. Bezos's sat 18 mm high and Musk's 14 mm. The points now move with the face and head around them, whatever the hero's physique or face.</p>
+<p>I also slimmed the square frames to 48 by 31 mm lenses and cleared the glass, so you can see his eyes.</p>
+<p>The hair had two problems. The generator flipped a weight at the crown, so every swept style rose to a peak like an onion dome. That's fixed, and the crown is round. And the strands were drawn finer than a pixel, so they shimmered into marbled bands. Now they fade out before they can shimmer, and forty locks run from the crown to the nape with shade in the grooves between them.</p>
+<figure><img src="img/2026-10-30-head.jpg" alt="Jensen's face from four sides and his bust before and after, a peaked hair dome and floating grey glasses above, a round crown, locks and clear glasses on his eyes below"><figcaption>His face from four sides, then the bust. Top row before, bottom row now.</figcaption></figure>
+</section>
+
+<section>
+<h2>His jacket read as a wetsuit</h2>
+<p>The creator drew leather as one smooth dark surface, so the light slid across it in a single blurry sweep, which is exactly what vinyl does. Leather now gets a pebbled grain two millimetres across and a soft swell where the hide doesn't lie flat, with patches worn a little smoother or drier. The relief holds at any distance, and the grain fades out before it can shimmer when you pull back to the full body.</p>
+<figure class="small"><img src="img/2026-10-30-leather.jpg" alt="The back of Jensen's jacket, one smooth highlight on the left and pebbled leather catching light on the right"><figcaption>The back of the jacket, before on the left and now on the right.</figcaption></figure>
+</section>
+
+<section>
+<h2>What still looks wrong</h2>
+<ul>
+<li><strong>The hair is still a shell.</strong> It reads as sculpted locks now but not as hair, with no stray strands and no light coming through at the edges, and the tufts over his ears are blobs. FC and most games build hair from cards, hundreds of thin strips that each carry a few strands with see-through gaps between them. That's the real fix, and it's the biggest step left for the face, because a face reads as a person only once the hair around it moves and lets light through the way hair does. I think it's a few days of work.</li>
+<li><strong>The jacket hugs him.</strong> His belly and chest show through it, and the collar is a flat band where a biker jacket folds over.</li>
+<li><strong>The skin looks a little like plastic.</strong> Real skin lets light in and glows red where it scatters back out, and ours doesn't yet.</li>
+<li><strong>The grain and the locks only show in the creator.</strong> The arena draws with a different renderer, and I haven't ported them there yet.</li>
+</ul>
+<p>I'll do the jacket and collar next, then the skin, since each takes hours. Then I'll start on hair cards.</p>
+<p>If the hair bothers you most, tell me and I'll start there.</p>
+<p class="muted">The commits are ef3f1ea for the glasses and hats, e050b04 for the crowns and frames, 0d72f79 for the shoulders, 9053210 for the leather and 04a1b64 for the hair.</p>
+</section>
+</main>
+</body>
+</html>
