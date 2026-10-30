@@ -2,7 +2,8 @@
  * Ready Player Me's animation library (github.com/readyplayerme/animation-library, used under the owner's agreement with
  * Ready Player Me) retargeted onto the heroes' 20-bone rig. Each clip's motion moves over bone by bone in world space:
  * the RPM skeleton's T-pose is first turned bone by bone onto our bodies' A-pose, so a frame's change from that pose
- * is the change our bone makes from its own rest, and every bone points where the performer's did. The hips' travel is
+ * is the change our bone makes from its own rest, and every bone points where the performer's did, but the clavicles,
+ * which turn as far as the performer's shoulders turned from relaxed (relaxedShoulders). The hips' travel is
  * scaled to our hips' height, and walking forward becomes walking in place (the engine moves the hero).
  *
  *   npx tsx scripts/rpm-anim.ts [library]      (default .scratch/rpm/src: its masculine/ and feminine/ folders)
@@ -221,6 +222,8 @@ const indexOf = (bones: Bone[], name: string) => {
 // ------------------------------------------------------------------------------------------------ retargeting
 
 const UP = new Vector3(0, 1, 0)
+/** The library's shoulder bones: our clavicles take their turn from relaxed, not where they point (relaxedShoulders). */
+const SHOULDERS = ['LeftShoulder', 'RightShoulder']
 
 /** A body to retarget onto: its rest rotations in the scene, and its hips' rest position. */
 interface Target {
@@ -264,6 +267,43 @@ interface Track {
   times: Float32Array
   values: Float32Array
   width: number
+}
+
+/**
+ * The library's shoulders as it stands: each shoulder bone's mean turn in its chest over the stance idle (`idle`). Its
+ * shoulder bone starts nearer the neck than our clavicle, so a relaxed shoulder points 2° above its chest's level in its
+ * rig and 10° below in ours, and copying where it points stood every hero with its shoulders shrugged 12°. Our
+ * clavicles take the performer's turn from these instead (retarget): a relaxed shoulder is our rest clavicle, and a
+ * clip lifts ours as far as the performer lifted theirs.
+ */
+function relaxedShoulders(idle: string): Map<string, Quaternion> {
+  const glb = readGlb(idle)
+  const bones = bonesOf(glb)
+  const anim = glb.json.animations?.[0]
+  if (!anim) throw new Error(`${idle}: no animation`)
+  const out = new Map<string, Quaternion>()
+  for (const name of SHOULDERS) {
+    const node = indexOf(bones, name)
+    const ch = anim.channels.find((c) => c.target.node === node && c.target.path === 'rotation')
+    if (!ch) {
+      out.set(name, bones[node].r.clone())
+      continue
+    }
+    const s = anim.samplers[ch.sampler]
+    const track = { times: readAccessor(glb, s.input), values: readAccessor(glb, s.output), width: 4 }
+    const duration = track.times[track.times.length - 1]
+    const sum = new Quaternion(0, 0, 0, 0)
+    const q = new Quaternion()
+    const tmp: number[] = []
+    for (let f = 0; f <= Math.round(duration * FPS); f++) {
+      q.fromArray(sample(track, Math.min(duration, f / FPS), tmp))
+      // each frame on the first's side of the sphere, so they average the short way
+      const sign = f && q.dot(sum) < 0 ? -1 : 1
+      sum.set(sum.x + q.x * sign, sum.y + q.y * sign, sum.z + q.z * sign, sum.w + q.w * sign)
+    }
+    out.set(name, sum.normalize())
+  }
+  return out
 }
 
 function sample(track: Track, t: number, out: number[]): number[] {
@@ -315,7 +355,7 @@ interface Gait {
   strike: number
 }
 
-function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: number, ours: Target, way?: number): Retargeted {
+function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<string, Quaternion>, sourceHipsY: number, ours: Target, way?: number): Retargeted {
   const glb = readGlb(path)
   const bones = bonesOf(glb)
   const anim = glb.json.animations?.[0]
@@ -335,6 +375,18 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
   let frames = Math.max(2, Math.round(duration * FPS) + 1)
   const sourceIndex = RIG.map(([, s]) => indexOf(bones, s))
   const alignedInverse = RIG.map(([, s]) => aligned.get(s)!.clone().invert())
+  // each clavicle: the performer's shoulder in its chest, its relaxed turn there taken away, and from the library's chest
+  // into ours (its chest as aligned onto ours), with our clavicle's rest in its parent to put the turn on
+  const shoulders = new Map(
+    RIG.flatMap(([o, src], k) => {
+      if (!SHOULDERS.includes(src)) return []
+      const node = sourceIndex[k]
+      const parent = bones[node].parent
+      const intoOurs = ours.world[ours.parentOf[k]].clone().invert().multiply(aligned.get(bones[parent].name)!)
+      const rest = ours.world[ours.parentOf[k]].clone().invert().multiply(ours.world[ours.index[k]])
+      return [[k, { node, parent, relaxedInverse: relaxed.get(src)!.clone().invert(), intoOurs, outOfOurs: intoOurs.clone().invert(), rest }] as const]
+    }),
+  )
   const raw: Vector3[] = []
   const facing: number[] = []
   const tmp: number[] = []
@@ -402,6 +454,12 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
       const change = turn.clone().multiply(world[sourceIndex[k]]).multiply(alignedInverse[k])
       ourWorld[k] = change.multiply(ours.world[ours.index[k]])
       const parentWorld = k === 0 ? ours.world[ours.parentOf[0]] ?? new Quaternion() : ourWorld[RIG.findIndex(([o]) => ours.bones[ours.parentOf[k]].name === o)]
+      const shoulder = shoulders.get(k)
+      if (shoulder) {
+        // a clavicle turns in our chest as the performer's shoulder turned from relaxed in theirs (relaxedShoulders)
+        const turned = world[shoulder.parent].clone().invert().multiply(world[shoulder.node]).multiply(shoulder.relaxedInverse)
+        ourWorld[k] = parentWorld.clone().multiply(shoulder.intoOurs).multiply(turned).multiply(shoulder.outOfOurs).multiply(shoulder.rest)
+      }
       const q = parentWorld.clone().invert().multiply(ourWorld[k]).normalize()
       // keep each track on one side of the sphere so it blends the short way
       if (f && q.dot(prev[k]) < 0) q.set(-q.x, -q.y, -q.z, -q.w)
@@ -538,6 +596,7 @@ let bytes = 0
 for (const gender of ['m', 'f'] as Gender[]) {
   const folder = join(LIBRARY, gender === 'm' ? 'masculine' : 'feminine', 'glb')
   const tpose = bonesOf(readGlb(join(folder, gender === 'm' ? 'Masculine_TPose.glb' : 'Feminine_TPose.glb')))
+  const relaxed = relaxedShoulders(join(folder, `${SETS.idle[gender].idle}.glb`))
   const ours = target(`public/heroes/${gender}-medium.glb`)
   const aligned = alignedPose(tpose, ours)
   const sourceHipsY = worldPositions(tpose)[indexOf(tpose, 'Hips')].y
@@ -546,7 +605,7 @@ for (const gender of ['m', 'f'] as Gender[]) {
   const gait: Record<string, Gait> = {}
   for (const [set, picks] of Object.entries(SETS)) {
     for (const [name, file] of Object.entries(picks[gender])) {
-      const r = retarget(join(folder, `${file}.glb`), aligned, sourceHipsY, ours, LOOPS.test(name) ? WAYS[name.match(/_(?:back|left|right)$/)?.[0] ?? ''] : undefined)
+      const r = retarget(join(folder, `${file}.glb`), aligned, relaxed, sourceHipsY, ours, LOOPS.test(name) ? WAYS[name.match(/_(?:back|left|right)$/)?.[0] ?? ''] : undefined)
       const out = join(OUT, gender, `${name}.json`)
       writeFileSync(out, JSON.stringify({ frames: r.frames, from: file.split('/').pop(), rot: deltas(r.rot, r.frames, 4, ROT_SCALE), pos: deltas(r.pos, r.frames, 3, POS_SCALE) }))
       const size = gzipSync(readFileSync(out)).length
