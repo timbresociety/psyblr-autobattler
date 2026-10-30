@@ -357,11 +357,12 @@ class Dresser:
             out.append(centre + d * r)
         return out
 
-    def band(self, name, centre, axis, ref, height, offset, mat, count=20, faces=None, flare=0.0, rigid=None, gap=None, radius=0.6, round_to=None):
+    def band(self, name, centre, axis, ref, height, offset, mat, count=20, faces=None, flare=0.0, rigid=None, gap=None, radius=0.6, round_to=None, thickness=0.0):
         """
         A ring band (belt, collar, cuff): the body's cross-section, pushed out, `height` tall along the axis. With
         `round_to`, the section is re-centred and no point may stand further out than the narrowest one plus that
-        much (a collar circles the neck instead of following the slope of the shoulders).
+        much (a collar circles the neck instead of following the slope of the shoulders). With `thickness`, it's solid
+        that thick inward, so its edges catch the light the way a leather collar's or cuff's do.
         """
         axis = axis.normalized()
         if round_to is not None:
@@ -405,6 +406,8 @@ class Dresser:
             radial -= axis * radial.dot(axis)
             if f.normal.dot(radial) < 0:
                 f.normal_flip()
+        if thickness:
+            solidify(bm, thickness)
         return self._finish(name, bm, mat, rigid)
 
     def strip(self, name, path, widths, side, offset, mat, rigid=None, faces=None, snap_dir=None, thickness=0.0):

@@ -471,19 +471,19 @@ def gear_sash(d, head, body, mat='accent', width=0.045, side='R'):
     return parts
 
 
-def gear_collar(d, head, body, mat='shirt', height=0.04, gap=0.18, offset=0.007, drop=0.02, tilt=0.3, flare=0.006, name='collar'):
+def gear_collar(d, head, body, mat='shirt', height=0.04, gap=0.18, offset=0.007, drop=0.02, tilt=0.3, flare=0.006, name='collar', thickness=0.0):
     """A collar standing round the neck (open at the front when `gap` > 0); a thin one is a tee's ribbed neckband."""
     n = d.neck
     gapf = (lambda k, cnt: abs(((k + 0.5) / cnt) - 0.75) < gap / 2) if gap else None
     # aim only at the neck itself, so rays from the front never land on the chest
     faces = {p.index for p in d.obj.data.polygons if p.center.z > n.z - 0.11 and d.face_bone(p) in ('neck', 'upper_chest', 'clavicle_L', 'clavicle_R', 'head') and abs(p.center.x) < 0.11}
-    return d.band(name, Vector((0, n.y + 0.012, n.z - drop)), Vector((0, -tilt, 1)), Vector((1, 0, 0)), height, offset, mat, count=18, flare=flare, gap=gapf, radius=0.14, faces=faces, round_to=0.012)
+    return d.band(name, Vector((0, n.y + 0.012, n.z - drop)), Vector((0, -tilt, 1)), Vector((1, 0, 0)), height, offset, mat, count=18, flare=flare, gap=gapf, radius=0.14, faces=faces, round_to=0.012, thickness=thickness)
 
 
-def gear_hem(d, head, body, mat='jacket', at='hip', height=0.035, offset=0.02, flare=0.01):
+def gear_hem(d, head, body, mat='jacket', at='hip', height=0.035, offset=0.02, flare=0.01, thickness=0.0):
     """The bottom edge of a jacket or coat standing off the hips."""
     z = {'waist': d.waist_z - 0.02, 'hip': d.hip_z - 0.04, 'crotch': d.hip_z - 0.12, 'thigh': d.hip_z - 0.24}[at]
-    return d.band('hem', Vector((0, d.bones['hips'][0].y, z - 0.005)), Vector((0, 0, 1)), Vector((1, 0, 0)), height, offset, mat, count=24, flare=flare, radius=0.34)
+    return d.band('hem', Vector((0, d.bones['hips'][0].y, z - 0.005)), Vector((0, 0, 1)), Vector((1, 0, 0)), height, offset, mat, count=24, flare=flare, radius=0.34, thickness=thickness)
 
 
 def gear_trouser_hems(d, head, body, mat='trousers', at=0.93, offset=0.008):
@@ -551,14 +551,14 @@ def gear_lapels(d, head, body, mat='jacket', width=0.06, button=None, drop=0.005
     return out
 
 
-def gear_cuffs(d, head, body, mat='shirt', at=0.9, height=0.035, offset=0.006, bone='forearm'):
+def gear_cuffs(d, head, body, mat='shirt', at=0.9, height=0.035, offset=0.006, bone='forearm', thickness=0.0):
     out = []
     for side in 'LR':
         b = f'{bone}_{side}'
         h, t = d.bones[b]
         faces = {p.index for p in d.obj.data.polygons if d.face_bone(p) == b}
         c = h.lerp(t, at)
-        out.append(d.band(f'cuff_{side}', c - (t - h).normalized() * height, t - h, Vector((0, 0, 1)), height, offset, mat, count=12, faces=faces, radius=0.3))
+        out.append(d.band(f'cuff_{side}', c - (t - h).normalized() * height, t - h, Vector((0, 0, 1)), height, offset, mat, count=12, faces=faces, radius=0.3, thickness=thickness))
     return out
 
 

@@ -1794,10 +1794,118 @@ def _hoodie(w):
     return parts
 
 
-@item('leather_jacket', 'Leather jacket over a tee', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton')], knobs=['sleeve'], tags=['leather jacket', 'biker jacket', 'moto jacket', 'jensen jacket'])
+@item('leather_jacket', 'Leather jacket over a tee', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton'), ('zip', '#9a9ba0', 'metal')], knobs=['sleeve'], tags=['leather jacket', 'biker jacket', 'moto jacket', 'jensen jacket'])
 def _leather(w):
+    """
+    A moto jacket worn open over a tee, made the way one is: a stand collar and a hem band and cuffs with leather's
+    thickness at their edges, a zip down each front, and panels seamed over the shoulders, round the armholes, across
+    the back and round the elbows, so the light breaks over it in pieces the way it does on a jacket, not in one sweep
+    the way it does on a wetsuit.
+    """
     c = clothes(w, [top(mat='tee'), dict(kind='jacket', mat='jacket', sleeve=1.93, hem='hip', neck='collar', open='v', open_width=0.07, thick=0.016, pad=0.01)], smooth=['jacket'])
-    return [c] + gear(c, 'collar', mat='jacket', height=0.045, gap=0.24, offset=0.004) + gear(c, 'hem', mat='jacket', at='hip', offset=0.004)
+    parts = [c]
+    parts += gear(c, 'collar', mat='jacket', height=0.048, gap=0.26, offset=0.006, flare=0.005, thickness=0.004)
+    parts += gear(c, 'hem', mat='jacket', at='hip', offset=0.004, height=0.04, thickness=0.004)
+    parts += gear(c, 'cuffs', mat='jacket', at=0.93, height=0.05, offset=0.004, thickness=0.003)
+    parts += zips(c)
+    parts += jacket_seams(c)
+    return parts
+
+
+def zips(c, mat='zip', width=0.0028, inset=0.006, lift=0.006):
+    """
+    A jacket's zip: a metal strip down each edge of its open front, `inset` in from the edge onto the leather, and on
+    down the closed front from the bottom of the opening to the hem band.
+    """
+    me = c.obj.data
+    # materials are named for the item they're made for ('tech_jacket:jacket')
+    names = [m.name.split(':')[-1] for m in me.materials]
+    n = c.d.neck
+    sides = {}
+    by_edge = {}
+    for p in me.polygons:
+        for k in p.edge_keys:
+            by_edge.setdefault(k, []).append(p)
+    for (a, b), ps in by_edge.items():
+        kinds = {names[p.material_index] for p in ps}
+        if len(ps) != 2 or 'jacket' not in kinds or kinds <= {'jacket'} or 'skin' in kinds:
+            continue
+        mid = (me.vertices[a].co + me.vertices[b].co) / 2
+        if mid.y > n.y or mid.z > n.z:
+            continue
+        sides.setdefault(1 if mid.x > 0 else -1, []).append(mid)
+    parts = []
+    torso = c.faces(*G.TORSO)
+    bottom = None
+    for s, pts in sides.items():
+        pts.sort(key=lambda p: -p.z)
+        # one point every 1.5 cm, each the mean of its neighbours: the cut's steps smoothed into a line
+        line = []
+        for p in pts:
+            if not line or line[-1].z - p.z > 0.015:
+                line.append(p.copy())
+        line = [sum((q for q in line[max(0, i - 1) : i + 2]), Vector()) / len(line[max(0, i - 1) : i + 2]) for i in range(len(line))]
+        for p in line:
+            p.x += s * inset
+        bottom = min(bottom, line[-1].z) if bottom is not None else line[-1].z
+        parts.append(trace(c, f'zip_{"L" if s > 0 else "R"}', line, torso, mat, width=width, lift=lift, step=0.012))
+    if bottom is not None:
+        foot = c.d.hip_z - 0.005
+        parts.append(trace(c, 'zip_closed', [V((0, n.y, bottom)), V((0, n.y, foot))], torso, mat, width=width, lift=lift, step=0.012))
+    return parts
+
+
+def seam(c, name, path, snap, faces=None, mat='jacket', width=0.0022, lift=0.006, closed=False):
+    """
+    A raised seam on a leather garment: a narrow strip of its own leather along `path`, each point snapped onto it
+    along snap(i, point). A seam catches a line of light along its edge, which is how panels read on a jacket.
+    """
+    # only the points that land on the faces: a point left where it was drawn would spike off the garment
+    bvh = c.d.bvh(faces) if faces is not None else c.d._full_bvh()
+    landed = [p for i, p in enumerate(path) if bvh.ray_cast(p - snap(i, p) * 0.4, snap(i, p), 0.8)[0] is not None]
+    if len(landed) < 2:
+        return None
+    # a ring with a gap stays open rather than spanning it
+    closed = closed and len(landed) == len(path)
+    path = landed
+    if closed:
+        path = path + path[:1]
+
+    def across(i, q, nrm):
+        return (path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]).cross(nrm)
+
+    return c.d.strip(name, path, [(width, width)] * len(path), across, lift, mat, faces=faces, snap_dir=snap, thickness=0.0015)
+
+
+def jacket_seams(c, mat='jacket'):
+    """A jacket's panels: over each shoulder, round each armhole (not under it), across the back, down its middle, and twice round each elbow."""
+    d = c.d
+    n = d.neck
+    parts = []
+    torso = c.faces(*G.TORSO)
+    down = lambda i, p: V((0, 0, -1))  # noqa: E731
+    from_back = lambda i, p: V((0, -1, 0))  # noqa: E731
+    for side, s in (('L', 1), ('R', -1)):
+        shoulder, elbow = d.bones[f'upper_arm_{side}']
+        wrist = d.bones[f'forearm_{side}'][1]
+        # along the top of the shoulder, from the side of the neck to where the sleeve is set in
+        top = [V((s * 0.08, n.y + 0.01, n.z + 0.1)).lerp(V((shoulder.x - s * 0.01, shoulder.y, n.z + 0.1)), t / 6) for t in range(7)]
+        parts.append(seam(c, f'seam_shoulder_{side}', top, down, faces=torso | c.faces(f'clavicle_{side}'), mat=mat))
+        # round the armhole and the elbow: rings about the arm, snapped in toward its bone
+        for name, at, arc, bones in (('armhole', 0.03, (-0.62, 0.62), (f'upper_arm_{side}', f'clavicle_{side}', 'upper_chest', 'chest')), ('elbow_a', 0.43, (-1, 1), (f'upper_arm_{side}',)), ('elbow_b', 0.6, (-1, 1), (f'forearm_{side}',))):
+            centre = c.chain(side, at)
+            axis = (elbow - shoulder if at < 0.5 else wrist - elbow).normalized()
+            up = (V((0, 0, 1)) - axis * axis.z).normalized()
+            fwd = axis.cross(up).normalized()
+            k = 20 if arc == (-1, 1) else 14
+            ring = [centre + (up * math.cos(math.pi * (arc[0] + (arc[1] - arc[0]) * i / k)) + fwd * math.sin(math.pi * (arc[0] + (arc[1] - arc[0]) * i / k))) * 0.12 for i in range(k + (0 if arc == (-1, 1) else 1))]
+            inward = lambda i, p, centre=centre, axis=axis: -(((p - centre) - axis * (p - centre).dot(axis)).normalized())  # noqa: E731
+            parts.append(seam(c, f'seam_{name}_{side}', ring, inward, faces=c.faces(*bones), mat=mat, closed=arc == (-1, 1)))
+    # across the back at the shoulder blades, and down the middle of the back to the hem
+    yoke = n.z - 0.13
+    parts.append(seam(c, 'seam_yoke', [V((x / 10 * 0.17, n.y, yoke + 0.02 * (1 - (x / 10) ** 2))) for x in range(-10, 11)], from_back, faces=torso, mat=mat))
+    parts.append(seam(c, 'seam_back', [V((0, n.y, yoke - (yoke - d.hip_z) * t / 8)) for t in range(9)], from_back, faces=torso, mat=mat))
+    return [x for x in parts if x]
 
 
 def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02):
@@ -1819,7 +1927,7 @@ def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02):
 
 # the owner's anime Jensen (Forge goal, phase 2): the leather jacket with circuit-like lines glowing down each front
 # panel and each sleeve. The inner lines stay outside the open front, which is 0.076 either side of centre at the collar
-@item('tech_jacket', 'Leather jacket with glowing trim', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton'), ('trim', '#6dff3a', 'glow')], knobs=['sleeve'], tags=['tech jacket', 'circuit jacket', 'neon jacket', 'glowing jacket', 'light-up jacket', 'cyberpunk jacket'])
+@item('tech_jacket', 'Leather jacket with glowing trim', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton'), ('trim', '#6dff3a', 'glow'), ('zip', '#9a9ba0', 'metal')], knobs=['sleeve'], tags=['tech jacket', 'circuit jacket', 'neon jacket', 'glowing jacket', 'light-up jacket', 'cyberpunk jacket'])
 def _tech_jacket(w):
     parts = _leather(w)
     c = parts[0]
