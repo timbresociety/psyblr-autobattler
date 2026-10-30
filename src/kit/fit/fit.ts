@@ -1,6 +1,6 @@
 import { bindPoints, evaluate, surfaceFrame, toLocal } from '../wear/bind.js'
 import { fieldAt } from '../wear/fields.js'
-import { checkMeta, surfaceItem, type ItemChannel, type ItemMeta, type ItemSlot, type Knob, type SurfaceItem } from '../wear/item.js'
+import { CARD_U, checkMeta, surfaceItem, type ItemChannel, type ItemMeta, type ItemSlot, type Knob, type SurfaceItem } from '../wear/item.js'
 import { chainsOf } from './chains.js'
 import type { V3 } from '../wear/ray.js'
 import { TriangleBVH } from '../wear/ray.js'
@@ -54,6 +54,8 @@ export interface RawSpec {
 
 /** Triangles per item, by slot: a whole outfit stays light enough for twenty heroes. */
 export const BUDGET: Record<ItemSlot, number> = { hair: 3200, beard: 1200, head: 2400, upper: 4200, lower: 3000, full: 6400, back: 3200, feet: 1800, face: 2400, hand: 1200, offhand: 1200 }
+/** Hair cards (u past CARD_U) are drawn in the creator's close look alone, so they count apart, against their own budget. */
+export const CARD_BUDGET = 14000
 
 /** How far a cover reaches out from the skin, and how close an item must lie to hide what's under it. */
 const REACH = 0.32
@@ -347,11 +349,14 @@ export function fitItem(input: RawItem, ref: Reference): Fitted {
   }
   const coveredSet = new Set(covers)
   const coverage = core(ref, spec.slot).map(({ name, verts, need }) => ({ name, share: verts.length ? verts.filter((v) => coveredSet.has(v)).length / verts.length : 1, need }))
-  const triangles = raw.index.length / 3
+  let cards = 0
+  if (raw.uv) for (let t = 0; t < raw.index.length; t += 3) if (raw.uv[raw.index[t] * 2] > CARD_U) cards++
+  const triangles = raw.index.length / 3 - cards
   const problems: string[] = []
   if (bindError > 0.001) problems.push(`binding error ${(bindError * 1000).toFixed(1)} mm`)
   if (inner && under / inner > 0.02) problems.push(`${((under / inner) * 100).toFixed(0)}% under the skin`)
   if (triangles > BUDGET[spec.slot]) problems.push(`${triangles} triangles, over the ${BUDGET[spec.slot]} budget`)
+  if (cards > CARD_BUDGET) problems.push(`${cards} card triangles, over the ${CARD_BUDGET} budget`)
   coverage.forEach((c) => c.share < c.need && problems.push(`covers ${(c.share * 100).toFixed(0)}% of the ${c.name}, needs ${c.need * 100}%`))
   const meta: ItemMeta = {
     format: 'psyblr-wear',

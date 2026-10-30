@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import type { DressedItem } from '../../../kit/wear/dress.js'
-import { clothGeometry } from './dress-model.js'
+import { CARD_U } from '../../../kit/wear/item.js'
+import { clothGeometry, withCards } from './dress-model.js'
 
 /** A dressed item of `triangles` separate triangles, every vertex in one colour. */
 function part(id: string, triangles: number, color: [number, number, number]): DressedItem {
@@ -70,5 +71,38 @@ describe("an outfit's one geometry", () => {
     ])
     // the print's draw is the obi: the kimono's last three vertices, after the tee's three
     expect(Array.from(geo.getIndex()!.array.slice(12))).toEqual([3 + 6, 3 + 7, 3 + 8])
+  })
+})
+
+describe('hair cards', () => {
+  /** Hair: a shell triangle at its edge (weave 5), one inside it, then two card triangles (u past CARD_U). */
+  function hair(): DressedItem {
+    const h: DressedItem = { ...part('hair_swept', 4, [0.8, 0.8, 0.8]), slot: 'hair' }
+    for (let v = 6; v < 12; v++) h.uv[v * 2] = 7.5
+    h.weave.set([5, 5, 5, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99])
+    h.positions.forEach((_, k) => (h.positions[k] = k))
+    return h
+  }
+
+  it('are left off with their vertices where the shell alone is drawn', () => {
+    const [shell] = withCards([hair()], false)
+    expect(shell.count).toBe(6)
+    expect(Array.from(shell.index)).toEqual([0, 1, 2, 3, 4, 5])
+    expect(Array.from(shell.positions)).toEqual(Array.from({ length: 18 }, (_, k) => k))
+    expect(Array.from(shell.uv).filter((_, k) => k % 2 === 0).every((u) => u < CARD_U)).toBe(true)
+  })
+
+  it('stay in a close look, the shell under them darkened but for its edge', () => {
+    const [kept] = withCards([hair()], true)
+    expect(kept.index.length).toBe(12)
+    expect(kept.color[0]).toBeCloseTo(0.8)
+    expect(kept.color[3 * 3]).toBeCloseTo(0.36)
+    expect(kept.color[6 * 3]).toBeCloseTo(0.8)
+  })
+
+  it('leave an item without them as it was', () => {
+    const tee = part('tee', 2, [1, 0, 0])
+    expect(withCards([tee], false)[0]).toBe(tee)
+    expect(withCards([tee], true)[0]).toBe(tee)
   })
 })

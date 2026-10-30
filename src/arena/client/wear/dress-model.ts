@@ -5,7 +5,7 @@ import { splitValues } from '../../../kit/body/surface.js'
 import { dress, type DressedItem, type Worn as WornItem } from '../../../kit/wear/dress.js'
 import { bodyFields, type BodyFields } from '../../../kit/wear/fields.js'
 import { linearRgb } from '../../../kit/wear/finish.js'
-import { coverOf, type Cover } from '../../../kit/wear/item.js'
+import { CARD_U, coverOf, type Cover } from '../../../kit/wear/item.js'
 import { PRINT_SCALE, drawPrint, inkFor, type PrintId } from '../../../kit/wear/prints.js'
 import { bodyKitLoaded } from '../body-kit.js'
 import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from '../character-look.js'
@@ -44,6 +44,63 @@ export interface WearMaterials {
   cloth: (map?: THREE.Texture) => THREE.Material
   /** A print's material, for the triangles of the channel it covers. */
   print: (print: ClothPrint) => THREE.Material
+  /**
+   * Hair cards drawn as strands over the shell (the creator's close look; the cloth material must draw them, as
+   * classicClothMaterial does). Without, they are left off and the shell alone is the hair.
+   */
+  cards?: boolean
+}
+
+/** How dark and how rough a hair shell goes under its cards, so it reads as the depth of the hair between them. */
+const UNDER_CARDS = 0.45
+const UNDER_ROUGH = 0.9
+
+/** The items with their hair cards kept, the shell under them darkened, or left off. */
+export function withCards(items: DressedItem[], keep: boolean): DressedItem[] {
+  return items.map((item) => {
+    const card = (v: number) => item.uv[v * 2] > CARD_U
+    let has = false
+    for (let v = 0; v < item.count && !has; v++) has = card(v)
+    if (!has) return item
+    if (keep) {
+      const color = Float32Array.from(item.color)
+      const finish = Float32Array.from(item.finish)
+      for (let v = 0; v < item.count; v++) {
+        if (card(v)) continue
+        // its ragged edge along the hairline (weave's fraction past HAIR_LOOK's, 0 there) keeps its colour, so what
+        // shows of it there reads as more strands, not as a dark fringe
+        const t = THREE.MathUtils.smoothstep(item.weave[v] - 5, 0, 0.8)
+        for (let c = 0; c < 3; c++) color[v * 3 + c] *= 1 - (1 - UNDER_CARDS) * t
+        finish[v * 4] += (UNDER_ROUGH - finish[v * 4]) * t
+      }
+      return { ...item, color, finish }
+    }
+    // left off: their triangles go, and their vertices with them, so twenty heroes don't carry them all
+    const kept: number[] = []
+    for (let t = 0; t < item.index.length; t += 3) if (!card(item.index[t])) kept.push(item.index[t], item.index[t + 1], item.index[t + 2])
+    const at = new Int32Array(item.count).fill(-1)
+    const order: number[] = []
+    for (const v of kept) if (at[v] < 0) at[v] = order.push(v) - 1
+    const pick = <T extends Float32Array | Uint16Array>(values: T, size: number): T => {
+      const out = new (values.constructor as new (n: number) => T)(order.length * size)
+      order.forEach((v, i) => out.set(values.subarray(v * size, v * size + size), i * size))
+      return out
+    }
+    return {
+      ...item,
+      count: order.length,
+      positions: pick(item.positions, 3),
+      normals: pick(item.normals, 3),
+      uv: pick(item.uv, 2),
+      joints: pick(item.joints, 4),
+      weights: pick(item.weights, 4),
+      color: pick(item.color, 3),
+      finish: pick(item.finish, 4),
+      weave: pick(item.weave, 1),
+      ...(item.chain ? { chain: pick(item.chain, 3) } : {}),
+      index: Uint32Array.from(kept, (v) => at[v]),
+    }
+  })
 }
 
 interface BodyCache {
@@ -331,6 +388,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const shape = shapeBody(cache.base, cache.morphs, look.physique, face)
   const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
+  const items = withCards(dressed.items, materials.cards ?? false)
   const source = mesh.geometry
   const map = atlas ?? characterMap(mesh)
   const normalMap = characterNormalMap(mesh)
@@ -345,7 +403,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   if (normalMap && fileMaterial?.normalScale && made.normalScale) made.normalScale.copy(fileMaterial.normalScale)
   mesh.material = made
   mesh.frustumCulled = false
-  const parts = drawn(dressed.items, textured)
+  const parts = drawn(items, textured)
   const cloth = clothGeometry(parts, textured, patterns)
   if (cloth) {
     // in clothGeometry's order: the plain items, each textured one, each print
@@ -382,7 +440,8 @@ float turn = atan(vStrandNormal.x, vStrandNormal.z) / 6.2831853 + 0.5;
 float turnStep = min(fwidth(turn), fwidth(fract(turn + 0.5)));
 float wave = 0.15 * sin(vStrandY * 34.0 + turn * 31.4159265);
 float hairRelief = 0.0;
-if (vWeave > 4.5) {
+if (vCardUv.x > 1.5) roughnessFactor = mix(0.6, 0.75, cardShade);
+else if (vWeave > 4.5) {
   float clump = mix(0.5, strandNoise(turn * 96.0 + wave, 96.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 96.0));
   float fine = mix(0.5, strandNoise(turn * 433.0 + wave * 3.0, 433.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 433.0));
   float lock = strandNoise(turn * 40.0 + wave * 0.6, 40.0);
@@ -415,6 +474,84 @@ if (vWeave > 3.5 && vWeave < 4.5) {
 float reliefX = dFdx(relief);
 float reliefY = dFdy(relief);
 if (vWeave > 3.5) normal = grainNormal(-vViewPosition, normal, reliefX, reliefY, faceDirection);`
+
+/**
+ * A hair card (u past 1.5, tools/blender/wardrobe.py hair_cards): nine clumps of strands across it, each its own
+ * width, shade, start and length, thinning to its tip and fewer toward the card's long edges, so neither its root nor
+ * its sides show as a straight cut. The gaps between them are see-through: its alpha, which the material turns into
+ * coverage across the pixel's samples, so the strands' edges stay smooth without sorting. The hair darkens toward the
+ * roots, where less light gets in.
+ */
+const CARD_GLSL = `
+float cardShade = 0.5;
+if (vCardUv.x > 1.5) {
+  float cardSeed = floor(vCardUv.x);
+  float along = vCardUv.y;
+  float k = fract(vCardUv.x) * 9.0;
+  float cell = floor(k);
+  float cover = 0.0;
+  for (int j = -1; j <= 1; j++) {
+    float c = cell + float(j);
+    float h1 = strandHash(cardSeed * 7.13 + c * 1.31);
+    float h2 = strandHash(cardSeed * 3.77 + c * 2.91 + 0.5);
+    float h3 = strandHash(cardSeed * 5.21 + c * 0.73 + 0.25);
+    float h4 = strandHash(cardSeed * 1.93 + c * 3.37 + 0.75);
+    float end = 0.5 + 0.5 * h3;
+    float start = 0.3 * h4;
+    float reach = (0.3 + 0.3 * h2) * (1.0 - 0.6 * smoothstep(0.0, end, along));
+    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.12, along) * (1.0 - smoothstep(end - 0.1, end, along));
+    if (a > cover) {
+      cover = a;
+      cardShade = h2;
+    }
+  }
+  // and thins out toward the card's long edges, so no strand is cut along them
+  cover *= smoothstep(0.0, 1.2, k) * smoothstep(9.0, 7.8, k);
+  if (cover < 0.02) discard;
+  diffuseColor.a = cover;
+  diffuseColor.rgb *= mix(0.45, 1.0, smoothstep(0.0, 0.45, along)) * mix(0.8, 1.15, cardShade);
+}`
+
+/**
+ * The way a hair card's strands run, in view space: where its v (root to tip) climbs, from the screen derivatives of
+ * the position and the UVs. Worked out for every pixel, as derivatives inside a branch are undefined, and used on
+ * cards alone (hairCard).
+ */
+const CARD_TANGENT_GLSL = `
+vec3 cardDx = dFdx(vViewPosition);
+vec3 cardDy = dFdy(vViewPosition);
+vec2 cardUx = dFdx(vCardUv);
+vec2 cardUy = dFdy(vCardUv);
+vec3 cardAlong = (cardDx * cardUy.x - cardDy * cardUx.x) * sign(cardUx.x * cardUy.y - cardUx.y * cardUy.x);
+hairTangent = length(cardAlong) > 1e-9 ? normalize(cardAlong) : vec3(0.0, 1.0, 0.0);
+hairCard = step(1.5, vCardUv.x);
+hairShade = cardShade;`
+
+/**
+ * Direct light on a hair card, on top of three's: two highlights that run across the strands (Kajiya and Kay's, as
+ * Scheuermann shifts them), a sharp white one from the hair's surface and a broader one in the hair's own colour from
+ * light that went through a strand and back. Each strand catches them a little more or less (hairShade).
+ */
+const HAIR_LIGHT_GLSL = `vec3 hairTangent = vec3(0.0, 1.0, 0.0);
+float hairCard = 0.0;
+float hairShade = 0.5;
+float strandSpecular(const in vec3 t, const in vec3 n, const in vec3 h, const in float shift, const in float sharp) {
+  vec3 ts = normalize(t + n * shift);
+  float th = dot(ts, h);
+  return pow(sqrt(max(0.0, 1.0 - th * th)), sharp) * smoothstep(-1.0, 0.0, th);
+}
+void RE_Direct_Hair(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+  RE_Direct_Physical(directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+  if (hairCard < 0.5) return;
+  vec3 h = normalize(directLight.direction + geometryViewDir);
+  float lit = saturate(dot(geometryNormal, directLight.direction) * 0.6 + 0.4);
+  float catchLight = mix(0.6, 1.3, hairShade);
+  float sharp = strandSpecular(hairTangent, geometryNormal, h, -0.08, 90.0);
+  float broad = strandSpecular(hairTangent, geometryNormal, h, 0.12, 22.0);
+  reflectedLight.directSpecular += directLight.color * lit * catchLight * (vec3(sharp * 0.3) + broad * 0.35 * material.diffuseColor);
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Hair`
 
 const STRAND_NOISE_GLSL = `
 varying float vWeave;
@@ -454,13 +591,15 @@ float strandNoise(float x, float period) {
 /** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow; hair's strands and leather's grain. */
 function finishShader(shader: { vertexShader: string; fragmentShader: string }) {
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;\nvarying vec3 vRest;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;\nvRest = position;')
+    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;\nvarying vec3 vRest;\nvarying vec2 vCardUv;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;\nvRest = position;\nvCardUv = uv;')
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', `#include <common>\nvarying vec4 vFinish;\n${STRAND_NOISE_GLSL}`)
+    .replace('#include <common>', `#include <common>\nvarying vec4 vFinish;\nvarying vec2 vCardUv;\n${STRAND_NOISE_GLSL}`)
+    .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>\n${CARD_GLSL}`)
     .replace('#include <roughnessmap_fragment>', `float roughnessFactor = vFinish.x;\n${STRANDS_GLSL}`)
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vFinish.y;')
-    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${LEATHER_GLSL}`)
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${LEATHER_GLSL}\n${CARD_TANGENT_GLSL}`)
+    .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${HAIR_LIGHT_GLSL}`)
     .replace(
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\nfloat grazing = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.0);\ntotalEmissiveRadiance += diffuseColor.rgb * (vFinish.w + vFinish.z * 0.3 * grazing);',
@@ -476,7 +615,8 @@ function finishShader(shader: { vertexShader: string; fragmentShader: string }) 
  * of its channels' colours, recoloured where the player chose another (printedColor).
  */
 export function classicClothMaterial(map?: THREE.Texture): THREE.MeshStandardMaterial {
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide, ...(map ? { map } : {}) })
+  // hair cards' strands set their alpha: as coverage across the samples, opaque cloth (alpha 1) is drawn as before
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, metalness: 0, side: THREE.DoubleSide, alphaToCoverage: true, ...(map ? { map } : {}) })
   m.onBeforeCompile = (shader) => {
     if (map) {
       shader.vertexShader = shader.vertexShader

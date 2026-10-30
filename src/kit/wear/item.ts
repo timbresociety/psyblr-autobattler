@@ -28,6 +28,12 @@ export const FINISHES = ['cotton', 'silk', 'denim', 'knit', 'leather', 'metal', 
 export type Finish = (typeof FINISHES)[number]
 
 /** Cuts a player can make on an item that allows them, each 0 (shortest) to 1 (as made). */
+/**
+ * Past this, an item vertex's u marks it as on a hair card (tools/blender/wardrobe.py, hair_cards): drawn in the
+ * creator's close look alone (dress-model.ts), and counted apart from the slot's triangle budget (fit.ts).
+ */
+export const CARD_U = 1.5
+
 export const KNOBS = ['sleeve', 'hem', 'leg', 'length'] as const
 export type Knob = (typeof KNOBS)[number]
 

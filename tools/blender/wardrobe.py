@@ -961,6 +961,147 @@ def spikes(w, mat, count=18, length=0.06, width=0.018, name='spikes'):
     return new_object(name, bm, w.d.mats.mats[mat])
 
 
+# hair that gets cards over its shell, and how: the layers' lift off the shell and spacing between roots (metres), the
+# cards' lengths and width
+HAIR_CARDS = {'swept': dict(layers=((0.0015, 0.015), (0.0045, 0.02), (0.0075, 0.028)), length=(0.075, 0.14), width=0.017)}
+# the extra roots that thicken the hairline, this far apart along it
+HAIRLINE_ROOTS = 0.008
+
+
+def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, mat='hair', name='cards', step=0.01, seed=11):
+    """
+    Cards over a hair shell, for the close look of the creator's studio (Forge goal, phase C): strips a clump of strands
+    wide, each laid from a root over the scalp along the hair's flow (straight back on top, back and down at the sides,
+    down at the back), in layers lifted off the shell, the outer ones sparser, and thickest along the hairline, where
+    they start on the skin. Their UVs mark them for the runtime, which draws their strands (dress-model.ts) and leaves
+    them off where it draws the shell alone: u is 2, plus a whole number that seeds the card's strand pattern, plus the
+    place across the card; v runs from the root to the tip.
+    """
+    import bisect
+    import random
+
+    rnd = random.Random(seed)
+    h = w.head
+    bm = bmesh.new()
+    bm.from_mesh(shell_obj.data)
+    bmesh.ops.triangulate(bm, faces=bm.faces[:])
+    bm.normal_update()
+    shell = BVHTree.FromBMesh(bm)
+    tris = [[v.co.copy() for v in f.verts] for f in bm.faces]
+    upto = []
+    for f in bm.faces:
+        upto.append((upto[-1] if upto else 0.0) + f.calc_area())
+    bm.free()
+    line = lambda p: h.hairline(p, recede, temple, nape, sideburn)  # noqa: E731
+
+    def on(p, lift):
+        """p moved onto the outside of the hair, `lift` off the shell, and never under the skin."""
+        q, n, _i, _d = shell.find_nearest(p)
+        out = q + n * lift
+        k, nk = w.snap(out)
+        if (out - k).dot(nk) < 0.002:
+            return k + nk * 0.002, nk
+        return out, n
+
+    def flow(n, turn):
+        """
+        Which way the hair runs where the surface faces `n`, turned a little about it by `turn` (radians). Over the top
+        it keeps to its own slice along the head (the surface's normal across the head's width): up and back over the
+        brow, straight back over the crown, down the back. The surface turning sideways would otherwise pull it out to
+        the sides, parting it down the middle. At the sides it runs back and down toward the nape.
+        """
+        along = n.cross(V((1, 0, 0)))
+        d = V((0, 1, -0.65))
+        d -= n * d.dot(n)
+        side = smooth01((abs(n.x) - 0.35) / 0.45)
+        if along.length < 1e-6 or d.length < 1e-6:
+            d = along if d.length < 1e-6 else d
+        else:
+            d = along.normalized().lerp(d.normalized(), side)
+        d = d.normalized() if d.length > 1e-6 else V((0, 0, -1))
+        return d * math.cos(turn) + n.cross(d) * math.sin(turn)
+
+    def roots(spacing):
+        """Points over the grown part of the shell, none closer than `spacing`."""
+        picked, cells = [], {}
+
+        def free(p):
+            c = tuple(int(math.floor(x / spacing)) for x in p)
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    for dz in (-1, 0, 1):
+                        for q in cells.get((c[0] + dx, c[1] + dy, c[2] + dz), ()):
+                            if (q - p).length < spacing:
+                                return False
+            cells.setdefault(c, []).append(p)
+            return True
+
+        total = upto[-1]
+        for _ in range(int(6 * total / (spacing * spacing))):
+            a, b, c = tris[min(len(tris) - 1, bisect.bisect_left(upto, rnd.random() * total))]
+            s, t = rnd.random(), rnd.random()
+            if s + t > 1:
+                s, t = 1 - s, 1 - t
+            p = a + (b - a) * s + (c - a) * t
+            if p.z >= line(p) + 0.004 and free(p):
+                picked.append(p)
+        return picked
+
+    def hairline_roots():
+        # round the forehead and the temples: further back the hairline runs over the ears
+        out = []
+        a = -1.2
+        while a <= 1.2:
+            # a point on the hairline at bearing a: out from the head's centre, at the hairline's height there
+            probe = V((h.centre.x + math.sin(a) * 0.3, h.centre.y - math.cos(a) * 0.3, 0))
+            probe.z = line(probe) + 0.003
+            k, _n = w.snap(V((probe.x, probe.y, probe.z)), (V((h.centre.x, h.centre.y, probe.z)) - probe).normalized())
+            out.append(k)
+            a += HAIRLINE_ROOTS / max(0.04, h.half_width)
+        return out
+
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.new('UVMap')
+    made = 0
+    for layer, (lift, spacing) in enumerate(layers):
+        starts = roots(spacing) + (hairline_roots() if layer == 0 else [])
+        for root in starts:
+            turn = math.radians(rnd.uniform(-7, 7))
+            full = rnd.uniform(*length)
+            p, n = on(root, lift)
+            path = [(p, n)]
+            while len(path) * step < full:
+                d = flow(n, turn)
+                p, n = on(p + d * step, lift)
+                if p.z < line(p) - 0.012 or (p - path[-1][0]).length < step * 0.3:
+                    break
+                path.append((p, n))
+            if len(path) < 3:
+                continue
+            seed_u = 2.0 + rnd.randrange(64)
+            rows = []
+            for i, (q, nq) in enumerate(path):
+                t = i / (len(path) - 1)
+                d = flow(nq, turn)
+                across = nq.cross(d).normalized()
+                half = width * (1.0 - 0.5 * t) / 2
+                # the tips lift a little off the hair under them, for volume
+                q = q + nq * 0.002 * t * t
+                rows.append((bm.verts.new(q - across * half), bm.verts.new(q + across * half), t))
+            for i in range(len(rows) - 1):
+                a0, b0, t0 = rows[i]
+                a1, b1, t1 = rows[i + 1]
+                f = bm.faces.new((a0, a1, b1, b0))
+                for loop, (uu, vv) in zip(f.loops, ((0.0, t0), (0.0, t1), (0.998, t1), (0.998, t0))):
+                    loop[uv].uv = (seed_u + uu, vv)
+            made += 1
+    log('hair cards', made, 'cards')
+    bm.normal_update()
+    obj = new_object(name, bm, w.d.mats.mats[mat])
+    w.d.skin_weights(obj, rigid='head')
+    return obj
+
+
 def hair(w, style, mat='hair', **k):
     """A humanlib hairstyle, finer where its budget allows, with its hang and len paints along whatever falls below the hairline."""
     h = relax_edges(H.make_hair(w.d, w.head, style, mat=mat, **k))
@@ -977,7 +1118,9 @@ def hair(w, style, mat='hair', **k):
         clear_body(h, w, margin=0.006, thickness=0.005, where=lambda p: line(p) - 0.02 - p.z > 0)
         paint(h, 'hang', lambda p: (line(p) - 0.02 - p.z) / max(0.03, drop * 0.8))
         paint(h, 'len', lambda p: (line(p) - p.z) / max(0.03, drop))
-    return [h] + ([spikes(w, mat, detail['spikes'])] if 'spikes' in detail else [])
+    edge = {key: k[key] for key in ('recede', 'temple', 'nape', 'sideburn') if key in k}
+    cards = [hair_cards(w, h, mat=mat, **HAIR_CARDS[style], **edge)] if style in HAIR_CARDS else []
+    return [h] + ([spikes(w, mat, detail['spikes'])] if 'spikes' in detail else []) + cards
 
 
 def tail(w, mat, root, length=0.28, radius=0.022, tip=0.006, segs=10, rings=9, bend=0.06, name='tail', braid=False):
@@ -2674,7 +2817,8 @@ def main(opts):
             p.data.update()
         tris = write_raw(os.path.join(out, f'{it.id}.json'), it, parts)
         if cam:
-            thumbnail(it, parts, cam, os.path.join(out, f'{it.id}.webp'))
+            # hair cards are drawn as strands only in the game: here they would be solid ribbons
+            thumbnail(it, [p for p in parts if not p.name.startswith('cards')], cam, os.path.join(out, f'{it.id}.webp'))
         done.append(it.id)
         log(it.id, it.slot, tris, 'tris', f'{time.time() - ts:.1f}s')
         for p in parts:

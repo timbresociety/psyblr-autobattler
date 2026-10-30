@@ -479,7 +479,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
           const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
           const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
           // the studio looks close: the coarse body's triangles split twice over, so the jaw and cheeks read round
-          dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty) }, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
+          dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty), cards: !!look && pace.current.studio }, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
           // a rebuilt hero (a slider moved) carries on from where the last one was in its clip
           const was = state.motion
           const time = was && clip && was.name === clip.name ? was.action.time : undefined
