@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { composeRecipe } from '../../recipes/defaults.js'
 import { lookFor } from '../../recipes/looks.js'
-import { createDraw, type Kit, type MeshKind } from './draw.js'
+import { createDraw, fanShapes, type Kit, type MeshKind } from './draw.js'
 
 /** A kit that draws nothing and remembers what it was asked for. */
 function recorder() {
@@ -22,6 +22,7 @@ function recorder() {
     later: (_seconds, fn) => fn(),
     shake: () => {},
     darken: () => void seen.darken++,
+    fans: fanShapes(),
     ghost: () => void seen.ghosts++,
   }
   return { seen, draw: createDraw(kit) }

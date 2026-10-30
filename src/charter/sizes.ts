@@ -46,14 +46,14 @@ export const SIZES: Record<SizeClass, SizeProfile> = {
  * amounts to a tank and a marksman: a tiny tank needs twice the health to keep up, a huge one gives a third of it back.
  */
 export const SIZE_HEALTH: Partial<Record<RoleId, Partial<Record<SizeClass, number>>>> = {
-  tank: { tiny: 2.119, small: 1.109, large: 0.717, huge: 0.683 },
-  fighter: { tiny: 1.011, small: 0.995, large: 1.041, huge: 0.973 },
-  assassin: { tiny: 1.084, small: 1.121, large: 1.077, huge: 1.048 },
-  mage: { tiny: 1.023, small: 1.006, large: 1.085, huge: 1.076 },
-  marksman: { tiny: 1.119, small: 1.026, large: 1.109, huge: 0.983 },
-  support: { tiny: 1.203, small: 0.943, large: 0.981, huge: 1.267 },
-  controller: { tiny: 0.934, small: 1.147, large: 0.972, huge: 1.034 },
-  summoner: { tiny: 0.959, small: 1.112, large: 1.092, huge: 0.955 },
+  tank: { tiny: 1.858, small: 0.973, large: 0.717, huge: 0.779 },
+  fighter: { tiny: 0.978, small: 1.062, large: 1.041, huge: 0.973 },
+  assassin: { tiny: 1.015, small: 0.983, large: 0.945, huge: 1.048 },
+  mage: { tiny: 1.023, small: 1.057, large: 1.121, huge: 1.494 },
+  marksman: { tiny: 1.083, small: 1.043, large: 0.973, huge: 1.05 },
+  support: { tiny: 1.513, small: 0.855, large: 0.919, huge: 1.041 },
+  controller: { tiny: 0.934, small: 0.974, large: 0.91, huge: 0.953 },
+  summoner: { tiny: 0.928, small: 0.944, large: 0.958, huge: 0.987 },
 }
 
 /** The health multiplier `role` pays for `size`. */

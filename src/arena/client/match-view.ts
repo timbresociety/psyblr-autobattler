@@ -9,7 +9,7 @@ import type { Vec3 } from '../engine/maths.js'
 import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
 import { capsule, type Command, type Team } from '../engine/state.js'
 import { tick } from '../engine/tick.js'
-import { createAnimator, onEvents, settle, type Animator } from './animation.js'
+import { createAnimator, onEvents, settle, stance, type Animator, type Stance } from './animation.js'
 import { Cameras } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, releaseIfDead, take } from './takeover.js'
@@ -18,7 +18,7 @@ import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { buildRuins } from './ruins.js'
 import { CosmeticPhysics, PHYSICS } from './physics.js'
-import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, type QualityLevel } from './quality.js'
+import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer.js'
 import { createStore, type Store } from './store.js'
@@ -87,6 +87,11 @@ export interface FrameHooks {
   human?: () => Command | undefined
   /** Animation time scale; the effects slow it to near zero for a hit-stop (render only). */
   timeScale?: () => number
+  /**
+   * The match clock's speed: 1 is real time. A practice room slows it to watch a wind-up and its contact frame; the
+   * engine still steps whole ticks, so nothing about the fight changes, only how fast it plays.
+   */
+  speed?: () => number
 }
 
 export function createHooks(): FrameHooks & { emit: { events: Listeners['events']; frame: Listeners['frame'] } } {
@@ -205,6 +210,50 @@ async function newRenderer(host: HTMLElement, forceWebGL: boolean) {
   }
 }
 
+/**
+ * Tell every texture in the scene that this stage's renderer is done with it (Forge goal, phase 0). three's renderer
+ * hangs a dispose listener on each texture it uploads and its own dispose() leaves those in place, so a texture shared
+ * through a cache (faces, clothes, scenery) keeps the finished renderer reachable. Disposing a texture only frees its
+ * copy on the graphics card: the next match's renderer uploads it again. three's own lookup textures can't be reached
+ * from here, so `retire` lets go of those.
+ */
+function releaseTextures(scene: THREE.Scene) {
+  const textures = new Set<THREE.Texture>()
+  scene.traverse((o) => {
+    const material = (o as THREE.Mesh).material
+    for (const m of Array.isArray(material) ? material : material ? [material] : [])
+      for (const value of Object.values(m)) if ((value as THREE.Texture | null)?.isTexture) textures.add(value as THREE.Texture)
+  })
+  for (const t of textures) t.dispose()
+}
+
+/**
+ * A finished renderer's device-loss handler. It lives out here because any function made inside createStage, even an
+ * empty one, holds createStage's variables, and with them the whole match.
+ */
+const ignoreLoss = () => {}
+
+/**
+ * Let a finished renderer go (Forge goal, phase 0). three keeps a few textures for good, like the lookup table its
+ * lighting reads (r186), and a renderer that drew one stays reachable through the listener it left there, along with
+ * every scene it drew: one more match kept per match played. So before it's disposed, the renderer drops each texture
+ * its shaders bound (its own copy only, so a live renderer elsewhere keeps drawing) and its device-loss hook.
+ */
+function retire(renderer: Renderer) {
+  const own = renderer as Renderer & {
+    onDeviceLost: (info: unknown) => void
+    _nodes?: { nodeBuilderCache?: Map<unknown, { bindings?: { bindings?: { texture?: THREE.Texture }[] }[] }> }
+    _textures?: { _destroyTexture?: (texture: THREE.Texture) => void }
+  }
+  const bound = new Set<THREE.Texture>()
+  for (const state of own._nodes?.nodeBuilderCache?.values() ?? [])
+    for (const group of state.bindings ?? [])
+      for (const binding of group.bindings ?? []) if (binding.texture?.isTexture && !binding.texture.isRenderTargetTexture) bound.add(binding.texture)
+  for (const texture of bound) own._textures?._destroyTexture?.(texture)
+  own.onDeviceLost = ignoreLoss
+  renderer.dispose()
+}
+
 /** Most times a lost graphics device is rebuilt in one match before the stage gives up. */
 const MAX_RECOVERIES = 3
 
@@ -255,7 +304,8 @@ async function createStage(host: HTMLElement) {
       },
       dispose: () => {
         window.removeEventListener('resize', stage.resize)
-        stage.renderer.dispose()
+        releaseTextures(scene)
+        retire(stage.renderer)
         stage.canvas.remove()
       },
       /** Rebuild the renderer on a new canvas after the graphics device was lost; false once out of attempts. */
@@ -269,7 +319,7 @@ async function createStage(host: HTMLElement) {
           const bloomOn = stage.glow?.enabled ?? false
           const next = await newRenderer(host, true)
           try {
-            stage.renderer.dispose()
+            retire(stage.renderer)
           } catch {
             // a lost device may refuse to release; the canvas goes regardless
           }
@@ -323,6 +373,9 @@ function watchDevice(stage: { renderer: Renderer; recover: () => Promise<boolean
   }
 }
 
+/** The render scale the last match ended on (Forge goal, phase 0): the next one starts there instead of at full. */
+let lastScale: number | undefined
+
 /**
  * The frame-rate guard wired to the stage (U18, R26): render resolution moves first, and the quality levels only start
  * once it is at its floor; on the way back up the levels return first and resolution after. Nothing here turns shadows
@@ -330,13 +383,15 @@ function watchDevice(stage: { renderer: Renderer; recover: () => Promise<boolean
  */
 function qualityControl(stage: Stage) {
   const guard = createGuard()
-  const scaler = createScaler()
+  const scaler = createScaler(lastScale)
   let current: QualityLevel = 'full'
   let frame = 0
   const applyScale = () => {
+    lastScale = scaler.scale
     stage.renderer.setPixelRatio(Math.max(0.75, stage.pixelRatio * scaler.scale))
     stage.resize()
   }
+  if (scaler.scale < SCALER.max) applyScale()
   return {
     current: () => current,
     level: (l: QualityLevel) => atLeast(current, l),
@@ -357,16 +412,19 @@ function qualityControl(stage: Stage) {
 const yawQ = new THREE.Quaternion()
 const up = new THREE.Vector3(0, 1, 0)
 
+/** How far cast clips may fall behind the engine during hit-stops, in ticks, and how fast they catch up after. */
+const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
+
 /**
  * Pose every hero between the last two engine states. Physics only changes how a body looks: a tumble on top of the
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera },
   prev: Vec3[],
-  frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean },
+  frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
-  const { arena, views, animators, physics, camera } = ctx
+  const { arena, views, animators, stances, physics, camera } = ctx
   return arena.match.heroes.map((h, i) => {
     const p = prev[i]
     const c = h.position
@@ -376,9 +434,16 @@ function drawHeroes(
     view.setForm?.(h.formUntil > 0, h.size)
     // under load, heroes far from the camera animate every other frame
     const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
-    const pose = settle(animators[i], h, moved, arena.match.tick, frame.dt)
+    // casts run on the engine's clock, between ticks too, so a clip's release frame lands on its release tick
+    const pose = settle(animators[i], h, moved, frame.clock, frame.dt)
     const scaled = frame.dt * frame.timeScale
     const moving = moved > 0.01
+    // legs follow the way the hero moves and the chest its aim; a view that can't twist faces its aim whole
+    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, pose.kind !== 'run', scaled) : undefined
+    stances[i] = s
+    // the run keeps pace with the ground covered: slower when slowed or striding through a swing, quicker hasted
+    const stride = Math.min(1.5, Math.max(0.4, (moved * ENGINE.tickHz) / arena.setups[i].sheet.moveSpeed))
+    if (s) view.lean!(s.twist, s.back, stride)
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
@@ -390,7 +455,7 @@ function drawHeroes(
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
-    yawQ.setFromAxisAngle(up, h.yaw)
+    yawQ.setFromAxisAngle(up, s?.body ?? h.yaw)
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
@@ -485,6 +550,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
 
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
+  const stances: (Stance | undefined)[] = []
   const rules = matchRules(arena)
   const clock = createClock()
   const quality = qualityControl(stage)
@@ -505,6 +571,9 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let stopped = false
   let unprobe: (() => void) | undefined
   let frameNo = 0
+  // ticks the cast clips run behind the engine: a hit-stop holds every swing at its contact frame, and the clips catch
+  // up through the recovery
+  let lag = 0
   const publish = () => {
     store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
     store.flush()
@@ -521,7 +590,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     last = now
     frameNo++
     if (!clock.paused) quality.observe(dt * 1000)
-    const { ticks, alpha } = frame(clock, dt)
+    // a slowed clock slows everything drawn with it: the fight, the animation and the effects
+    const speed = hooks.speed?.() ?? 1
+    const { ticks, alpha } = frame(clock, dt * speed)
+    const scale = hooks.timeScale?.() ?? 1
+    const elapsed = clock.paused ? 0 : dt * speed * ENGINE.tickHz
+    lag = Math.min(HIT_STOP_LAG.max, scale < 1 ? lag + elapsed * (1 - scale) : Math.max(0, lag - elapsed * HIT_STOP_LAG.catchUp))
     for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
       prev = arena.match.heroes.map((h) => ({ ...h.position }))
       const commands = aiCommands(arena)
@@ -540,19 +614,19 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
         }
       }
       if (events.length) {
-        arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events))
+        arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events, arena.match.tick))
         hooks.emit.events(events)
       }
     }
     physics?.step(dt)
     ruins?.update(dt)
-    drawn = drawHeroes({ arena, views, animators, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: hooks.timeScale?.() ?? 1, slowFar: quality.level('slow-animation') })
+    drawn = drawHeroes({ arena, views, animators, stances, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawDebris(debris, physics)
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
     range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
-    hooks.emit.frame(dt, alpha)
+    hooks.emit.frame(dt * speed, alpha)
     stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
     if (store.due()) store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))

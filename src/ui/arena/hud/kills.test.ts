@@ -24,7 +24,7 @@ describe('kill feed attribution (R38)', () => {
   it('remembers hits across ticks, forgets them once the victim dies, and leaves an unhit death uncredited', () => {
     const t = createKillTracker()
     t.read([hit(0, 5)])
-    t.read([{ type: 'cast', hero: 1, slot: 'active1', templateId: 'x' }])
+    t.read([{ type: 'cast', hero: 1, slot: 'active1', templateId: 'x', release: 14, ends: 30 }])
     expect(t.read([death(5)])[0].killer).toBe(0)
     expect(t.lastHitter(5)).toBeUndefined()
     const [fell] = t.read([death(5)])

@@ -95,7 +95,14 @@ export interface Scaler {
   probing: boolean
 }
 
-export const createScaler = (): Scaler => ({ scale: SCALER.max, frames: [], sinceChange: 0, upDelay: SCALER.upSeconds, probing: false })
+/** A scaler starting at `scale`: the last match's, so a slow machine doesn't start every fight at full resolution. */
+export const createScaler = (scale: number = SCALER.max): Scaler => ({
+  scale: Math.min(SCALER.max, Math.max(SCALER.min, scale)),
+  frames: [],
+  sinceChange: 0,
+  upDelay: SCALER.upSeconds,
+  probing: false,
+})
 
 export const atFloor = (s: Scaler) => s.scale <= SCALER.min + 1e-6
 

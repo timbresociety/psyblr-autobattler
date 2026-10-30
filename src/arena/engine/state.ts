@@ -82,6 +82,11 @@ export interface HeroState {
   /** Ticks until each slot is ready. */
   cooldowns: Record<BuildSlot, number>
   nextAttackAt: number
+  /**
+   * The action in progress (Forge goal, phase 1): pressed at `started`, it lands at `release` and frees the hero at
+   * `ends`. Control that lands first cuts it short, and what hasn't been released never lands.
+   */
+  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean }
   chosenSize: SizeClass
   /** The current class, which a transformation can change until `formUntil` (KTD14). */
   size: SizeClass

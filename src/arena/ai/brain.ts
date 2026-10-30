@@ -2,7 +2,7 @@ import { geometryOf } from '../../charter/geometry.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { ENGINE } from '../engine/calibration.js'
 import { coverHit } from '../engine/cover.js'
-import { canSee, chest, isRanged as rangedBasic } from '../engine/deliveries.js'
+import { canSee, chest, free, isRanged as rangedBasic } from '../engine/deliveries.js'
 import { alliesOf, enemiesOf, hpFraction } from '../engine/effects.js'
 import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths.js'
 import type { Arena } from '../engine/match.js'
@@ -350,7 +350,8 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   let seen: boolean | undefined
   const sight = () => (seen ??= canSee(m, from, chest(target)))
   const lobbed = kind === 'zone' || kind === 'blink' || kind === 'dash' || kind === 'grapple'
-  if (brain.cast && (aimless || brain.cast.escape || (off <= AI.fireTolerance && (lobbed || sight())))) {
+  // a decided skill waits while the hero finishes what it's doing, rather than being pressed and lost
+  if (brain.cast && free(hero, brain.cast.slot as BuildSlot, m.tick) && (aimless || brain.cast.escape || (off <= AI.fireTolerance && (lobbed || sight())))) {
     buttons |= slotBit(brain.cast.slot as BuildSlot)
     brain.cast = undefined
   }

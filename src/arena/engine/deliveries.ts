@@ -9,6 +9,7 @@ import { keepOut } from './locomotion.js'
 import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths.js'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import type { TickRules } from './tick.js'
+import { timingTicks } from './timing.js'
 
 /**
  * Where casts land (U4, KTD3). Every hit is engine geometry: heroes are vertical capsules, and each delivery is
@@ -185,24 +186,67 @@ function forbidden(match: MatchState, h: HeroState, slot: BuildSlot): boolean {
   return slot === 'movement' && controlled(h, 'grounded', now)
 }
 
-/** Cast a slot if it is ready: mobility first, then the delivery, then its effects (U4). Returns whether it fired. */
+/**
+ * Whether a hero is free to start `slot` (phase 1): nothing in progress, or a skill cutting short a basic attack's
+ * wind-up or any action's recovery. A basic attack waits for whatever came before it.
+ */
+export function free(h: HeroState, slot: BuildSlot, now: number): boolean {
+  const a = h.action
+  if (!a || now >= a.ends) return true
+  return slot !== 'basic' && (a.released || a.slot === 'basic')
+}
+
+/**
+ * Cast a slot if it is ready (U4): pay for it now and start its wind-up. It lands on its release tick (`carryOn`), so
+ * every hit follows a release and the client can show the wind-up first. Returns whether it started.
+ */
 export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
   const { match, setups } = ctx
   const caster = match.heroes[index]
   const setup = setups[index]
   const template = setup.kit[slot]
-  if (forbidden(match, caster, slot)) return false
+  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick)) return false
+  let interval = Infinity
   if (slot === 'basic') {
     if (match.tick < caster.nextAttackAt) return false
     const tempo = isRanged(setup) ? setup.sheet.fireRate : setup.sheet.attackSpeed
     // a cripple slows basic attacks the way a slow slows feet: the strongest one counts
     const crippled = caster.slows.reduce((m, sl) => (sl.stat === 'attack' && sl.pct / 100 > m ? sl.pct / 100 : m), 0)
-    caster.nextAttackAt = match.tick + ticks(1 / Math.max(0.2, tempo * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled)))
+    const between = ticks(1 / Math.max(0.2, tempo * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled)))
+    caster.nextAttackAt = match.tick + between
+    interval = between / ENGINE.tickHz
   } else {
     if (slot === 'passive' || caster.cooldowns[slot] > 0) return false
     caster.cooldowns[slot] = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
   }
-  ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id })
+  // a skill pressed during a basic attack's wind-up takes over, and that swing never lands
+  const before = caster.action
+  if (before && !before.released && match.tick < before.ends) ctx.events.push({ type: 'interrupt', hero: caster.id, slot: before.slot })
+  const { prep, recover } = timingTicks(template, slot, interval)
+  const release = match.tick + prep
+  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false }
+  ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id, release, ends: release + recover })
+  return true
+}
+
+/** Land an action whose wind-up is over, and free a hero whose recovery is over (phase 1). */
+export function carryOn(ctx: Ctx, index: number) {
+  const hero = ctx.match.heroes[index]
+  const a = hero.action
+  if (!a) return
+  if (!a.released && ctx.match.tick >= a.release) {
+    a.released = true
+    release(ctx, index, a.slot)
+  }
+  if (ctx.match.tick >= a.ends && hero.action === a) hero.action = undefined
+}
+
+/** A cast lands: mobility first, then the delivery, then its effects. */
+function release(ctx: Ctx, index: number, slot: BuildSlot) {
+  const { match, setups } = ctx
+  const caster = match.heroes[index]
+  const template = setups[index].kit[slot]
+  ctx.events.push({ type: 'release', hero: caster.id, slot })
   for (const e of template.effects) {
     if (e.kind !== 'mobility') continue
     if (e.invulnerable) caster.invulnerableUntil = Math.max(caster.invulnerableUntil, match.tick + ticks(e.invulnerable))
@@ -231,14 +275,13 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
     const from = chest(caster)
     match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: scale(aimOf(match, caster), speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(d.range / speed)) })
     ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: projectileRadius, speed })
-    return true
+    return
   }
   const { hit, at, cover } = landing(ctx, caster, template)
   if (template.delivery.kind !== 'self') impact(ctx, caster, slot, template, at)
   strikeCover(ctx, caster, template, cover)
   resolve(ctx, caster, template, slot, hit, at)
   if (slot === 'basic') afterBasic(ctx, caster, hit[0])
-  return true
 }
 
 function afterBasic(ctx: Ctx, hero: HeroState, target: HeroState | undefined) {
@@ -316,8 +359,9 @@ function moveKnockbacks(ctx: Ctx) {
 export const COMBAT_RULES: TickRules = {
   statuses: (match, setups, events) => tickStatuses({ match, setups, events }),
   act: (match, setups, hero, command: Command, events) => {
-    if (!command.buttons) return
     const ctx = { match, setups, events }
+    carryOn(ctx, hero)
+    if (!command.buttons) return
     for (const slot of CAST_ORDER) if (command.buttons & slotBit(slot) && cast(ctx, hero, slot)) return
   },
   after: (match, setups, events) => {

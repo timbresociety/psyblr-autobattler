@@ -52,7 +52,7 @@ describe('soak test (Forge goal, phase 0)', () => {
     r.context({ ...base, phase: 'loading' })
     r.frame(250)
     r.context({ ...base, phase: 'fight' })
-    r.events([{ type: 'cast', hero: 3, slot: 'ultimate', templateId: 'x' }])
+    r.events([{ type: 'cast', hero: 3, slot: 'ultimate', templateId: 'x', release: 30, ends: 60 }])
     for (let i = 0; i < 600; i++) r.frame(i === 30 ? 48 : 16.7)
     r.sample()
     const report = r.report()

@@ -432,9 +432,13 @@ export class Trail {
     this.points.length = 0
   }
 
-  /** Add the head's new position and rebuild the ribbon facing the camera. */
-  push(head: THREE.Vector3, camera: THREE.Camera) {
-    this.points.unshift(head.clone())
+  /**
+   * Add the head's new position and rebuild the ribbon facing the camera. With `grow` false the head moves without
+   * adding a point, so a ribbon sampled on a slowed clock keeps the length it has at full speed.
+   */
+  push(head: THREE.Vector3, camera: THREE.Camera, grow = true) {
+    if (grow || !this.points.length) this.points.unshift(head.clone())
+    else this.points[0].copy(head)
     if (this.points.length > this.length) this.points.pop()
     const eye = camera.position
     const side = new THREE.Vector3()

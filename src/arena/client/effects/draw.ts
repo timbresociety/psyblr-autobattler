@@ -47,6 +47,8 @@ export interface Kit {
   darken: (seconds: number, c: THREE.Color) => void
   /** A frozen, glowing copy of a hero, standing where it was: an afterimage. */
   ghost: (hero: number, at: THREE.Vector3, c: THREE.Color, life: number) => void
+  /** This match's fan and band shapes. */
+  fans: Fans
 }
 
 /** What the impact event knows beyond where it landed. */
@@ -251,7 +253,7 @@ export function createDraw(kit: Kit) {
         for (let k = 0; k < 3; k++)
           later(k * 0.08, () =>
             show('band', hot(v, 0.2), 0.4, (m) => {
-              m.geometry = bandGeometry(arc)
+              m.geometry = kit.fans.band(arc)
               m.position.set(at.x, 0.4 + at.y * 0.5, at.z)
               m.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
               m.scale.setScalar(range * 0.15)
@@ -383,7 +385,7 @@ export function createDraw(kit: Kit) {
       case 'cone':
         // the fan on the ground is the hit area at its true size, whatever the cone is made of
         show('cone', v, dur, (m) => {
-          m.geometry = coneGeometry(extra.arc ?? 90)
+          m.geometry = kit.fans.cone(extra.arc ?? 90)
           m.position.set(at.x, 0.08, at.z)
           m.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
           m.scale.setScalar(extra.range ?? size)
@@ -574,28 +576,32 @@ export function createDraw(kit: Kit) {
   return { layer, along, path, wake, flash, sparks }
 }
 
-// one fan per whole-degree arc, shared by every cone effect
-const cones = new Map<number, THREE.CircleGeometry>()
-export function coneGeometry(degrees: number): THREE.CircleGeometry {
-  const key = Math.round(degrees)
-  let g = cones.get(key)
-  if (!g) {
-    const arc = (key * Math.PI) / 180
-    cones.set(key, (g = new THREE.CircleGeometry(1, 32, Math.PI / 2 - arc / 2, arc)))
-  }
-  return g
-}
+export type Fans = ReturnType<typeof fanShapes>
 
-// a band at the fan's edge, laid out like the fan, for sound waves spreading across it
-const bands = new Map<number, THREE.RingGeometry>()
-export function bandGeometry(degrees: number): THREE.RingGeometry {
-  const key = Math.round(degrees)
-  let g = bands.get(key)
-  if (!g) {
-    const arc = (key * Math.PI) / 180
-    bands.set(key, (g = new THREE.RingGeometry(0.86, 1, 32, 1, Math.PI / 2 - arc / 2, arc)))
+/**
+ * One fan per whole-degree arc, shared by every cone effect, and a band at the fan's edge laid out like it, for sound
+ * waves spreading across it. A pooled mesh swaps between these as arcs change, and three's renderer leaves a listener
+ * on the shape a mesh swapped away from, holding everything that mesh was drawn with. So each match makes its own
+ * set, and those listeners go when the match does (they used to chain every finished match together, Forge goal phase 0).
+ */
+export function fanShapes() {
+  const cones = new Map<number, THREE.CircleGeometry>()
+  const bands = new Map<number, THREE.RingGeometry>()
+  const arcOf = (key: number) => (key * Math.PI) / 180
+  return {
+    cone(degrees: number): THREE.CircleGeometry {
+      const key = Math.round(degrees)
+      let g = cones.get(key)
+      if (!g) cones.set(key, (g = new THREE.CircleGeometry(1, 32, Math.PI / 2 - arcOf(key) / 2, arcOf(key))))
+      return g
+    },
+    band(degrees: number): THREE.RingGeometry {
+      const key = Math.round(degrees)
+      let g = bands.get(key)
+      if (!g) bands.set(key, (g = new THREE.RingGeometry(0.86, 1, 32, 1, Math.PI / 2 - arcOf(key) / 2, arcOf(key))))
+      return g
+    },
   }
-  return g
 }
 
 export { v3 }

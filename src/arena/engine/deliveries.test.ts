@@ -7,7 +7,8 @@ import { ai, at, form, phys, push, resize, active, ultimate } from '../../charte
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE, ticks } from './calibration.js'
-import { COMBAT_RULES, cast, chest, landing } from './deliveries.js'
+import { COMBAT_RULES, chest, landing } from './deliveries.js'
+import { land } from './testing.js'
 import type { MatchEvent } from './events.js'
 import { PI, atan2 } from './maths.js'
 import { IDLE, capsule, createHero, emptyMatch, prepareHero, slotBit, type HeroSetup, type MatchState } from './state.js'
@@ -39,7 +40,8 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number;
   }
   const events: MatchEvent[] = []
   const ctx = { match: m, setups, events }
-  const fire = (slot: BuildSlot = 'active1') => cast(ctx, 0, slot)
+  // these tests are about where a cast lands, so it lands on the tick it's pressed; timing.test.ts covers the wind-up
+  const fire = (slot: BuildSlot = 'active1') => land(ctx, 0, slot)
   const run = (n: number) => {
     for (let i = 0; i < n; i++) events.push(...tick(m, setups, [], COMBAT_RULES))
   }

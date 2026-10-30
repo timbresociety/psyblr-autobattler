@@ -7,7 +7,8 @@ import { BODIES, bodyFor, characterLook, formCharacterLook } from './character-l
 import { lookFor } from '../recipes/looks.js'
 import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
 import { castClip as stageClip } from '../../ui/common/hero-look.js'
-import { castClip } from './characters.js'
+import * as THREE from 'three'
+import { castClip, heldTip, leadHand } from './characters.js'
 
 const ids = (outfit: ReturnType<typeof characterLook>['outfit']) => Object.fromEntries(Object.entries(outfit).map(([slot, w]) => [slot, w!.id]))
 
@@ -130,5 +131,47 @@ describe('the body a form changes (R23)', () => {
   it("recolours the hero's own hair when a form names only a colour, and changes nothing without a body", () => {
     expect(formCharacterLook(base, { hairColor: '#ffffff' }).outfit.hair).toEqual({ ...base.outfit.hair, colors: ['#ffffff'] })
     expect(formCharacterLook(base, undefined)).toBe(base)
+  })
+})
+
+describe('where a skill leaves the body (Forge goal, phase 1)', () => {
+  /** A forearm from an elbow at (x, 1.2, 0), its hand bone (the wrist) `reach` metres ahead along +z. */
+  const arm = (x: number, reach: number) => {
+    const forearm = new THREE.Object3D()
+    forearm.position.set(x, 1.2, 0)
+    const hand = new THREE.Object3D()
+    hand.position.set(0, 0, reach)
+    forearm.add(hand)
+    new THREE.Group().add(forearm)
+    return hand
+  }
+  const ahead = new THREE.Vector3(0, 0, 1)
+
+  it('leaves from the palm of the hand that leads, a little past its wrist', () => {
+    const out = leadHand([arm(0.3, 0.1), arm(-0.3, 0.5)], ahead, new THREE.Vector3())!
+    expect(out.x).toBeCloseTo(-0.3)
+    expect(out.z).toBeCloseTo(0.5 * 1.35)
+  })
+
+  it('leaves from between the palms when both push out together, and from nowhere without hands', () => {
+    const out = leadHand([arm(0.08, 0.5), arm(-0.08, 0.52)], ahead, new THREE.Vector3())!
+    expect(out.x).toBeCloseTo(0)
+    expect(out.z).toBeCloseTo(0.51 * 1.35)
+    expect(leadHand([], ahead, new THREE.Vector3())).toBeUndefined()
+  })
+
+  it('finds the far end of what a hand holds, in the socket’s own space', () => {
+    const socket = new THREE.Object3D()
+    socket.position.set(1, 2, 3)
+    socket.rotation.set(0.4, 1.1, -0.3)
+    expect(heldTip(socket)).toBeUndefined()
+    // a blade a metre long, from just past the grip to its point
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.02, 1))
+    blade.position.set(0, 0, 0.6)
+    socket.add(blade)
+    const tip = heldTip(socket)!
+    expect(tip.x).toBeCloseTo(0)
+    expect(tip.y).toBeCloseTo(0)
+    expect(tip.z).toBeCloseTo(1.1)
   })
 })

@@ -3,7 +3,7 @@ import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
 import { attribute, clamp, distance, dot, float, max, mix, normalGeometry, normalView, positionGeometry, positionViewDirection, step, texture, uniform, vec3, vertexColor } from 'three/tsl'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS, type Build } from '../../charter/build.js'
-import { POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
+import { CAST_POSES, POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
@@ -80,6 +80,20 @@ function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.
 
 const LOCOMOTION = new Set(['idle', 'run', 'fly', 'hover', 'stunned'])
 
+/**
+ * Seconds into each one-shot clip where its blow lands or its shot leaves (tools/blender/humanlib/clips.py): the strike
+ * of a slash, the shot, the hip charge's thrust, the ultimate's burst, and each cast pose's release. A cast that runs
+ * on the engine's clock stretches the clip so this frame lands on the release tick (Forge goal, phase 1).
+ */
+export const CLIP_RELEASE: Record<string, number> = { slash: 0.2, shoot: 0.1, cast: 0.28, ultimate: 0.45 }
+for (const pose of CAST_POSES) if (POSE_RELEASE[pose] > 0) CLIP_RELEASE[poseClip(pose)] ??= POSE_RELEASE[pose]
+
+/** Where a cast's clip is when the wind-up is `prep` done and the recovery `recover` done: the release frame at prep 1. */
+export function castTime(clip: string, duration: number, prep: number, recover: number): number {
+  const release = Math.min(CLIP_RELEASE[clip] ?? duration / 2, duration)
+  return prep < 1 ? prep * release : release + recover * (duration - release)
+}
+
 export interface CastClip {
   clip: string
   /** Seconds into the clip to start. */
@@ -109,6 +123,62 @@ export interface CharacterView {
    * holds it at rest (reduced motion). True while it still swings.
    */
   settle: (dt: number, far?: boolean, still?: boolean) => boolean
+  /** Where the hand leading along `dir` is, as last posed (see `leadHand`); undefined for a body without hand bones. */
+  hand: (dir: THREE.Vector3, out: THREE.Vector3) => THREE.Vector3 | undefined
+  /** The far end of what the right hand holds, as last posed; undefined when it holds nothing. */
+  tip: (out: THREE.Vector3) => THREE.Vector3 | undefined
+  /**
+   * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and step at
+   * `stride` times the run's own pace, so the feet keep up with the ground the hero covers instead of sliding.
+   */
+  lean: (twist: number, back: boolean, stride?: number) => void
+}
+
+/** How a twist is shared up the back, hips to head. */
+const TWIST_SHARE: Record<string, number> = { spine: 0.3, chest: 0.3, upper_chest: 0.25, neck: 0.15 }
+
+/** How far past the wrist the palm is, as a share of the forearm. */
+const PALM = 0.35
+/** Hands closer than this share of the gap between them along the aim lead together (a two-handed blast). */
+const TOGETHER = 0.35
+
+/**
+ * The palm that leads along `dir`: the one further out, or the point between both when they push out together.
+ * Each palm is a little past its wrist, along the forearm. Effects leave from here (Forge goal, phase 1).
+ */
+export function leadHand(hands: readonly THREE.Object3D[], dir: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 | undefined {
+  if (!hands.length) return undefined
+  const palms = hands.map((bone) => {
+    const wrist = bone.getWorldPosition(new THREE.Vector3())
+    return bone.parent ? wrist.lerp(bone.parent.getWorldPosition(new THREE.Vector3()), -PALM) : wrist
+  })
+  if (palms.length === 1) return out.copy(palms[0])
+  const ahead = palms[1].dot(dir) - palms[0].dot(dir)
+  if (Math.abs(ahead) < TOGETHER * palms[0].distanceTo(palms[1])) return out.copy(palms[0]).add(palms[1]).multiplyScalar(0.5)
+  return out.copy(ahead > 0 ? palms[1] : palms[0])
+}
+
+/**
+ * The far end of a held piece in its socket's own space: the middle of the end of its longest side that lies further
+ * from the hand. A sword's point, a staff's head. Undefined for a socket holding nothing.
+ */
+export function heldTip(socket: THREE.Object3D): THREE.Vector3 | undefined {
+  if (!socket.children.length) return undefined
+  socket.updateWorldMatrix(true, true)
+  const toSocket = socket.matrixWorld.clone().invert()
+  const box = new THREE.Box3()
+  socket.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh) return
+    mesh.geometry.computeBoundingBox()
+    box.union(mesh.geometry.boundingBox!.clone().applyMatrix4(toSocket.clone().multiply(mesh.matrixWorld)))
+  })
+  if (box.isEmpty()) return undefined
+  const size = box.getSize(new THREE.Vector3())
+  const axis = size.x >= size.y && size.x >= size.z ? 'x' : size.y >= size.z ? 'y' : 'z'
+  const tip = box.getCenter(new THREE.Vector3())
+  tip[axis] = Math.abs(box.max[axis]) >= Math.abs(box.min[axis]) ? box.max[axis] : box.min[axis]
+  return tip
 }
 
 /** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face, `wear` its outfit. */
@@ -131,9 +201,17 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   let current: THREE.AnimationAction | undefined
   let currentName = ''
+  // the cast the current clip belongs to: a new one restarts the clip even when it's the same skill again
+  let castSeq = -1
   const play = (name: string, fade: number, from = 0) => {
     const next = actions.get(name) ?? actions.get('idle')
-    if (!next || next === current) return
+    if (!next) return
+    if (next === current) {
+      // the same clip again: a repeated swing starts over from its guard, where the last one ended
+      next.reset().setEffectiveWeight(1).play()
+      next.time = from
+      return
+    }
     next.reset().setEffectiveWeight(1).fadeIn(fade).play()
     next.time = from
     current?.fadeOut(fade)
@@ -142,20 +220,74 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   // each skill's clip, worked out once: reading a look from its words is too slow to do every frame
   const casts = new Map(BUILD_SLOTS.map((slot) => [slot as string, castClip(build, slot)]))
+  const hands = ['hand_L', 'hand_R'].flatMap((name) => scene.getObjectByName(name) ?? [])
+  const back = Object.keys(TWIST_SHARE).flatMap((name) => scene.getObjectByName(name) ?? [])
+  let twist = 0
+  let backwards = false
+  let pace = 1
+  // a twist goes on after the clip has posed the bones, each bone turning about its own length. The mixer only writes
+  // a bone whose clip value changed, so a held pose (idle, a cast frozen in a hit-stop) would keep last frame's twist
+  // and twist again: each bone's clip pose is kept and put back before the next update.
+  const untwisted = back.map(() => new THREE.Quaternion())
+  let twisted = false
+  const untwist = () => {
+    if (twisted) back.forEach((bone, k) => bone.quaternion.copy(untwisted[k]))
+    twisted = false
+  }
+  const turnChest = () => {
+    if (!twist) return
+    back.forEach((bone, k) => {
+      untwisted[k].copy(bone.quaternion)
+      bone.rotateY(twist * TWIST_SHARE[bone.name])
+    })
+    twisted = true
+  }
+  // what the right hand holds is measured the first time its tip is asked for, once the model is in the scene
+  const holder = scene.getObjectByName('socket:hand_r')
+  let tip: THREE.Vector3 | undefined | null = holder ? null : undefined
   return {
     root,
     pose: (state, dt, moving) => {
+      untwist()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
       const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
+      if (state.kind === 'cast' && state.prep !== undefined) {
+        // on the engine's clock: the clip starts from its guard with the wind-up and is held to it, frame by frame
+        if (wanted !== currentName || state.seq !== castSeq) play(wanted, 0.08)
+        castSeq = state.seq ?? castSeq
+        if (current) {
+          current.timeScale = 0
+          current.time = castTime(currentName, current.getClip().duration, state.prep, state.recover ?? 0)
+        }
+        mixer.update(dt)
+        turnChest()
+        return
+      }
+      // a cast on the engine's clock has already played its recovery, or was cut short and must not land now
+      const timed = current?.timeScale === 0
+      if (current && timed) current.timeScale = 1
       // a swing or a blast finishes before running or idling takes over; a new cast, a hit or death cuts in at once
-      const oneShotPlaying = current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
+      const oneShotPlaying = !timed && current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
       if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : 0.15, cast?.from)
+      // backing away, the run plays backwards
+      if (current && currentName === 'run') current.timeScale = backwards ? -pace : pace
       mixer.update(dt)
+      turnChest()
     },
     settle: (dt, far, still) => {
       if (!still) return settleCloth(scene, dt, far)
       restClothOn(scene)
       return false
+    },
+    hand: (dir, out) => leadHand(hands, dir, out),
+    lean: (t, b, stride = 1) => {
+      twist = t
+      backwards = b
+      pace = stride
+    },
+    tip: (out) => {
+      if (tip === null) tip = heldTip(holder!)
+      return tip && holder ? holder.localToWorld(out.copy(tip)) : undefined
     },
   }
 }

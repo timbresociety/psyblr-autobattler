@@ -4,6 +4,7 @@ import { DT, ENGINE, ticks } from './calibration.js'
 import { clamp } from './maths.js'
 import { pushOut } from './cover.js'
 import { bodyRadius, capsule, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
+import { moveShare } from './timing.js'
 
 /** Ground speed now: the sheet's move speed with buffs, the strongest slow, and any transformation's speed (KTD2). */
 export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
@@ -49,7 +50,9 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     hero.flight = Math.max(0, hero.flight - F.drain * DT)
     if (hero.flight <= 0 || grounded) vertical = -1
   } else if (now - hero.landedAt >= ticks(F.refillDelay)) hero.flight = Math.min(F.max, hero.flight + F.refill * DT)
-  const speed = hero.airborne ? flight : ground
+  // feet stay planted through a wind-up and slow through the recovery (phase 1)
+  const acting = hero.action && now < hero.action.ends ? moveShare(hero.action.slot, hero.action.released, setup.kit[hero.action.slot].delivery.kind) : 1
+  const speed = (hero.airborne ? flight : ground) * acting
   const p = hero.position
   if (!rooted) {
     p.x += mx * speed * DT

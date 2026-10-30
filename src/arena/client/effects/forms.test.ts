@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { FORM_ENTRIES, type TransformationLook } from '../../../charter/skill-look.js'
 import { composeRecipe } from '../../recipes/defaults.js'
 import { formLookOf, lookFor } from '../../recipes/looks.js'
-import type { MeshKind } from './draw.js'
+import { fanShapes, type MeshKind } from './draw.js'
 import { createForms, formColor, type FormBodyAt, type FormKit } from './forms.js'
 import type { Ribbon } from './vfx.js'
 
@@ -35,6 +35,7 @@ function recorder() {
     shake: (amount) => void (seen.shake = Math.max(seen.shake, amount)),
     darken: () => void seen.darken++,
     ghost: () => void seen.ghosts++,
+    fans: fanShapes(),
     flash: () => void seen.flashes++,
     sparks: () => {},
     tail: (path, color, width, life) => {

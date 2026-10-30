@@ -41,6 +41,18 @@ export const immune = (h: HeroState, now: number) => h.unstoppableUntil > now ||
 /** Whether a kind of control is holding a hero now. */
 export const controlled = (h: HeroState, type: ControlType, now: number) => h.cc[type] > now
 
+/**
+ * Control cuts an action short (phase 1): a wind-up that hasn't released never lands. `only` limits the cut to a basic
+ * attack (disarm) or to skills (silence, taunt); stuns, sleep, fear and displacement cut anything.
+ */
+export function interrupt(ctx: Ctx, hero: HeroState, only?: 'basic' | 'skills') {
+  const a = hero.action
+  if (!a || (only === 'basic' && a.slot !== 'basic') || (only === 'skills' && a.slot === 'basic')) return
+  if (!a.released && ctx.match.tick < a.ends) ctx.events.push({ type: 'interrupt', hero: hero.id, slot: a.slot })
+  // a released action only had its recovery left, which the control replaces
+  if (!only || !a.released) hero.action = undefined
+}
+
 export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: number, type: DamageType, slot: BuildSlot | 'dot', executeBonus = 0) {
   const { match } = ctx
   if (!target.alive || target.invulnerableUntil > match.tick || raw <= 0) return
@@ -90,6 +102,7 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
     target.alive = false
     target.hp = 0
     target.knockback = undefined
+    target.action = undefined
     ctx.events.push({ type: 'death', hero: target.id })
     firePassive(ctx, source, 'onKill', undefined)
   }
@@ -184,6 +197,7 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
       for (const u of hit) {
         if (immune(u, now)) continue
         u.stunnedUntil = Math.max(u.stunnedUntil, now + held(e.duration))
+        interrupt(ctx, u)
         status(ctx, u, 'stun', u.stunnedUntil)
       }
       break
@@ -200,6 +214,9 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
         u.cc[e.type] = Math.max(u.cc[e.type], now + held(e.duration))
         if (e.type === 'fear') u.fearFrom = caster.id
         if (e.type === 'taunt') u.tauntBy = caster.id
+        if (e.type === 'fear' || e.type === 'sleep') interrupt(ctx, u)
+        else if (e.type === 'silence' || e.type === 'taunt') interrupt(ctx, u, 'skills')
+        else if (e.type === 'disarm') interrupt(ctx, u, 'basic')
         status(ctx, u, e.type, u.cc[e.type])
       }
       break
@@ -210,6 +227,7 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
         u.knockback = undefined
         u.launch = { from: now, until: now + n, height: e.height, base: u.position.y }
         u.stunnedUntil = Math.max(u.stunnedUntil, now + n)
+        interrupt(ctx, u)
         u.airborne = true
         status(ctx, u, 'knockup', now + n)
       }
@@ -293,6 +311,7 @@ function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Temp
   if (metres <= 0 || n <= 0) return
   // moveKnockbacks steps in this same tick's after(), so the last step lands on tick + n - 1: n steps in all
   target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n - 1, grounded: !target.airborne }
+  interrupt(ctx, target)
   ctx.events.push({ type: 'knockback', hero: target.id, phase: 'start' })
 }
 

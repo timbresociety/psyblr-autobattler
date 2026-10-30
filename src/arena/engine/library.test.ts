@@ -6,7 +6,8 @@ import {
 } from '../../charter/templates/dsl.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE, ticks } from './calibration.js'
-import { COMBAT_RULES, cast, chest } from './deliveries.js'
+import { COMBAT_RULES, chest } from './deliveries.js'
+import { land } from './testing.js'
 import { dealDamage, heal as applyHeal } from './effects.js'
 import type { MatchEvent } from './events.js'
 import { atan2 } from './maths.js'
@@ -36,7 +37,8 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number 
   }
   const events: MatchEvent[] = []
   const ctx = { match: m, setups, events }
-  const fire = (slot: BuildSlot = 'active1', who = 0) => cast(ctx, who, slot)
+  // these tests are about what a skill does, so it lands on the tick it's pressed; timing.test.ts covers the wind-up
+  const fire = (slot: BuildSlot = 'active1', who = 0) => land(ctx, who, slot)
   const run = (n: number, commands: (Command | undefined)[] = []) => {
     for (let i = 0; i < n; i++) events.push(...tick(m, setups, commands, COMBAT_RULES))
   }

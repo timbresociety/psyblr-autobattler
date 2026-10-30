@@ -2,7 +2,7 @@ import { active, ai, at, basic, blind, breakPassive, cripple, disarm, fear, fiel
 
 /** Controller: takes enemies out of the fight. Every kind of crowd control, and walls to cut a fight in two. */
 export const CONTROLLER = [
-  basic({ id: 'controller-chill-ray', name: 'Chill Ray', roles: ['controller'], tags: ['ice', 'ray', 'beam', 'cold', 'freeze', 'frost'], delivery: at.beam(14), effects: [spirit(5, 0.6), slow(20, 0.6)], ai: ai('always', 1) }),
+  basic({ id: 'controller-chill-ray', name: 'Chill Ray', roles: ['controller'], tags: ['ice', 'ray', 'beam', 'cold', 'freeze', 'frost'], delivery: at.beam(14), effects: [spirit(5, 0.6), slow(20, 0.6)], ai: ai('always', 1), override: { budget: 66, reason: 'once skills wound up (Forge goal, phase 1), a hitscan slow on every basic kept melee from closing: the controller\'s default beat the field at 57%, and one retune step on this basic took it to 50%' } }),
   basic({ id: 'controller-gravity-orb', name: 'Gravity Orb', roles: ['controller'], tags: ['gravity', 'orb', 'heavy', 'weight', 'splash'], delivery: at.proj(16, 1.5, 18), effects: [spirit(5, 0.6), slow(15, 0.6)], ai: ai('always', 1) }),
   basic({ id: 'controller-psy-lash', name: 'Psy Lash', roles: ['controller'], tags: ['psychic', 'psionic', 'lash', 'mind', 'telekinesis', 'whip'], delivery: at.melee(4, 70), effects: [spirit(7, 0.8), cripple(15, 1)], ai: ai('always', 1) }),
   basic({ id: 'controller-bolas', name: 'Bolas', roles: ['controller'], tags: ['bolas', 'sling', 'rope', 'tangle', 'throw'], delivery: at.proj(16), effects: [phys(4, 0.8), slow(25, 0.8)], ai: ai('always', 1) }),

@@ -17,10 +17,10 @@ import { formLookOf, skillLookOf } from '../../recipes/looks.js'
 import type { EffectRecipe, RecipeLayer } from '../../recipes/schema.js'
 import type { ArenaController } from '../match-view.js'
 import { skyFlashOf } from '../map.js'
-import { bandGeometry, color, coneGeometry, createDraw, hot, setOpacity, v3, vivid, type Kit, type MeshKind } from './draw.js'
+import { color, createDraw, fanShapes, hot, setOpacity, v3, vivid, type Kit, type MeshKind } from './draw.js'
 import { createForms } from './forms.js'
 import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing.js'
-import { playCast, playHit } from './sound.js'
+import { cue, kitReady, playCast, playHit, type Cue, type Voice } from './sound.js'
 import { createWorldFx } from './world-fx.js'
 import {
   RibbonPool,
@@ -133,7 +133,26 @@ interface Shot {
   /** What it sheds each frame on the way: sparks, smoke or its motif. */
   wakes: RecipeLayer[]
   last: THREE.Vector3
+  /** From the engine's start to the palm it is drawn leaving from, eased away over HAND_BLEND. */
+  lead: THREE.Vector3
+  born: number
 }
+
+/** Within this many metres of the camera a sound plays at full level; it halves at twice this. */
+const NEAR = 14
+/** Seconds a swing's whoosh peaks before its contact, so the hit doesn't swallow it. */
+const SWING_LEAD = 0.05
+
+/** Seconds a shot takes to ease from the palm onto the engine's line. */
+const HAND_BLEND = 0.15
+/** A swing's smear shows at this hand speed (metres a second, against the body) and is brightest at the second. */
+const SMEAR_SPEED = [3, 9]
+/** Most swings smearing at once; more swing unsmeared. */
+const SMEARS = 12
+/** Seconds of the fight between a smear's points, whatever the clock's speed. */
+const SMEAR_STEP = 1 / 60
+/** Frames at a match's start that every effect is drawn unseen, so its shaders compile in the countdown. */
+const WARM_FRAMES = 4
 
 interface Ghost {
   root: THREE.Object3D
@@ -172,6 +191,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     disc: discTexture(),
     crescent: crescentTexture(),
   }
+  const fans = fanShapes()
   const geometry: Record<MeshKind, () => THREE.BufferGeometry> = {
     shock: ground,
     face: () => new THREE.PlaneGeometry(2, 2),
@@ -182,8 +202,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     core: () => tube(12),
     chain: () => tube(8),
     pillar: () => new THREE.CylinderGeometry(1, 1, 1, 24, 1, true).translate(0, 0.5, 0),
-    cone: () => coneGeometry(90),
-    band: () => bandGeometry(90),
+    cone: () => fans.cone(90),
+    band: () => fans.band(90),
     orb: () => new THREE.IcosahedronGeometry(1, 3),
     shell: () => new THREE.IcosahedronGeometry(1, 3),
     form: () => new THREE.IcosahedronGeometry(1, 3),
@@ -339,6 +359,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       skyColor = c
     },
     ghost,
+    fans,
   }
   const draw = createDraw(kit)
   const { flash, sparks } = draw
@@ -365,6 +386,79 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     return new THREE.Vector3(Math.sin(h.yaw) * Math.cos(h.pitch), Math.sin(h.pitch), Math.cos(h.yaw) * Math.cos(h.pitch))
   }
 
+  // where a skill leaves the hero: its leading palm as last drawn, else its chest (a body without hands, or a view not
+  // yet stood where the hero is)
+  const handOf = (hero: number, dir: THREE.Vector3) => {
+    const body = v3(chest(arena.match.heroes[hero]))
+    const palm = ctrl.views[hero]?.hand?.(dir, new THREE.Vector3())
+    return palm && palm.distanceToSquared(body) < 9 ? palm : body
+  }
+  const newHalo = () => spareHalos.pop() ?? new THREE.Sprite(new THREE.SpriteMaterial({ map: haloMap, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
+
+  // a charge held through a wind-up (Forge goal, phase 1): a hot core riding the leading palm, swelling until the shot
+  // or beam leaves it, sputtering out if the wind-up is cut short
+  const held = new Map<number, { release: number; halo: THREE.Sprite; size: number; born: number; prep: number }>()
+  const drop = (hero: number, fizzle: boolean) => {
+    const h = held.get(hero)
+    if (!h) return
+    if (fizzle) sparks(h.halo.position.clone(), h.halo.material.color.clone(), 6, 2)
+    h.halo.removeFromParent()
+    spareHalos.push(h.halo)
+    held.delete(hero)
+  }
+  const hold = (hero: number, release: number, c: THREE.Color, size: number, prep: number) => {
+    drop(hero, false)
+    const halo = newHalo()
+    halo.material.color.copy(c)
+    halo.material.opacity = 0.9
+    halo.scale.setScalar(0.01)
+    halo.position.copy(handOf(hero, aimOf(hero)))
+    scene.add(halo)
+    held.set(hero, { release, halo, size, born: clock, prep: Math.max(0.05, prep) })
+  }
+
+  // a swing's smear: a ribbon off the weapon's tip, or off the leading hand, bright only while it moves fast against
+  // the body, so the strike shows and the wind-up and the run don't
+  const swings = new Map<number, { release: number; trail: Trail; rel?: THREE.Vector3; fade: number; since: number }>()
+  const spareSmears: Trail[] = []
+  const smear = (hero: number, release: number, c: THREE.Color) => {
+    if (swings.size >= SMEARS || swings.has(hero)) return
+    const armed = !!ctrl.views[hero]?.tip?.(new THREE.Vector3())
+    const trail = spareSmears.pop() ?? new Trail(10, 0.2, c)
+    trail.width = armed ? 0.32 : 0.2
+    trail.recolor(c)
+    trail.reset()
+    ;(trail.mesh.material as THREE.MeshBasicMaterial).opacity = 0
+    trail.mesh.visible = true
+    if (!trail.mesh.parent) scene.add(trail.mesh)
+    swings.set(hero, { release, trail, fade: 0, since: 0 })
+  }
+  const SMEAR_FADE = 0.15
+
+  // sound for a listener at the camera: full level near it, quieter further off, panned to where it happens
+  const right = new THREE.Vector3()
+  const spot = (at: { x: number; y: number; z: number }) => {
+    const cam = ctrl.camera
+    const to = new THREE.Vector3(at.x, at.y, at.z).sub(cam.position)
+    const d = to.length()
+    right.setFromMatrixColumn(cam.matrixWorld, 0)
+    return { gain: 1 / (1 + Math.max(0, d - NEAR) / NEAR), pan: d > 0.01 ? THREE.MathUtils.clamp(to.dot(right) / d, -1, 1) * 0.7 : 0 }
+  }
+  // a wind-up's sounds are booked when it starts, to land on its release; a wind-up cut short cuts them too
+  const booked = new Map<number, Voice[]>()
+  const unbook = (hero: number) => {
+    for (const v of booked.get(hero) ?? []) v.stop()
+    booked.delete(hero)
+  }
+  /** What a skill sounds like as it lets go: a swish for a swing, a zip for a shot, a thump for a beam or an ultimate. */
+  const releaseCue = (kind: string, slot: BuildSlot): Cue | undefined => {
+    if (slot === 'ultimate') return 'burst'
+    if (kind === 'melee' || kind === 'cone' || kind === 'dash' || kind === 'grapple' || kind === 'leap') return 'swing'
+    if (kind === 'projectile') return 'shot'
+    if (kind === 'beam') return slot === 'basic' ? 'shot' : 'burst'
+    return undefined
+  }
+
   const launch = (e: Extract<MatchEvent, { type: 'projectile' }>) => {
     const r = recipe(e.hero, e.slot)
     const core = r.layers.find((l) => l.damaging) ?? r.layers[0]
@@ -382,7 +476,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     else body.scale.setScalar(shape === 'crescent' ? size * 0.95 : size)
     const skin = shape === 'meteor' ? mesh('shell', hot(v, 0.2), 0.9) : undefined
     skin?.scale.setScalar(size * 1.15)
-    const halo = spareHalos.pop() ?? new THREE.Sprite(new THREE.SpriteMaterial({ map: haloMap, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
+    const halo = newHalo()
     halo.material.color.copy(v)
     halo.material.opacity = Math.min(1, 0.6 * bright)
     halo.scale.setScalar(size * (shape === 'orb' ? 4.5 : 3) * bright)
@@ -395,9 +489,11 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     trail.mesh.visible = true
     if (!trail.mesh.parent) scene.add(trail.mesh)
     const wakes = r.layers.filter((l) => l.phase === 'travel' && (l.primitive === 'sparks' || l.primitive === 'smoke' || l.primitive === 'motif'))
-    const from = v3(e.from)
+    // drawn leaving the palm, and eased onto the engine's line over its first moment
+    const from = handOf(e.hero, aimOf(e.hero))
+    const lead = from.clone().sub(v3(e.from))
     body.position.copy(from)
-    projectiles.set(e.id, { body, kind, shape, halo, trail, skin, recipe: r, size, wakes, last: from })
+    projectiles.set(e.id, { body, kind, shape, halo, trail, skin, recipe: r, size, wakes, last: from, lead, born: clock })
     // a muzzle flash where it leaves the hand
     flash(from, v, Math.max(0.4, size * 2.2))
   }
@@ -414,6 +510,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   }
 
   const fly = (fx: Shot, at: THREE.Vector3, dt: number) => {
+    const ease = 1 - (clock - fx.born) / HAND_BLEND
+    if (ease > 0) at.addScaledVector(fx.lead, ease * ease)
     const heading = at.clone().sub(fx.last)
     const moving = heading.lengthSq() > 1e-6
     const b = fx.body
@@ -443,26 +541,65 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     fx.last = at
   }
 
+  // a shader compiles the first time something is drawn with it, so the first cast of each kind used to stall the fight
+  // (the soak's worst frame, 517 ms; Forge goal, phase 0). Instead one of every effect mesh, sprite and charge halo is
+  // drawn unseen in front of the camera for the first frames, in the countdown, and then goes back to its pool.
+  const unseen = new THREE.Color(0, 0, 0)
+  const warming = (Object.keys(geometry) as MeshKind[]).map((kind) => ({ kind, mesh: mesh(kind, unseen, 0) }))
+  const warmHalo = newHalo()
+  warmHalo.material.opacity = 0
+  scene.add(warmHalo)
+  for (const spawn of [sparkle, puff, motif]) spawn({ at: { x: 0, y: 0, z: 0 }, count: 1, kind: 'glow', life: 1, size: [0, 0], color: unseen, alpha: 0 })
+  let warmFrames = WARM_FRAMES
+  const ahead = new THREE.Vector3()
+  const warmUp = () => {
+    if (!warmFrames) return
+    if (--warmFrames) {
+      ctrl.camera.getWorldDirection(ahead).multiplyScalar(3).add(ctrl.camera.position)
+      for (const w of warming) (w.mesh.position.copy(ahead), w.mesh.scale.setScalar(0.01))
+      warmHalo.position.copy(ahead)
+      return
+    }
+    for (const w of warming) park(w.kind, w.mesh)
+    warmHalo.removeFromParent()
+    spareHalos.push(warmHalo)
+  }
+
   return {
     events: (events) => {
       world.events(events)
       for (const e of events) {
         if (e.type === 'cast') {
+          // the wind-up (phase 1): the charge gathers and the circle opens; what the skill does waits for its release
           const r = recipe(e.hero, e.slot)
           const hero = arena.match.heroes[e.hero]
           const at = v3(chest(hero))
           const dir = aimOf(e.hero)
-          const family = FAMILY_OF[r.delivery]
-          for (const l of r.layers) if (l.phase === 'charge') draw.layer(l, r, at, 1, { dir })
-          // a self-cast has no area and sends no impact: its look plays on the caster as it casts (a transformation's
-          // arrival is the form's own, from its event)
-          if (family === 'self' && !transformOf(arena.setups[e.hero].kit[e.slot])) for (const l of r.layers) if (l.phase === 'impact' || l.phase === 'linger') draw.layer(l, r, at, capsule(hero).height / 2, { dir, caster: at })
-          // a movement skill has already moved the hero; its way runs from where the hero was last drawn
-          if (family === 'movement') {
-            const was = ctrl.positions()[e.hero]
-            const from = was ? v3(was) : v3(hero.position)
-            for (const l of r.layers) if (l.phase === 'travel') draw.path(l, r, e.hero, from, v3(hero.position), capsule(hero).height * ENGINE.chest)
+          // the charge lasts exactly as long as the engine's wind-up
+          const prep = Math.max(0, e.release - arena.match.tick) / ENGINE.tickHz
+          const winding = () => {
+            const a = arena.match.heroes[e.hero].action
+            return a?.release === e.release && !a.released
           }
+          for (const l of r.layers) {
+            if (l.phase !== 'charge') continue
+            // motes rush in to the hands halfway through, once they have come together; an aura or a glowing fingertip
+            // is drawn on the body at once
+            if (l.primitive === 'gather' && (l.style ?? 'gather') === 'gather') later(prep / 2, () => winding() && draw.layer(l, { ...r, charge: prep / 2 }, handOf(e.hero, aimOf(e.hero)), 1, { dir: aimOf(e.hero) }))
+            else draw.layer(l, { ...r, charge: prep }, at, 1, { dir })
+          }
+          const delivery = arena.setups[e.hero].kit[e.slot].delivery
+          // the sound beats: a riser that tops out on the release for a skill, and the release's own sound peaking on it
+          unbook(e.hero)
+          const where = spot(at)
+          const voices = [e.slot !== 'basic' ? cue(e.slot === 'ultimate' ? 'charge-big' : 'charge', where, prep) : undefined]
+          const out = releaseCue(delivery.kind, e.slot)
+          if (out) voices.push(cue(out, where, out === 'swing' ? Math.max(0, prep - SWING_LEAD) : prep))
+          booked.set(e.hero, voices.filter((v): v is Voice => !!v))
+          if (delivery.kind === 'projectile' || delivery.kind === 'beam') {
+            const core = r.layers.find((l) => l.damaging) ?? r.layers[0]
+            hold(e.hero, e.release, vivid(r, core.color), layerSize(core, delivery.projectileRadius ?? 0.25) * (e.slot === 'ultimate' ? 4 : 2.5), prep)
+          } else if (delivery.kind === 'melee' || delivery.kind === 'cone') smear(e.hero, e.release, hot(vivid(r, 0), 0.25))
           // skills draw a magic circle under the caster; the ultimate's is big and slow
           if (e.slot !== 'basic' && e.slot !== 'passive') {
             const big = e.slot === 'ultimate'
@@ -473,16 +610,36 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             })
             if (big) sparkle({ at: v3(hero.position), count: 60, kind: 'glow', life: 1.2, size: [0.25, 0.05], color: hot(c, 0.3), spread: 2.2, velocity: { x: 0, y: 3.5, z: 0 }, speed: 0.6 })
           }
-          playCast(r.delivery)
+        } else if (e.type === 'release') {
+          drop(e.hero, false)
+          booked.delete(e.hero)
+          const r = recipe(e.hero, e.slot)
+          const hero = arena.match.heroes[e.hero]
+          const at = v3(chest(hero))
+          const dir = aimOf(e.hero)
+          const family = FAMILY_OF[r.delivery]
+          // a self-cast has no area and sends no impact: its look plays on the caster as it lands (a transformation's
+          // arrival is the form's own, from its event)
+          if (family === 'self' && !transformOf(arena.setups[e.hero].kit[e.slot])) for (const l of r.layers) if (l.phase === 'impact' || l.phase === 'linger') draw.layer(l, r, at, capsule(hero).height / 2, { dir, caster: at })
+          // a movement skill has just moved the hero; its way runs from where the hero was last drawn
+          if (family === 'movement') {
+            const was = ctrl.positions()[e.hero]
+            const from = was ? v3(was) : v3(hero.position)
+            for (const l of r.layers) if (l.phase === 'travel') draw.path(l, r, e.hero, from, v3(hero.position), capsule(hero).height * ENGINE.chest)
+          }
+          if (!kitReady()) playCast(r.delivery)
+        } else if (e.type === 'interrupt') {
+          drop(e.hero, true)
+          unbook(e.hero)
         } else if (e.type === 'projectile') {
           launch(e)
         } else if (e.type === 'impact') {
           const r = recipe(e.hero, e.slot)
           const caster = arena.match.heroes[e.hero]
-          const from = v3(chest(caster))
           const end = v3(e.at)
           // a beam runs from the hands to where the engine stopped it, wall or full range
           const beam = r.delivery === 'beam'
+          const from = beam ? handOf(e.hero, aimOf(e.hero)) : v3(chest(caster))
           const length = beam ? from.distanceTo(end) : e.range
           const dir = beam && length > 0.01 ? end.clone().sub(from).normalize() : aimOf(e.hero)
           const base = baseSize(e as ImpactEvent, arena.setups[e.hero].kit[e.slot].delivery.projectileRadius)
@@ -510,7 +667,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           if (feel.blood) puff({ at, count: Math.ceil(feel.blood / 3), kind: 'glow', life: 0.5, size: [0.08, 0.03], color: new THREE.Color(0.6, 0.02, 0.02), speed: 3.5, gravity: 14, alpha: 0.9 })
           hitStop = Math.max(hitStop, feel.hitStop)
           shake = Math.max(shake, feel.shake)
-          playHit(e.heavy)
+          if (kitReady()) cue(e.heavy ? 'hit-heavy' : 'hit', spot(at))
+          else playHit(e.heavy)
         } else if (e.type === 'form') {
           if (e.phase === 'end') forms.end(e.hero)
           else {
@@ -538,6 +696,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
         } else if (e.type === 'death') {
           // the engine sends no form end for a hero that dies transformed; the death has its own flash
           forms.end(e.hero, true)
+          unbook(e.hero)
           const hero = arena.match.heroes[e.hero]
           const at = v3(chest(hero))
           const team = hero.team === 0 ? new THREE.Color(0.31, 0.64, 1) : new THREE.Color(1, 0.42, 0.29)
@@ -549,6 +708,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       }
     },
     frame: (dt) => {
+      warmUp()
       clock += dt
       world.frame(dt)
       // tasks may book more tasks; those run from the next frame
@@ -583,6 +743,43 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           endGhost(g)
           ghosts.splice(i, 1)
         } else g.material.fade.value = 0.7 * (1 - p) ** 1.3
+      }
+      for (const [hero, h] of held) {
+        const a = arena.match.heroes[hero].action
+        // a death, or anything else that ends the wind-up without a word, puts it out
+        if (a?.release !== h.release || a.released) {
+          drop(hero, true)
+          continue
+        }
+        const grown = Math.min(1, (clock - h.born) / h.prep)
+        h.halo.position.copy(handOf(hero, aimOf(hero)))
+        h.halo.scale.setScalar(h.size * (0.25 + 0.75 * grown) * (1 + 0.1 * Math.sin(clock * 45)))
+      }
+      for (const [hero, s] of swings) {
+        const material = s.trail.mesh.material as THREE.MeshBasicMaterial
+        const view = ctrl.views[hero]
+        const drawn = ctrl.positions()[hero]
+        if (!view || !drawn || arena.match.heroes[hero].action?.release !== s.release) s.fade += dt
+        if (s.fade >= SMEAR_FADE || !view || !drawn) {
+          s.trail.mesh.visible = false
+          spareSmears.push(s.trail)
+          swings.delete(hero)
+          continue
+        }
+        const head = view.tip?.(new THREE.Vector3()) ?? handOf(hero, aimOf(hero))
+        const rel = head.clone().sub(v3(drawn))
+        const speed = s.rel && dt > 0 ? rel.distanceTo(s.rel) / dt : 0
+        s.rel = rel
+        s.since += dt
+        const grow = s.since >= SMEAR_STEP
+        if (grow) s.since = 0
+        s.trail.push(head, ctrl.camera, grow)
+        // only the strike smears: the back half of the wind-up and the front half of the recovery
+        const a = arena.match.heroes[hero].action
+        const t = arena.match.tick
+        const striking = a && (a.released ? t < (a.release + a.ends) / 2 : t >= (a.started + a.release) / 2)
+        const bright = striking ? THREE.MathUtils.smoothstep(speed, SMEAR_SPEED[0], SMEAR_SPEED[1]) : 0
+        material.opacity = s.fade > 0 ? material.opacity * (1 - s.fade / SMEAR_FADE) : Math.max(bright, material.opacity * Math.exp(-13 * dt))
       }
       const flying = new Map(arena.match.projectiles.map((p) => [p.id, p]))
       for (const [id, fx] of projectiles) {
