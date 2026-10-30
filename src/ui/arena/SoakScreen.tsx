@@ -113,6 +113,9 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
         const report = (phase: SoakPhase) => {
           const { render, memory } = c.renderer.info
           const m = c.arena.match
+          // live, unlike `__soak`, which updates every 10 s: a runner can collect garbage during the countdown and
+          // read the heap with nothing of the fight in it
+          ;(window as unknown as { __soakPhase?: { match: number; phase: SoakPhase } }).__soakPhase = { match: index, phase }
           recorder.context({
             match: index,
             phase,

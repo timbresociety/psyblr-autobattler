@@ -1,9 +1,11 @@
 /**
  * The frame-rate guard (U18, R26): watch the rolling frame time and step quality down one level at a time when frames
- * run long, and back up when there is headroom. Levels, in order: shadows off, slower far-hero animation, fewer
- * particles, lower render resolution.
+ * run long, and back up when there is headroom. Render resolution moves first and on its own (the scaler below); these
+ * levels only start once it is at its floor. In order: slower far-hero animation, fewer particles, shadows redrawn every
+ * third frame. None of them compiles a shader: turning shadows or bloom off rebuilt every material and froze a 10v10
+ * for 1 to 3 seconds (the soak test, 2026-10-30).
  */
-export const QUALITY_LEVELS = ['full', 'no-shadows', 'slow-animation', 'fewer-particles', 'low-resolution'] as const
+export const QUALITY_LEVELS = ['full', 'slow-animation', 'fewer-particles', 'lazy-shadows'] as const
 export type QualityLevel = (typeof QUALITY_LEVELS)[number]
 
 export const GUARD = {
@@ -61,5 +63,65 @@ function step(g: Guard, by: 1 | -1) {
   g.probing = false
 }
 
-/** Is `current` at or past `step`? Steps add up: a lower resolution still has its shadows off. */
+/** Is `current` at or past `step`? Steps add up: lazy shadows still come with fewer particles. */
 export const atLeast = (current: QualityLevel, step: QualityLevel) => QUALITY_LEVELS.indexOf(current) >= QUALITY_LEVELS.indexOf(step)
+
+/**
+ * The render scale (Forge goal, phase 0): a fraction of the device's pixel ratio, moved in small steps before any
+ * quality level. On a Retina MacBook Air the pixel count is most of a frame's cost, and changing it compiles nothing.
+ */
+export const SCALER = {
+  min: 0.5,
+  max: 1,
+  /** Seconds of frames averaged before a change. */
+  windowSeconds: 1,
+  /** Averages above this scale down; at or under `fastMs` a vsync-capped display is holding 60 fps. */
+  slowMs: 18,
+  fastMs: 17.5,
+  stallMs: 100,
+  settleSeconds: 1,
+  /** Seconds of headroom before a step up; doubles each time a step up has to be undone, up to the max. */
+  upSeconds: 3,
+  maxUpSeconds: 60,
+  upStep: 1.05,
+}
+
+export interface Scaler {
+  scale: number
+  frames: number[]
+  sinceChange: number
+  upDelay: number
+  /** True right after a step up, until the next change. */
+  probing: boolean
+}
+
+export const createScaler = (): Scaler => ({ scale: SCALER.max, frames: [], sinceChange: 0, upDelay: SCALER.upSeconds, probing: false })
+
+export const atFloor = (s: Scaler) => s.scale <= SCALER.min + 1e-6
+
+/** Feed one frame's time; returns the render scale to use now. */
+export function scaleFor(s: Scaler, frameMs: number): number {
+  if (frameMs > SCALER.stallMs) return s.scale
+  s.frames.push(frameMs)
+  s.sinceChange += frameMs / 1000
+  let total = s.frames.reduce((a, b) => a + b, 0)
+  while (total > SCALER.windowSeconds * 1000 && s.frames.length > 1) total -= s.frames.shift()!
+  if (total < SCALER.windowSeconds * 1000 * 0.9) return s.scale
+  const avg = total / s.frames.length
+  if (avg > SCALER.slowMs && !atFloor(s) && s.sinceChange >= SCALER.settleSeconds) {
+    if (s.probing) s.upDelay = Math.min(SCALER.maxUpSeconds, s.upDelay * 2)
+    // pixels cost about the square of the scale, so a frame twice too slow wants a scale about 0.7 as big
+    rescale(s, Math.max(SCALER.min, s.scale * Math.max(0.7, Math.sqrt(1000 / 60 / avg))))
+  } else if (avg <= SCALER.fastMs && s.scale < SCALER.max && s.sinceChange >= s.upDelay) {
+    rescale(s, Math.min(SCALER.max, s.scale * SCALER.upStep))
+    s.probing = true
+  }
+  return s.scale
+}
+
+function rescale(s: Scaler, scale: number) {
+  s.scale = scale
+  s.sinceChange = 0
+  s.frames = []
+  s.probing = false
+}

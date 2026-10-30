@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { QUALITY_LEVELS, createGuard, observe } from './quality.js'
+import { QUALITY_LEVELS, SCALER, atFloor, createGuard, createScaler, observe, scaleFor } from './quality.js'
 import { loadAudio, saveAudio } from './settings.js'
 
 describe('frame-rate guard (U18)', () => {
@@ -39,6 +39,37 @@ describe('frame-rate guard (U18)', () => {
       for (let i = 0; i < 200 && g.probing; i++) observe(g, 25)
     }
     expect(g.upDelay).toBeGreaterThan(first)
+  })
+})
+
+describe('render scale (Forge goal, phase 0)', () => {
+  it('scales down in steps sized to how slow frames are, and stops at the floor', () => {
+    const s = createScaler()
+    const seen: number[] = []
+    for (let i = 0; i < 60 * 3; i++) seen.push(scaleFor(s, 33))
+    // a 33 ms frame wants about 0.71 of the pixels per axis, which is the largest single step
+    expect(seen.find((v) => v < 1)).toBeCloseTo(0.71, 2)
+    for (let i = 0; i < 60 * 10; i++) scaleFor(s, 33)
+    expect(atFloor(s)).toBe(true)
+    expect(s.scale).toBeCloseTo(SCALER.min)
+  })
+
+  it('creeps back up with headroom and backs off after a step up that does not hold', () => {
+    const s = createScaler()
+    for (let i = 0; i < 60 * 3; i++) scaleFor(s, 25)
+    const low = s.scale
+    for (let i = 0; i < 60 * 5; i++) scaleFor(s, 1000 / 60)
+    expect(s.scale).toBeGreaterThan(low)
+    const delay = s.upDelay
+    while (!s.probing) scaleFor(s, 1000 / 60)
+    for (let i = 0; i < 60 * 2 && s.probing; i++) scaleFor(s, 25)
+    expect(s.upDelay).toBeGreaterThan(delay)
+  })
+
+  it('ignores stalls', () => {
+    const s = createScaler()
+    for (let i = 0; i < 120; i++) scaleFor(s, i % 30 === 0 ? 400 : 1000 / 60)
+    expect(s.scale).toBe(SCALER.max)
   })
 })
 

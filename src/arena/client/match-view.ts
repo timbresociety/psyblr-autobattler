@@ -18,7 +18,7 @@ import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { buildRuins } from './ruins.js'
 import { CosmeticPhysics, PHYSICS } from './physics.js'
-import { atLeast, createGuard, observe, type QualityLevel } from './quality.js'
+import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
 import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer.js'
 import { createStore, type Store } from './store.js'
@@ -217,6 +217,9 @@ async function createStage(host: HTMLElement) {
   const first = await newRenderer(host, forceWebGLFlag(window.location.search))
   try {
     const pixelRatio = Math.min(2, window.devicePixelRatio)
+    // the frame-rate guard scales down from here; until 2026-10-30 nothing applied it, so a Retina screen drew at 1x
+    // and then jumped to 2x on the guard's first step down
+    first.renderer.setPixelRatio(pixelRatio)
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
     atmosphere(scene)
@@ -321,24 +324,32 @@ function watchDevice(stage: { renderer: Renderer; recover: () => Promise<boolean
 }
 
 /**
- * The frame-rate guard wired to the stage (U18, R26): each step keeps the ones before it, shadows first and render
- * resolution last.
+ * The frame-rate guard wired to the stage (U18, R26): render resolution moves first, and the quality levels only start
+ * once it is at its floor; on the way back up the levels return first and resolution after. Nothing here turns shadows
+ * or bloom off, because either one rebuilds every material in the middle of a fight.
  */
 function qualityControl(stage: Stage) {
   const guard = createGuard()
+  const scaler = createScaler()
   let current: QualityLevel = 'full'
+  let frame = 0
+  const applyScale = () => {
+    stage.renderer.setPixelRatio(Math.max(0.75, stage.pixelRatio * scaler.scale))
+    stage.resize()
+  }
   return {
     current: () => current,
     level: (l: QualityLevel) => atLeast(current, l),
     observe(frameMs: number) {
-      const next = observe(guard, frameMs)
-      if (next === current) return
-      current = next
-      stage.sun.castShadow = !atLeast(current, 'no-shadows')
-      // bloom is the first post effect to go when particles are thinned
-      if (stage.glow) stage.glow.enabled = !atLeast(current, 'fewer-particles')
-      stage.renderer.setPixelRatio(atLeast(current, 'low-resolution') ? Math.max(0.75, stage.pixelRatio * 0.6) : stage.pixelRatio)
-      stage.resize()
+      const before = scaler.scale
+      if (current === 'full') scaleFor(scaler, frameMs)
+      if (scaler.scale !== before) applyScale()
+      // the guard only watches once resolution has nothing left to give, and starts from a fresh window when it does
+      if (current === 'full' && !atFloor(scaler)) guard.frames = []
+      else current = observe(guard, frameMs)
+      // lazy shadows redraw the sun's shadow map every third frame instead of every frame
+      stage.sun.shadow.autoUpdate = !atLeast(current, 'lazy-shadows')
+      if (!stage.sun.shadow.autoUpdate && frame++ % 3 === 0) stage.sun.shadow.needsUpdate = true
     },
   }
 }
