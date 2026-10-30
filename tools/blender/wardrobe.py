@@ -1994,7 +1994,8 @@ def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02, bar
 
 
 # the owner's anime Jensen (Forge goal, phase 2): the leather jacket with circuit-like lines glowing down each front
-# panel and each sleeve. The inner lines stay outside the open front, which is 0.076 either side of centre at the collar
+# panel and each sleeve, bending the way a circuit's traces do. The inner lines stay 2 cm outside the zips, which run
+# 0.076 either side of centre
 @item('tech_jacket', 'Leather jacket with glowing trim', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton'), ('trim', '#6dff3a', 'glow'), ('zip', '#9a9ba0', 'metal')], knobs=['sleeve'], tags=['tech jacket', 'circuit jacket', 'neon jacket', 'glowing jacket', 'light-up jacket', 'cyberpunk jacket'])
 def _tech_jacket(w):
     parts = _leather(w)
@@ -2003,13 +2004,20 @@ def _tech_jacket(w):
     top, low = n.z - 0.07, c.d.waist_z + 0.03
     torso = c.faces(*G.TORSO)
     at = lambda x, z: V((x, n.y, z))  # noqa: E731
+    # down each front panel from the collar to the hem band, zigzagging out and back (x, and how far down from top to
+    # low), and a short run from the collar out toward the front of the shoulder
+    panel = [(0.095, 0.0), (0.1, 0.1), (0.15, 0.28), (0.122, 0.44), (0.122, 0.62), (0.148, 0.75), (0.148, 0.86), (0.118, 0.95), (0.118, 1.0)]
     for side, s in (('L', 1), ('R', -1)):
-        parts.append(trace(c, f'trim_front_{side}', [at(s * 0.092, top), at(s * 0.092, top - 0.06), at(s * 0.118, top - 0.1), at(s * 0.118, low)], torso, 'trim'))
-        parts.append(trace(c, f'trim_chest_{side}', [at(s * 0.118, top - 0.15), at(s * 0.138, top - 0.18), at(s * 0.138, top - 0.3)], torso, 'trim'))
+        parts.append(trace(c, f'trim_front_{side}', [at(s * x, top - f * (top - low)) for x, f in panel], torso, 'trim'))
+        # the front of the shoulder is the upper arm's: without its faces the run's rays pass through and land on the back
+        parts.append(trace(c, f'trim_chest_{side}', [at(s * 0.108, top + 0.01), at(s * 0.14, top - 0.03), at(s * 0.172, top - 0.07)], torso | c.faces(f'upper_arm_{side}'), 'trim'))
+        # down the front of the sleeve from above the elbow to the cuff, stepping a centimetre or two to either side
         shoulder, elbow = c.d.bones[f'upper_arm_{side}']
         wrist = c.d.bones[f'forearm_{side}'][1]
         arm = c.faces(f'upper_arm_{side}', f'forearm_{side}')
-        parts.append(trace(c, f'trim_sleeve_{side}', [shoulder.lerp(elbow, 0.15), elbow, elbow.lerp(wrist, 0.82)], arm, 'trim'))
+        across = (wrist - elbow).cross(V((0, 1, 0))).normalized()
+        steps = [(shoulder.lerp(elbow, 0.45), 0.015), (shoulder.lerp(elbow, 0.75), -0.01), (elbow, -0.01), (elbow.lerp(wrist, 0.2), 0.015), (elbow.lerp(wrist, 0.45), 0.015), (elbow.lerp(wrist, 0.6), -0.012), (elbow.lerp(wrist, 0.85), -0.012)]
+        parts.append(trace(c, f'trim_sleeve_{side}', [p + across * (k * s) for p, k in steps], arm, 'trim'))
     return parts
 
 

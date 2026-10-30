@@ -461,6 +461,9 @@ function finishShader(shader: { vertexShader: string; fragmentShader: string }) 
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\nfloat grazing = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.0);\ntotalEmissiveRadiance += diffuseColor.rgb * (vFinish.w + vFinish.z * 0.3 * grazing);',
     )
+    // a glowing channel shows its own colour, dimming toward its edges: lit and then tone mapped, a bright saturated
+    // green comes out pale lime
+    .replace('#include <tonemapping_fragment>', '#include <tonemapping_fragment>\ngl_FragColor.rgb = mix(gl_FragColor.rgb, diffuseColor.rgb * (1.0 - 0.35 * grazing), vFinish.w);')
 }
 
 /**
