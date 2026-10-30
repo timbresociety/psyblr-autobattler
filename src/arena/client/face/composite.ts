@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import type { FormMark } from '../../../charter/skill-look.js'
 import { metaChannel } from '../character-look.js'
-import type { FaceMeta, Rgb, Rgba } from './patch.js'
+import { blur, type FaceMeta, type Rgb, type Rgba } from './patch.js'
 
 /**
  * A hero's own copy of its body's atlas, with its skin colour baked into every skin texel and its photo face painted
@@ -87,13 +87,17 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
   const m = mask.getContext('2d') as Ctx
   m.beginPath()
   const faces: number[][] = []
+  // the face's triangles in the patch, the eyes among them: the photo is drawn on the skin ones alone
+  const covered: number[] = []
   for (let k = 0; k < count; k += 3) {
     const a = vertex(k)
     const b = vertex(k + 1)
     const c = vertex(k + 2)
+    const front = inFace(a) && inFace(b) && inFace(c)
+    if (front) covered.push(...toPatch(a), ...toPatch(b), ...toPatch(c))
     if (!isSkin(a) || !isSkin(b) || !isSkin(c)) continue
     path(m, [...toAtlas(a), ...toAtlas(b), ...toAtlas(c)])
-    if (inFace(a) && inFace(b) && inFace(c)) faces.push([a, b, c])
+    if (front) faces.push([a, b, c])
   }
   m.fillStyle = m.strokeStyle = '#fff'
   m.lineWidth = 3 * scale
@@ -108,9 +112,47 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
   ctx.drawImage(mask, 0, 0)
   ctx.globalCompositeOperation = 'source-over'
 
-  // 2. the photo face, its skin shifted to the skin it sits in, triangle by triangle, feathered by its own alpha
-  drawPatch(ctx, faces, toPatch, toAtlas, tonedPatch(patch, tone, faceSkin(ctx, faces, toAtlas)))
+  // 2. the photo face, its skin shifted to the skin it sits in, triangle by triangle, feathered by its own alpha and
+  // gone before the edge of the face's triangles
+  drawPatch(ctx, faces, toPatch, toAtlas, tonedPatch(withinFaces(patch, covered), tone, faceSkin(ctx, faces, toAtlas)))
   return out
+}
+
+/** How far inside the face's triangles the photo fades out, as a share of the patch. */
+const COVER_FADE = 0.03
+
+/**
+ * The patch faded out inside the outline of the face's triangles (`tris`, six patch coordinates each). A triangle
+ * takes the photo only when all three of its corners face the camera, so the outline steps along their edges, and
+ * where the photo's own alpha hadn't reached nothing by then (low on a cheek, by the jaw) it stopped in a staircase.
+ */
+export function withinFaces(patch: Rgba, tris: number[]): Rgba {
+  const res = patch.width
+  const inside = blur(fillTriangles(tris, res), res, res * COVER_FADE)
+  const data = patch.data.slice()
+  for (let i = 0; i < inside.length; i++) data[i * 4 + 3] *= THREE.MathUtils.smoothstep(inside[i], 0.5, 0.9)
+  return { width: res, height: patch.height, data }
+}
+
+/** Triangles (six coordinates each) filled with 1 on a res×res field, where each pixel's centre falls inside one. */
+function fillTriangles(tris: number[], res: number): Float32Array {
+  const field = new Float32Array(res * res)
+  for (let t = 0; t + 5 < tris.length; t += 6) {
+    const [x0, y0, x1, y1, x2, y2] = tris.slice(t, t + 6)
+    const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    if (Math.abs(det) < 1e-9) continue
+    const top = Math.max(0, Math.floor(Math.min(y0, y1, y2)))
+    const bottom = Math.min(res - 1, Math.ceil(Math.max(y0, y1, y2)))
+    const left = Math.max(0, Math.floor(Math.min(x0, x1, x2)))
+    const right = Math.min(res - 1, Math.ceil(Math.max(x0, x1, x2)))
+    for (let y = top; y <= bottom; y++)
+      for (let x = left; x <= right; x++) {
+        const w1 = ((x + 0.5 - x0) * (y2 - y0) - (x2 - x0) * (y + 0.5 - y0)) / det
+        const w2 = ((x1 - x0) * (y + 0.5 - y0) - (x + 0.5 - x0) * (y1 - y0)) / det
+        if (w1 >= -1e-6 && w2 >= -1e-6 && w1 + w2 <= 1 + 1e-6) field[y * res + x] = 1
+      }
+  }
+  return field
 }
 
 /** The skin the face sits in, once tinted: the median texel at the face triangles' centres, sRGB 0 to 1. */
@@ -134,20 +176,55 @@ function faceSkin(ctx: Ctx, faces: number[][], toAtlas: (i: number) => number[])
 
 /** How far a photo's colour may be pulled toward the skin, per channel, either way: past it a photo is a poor match anyway. */
 const TONE_LIMITS = [0.6, 1.6] as const
+/** The photo's broad colour, its light and shade, is what it shows at this radius (a share of the patch); finer is detail. */
+const BROAD = 0.03
+/** How deep into the photo, as a share of the patch, its broad colour gives way to the skin's toward its edge. */
+const EDGE_BAND = 0.06
 
-/** The patch as an image, every pixel scaled per channel so its skin `from` comes out as `to`. */
+/** The patch as an image, toned to the skin it sits in (tonePatch). */
 function tonedPatch(patch: Rgba, from: Rgb, to: Rgb | undefined): Sized {
-  const gain = [0, 1, 2].map((c) => (to ? THREE.MathUtils.clamp(to[c] / Math.max(from[c], 0.02), ...TONE_LIMITS) : 1))
-  const data = new Uint8ClampedArray(patch.data.length)
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = patch.data[i] * gain[0]
-    data[i + 1] = patch.data[i + 1] * gain[1]
-    data[i + 2] = patch.data[i + 2] * gain[2]
-    data[i + 3] = patch.data[i + 3]
-  }
+  const toned = tonePatch(patch, from, to)
   const out = surface(patch.width, patch.height)
-  ;(out.getContext('2d') as Ctx).putImageData(new ImageData(data, patch.width, patch.height), 0, 0)
+  ;(out.getContext('2d') as Ctx).putImageData(new ImageData(toned.data as Uint8ClampedArray<ArrayBuffer>, patch.width, patch.height), 0, 0)
   return out
+}
+
+/**
+ * The patch scaled per channel so its skin `from` comes out as `to`, and toward its edge its broad colour swapped for
+ * `to` itself while its detail stays. The skin round a photo is one flat colour, and a photo's edge carries its own
+ * light and shade (a jaw darker underneath, a forehead lit from above), so scaled alone it stopped in a line.
+ */
+export function tonePatch(patch: Rgba, from: Rgb, to: Rgb | undefined): Rgba {
+  const res = patch.width
+  const n = res * res
+  const gain = [0, 1, 2].map((c) => (to ? THREE.MathUtils.clamp(to[c] / Math.max(from[c], 0.02), ...TONE_LIMITS) : 1))
+  const rgb = [0, 1, 2].map((c) => {
+    const f = new Float32Array(n)
+    for (let i = 0; i < n; i++) f[i] = (patch.data[i * 4 + c] / 255) * gain[c]
+    return f
+  })
+  const alpha = new Float32Array(n)
+  for (let i = 0; i < n; i++) alpha[i] = patch.data[i * 4 + 3] / 255
+  if (to && patch.height === res) {
+    // how deep inside the photo each pixel sits, and the photo's broad colour from its own pixels alone
+    const inner = blur(alpha.slice(), res, res * EDGE_BAND)
+    const weight = blur(alpha.slice(), res, res * BROAD)
+    for (let c = 0; c < 3; c++) {
+      const broad = rgb[c].map((v, i) => v * alpha[i])
+      blur(broad, res, res * BROAD)
+      for (let i = 0; i < n; i++) {
+        if (alpha[i] <= 0 || weight[i] < 1e-3) continue
+        const keep = THREE.MathUtils.smoothstep(inner[i], 0.55, 0.95)
+        rgb[c][i] += (to[c] - broad[i] / weight[i]) * (1 - keep)
+      }
+    }
+  }
+  const data = new Uint8ClampedArray(patch.data.length)
+  for (let i = 0; i < n; i++) {
+    for (let c = 0; c < 3; c++) data[i * 4 + c] = rgb[c][i] * 255
+    data[i * 4 + 3] = patch.data[i * 4 + 3]
+  }
+  return { width: res, height: patch.height, data }
 }
 
 /**
