@@ -287,9 +287,15 @@ interface Retargeted {
   rot: Float32Array
   /** Per frame, the hips' x y z in metres. */
   pos: Float32Array
-  /** The source's mean facing, in degrees, before any correction, and how far it swings about that. */
+  /**
+   * How far the clip was turned to face ahead, in degrees: by its chest's mean facing, or a looping move by where it
+   * goes. Then where its chest faces on average once turned, and how far it swings about that.
+   */
   yaw: number
+  chest: number
   spread: number
+  /** A looping move's seam (seamOf): at OPEN_SEAM or more, it ended a frame short and was given its first frame again. */
+  seam: number
   /**
    * Where the head looks over the clip, in degrees from level ahead: its highest and lowest, and its furthest aside;
    * and the furthest it leans from upright, any way (a nod or a tilt to a shoulder).
@@ -309,7 +315,7 @@ interface Gait {
   strike: number
 }
 
-function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: number, ours: Target): Retargeted {
+function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: number, ours: Target, way?: number): Retargeted {
   const glb = readGlb(path)
   const bones = bonesOf(glb)
   const anim = glb.json.animations?.[0]
@@ -326,10 +332,9 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
     if (ch.target.path === 'rotation') rotations.set(ch.target.node, track)
     else if (ch.target.path === 'translation' && ch.target.node === hips) hipsTrack = track
   }
-  const frames = Math.max(2, Math.round(duration * FPS) + 1)
+  let frames = Math.max(2, Math.round(duration * FPS) + 1)
   const sourceIndex = RIG.map(([, s]) => indexOf(bones, s))
   const alignedInverse = RIG.map(([, s]) => aligned.get(s)!.clone().invert())
-  const rot = new Float32Array(frames * RIG.length * 4)
   const raw: Vector3[] = []
   const facing: number[] = []
   const tmp: number[] = []
@@ -353,13 +358,36 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
     const fwd = new Vector3(0, 0, 1).applyQuaternion(world[chest].clone().multiply(aligned.get('Spine2')!.clone().invert()))
     facing.push(Math.atan2(fwd.x, fwd.z))
   }
+  // a looping move's last frame has to lead straight back into its first. The library cuts its loops two ways: some
+  // end a frame short of where they began, which played as a jump each time round (the feet skipped about 20 cm a
+  // stride on the strafes), and some end on their first frame again, near enough. The first kind gets its first frame
+  // again, carried on by the hips' drift; the other has what is left of its seam spread over the loop, further down
+  const seam = way === undefined ? 0 : seamOf(worlds, sourceIndex)
+  if (seam >= OPEN_SEAM) {
+    const n = frames
+    const on = (p: Vector3[]) => new Vector3(p[0].x + ((p[n - 1].x - p[0].x) * n) / (n - 1), p[0].y, p[0].z + ((p[n - 1].z - p[0].z) * n) / (n - 1))
+    const hipsThen = on(hipsAt)
+    feet.push(feet[0].clone().add(hipsThen.clone().sub(hipsAt[0])))
+    hipsAt.push(hipsThen)
+    raw.push(on(raw))
+    worlds.push(worlds[0])
+    facing.push(facing[0])
+    frames = n + 1
+  }
+  const rot = new Float32Array(frames * RIG.length * 4)
   // the mean facing, unwrapped
   let sum = 0
   for (let f = 0; f < frames; f++) sum += facing[0] + Math.atan2(Math.sin(facing[f] - facing[0]), Math.cos(facing[f] - facing[0]))
-  const yaw = sum / frames
-  const around = facing.map((f) => Math.atan2(Math.sin(f - yaw), Math.cos(f - yaw)))
+  const chestYaw = sum / frames
+  const around = facing.map((f) => Math.atan2(Math.sin(f - chestYaw), Math.cos(f - chestYaw)))
   const spread = ((Math.max(...around) - Math.min(...around)) * 180) / Math.PI
-  // every clip faces the way its performer faced on average: the library recorded some (strafes, crouches) turned aside
+  // every clip faces the way its performer faced on average: the library recorded some (crouches, idles) turned aside.
+  // A looping move goes `way` instead (0 ahead, a quarter turn to the performer's left): the hero's hips face its aim
+  // while it moves, and the library's strafes run with the body turned most of the way toward where they go, the head
+  // looking back, so facing their chests ahead would turn a strafe into a run straight ahead
+  const travel = new Vector3(hipsAt[frames - 1].x - hipsAt[0].x, 0, hipsAt[frames - 1].z - hipsAt[0].z)
+  const off = Math.atan2(travel.x, travel.z) - (way ?? 0)
+  const yaw = way !== undefined && travel.length() > 0.05 ? Math.atan2(Math.sin(off), Math.cos(off)) : chestYaw
   const turn = new Quaternion().setFromAxisAngle(UP, -yaw)
 
   const ourWorld: Quaternion[] = RIG.map(() => new Quaternion())
@@ -388,6 +416,22 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
     look.aside = Math.max(look.aside, (Math.abs(Math.atan2(ahead.x, ahead.z)) * 180) / Math.PI)
     look.lean = Math.max(look.lean, (new Vector3(0, 1, 0).applyQuaternion(ourWorld[head]).angleTo(upright) * 180) / Math.PI)
   }
+  // a loop that ends on its first frame again: each bone takes on what is left of the seam a little more each frame,
+  // so the last frame is the first exactly
+  const closing = way !== undefined && seam < OPEN_SEAM
+  if (closing) {
+    const q = new Quaternion()
+    const error = new Quaternion()
+    const part = new Quaternion()
+    RIG.forEach((_, k) => {
+      error.fromArray(rot, ((frames - 1) * RIG.length + k) * 4).invert().multiply(q.fromArray(rot, k * 4))
+      if (error.w < 0) error.set(-error.x, -error.y, -error.z, -error.w)
+      for (let f = 1; f < frames; f++) {
+        const at = (f * RIG.length + k) * 4
+        q.fromArray(rot, at).multiply(part.identity().slerp(error, f / (frames - 1))).normalize().toArray(rot, at)
+      }
+    })
+  }
 
   // the hips: the drift over the clip taken out (in place), centred, turned with the clip, and scaled to our height
   const scale = ours.hips.y / sourceHipsY
@@ -399,13 +443,34 @@ function retarget(path: string, aligned: Map<string, Quaternion>, sourceHipsY: n
   })
   const mean = flat.reduce((m, p) => m.add(new Vector3(p.x, 0, p.z)), new Vector3()).multiplyScalar(1 / frames)
   const pos = new Float32Array(frames * 3)
+  // the drift takes the seam out across the ground; a closing loop's height is evened out the same way
+  const rise = closing ? last.y - first.y : 0
   flat.forEach((p, f) => {
     const off = new Vector3(p.x - mean.x, 0, p.z - mean.z).applyQuaternion(turn)
     pos[f * 3] = ours.hips.x + off.x * scale
-    pos[f * 3 + 1] = ours.hips.y + (p.y - sourceHipsY) * scale
+    pos[f * 3 + 1] = ours.hips.y + (p.y - sourceHipsY - (rise * f) / (frames - 1)) * scale
     pos[f * 3 + 2] = ours.hips.z + off.z * scale
   })
-  return { frames, rot, pos, yaw: (yaw * 180) / Math.PI, spread, look, gait: gaitOf(feet, hipsAt, scale) }
+  return { frames, rot, pos, seam, yaw: (yaw * 180) / Math.PI, chest: (Math.atan2(Math.sin(chestYaw - yaw), Math.cos(chestYaw - yaw)) * 180) / Math.PI, spread, look, gait: gaitOf(feet, hipsAt, scale) }
+}
+
+/** Past this (seamOf), a loop ends a frame short of where it began; below it, on its first frame again. */
+const OPEN_SEAM = 0.5
+
+/**
+ * How a loop's last frame leads back into its first, against how its frames lead on from each other either side of
+ * the seam, the median over the bones that move: about 1 when it ends a frame short of where it began, about 0 when
+ * it ends on its first frame again.
+ */
+function seamOf(worlds: Quaternion[][], bones: number[]): number {
+  const n = worlds.length
+  const ratios: number[] = []
+  for (const b of bones) {
+    const near = (worlds[0][b].angleTo(worlds[1][b]) + worlds[n - 2][b].angleTo(worlds[n - 1][b])) / 2
+    if (near > (2 * Math.PI) / 180) ratios.push(worlds[n - 1][b].angleTo(worlds[0][b]) / near)
+  }
+  ratios.sort((a, b) => a - b)
+  return ratios.length ? ratios[ratios.length >> 1] : 0
 }
 
 /** A move's gait (see Gait) from its left foot and hips in the scene, frame by frame; `scale` is ours over the source. */
@@ -438,6 +503,8 @@ const isStance = (r: Retargeted) => r.spread / 2 <= 10 && r.look.up <= 20 && r.l
 const OUT_SETS = ['idle', 'fidget', 'move', 'dance', 'talk']
 /** The looping moves, which the arena blends in step: walking, jogging, running and crouching, every way. */
 const LOOPS = /^(?:walk|jog|run|crouch)(?:_back|_left|_right)?$/
+/** Which way each looping move goes from the hips, the way yaw turns: a quarter turn is the performer's left. */
+const WAYS: Record<string, number> = { '': 0, _left: Math.PI / 2, _back: Math.PI, _right: -Math.PI / 2 }
 
 // ------------------------------------------------------------------------------------------------ writing
 
@@ -479,7 +546,7 @@ for (const gender of ['m', 'f'] as Gender[]) {
   const gait: Record<string, Gait> = {}
   for (const [set, picks] of Object.entries(SETS)) {
     for (const [name, file] of Object.entries(picks[gender])) {
-      const r = retarget(join(folder, `${file}.glb`), aligned, sourceHipsY, ours)
+      const r = retarget(join(folder, `${file}.glb`), aligned, sourceHipsY, ours, LOOPS.test(name) ? WAYS[name.match(/_(?:back|left|right)$/)?.[0] ?? ''] : undefined)
       const out = join(OUT, gender, `${name}.json`)
       writeFileSync(out, JSON.stringify({ frames: r.frames, from: file.split('/').pop(), rot: deltas(r.rot, r.frames, 4, ROT_SCALE), pos: deltas(r.pos, r.frames, 3, POS_SCALE) }))
       const size = gzipSync(readFileSync(out)).length
@@ -488,8 +555,8 @@ for (const gender of ['m', 'f'] as Gender[]) {
       if (LOOPS.test(name)) gait[name] = r.gait
       sets[into][name] = Math.round(((r.frames - 1) / FPS) * 100) / 100
       const looks = `head ${r.look.down.toFixed(0)}..${r.look.up.toFixed(0)}° ±${r.look.aside.toFixed(0)}° lean ${r.look.lean.toFixed(0)}°`
-      const strides = LOOPS.test(name) ? `  ${r.gait.speed} m/s, ${r.gait.strides} stride${r.gait.strides > 1 ? 's' : ''}, lands ${r.gait.strike}s` : ''
-      report.push(`${gender} ${into.padEnd(6)} ${name.padEnd(12)} ${String(r.frames).padStart(4)} frames  ${(size / 1024).toFixed(1).padStart(5)} KB gzipped  facing ${r.yaw.toFixed(1).padStart(6)}° ±${(r.spread / 2).toFixed(0)}°  ${looks}${strides}`)
+      const strides = LOOPS.test(name) ? `  ${r.gait.speed} m/s, ${r.gait.strides} stride${r.gait.strides > 1 ? 's' : ''}, lands ${r.gait.strike}s, seam ${r.seam.toFixed(2)}${r.seam >= OPEN_SEAM ? ' (+1 frame)' : ''}` : ''
+      report.push(`${gender} ${into.padEnd(6)} ${name.padEnd(12)} ${String(r.frames).padStart(4)} frames  ${(size / 1024).toFixed(1).padStart(5)} KB gzipped  turned ${r.yaw.toFixed(1).padStart(6)}°, chest ${r.chest.toFixed(0).padStart(4)}° ±${(r.spread / 2).toFixed(0)}°  ${looks}${strides}`)
     }
   }
   // the body it was fitted to at rest, so a body of another size can take each bone's change from rest (anim-library.ts)

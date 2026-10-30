@@ -91,7 +91,7 @@ describe('arena client core (U13)', () => {
 describe('how a hero stands while it moves (Forge goal, phase 1)', () => {
   const deg = (d: number) => (d * Math.PI) / 180
   // a long frame, so the hips finish turning
-  const still = { body: 0, twist: 0, back: false, pivot: false, legs: 0 }
+  const still = { body: 0, twist: 0, back: false, pivot: false, legs: 0, heading: 0 }
   const settled = (aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square' = 'run') => stance(still, aim, move, mode, 1)
 
   it('strafes on a diagonal: the hips turn partway, the legs run the rest, the chest stays on the aim (phase 2)', () => {
@@ -139,14 +139,31 @@ describe('how a hero stands while it moves (Forge goal, phase 1)', () => {
     }
   })
 
+  it('strafes square to its aim on clips of its own: the hips face the aim, the heading says which way it goes', () => {
+    // moving along +x while aiming along +z: the hero's left, its hips and chest on the aim, its legs left to the clips
+    const left = stance(still, 0, { x: 1, z: 0 }, 'run', 1, true)
+    expect(left.body).toBeCloseTo(0)
+    expect(left.twist).toBeCloseTo(0)
+    expect(left.legs).toBe(0)
+    expect(left.heading).toBeCloseTo(deg(90))
+    // backing away it still faces the aim, and counts as running backwards for the dash it hops back on
+    const away = stance(still, 0, { x: 0.1, z: -1 }, 'run', 1, true)
+    expect(away.body).toBeCloseTo(0)
+    expect(away.back).toBe(true)
+    expect(Math.abs(away.heading)).toBeCloseTo(Math.PI - Math.atan(0.1))
+    // the heading is from where the hips face now, as they turn toward the aim
+    const turning = stance({ ...still, body: deg(40) }, 0, { x: 0, z: 1 }, 'run', 1 / 60, true)
+    expect(turning.heading).toBeCloseTo(-turning.body)
+  })
+
   it('squares up to its aim flying', () => {
-    expect(settled(deg(30), undefined, 'square')).toEqual({ body: expect.closeTo(deg(30)), twist: expect.closeTo(0), back: false, pivot: false, legs: 0 })
+    expect(settled(deg(30), undefined, 'square')).toEqual({ body: expect.closeTo(deg(30)), twist: expect.closeTo(0), back: false, pivot: false, legs: 0, heading: 0 })
     expect(settled(0, { x: 1, z: 0 }, 'square').body).toBeCloseTo(0)
   })
 
   it('keeps its feet still standing: the chest follows the aim, and the hips turn only once it is far round', () => {
     // a small turn of the aim twists the chest and leaves the hips (and so the feet) where they were
-    expect(settled(deg(30), undefined, 'stand')).toEqual({ body: 0, twist: expect.closeTo(deg(30)), back: false, pivot: false, legs: 0 })
+    expect(settled(deg(30), undefined, 'stand')).toEqual({ body: 0, twist: expect.closeTo(deg(30)), back: false, pivot: false, legs: 0, heading: 0 })
     // a big one turns the hips at their rate, and they keep turning until they face the aim, past the dead zone
     let s = stance(still, deg(90), undefined, 'stand', 1 / 60)
     expect(s.pivot).toBe(true)

@@ -8,7 +8,10 @@ import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
 import { STANCE, type AnimState } from './animation.js'
+import { fitClip, restPose } from './anim-library.js'
 import { hipYaw, legReach, planter, turn } from './feet.js'
+import { GAIT_CLIPS, GAIT_TIERS, GAIT_WAYS, PACE_LIMITS, pickTier, strideSeconds, strideTime, tierSpeed, wayWeights, type GaitTier } from './gait.js'
+import type { LibraryGait } from './library-gait.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel, type ClothPrint } from './wear/dress-model.js'
@@ -200,6 +203,79 @@ export function castClip(build: Build, slot: string): CastClip {
   return { clip: kind === 'projectile' && slot === 'basic' ? 'shoot' : 'cast', from: 0 }
 }
 
+/** Seconds a change of pace (walking, jogging, running) blends over. */
+const TIER_FADE = 0.25
+/** How much of a strafe's turn toward where the hero goes its back takes off again while it runs, its chest toward its aim. */
+const SQUARE = 0.6
+/** How much of the head's tilt toward a shoulder the neck takes back while the gait carries the body. */
+const LEVEL = 0.8
+
+/**
+ * The library's walks, jogs and runs every way (gait.ts), fitted to one body: every clip held to one shared stride and
+ * weighted by how much the gait shows, its tier's share (eased, so a change of pace blends) and its way's. Their legs
+ * halves carry a cast on the move.
+ */
+export function gaitPlayer(mixer: THREE.AnimationMixer, gait: LibraryGait, fit: (clip: THREE.AnimationClip) => THREE.AnimationClip) {
+  const clips = GAIT_CLIPS.map((name) => fit(gait.clips.get(name)!))
+  const durations = Object.fromEntries(clips.map((clip, k) => [GAIT_CLIPS[k], clip.duration]))
+  const whole = clips.map((clip) => mixer.clipAction(clip))
+  const legs = clips.map((clip) => mixer.clipAction(halvesOf(clip).legs))
+  for (const action of [...whole, ...legs]) {
+    action.play()
+    action.timeScale = 0
+    action.weight = 0
+  }
+  const tiers = GAIT_TIERS.map((_, k) => (k === 0 ? 1 : 0))
+  let tier: GaitTier = 'walk'
+  let phase = 0
+  return {
+    /**
+     * Carry the stride on at `speed` (metres a second on the clips' own body), going `heading` from the hips (see
+     * Stance), and weight every clip: `shown` is how much of the body the gait has, `striding` how much of a cast's legs.
+     */
+    update(dt: number, shown: number, striding: number, speed: number, heading: number) {
+      const ways = wayWeights(heading)
+      if (shown + striding > 0) tier = pickTier(gait.gaits, ways, speed, tier)
+      let sum = 0
+      GAIT_TIERS.forEach((t, k) => {
+        const want = t === tier ? 1 : 0
+        tiers[k] += Math.sign(want - tiers[k]) * Math.min(Math.abs(want - tiers[k]), dt / TIER_FADE)
+        sum += tiers[k]
+      })
+      // the blend's own speed and stride at 1x, played quicker or slower to cover the ground, within limits
+      let own = 0
+      let stride = 0
+      GAIT_TIERS.forEach((t, k) => {
+        tiers[k] /= sum
+        own += tiers[k] * tierSpeed(gait.gaits, t, ways)
+        stride += tiers[k] * strideSeconds(gait.gaits, durations, t, ways)
+      })
+      const rate = Math.min(PACE_LIMITS[1], Math.max(PACE_LIMITS[0], speed / own))
+      phase = (phase + (dt * rate) / stride) % 1
+      GAIT_CLIPS.forEach((name, k) => {
+        // GAIT_CLIPS runs tier by tier, each tier's ways in GAIT_WAYS's order
+        const share = tiers[Math.floor(k / GAIT_WAYS.length)] * ways[k % GAIT_WAYS.length]
+        whole[k].weight = shown * share
+        legs[k].weight = striding * share
+        whole[k].time = legs[k].time = strideTime(gait.gaits[name], durations[name], phase)
+      })
+    },
+  }
+}
+
+const between = new THREE.Quaternion()
+const partway = new THREE.Quaternion()
+
+/**
+ * A bone's turn on hips that stand one way, as it would stand on hips that stand another (`castHips`, both turns from
+ * the same parent), `share` of the way: the back of a cast played over a gait's hips holds itself as the cast does.
+ * Written to `out`, which may be `spine`.
+ */
+export function standOn(spine: THREE.Quaternion, hips: THREE.Quaternion, castHips: THREE.Quaternion, share: number, out: THREE.Quaternion): THREE.Quaternion {
+  between.copy(hips).invert().multiply(castHips)
+  return out.copy(spine).premultiply(partway.identity().slerp(between, share))
+}
+
 export interface CharacterView {
   root: THREE.Group
   pose: (state: AnimState, dt: number, moving: boolean) => void
@@ -216,9 +292,15 @@ export interface CharacterView {
    * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and cover
    * the ground at `speed` metres a second: the run plays at whatever pace keeps a planted foot from sliding. `planted`,
    * the hero stands on the ground, so its feet stay where they land (see feet.ts). `legs` turns each leg about its hip
-   * joint, so a strafing hero runs on a diagonal under hips that face nearer its aim.
+   * joint, so a strafing hero runs on a diagonal under hips that face nearer its aim. `heading`, which way it moves
+   * from its hips (see Stance), picks the gait's ways for a view that `strafes`.
    */
-  lean: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number) => void
+  lean: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number) => void
+  /**
+   * Whether it walks, jogs and runs on the motion library's clips every way (Forge goal, phase B): its hips square to
+   * its aim, sidestepping and backpedalling (see `stance`). Otherwise it runs on its body's own run, its legs swung.
+   */
+  strafes: boolean
 }
 
 /** How a twist is shared up the back, hips to head. */
@@ -270,7 +352,7 @@ export function heldTip(socket: THREE.Object3D): THREE.Vector3 | undefined {
 }
 
 /** A posed, animated clone of a build for one hero; `atlas` is its own atlas when it has a photo face, `wear` its outfit. */
-export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null, wear?: LoadedWear): CharacterView {
+export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color, build: Build, atlas: THREE.Texture | null = null, wear?: LoadedWear, gait?: LibraryGait): CharacterView {
   const root = new THREE.Group()
   const scene = cloneSkinned(file.scene) as THREE.Group
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
@@ -281,6 +363,15 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   root.add(scene)
   const mixer = new THREE.AnimationMixer(scene)
   const actions = new Map(file.animations.map((clip) => [clip.name, mixer.clipAction(clip)]))
+  // with the motion library's gait (Forge goal, phase B), fitted to this body from its rest as the file has it, the
+  // hero stands in the library's stance and moves on its walks, jogs and runs; 'run' becomes a stand-in with no tracks
+  // that only carries the run's fades and weight, which the gait plays under
+  const rest = gait && restPose(file.scene, gait.bones)
+  const strides = gait && rest ? gaitPlayer(mixer, gait, (clip) => fitClip(clip, gait.gender, look.build, rest)) : undefined
+  if (gait && rest && strides) {
+    if (gait.stance) actions.set('idle', mixer.clipAction(fitClip(gait.stance, gait.gender, look.build, rest)))
+    actions.set('run', mixer.clipAction(new THREE.AnimationClip('run', 1, [])))
+  }
   for (const [name, action] of actions) {
     if (!LOCOMOTION.has(name)) {
       action.setLoop(THREE.LoopOnce, 1)
@@ -310,6 +401,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const back = Object.keys(TWIST_SHARE).flatMap((name) => scene.getObjectByName(name) ?? [])
   let twist = 0
   let backwards = false
+  let heading = 0
   // metres a second the hero covers, as last told (see `lean`); undefined, the run plays as it was made
   let ground: number | undefined
   const keyed = runSpeed(file)
@@ -329,7 +421,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     return pair
   }
   const run = actions.get('run')
-  const runLegs = run && mixer.clipAction(halvesOf(run.getClip()).legs)
+  const runLegs = run && !strides ? mixer.clipAction(halvesOf(run.getClip()).legs) : undefined
   // in the air the legs under a cast hang as they do in a jump
   const air = actions.get('air')
   const airLegs = air && mixer.clipAction(halvesOf(air.getClip()).legs)
@@ -348,11 +440,11 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     if (twisted) back.forEach((bone, k) => bone.quaternion.copy(untwisted[k]))
     twisted = false
   }
-  const turnChest = () => {
-    if (!twist) return
+  const turnChest = (amount: number) => {
+    if (!amount) return
     back.forEach((bone, k) => {
       untwisted[k].copy(bone.quaternion)
-      bone.rotateY(twist * TWIST_SHARE[bone.name])
+      bone.rotateY(amount * TWIST_SHARE[bone.name])
     })
     twisted = true
   }
@@ -393,6 +485,78 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     })
     swung = true
   }
+  // the library's strafes run with the hips and chest turned most of the way toward where the hero goes, the head
+  // looking back: the back twists the chest back toward the aim the hero faces (see `squared`), and the neck turns the
+  // head the rest of the way, as far as the gait has the body, after the clip has posed it; like the twist, put back
+  // before the next update
+  const chest = strides ? scene.getObjectByName('upper_chest') : undefined
+  const neck = strides ? scene.getObjectByName('neck') : undefined
+  const head = scene.getObjectByName('head')
+  const unsteadied = new THREE.Quaternion()
+  const at = new THREE.Vector3()
+  const facing = new THREE.Quaternion()
+  const own = new THREE.Quaternion()
+  const unown = new THREE.Quaternion()
+  const size = new THREE.Vector3()
+  const ahead = new THREE.Vector3()
+  /** How far round from where the hero faces a bone faces, as posed now; undefined for one facing nearly straight up or down. */
+  const yawFromRoot = (bone: THREE.Object3D): number | undefined => {
+    bone.updateWorldMatrix(true, false)
+    root.matrixWorld.decompose(at, own, size)
+    bone.matrixWorld.decompose(at, facing, size)
+    ahead.set(0, 0, 1).applyQuaternion(facing.premultiply(unown.copy(own).invert()))
+    return Math.hypot(ahead.x, ahead.z) < 0.3 ? undefined : Math.atan2(ahead.x, ahead.z)
+  }
+  /** The stance's twist, and as much again as squares the chest `share` of the way back to where the hero faces. */
+  const squared = (share: number) => {
+    const off = chest && share > 0 ? yawFromRoot(chest) : undefined
+    return off === undefined ? twist : twist - off * share
+  }
+  let steadied = false
+  const unsteady = () => {
+    if (steadied) neck!.quaternion.copy(unsteadied)
+    steadied = false
+  }
+  const steadyHead = (share: number) => {
+    const off = neck && head && share > 0 ? yawFromRoot(head) : undefined
+    if (off === undefined) return
+    unsteadied.copy(neck!.quaternion)
+    yawQ.setFromAxisAngle(at.set(0, 1, 0).applyQuaternion(own), -off * share)
+    turn(neck!, yawQ)
+    // and levels it: a strafe leans the body into the run, but the eyes stay level
+    head!.matrixWorld.decompose(at, facing, size)
+    ahead.set(0, 1, 0).applyQuaternion(facing).applyQuaternion(unown.copy(own).invert())
+    yawQ.setFromAxisAngle(at.set(0, 0, 1).applyQuaternion(own), Math.atan2(ahead.x, ahead.y) * LEVEL * share)
+    turn(neck!, yawQ)
+    steadied = true
+  }
+  // a cast on the move stands its back on the cast's own hips, not the gait's. A cast's back is made to carry its arms
+  // from how its hips stand (a shot tips the hips back and the back forward again over them), so on a strafe's hips,
+  // turned and leaning into the run, the cast leaned twice as far, nearly flat. The hips stay the gait's and the spine
+  // turns by the difference, as far as the gait carries the cast's legs; like the twist, put back before the next update
+  const hipsBone = strides ? scene.getObjectByName('hips') : undefined
+  const spine = strides ? scene.getObjectByName('spine') : undefined
+  const castHips = new Map<THREE.AnimationClip, THREE.Interpolant | null>()
+  const castHip = new THREE.Quaternion()
+  const unstood = new THREE.Quaternion()
+  let stood = false
+  const unstand = () => {
+    if (stood) spine!.quaternion.copy(unstood)
+    stood = false
+  }
+  const standOnCast = (legs: THREE.AnimationAction | undefined, share: number) => {
+    if (!hipsBone || !spine || !legs || share <= 0) return
+    const clip = legs.getClip()
+    let hipsAt = castHips.get(clip)
+    if (hipsAt === undefined) {
+      const track = clip.tracks.find((t) => t.name === 'hips.quaternion')
+      castHips.set(clip, (hipsAt = track ? new THREE.QuaternionLinearInterpolant(track.times, track.values, 4, new Float32Array(4)) : null))
+    }
+    if (!hipsAt) return
+    unstood.copy(spine.quaternion)
+    standOn(spine.quaternion, hipsBone.quaternion, castHip.fromArray(hipsAt.evaluate(legs.time) as Float32Array), share, spine.quaternion)
+    stood = true
+  }
   const plantFeet = () => {
     if (!plants || posed === undefined) return
     const dt = posed
@@ -418,10 +582,13 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   return {
     root,
     pose: (state, dt, moving) => {
-      // undone in the reverse order they went on: the feet's bend, then the legs' swing, then the twist
+      // undone in the reverse order they went on: the feet's bend, then the legs' swing, the head's steadying, the twist,
+      // the back stood on a cast's hips
       unbend()
       unswing()
+      unsteady()
       untwist()
+      unstand()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
       // a dash away from the aim hops backwards, where the model has the clip
       const named = state.kind === 'dash' && backwards && actions.has('dash_back') ? 'dash_back' : state.kind
@@ -468,7 +635,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         if (!layer) shown = undefined
       }
       // the run keeps pace with the ground it covers, so a planted foot stays put; backing away, it plays backwards
-      if (current && currentName === 'run') {
+      if (current && currentName === 'run' && !strides) {
         const pace = keyed && ground !== undefined ? Math.min(PACE[1], Math.max(PACE[0], ground / (keyed * root.scale.x))) : 1
         current.timeScale = backwards ? -pace : pace
       }
@@ -488,8 +655,14 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
           airLegs.time = air.time
         }
       }
+      // the library's gait plays under the stand-in run, as much as its fades and a cast leave it, and under a cast's legs
+      const gaitShare = strides ? actions.get('run')!.getEffectiveWeight() : 0
+      strides?.update(dt, gaitShare, layer * striding, ground !== undefined ? ground / root.scale.x : 0, heading)
       mixer.update(dt)
-      turnChest()
+      standOnCast(shown?.legs, layer * striding)
+      // running, the chest comes SQUARE of the way back round to the aim; casting on the move, all of it, so the cast aims true
+      turnChest(squared(Math.min(1, gaitShare * SQUARE + layer * striding)))
+      steadyHead(gaitShare)
       swingLegs()
       posed = dt
     },
@@ -500,13 +673,15 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       return false
     },
     hand: (dir, out) => leadHand(hands, dir, out),
-    lean: (t, b, speed, onGround = false, angle = 0) => {
+    lean: (t, b, speed, onGround = false, angle = 0, way = 0) => {
       twist = t
       backwards = b
       ground = speed
       planted = onGround
       swing = angle
+      heading = way
     },
+    strafes: !!strides,
     tip: (out) => {
       if (tip === null) tip = heldTip(holder!)
       return tip && holder ? holder.localToWorld(out.copy(tip)) : undefined

@@ -449,10 +449,12 @@ function drawHeroes(
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
     const mode = pose.kind === 'slide' ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
-    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled) : undefined
+    // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
+    const strafes = view.strafes === true && pose.kind !== 'dash'
+    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
     stances[i] = s
     // standing on the ground, the feet stay where they land
-    if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs)
+    if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading)
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed

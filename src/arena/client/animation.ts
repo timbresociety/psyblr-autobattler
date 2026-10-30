@@ -113,8 +113,8 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
 /**
  * Where a hero's hips face, how far its chest twists back toward its aim, whether it runs backwards, whether it's
- * turning on the spot to face its aim, and how far its legs run at an angle to its hips (radians, the same way round
- * as yaw).
+ * turning on the spot to face its aim, how far its legs run at an angle to its hips, and which way it moves from its
+ * hips (radians, the same way round as yaw: a quarter turn is its left; 0 when it isn't moving).
  */
 export interface Stance {
   body: number
@@ -122,6 +122,7 @@ export interface Stance {
   back: boolean
   pivot: boolean
   legs: number
+  heading: number
 }
 
 /**
@@ -131,9 +132,11 @@ export interface Stance {
  * put: the hips hold while the chest follows the aim, and only once the aim is STANCE.pivot round do the hips turn, all
  * the way to face it. In the air the whole body faces the aim. Sliding, the hips face along the slide and the chest
  * turns toward the aim as far as it twists. `last` is last frame's stance: the hips turn from there at STANCE.turn.
- * `move` is how far the hero moved, if it did.
+ * `move` is how far the hero moved, if it did. A hero that `strafes` (its view sidesteps and backpedals on clips of
+ * its own: see gait.ts) runs with its hips square to its aim whichever way it goes, its legs and the clips doing the
+ * rest; it still counts as running backwards when it moves away from its aim, for the dash it hops back on.
  */
-export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square' | 'slide', dt: number): Stance {
+export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square' | 'slide', dt: number, strafes = false): Stance {
   const from = last?.body ?? aim
   let target = aim
   let back = false
@@ -144,7 +147,7 @@ export function stance(last: Stance | undefined, aim: number, move: { x: number;
     const off = wrap(heading - aim)
     back = Math.abs(off) > (last?.back ? STANCE.back.leave : STANCE.back.enter)
     // the hips go part of the way round toward the line the legs run along, forwards or backwards
-    target = wrap(aim + clamp(back ? wrap(off + Math.PI) : off, STANCE.warp))
+    if (!strafes) target = wrap(aim + clamp(back ? wrap(off + Math.PI) : off, STANCE.warp))
   } else if (mode === 'slide' && move) {
     heading = Math.atan2(move.x, move.z)
     target = heading
@@ -160,11 +163,11 @@ export function stance(last: Stance | undefined, aim: number, move: { x: number;
     twist = Math.sign(twist) * STANCE.twist
     if (mode !== 'slide') hips = wrap(aim - twist)
   }
-  // the legs make up the rest of the way to the line they run along, easing there
-  const wanted = heading === undefined ? 0 : clamp(wrap((back ? heading + Math.PI : heading) - hips), STANCE.legs)
+  // the legs make up the rest of the way to the line they run along, easing there; a strafing hero's clips run it
+  const wanted = heading === undefined || strafes ? 0 : clamp(wrap((back ? heading + Math.PI : heading) - hips), STANCE.legs)
   const was = last?.legs ?? 0
   const legs = was + Math.sign(wanted - was) * Math.min(Math.abs(wanted - was), STANCE.swing * dt)
-  return { body: hips, twist, back, pivot, legs }
+  return { body: hips, twist, back, pivot, legs, heading: heading === undefined ? 0 : wrap(heading - hips) }
 }
 
 const clamp = (a: number, limit: number) => Math.max(-limit, Math.min(limit, a))

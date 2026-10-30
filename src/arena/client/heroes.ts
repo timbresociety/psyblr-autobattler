@@ -8,10 +8,12 @@ import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
 import { formSize, formSlot } from '../../forge/form.js'
 import type { FormBody } from '../../charter/skill-look.js'
+import type { Gender } from '../../charter/look.js'
 import { formLookOf, skillLookOf } from '../recipes/looks.js'
 import { formCharacterLook } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
+import { libraryGait } from './library-gait.js'
 import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
 
@@ -51,7 +53,9 @@ export interface HeroView {
   /** The far end of what the hero holds in its right hand, as last posed: where a weapon's swing trail runs from. */
   tip?: (out: THREE.Vector3) => THREE.Vector3 | undefined
   /** Twist the chest from the hips, run backwards or not, covering the ground this fast (see CharacterView.lean); without it, the view faces its aim whole. */
-  lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number) => void
+  lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number) => void
+  /** Whether it sidesteps and backpedals on clips of its own, its hips square to its aim (see CharacterView.strafes). */
+  strafes?: boolean
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
@@ -82,8 +86,13 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const dressed = async (shape: Build, body?: FormBody) => {
     const shapeLook = formCharacterLook(characterLook(shape, hue), body)
     const file = await load(shapeLook.build)
-    const [atlas, wear] = await Promise.all([heroAtlas(file, shapeLook), loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)])
-    return characterView(file, shapeLook, color, build, atlas, wear)
+    // it moves on the motion library's gait and stands in its chosen stance, where the library loads (Forge goal, phase B)
+    const [atlas, wear, gait] = await Promise.all([
+      heroAtlas(file, shapeLook),
+      loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
+      libraryGait(shapeLook.build.charAt(0) as Gender, build.look?.idle),
+    ])
+    return characterView(file, shapeLook, color, build, atlas, wear, gait)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
@@ -120,7 +129,10 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     settle: (dt, far, still) => shown().settle(dt, far, still),
     hand: (dir, out) => shown().hand(dir, out),
     tip: (out) => shown().tip(out),
-    lean: (twist, back, speed, planted, legs) => shown().lean(twist, back, speed, planted, legs),
+    lean: (twist, back, speed, planted, legs, heading) => shown().lean(twist, back, speed, planted, legs, heading),
+    get strafes() {
+      return shown().strafes
+    },
     setForm: (transformed, next) => {
       if (formView) {
         if (formView.root.visible === transformed) return

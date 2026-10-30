@@ -8,7 +8,8 @@ import { lookFor } from '../recipes/looks.js'
 import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
 import { castClip as stageClip } from '../../ui/common/hero-look.js'
 import * as THREE from 'three'
-import { castClip, groundSpeed, heldTip, leadHand, splitClip } from './characters.js'
+import { castClip, gaitPlayer, groundSpeed, heldTip, leadHand, splitClip, standOn } from './characters.js'
+import { GAIT_CLIPS, PACE_LIMITS, strideTime, type Gait } from './gait.js'
 
 const ids = (outfit: ReturnType<typeof characterLook>['outfit']) => Object.fromEntries(Object.entries(outfit).map(([slot, w]) => [slot, w!.id]))
 
@@ -206,5 +207,84 @@ describe('feet that stay planted (Forge goal, phase 2)', () => {
     const { body, clip } = runner()
     body.remove(body.getObjectByName('foot_R')!)
     expect(groundSpeed(body, clip)).toBeUndefined()
+  })
+})
+
+describe('walking, jogging and running every way on the motion library (Forge goal, phase B)', () => {
+  // the masculine library's gaits as scripts/rpm-anim.ts measured them, rounded
+  const speeds: Record<string, number> = { walk: 1.58, jog: 3.39, run: 5.45 }
+  const gaits: Record<string, Gait> = Object.fromEntries(GAIT_CLIPS.map((name) => [name, { speed: speeds[name.split('_')[0]] * (name.endsWith('_back') ? 0.8 : 1), strides: name.startsWith('walk') ? 2 : 1, strike: 0.25 }]))
+  const durations: Record<string, number> = { walk: 1.92, jog: 0.71, run: 0.58 }
+  // a bare rig whose every clip moves its hips and turns its spine, so each clip has a legs half and a top half
+  const rig = () => {
+    const body = new THREE.Group()
+    for (const name of ['hips', 'spine']) body.add(Object.assign(new THREE.Object3D(), { name }))
+    const clips = new Map(
+      GAIT_CLIPS.map((name) => {
+        const d = durations[name.split('_')[0]]
+        return [name, new THREE.AnimationClip(name, d, [new THREE.VectorKeyframeTrack('hips.position', [0, d], [0, 0, 0, 0, 1, 0]), new THREE.QuaternionKeyframeTrack('spine.quaternion', [0, d], [0, 0, 0, 1, 0, 0, 0, 1])])]
+      }),
+    )
+    const mixer = new THREE.AnimationMixer(body)
+    const player = gaitPlayer(mixer, { gender: 'm', clips, gaits, bones: [] }, (clip) => clip)
+    const action = (name: string) => mixer.existingAction(clips.get(name)!)!
+    return { body, mixer, player, action }
+  }
+  const weights = (of: (name: string) => THREE.AnimationAction) => Object.fromEntries(GAIT_CLIPS.map((name) => [name, of(name).weight]).filter(([, w]) => (w as number) > 1e-9))
+
+  it('plays the two ways either side of where it goes, at its pace, every clip on one stride', () => {
+    const { player, action } = rig()
+    // walking forward and to its left at once
+    player.update(1 / 60, 1, 0, 1.5, Math.PI / 4)
+    expect(weights(action)).toEqual({ walk: expect.closeTo(0.5), walk_left: expect.closeTo(0.5) })
+    // both feet land together: each clip is as far through its stride as the other, from its own left-foot landing
+    const phase = ((1 / 60) * Math.max(PACE_LIMITS[0], 1.5 / 1.58)) / (1.92 / 2)
+    for (const name of ['walk', 'walk_left']) expect(action(name).time).toBeCloseTo(strideTime(gaits[name], 1.92, phase))
+    // only as much as the gait shows: half of it, a quarter each way
+    player.update(1 / 60, 0.5, 0, 1.5, Math.PI / 4)
+    expect(action('walk').weight).toBeCloseTo(0.25)
+  })
+
+  it('changes pace by blending into the next tier over a moment, a tier at a time', () => {
+    const { player, action } = rig()
+    player.update(1 / 60, 1, 0, 1.5, 0)
+    // sprinting off: a jog first, the walk fading out under it, then the run
+    player.update(0.1, 1, 0, 5.6, 0)
+    const early = weights(action)
+    expect(early.walk).toBeGreaterThan(0)
+    expect(early.jog).toBeGreaterThan(0)
+    expect(early.run).toBeUndefined()
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 5.6, 0)
+    expect(weights(action)).toEqual({ run: expect.closeTo(1) })
+    // backing away it runs backwards
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 4.4, Math.PI)
+    expect(weights(action)).toEqual({ run_back: expect.closeTo(1) })
+  })
+
+  it('holds a cast’s back as the cast’s own hips would, over hips leaning into a strafe', () => {
+    const turned = (x: number, y: number, z: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z))
+    // the strafe's hips turned most of the way toward where it goes and leaning into the run; the cast's tipped back
+    const strafing = turned(0, 1.4, 0.55)
+    const casting = turned(-0.35, 0, 0)
+    // a cast's spine leans forward over its hips, to stand the chest up again
+    const spine = turned(0.4, 0.1, 0)
+    const stood = standOn(spine, strafing, casting, 1, new THREE.Quaternion())
+    // on the strafe's hips, the spine stands as it does on the cast's: upright again, facing the aim
+    expect(strafing.clone().multiply(stood).angleTo(casting.clone().multiply(spine))).toBeCloseTo(0)
+    // part of the way, part of the difference; none of the way, the spine as the clips have it
+    const half = standOn(spine, strafing, casting, 0.5, new THREE.Quaternion())
+    const gap = strafing.clone().multiply(spine).angleTo(casting.clone().multiply(spine))
+    expect(strafing.clone().multiply(half).angleTo(casting.clone().multiply(spine))).toBeCloseTo(gap / 2)
+    expect(standOn(spine, strafing, casting, 0, new THREE.Quaternion()).angleTo(spine)).toBeCloseTo(0)
+  })
+
+  it('runs under a cast with its legs alone', () => {
+    const { body, mixer, player, action } = rig()
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 0, 0.7, 5.6, -Math.PI / 2)
+    expect(weights(action)).toEqual({})
+    // the run to its right moves the hips (a legs track) as far as it shows: 0.7 of the way the clip has them now
+    mixer.update(0)
+    const t = action('run_right').time
+    expect(body.getObjectByName('hips')!.position.y).toBeCloseTo((0.7 * t) / durations.run)
   })
 })
