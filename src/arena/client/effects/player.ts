@@ -162,6 +162,11 @@ interface Ghost {
   skeletons: THREE.Skeleton[]
 }
 
+/** Dust off the ground, air under a second jump, and each team's glow (phase 2). */
+const DUST = new THREE.Color(0.78, 0.72, 0.62)
+const AIR = new THREE.Color(0.9, 0.94, 1)
+const TEAM_GLOW = [new THREE.Color(0.31, 0.64, 1), new THREE.Color(1, 0.42, 0.29)] as const
+
 export function createEffects(ctrl: ArenaController, packages: (HeroPackage | undefined)[] = []): Effects {
   const { scene, arena } = ctrl
   const atlas = spriteAtlas()
@@ -693,6 +698,26 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           puff({ at, count: 30, kind: 'glow', life: 0.9, size: [0.12, 0.08], color: new THREE.Color(0.45, 0.3, 0.16), speed: 8, gravity: 12, alpha: 1 })
           show('shock', new THREE.Color(1, 0.9, 0.7), 0.5, (m) => m.position.set(at.x, 0.06, at.z), (p, m) => (m.scale.setScalar(1 + 4 * p), setOpacity(m, 0.8 * (1 - p))))
           shake = Math.max(shake, 0.4)
+        } else if (e.type === 'move') {
+          // moving like Deadlock (phase 2): dust kicked up by a jump, a hard landing or a slide, a puff of air under a
+          // second jump, and a dash leaves a faint copy of the hero where it set off
+          const hero = arena.match.heroes[e.hero]
+          const feet = { x: hero.position.x, y: hero.position.y + 0.05, z: hero.position.z }
+          const fall = e.speed ?? 0
+          if (e.move === 'jump') puff({ at: feet, count: 4, kind: 'smoke', life: 0.7, size: [0.25, 0.8], color: DUST, speed: 1.4, spread: 0.2, drag: 3, up: 0.2, alpha: 0.28, spin: 0.6 })
+          else if (e.move === 'land' && fall > 5) puff({ at: feet, count: Math.min(14, 3 + Math.round(fall / 2)), kind: 'smoke', life: 0.9, size: [0.3, 1.1], color: DUST, speed: 1 + fall * 0.12, spread: 0.3, drag: 3, up: 0.12, alpha: 0.32, spin: 0.6 })
+          else if (e.move === 'air-jump') puff({ at: feet, count: 6, kind: 'smoke', life: 0.45, size: [0.3, 1.0], color: AIR, speed: 2.4, spread: 0.2, drag: 4, alpha: 0.22, spin: 1 })
+          else if (e.move === 'dash') {
+            if (!hero.airborne) puff({ at: feet, count: 5, kind: 'smoke', life: 0.7, size: [0.3, 0.9], color: DUST, speed: 1.6, spread: 0.2, drag: 3, up: 0.25, alpha: 0.3, spin: 0.6 })
+            const view = ctrl.views[e.hero]
+            if (view) ghost(e.hero, view.root.position.clone(), hot(TEAM_GLOW[hero.team], 0.1), 0.22)
+          } else if (e.move === 'slide') {
+            for (let k = 0; k < 9; k++) {
+              later(k * 0.09, () => {
+                if (hero.slide) puff({ at: { x: hero.position.x, y: hero.position.y + 0.05, z: hero.position.z }, count: 2, kind: 'smoke', life: 0.6, size: [0.2, 0.75], color: DUST, speed: 0.7, drag: 3, up: 0.3, alpha: 0.24, spin: 0.5 })
+              })
+            }
+          }
         } else if (e.type === 'death') {
           // the engine sends no form end for a hero that dies transformed; the death has its own flash
           forms.end(e.hero, true)

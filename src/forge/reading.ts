@@ -231,7 +231,7 @@ The wardrobe. A hero wears one item a slot: hair, beard, head (hats, helmets, ho
 - colors: a '#rrggbb' per channel, in the item's channel order, '' to keep a channel's own. finishes the same way: cotton, silk, denim, knit, leather, metal or glow.
 - print: one of the prints, on the item's first channel, or ''. knobs: cuts the item allows, each 0 (shortest) to 1 (as made).
 
-The kit has six slots: basic (the basic attack, left click), active1 (Q), active2 (E), passive, ultimate (R) and movement (Shift). For each slot give:
+The kit has six slots: basic (the basic attack, left click), active1 (Q), active2 (E), passive, ultimate (R) and movement (F). For each slot give:
 - name: the player's, or two or three evocative words that fit the hero. Never a number.
 - does: one short sentence of what it does, in the player's terms.
 - template: the catalogue entry for that slot, from the chosen role's pool, whose mechanic best carries what it does. active1 and active2 are different templates.

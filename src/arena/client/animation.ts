@@ -3,8 +3,9 @@ import type { MatchEvent } from '../engine/events.js'
 import type { HeroState } from '../engine/state.js'
 
 /**
- * Each hero's animation state (KTD9), driven only by engine events and state: run or fly while moving, a cast
- * pose for a slot, a flinch on a heavy hit, stunned, and dead for good.
+ * Each hero's animation state (KTD9), driven only by engine events and state: run, slide or hang in the air while
+ * moving, a jump, a second jump, a dash or a landing as each happens, a cast pose for a slot, a flinch on a heavy hit,
+ * stunned, and dead for good. `seq` on a movement counts them, so a second dash straight after the first starts over.
  *
  * A cast runs on the engine's clock (Forge goal, phase 1): `prep` is how much of the wind-up is done and `recover` how
  * much of the recovery, each 0 to 1, so the clip's release frame lands on the engine's release tick. `seq` counts the
@@ -12,8 +13,19 @@ import type { HeroState } from '../engine/state.js'
  * as it was made.
  */
 export type AnimState =
-  | { kind: 'idle' | 'run' | 'fly' | 'hit' | 'stunned' | 'dead' }
-  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number }
+  | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' }
+  | { kind: MoveKind; seq: number }
+  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean }
+
+/** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
+export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land'
+
+/**
+ * Seconds each movement holds the body before running, hanging in the air or standing takes over: about its clip's
+ * length, less the blend out. A landing gives way at once to a hero that moves on, and lasts longer the harder it was.
+ */
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16 }
+const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
   state: AnimState
@@ -23,11 +35,13 @@ export interface Animator {
   cast?: { slot: BuildSlot; started: number; release: number; ends: number }
   /** Casts so far. */
   casts: number
+  /** Movements so far. */
+  moves: number
 }
 
 export const HIT_SECONDS = 0.25
 
-export const createAnimator = (): Animator => ({ state: { kind: 'idle' }, hold: 0, casts: 0 })
+export const createAnimator = (): Animator => ({ state: { kind: 'idle' }, hold: 0, casts: 0, moves: 0 })
 
 /** Apply one tick's events for one hero; `tick` is the tick they happened on. */
 export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[], tick: number) {
@@ -48,6 +62,10 @@ export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[
     } else if (e.type === 'hit' && e.target === hero && e.heavy && !a.cast) {
       a.state = { kind: 'hit' }
       a.hold = HIT_SECONDS
+    } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide') {
+      const kind = e.move === 'air-jump' ? 'air_jump' : e.move
+      a.state = { kind, seq: ++a.moves }
+      a.hold = kind === 'land' && (e.speed ?? 0) >= HARD_LANDING.speed ? HARD_LANDING.seconds : MOVE_SECONDS[kind]
     }
   }
 }
@@ -62,15 +80,18 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
   if (c && now < c.ends) {
     const prep = Math.min(1, Math.max(0, (now - c.started) / Math.max(1, c.release - c.started)))
     const recover = now <= c.release ? 0 : Math.min(1, (now - c.release) / Math.max(1, c.ends - c.release))
-    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover }
+    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne }
     return a.state
   }
   a.cast = undefined
+  // a landing holds only a hero that stands there; one running on lands in its stride
+  if (a.state.kind === 'land' && moved > 0.01) a.hold = 0
   if (a.hold > 0) {
     a.hold -= dt
     if (a.hold > 0) return a.state
   }
-  a.state = { kind: hero.stunnedUntil > now ? 'stunned' : hero.airborne ? 'fly' : moved > 0.01 ? 'run' : 'idle' }
+  const kind = hero.stunnedUntil > now ? 'stunned' : hero.airborne ? 'air' : hero.slide ? 'slide' : moved > 0.01 ? 'run' : 'idle'
+  if (a.state.kind !== kind) a.state = { kind }
   return a.state
 }
 
@@ -108,10 +129,11 @@ export interface Stance {
  * moves, its legs run the rest at an angle, and its chest twists to where it aims, so a hero shooting while it strafes
  * or backs away doesn't skate; moving away from its aim it faces the aim and runs backwards. Standing, its feet stay
  * put: the hips hold while the chest follows the aim, and only once the aim is STANCE.pivot round do the hips turn, all
- * the way to face it. In the air the whole body faces the aim. `last` is last frame's stance: the hips turn from there
- * at STANCE.turn. `move` is how far the hero moved, if it did.
+ * the way to face it. In the air the whole body faces the aim. Sliding, the hips face along the slide and the chest
+ * turns toward the aim as far as it twists. `last` is last frame's stance: the hips turn from there at STANCE.turn.
+ * `move` is how far the hero moved, if it did.
  */
-export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square', dt: number): Stance {
+export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square' | 'slide', dt: number): Stance {
   const from = last?.body ?? aim
   let target = aim
   let back = false
@@ -123,17 +145,20 @@ export function stance(last: Stance | undefined, aim: number, move: { x: number;
     back = Math.abs(off) > (last?.back ? STANCE.back.leave : STANCE.back.enter)
     // the hips go part of the way round toward the line the legs run along, forwards or backwards
     target = wrap(aim + clamp(back ? wrap(off + Math.PI) : off, STANCE.warp))
+  } else if (mode === 'slide' && move) {
+    heading = Math.atan2(move.x, move.z)
+    target = heading
   } else if (mode === 'stand') {
     pivot = Math.abs(wrap(aim - from)) > (last?.pivot ? 1e-3 : STANCE.pivot)
     if (!pivot) target = from
   }
   const step = wrap(target - from)
   let hips = wrap(from + Math.sign(step) * Math.min(Math.abs(step), STANCE.turn * dt))
-  // the chest never twists past its limit: past it, the hips come round with it
+  // the chest never twists past its limit: past it, the hips come round with it, unless they're sliding along a line
   let twist = wrap(aim - hips)
   if (Math.abs(twist) > STANCE.twist) {
     twist = Math.sign(twist) * STANCE.twist
-    hips = wrap(aim - twist)
+    if (mode !== 'slide') hips = wrap(aim - twist)
   }
   // the legs make up the rest of the way to the line they run along, easing there
   const wanted = heading === undefined ? 0 : clamp(wrap((back ? heading + Math.PI : heading) - hips), STANCE.legs)

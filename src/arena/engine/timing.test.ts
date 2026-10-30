@@ -33,8 +33,8 @@ function duel(skills: Partial<Record<BuildSlot, Template>>, gap = 1.6) {
   const events: MatchEvent[] = []
   // the fighter aims along +z and the tank back along -z, at each other, whoever presses
   const press = (buttons: number, who = 0, moveZ = 0): Command[] => [
-    { moveX: 0, moveZ: who ? 0 : moveZ, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: who ? 0 : buttons },
-    { moveX: 0, moveZ: 0, vertical: 0, aimYaw: AIM_STEPS / 2, aimPitch: 0, buttons: who ? buttons : 0 },
+    { moveX: 0, moveZ: who ? 0 : moveZ, moves: 0, aimYaw: 0, aimPitch: 0, buttons: who ? 0 : buttons },
+    { moveX: 0, moveZ: 0, moves: 0, aimYaw: AIM_STEPS / 2, aimPitch: 0, buttons: who ? buttons : 0 },
   ]
   const step = (commands: (Command | undefined)[] = press(0)) => {
     const out = tick(m, setups, commands, COMBAT_RULES)
@@ -142,7 +142,7 @@ describe('action timing (Forge goal, phase 1)', () => {
     d.step(d.press(0, 0, 1))
     expect(d.m.heroes[0].position.z).toBeCloseTo(z, 9)
     const free = duel({}, 30)
-    free.step(free.press(0, 0, 1))
+    for (let i = 0; i < 10; i++) free.step(free.press(0, 0, 1))
     const z0 = free.m.heroes[0].position.z
     free.step(free.press(0, 0, 1))
     expect(free.m.heroes[0].position.z - z0).toBeGreaterThan(0.05)

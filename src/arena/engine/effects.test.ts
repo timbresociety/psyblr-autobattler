@@ -88,6 +88,8 @@ describe('AI casts transformations (review #2)', () => {
     const f = fight([withSlot(defaultBuild('tank'), 'ultimate', 'tank-titan-form')], [defaultBuild('fighter')])
     const me = f.m.heroes[0]
     me.cooldowns.ultimate = 0
+    // the fighter dashes in fast enough to knock the tank out of its wind-up; this asks only that the AI casts it
+    f.quiet(1)
     f.run(60 * 30, () => f.events.some((e) => e.type === 'form' && e.hero === 0 && e.phase === 'start'))
     expect(f.events.some((e) => e.type === 'form' && e.hero === 0 && e.phase === 'start')).toBe(true)
   })

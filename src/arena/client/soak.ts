@@ -2,7 +2,7 @@ import { BUILD_SLOTS } from '../../charter/build.js'
 import { ENGINE } from '../engine/calibration.js'
 import type { MatchEvent } from '../engine/events.js'
 import { TAU } from '../engine/maths.js'
-import { AIM_STEPS, slotBit, type Command, type HeroState, type MatchState } from '../engine/state.js'
+import { AIM_STEPS, MOVES, slotBit, type Command, type HeroState, type MatchState } from '../engine/state.js'
 import type { QualityLevel } from './quality.js'
 
 /**
@@ -61,8 +61,7 @@ export function soakCommand(match: MatchState, hero: number): Command {
       target = h
     }
   }
-  const vertical = me.airborne ? -1 : 0
-  if (!target) return { moveX: 0, moveZ: 0, vertical, aimYaw: Math.round((me.yaw / TAU) * AIM_STEPS), aimPitch: 0, buttons: 0 }
+  if (!target) return { moveX: 0, moveZ: 0, moves: 0, aimYaw: Math.round((me.yaw / TAU) * AIM_STEPS), aimPitch: 0, buttons: 0 }
   const dx = target.position.x - me.position.x
   const dz = target.position.z - me.position.z
   const dist = Math.sqrt(dx * dx + dz * dz) || 1
@@ -75,7 +74,10 @@ export function soakCommand(match: MatchState, hero: number): Command {
   const len = Math.sqrt(mx * mx + mz * mz) || 1
   let buttons = slotBit('basic')
   if (match.tick % Math.round(ENGINE.tickHz / 2) === 0) for (const slot of BUILD_SLOTS) if (slot !== 'passive') buttons |= slotBit(slot)
-  return { moveX: mx / len, moveZ: mz / len, vertical, aimYaw: Math.round((Math.atan2(dx, dz) / TAU) * AIM_STEPS), aimPitch: 0, buttons }
+  // and the player's movement: a dash every few seconds, a jump now and then, so a soak carries what a player does
+  const t = match.tick % (5 * ENGINE.tickHz)
+  const moves = t === 0 ? MOVES.dash : t === 2 * ENGINE.tickHz ? MOVES.jump : 0
+  return { moveX: mx / len, moveZ: mz / len, moves, aimYaw: Math.round((Math.atan2(dx, dz) / TAU) * AIM_STEPS), aimPitch: 0, buttons }
 }
 
 /** Take the ultimate off cooldown for up to `count` living heroes, alternating sides, so the wave lands together. */

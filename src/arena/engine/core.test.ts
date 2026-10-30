@@ -3,11 +3,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE } from './calibration.js'
-import { heroLocomotion } from './locomotion.js'
+import { initialCoverHealth, type CoverPiece } from './cover.js'
 import { FORBIDDEN_MATHS, atan2, cos, sin } from './maths.js'
 import { next } from './rng.js'
 import { hashState, restore, snapshot } from './snapshot.js'
-import { AIM_STEPS, createHero, emptyMatch, prepareHero, type Command, type MatchState } from './state.js'
+import { AIM_STEPS, capsule, createHero, emptyMatch, MOVES, prepareHero, type Command, type MatchState } from './state.js'
 import { pause, resume, tick } from './tick.js'
 
 const build = (moveSpeed?: number) => {
@@ -25,7 +25,7 @@ function match(seed: number, count = 4) {
 /** Seeded wandering commands, the same for the same seed. */
 function wander(m: MatchState, seed: number): Command[] {
   const rng = { s: seed + m.tick }
-  return m.heroes.map(() => ({ moveX: next(rng) * 2 - 1, moveZ: next(rng) * 2 - 1, vertical: (Math.floor(next(rng) * 3) - 1) as -1 | 0 | 1, aimYaw: Math.floor(next(rng) * AIM_STEPS), aimPitch: 0, buttons: 0 }))
+  return m.heroes.map(() => ({ moveX: next(rng) * 2 - 1, moveZ: next(rng) * 2 - 1, moves: Math.floor(next(rng) * 8), aimYaw: Math.floor(next(rng) * AIM_STEPS), aimPitch: 0, buttons: 0 }))
 }
 
 const run = (m: MatchState, setups: ReturnType<typeof match>['setups'], n: number, seed: number) => {
@@ -67,60 +67,130 @@ describe('engine maths (KTD1)', () => {
 })
 
 describe('engine core (U3)', () => {
-  it('a hero with move speed 6 covers 6 m on the ground in 60 ticks, and flies slower: the air is a burst, not travel', () => {
-    const setup = build(6)
+  const go = (moveX: number, moveZ: number, moves = 0): Command => ({ moveX, moveZ, moves, aimYaw: 0, aimPitch: 0, buttons: 0 })
+  const solo = (moveSpeed?: number, y = 0) => {
+    const setup = build(moveSpeed)
     const m = emptyMatch(1)
-    m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 0, z: 0 }))
-    for (let i = 0; i < 60; i++) tick(m, [setup], [{ moveX: 0, moveZ: 1, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    expect(m.heroes[0].position.z).toBeCloseTo(6, 6)
-    const { flight, jumpReach } = heroLocomotion(m.heroes[0], setup)
-    expect(flight).toBeLessThan(6)
-    expect(heroLocomotion(m.heroes[0], build(8)).jumpReach).toBeGreaterThan(jumpReach)
-  })
-
-  it('a hero cannot leave the arena or pass the floor or the ceiling', () => {
-    const setup = build(8)
-    const m = emptyMatch(1)
-    m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 0, z: 0 }))
-    for (let i = 0; i < 2000; i++) tick(m, [setup], [{ moveX: 1, moveZ: 1, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    const p = m.heroes[0].position
-    expect([p.x, p.y, p.z]).toEqual([ENGINE.arena.halfWidth, 0, ENGINE.arena.halfLength])
-    // just under the ceiling with a full meter, climbing stops at it
-    const high = createHero(setup, 1, 0, { x: 0, y: ENGINE.arena.ceiling - 0.2, z: 0 })
-    m.heroes.push(high)
-    for (let i = 0; i < 30; i++) tick(m, [setup, setup], [undefined, { moveX: 0, moveZ: 0, vertical: 1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    expect(high.position.y).toBe(ENGINE.arena.ceiling)
-    for (let i = 0; i < 2000; i++) tick(m, [setup, setup], [undefined, { moveX: 0, moveZ: 0, vertical: -1, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    expect(high.position.y).toBe(0)
-    expect(high.airborne).toBe(false)
-  })
-
-  it('flying spends the flight meter: an empty meter glides down, and standing on the ground refills it', () => {
-    const setup = build(6)
-    const m = emptyMatch(1)
-    const h = createHero(setup, 0, 0, { x: 0, y: 0, z: 0 })
+    const h = createHero(setup, 0, 0, { x: 0, y, z: 0 })
     m.heroes.push(h)
-    const up = { moveX: 0, moveZ: 1, vertical: 1 as const, aimYaw: 0, aimPitch: 0, buttons: 0 }
-    tick(m, [setup], [up])
-    expect(h.airborne).toBe(true)
-    expect(h.flight).toBeLessThan(ENGINE.flight.max - ENGINE.flight.takeoff + 1)
-    // holding "up" for longer than the meter lasts still brings the hero back down to land
-    for (let i = 0; i < 60 * 30 && h.airborne; i++) tick(m, [setup], [up])
-    expect(h.airborne).toBe(false)
-    expect(h.flight).toBeLessThan(ENGINE.flight.takeoff)
-    // it can't take off again until the meter has refilled enough
-    tick(m, [setup], [up])
-    expect(h.airborne).toBe(false)
-    for (let i = 0; i < 60 * 5; i++) tick(m, [setup], [undefined])
-    expect(h.flight).toBe(ENGINE.flight.max)
+    return { setup, m, h, step: (c: Command | undefined, n = 1) => { for (let i = 0; i < n; i++) tick(m, [setup], [c]) } }
+  }
+
+  it('a hero with move speed 6 eases up to 6 m/s in a tenth of a second, and eases to a stop (phase 2)', () => {
+    const { h, step } = solo(6)
+    step(go(0, 1), 60)
+    // a metre a second more each tick for the first six, then 6 m/s: 5.75 m in all
+    expect(h.position.z).toBeCloseTo(5.75, 6)
+    expect(h.velocity.z).toBeCloseTo(6)
+    step(go(0, 0), 6)
+    expect(h.velocity.z).toBeCloseTo(0)
   })
 
-  it('a flying hero holds altitude with no vertical input', () => {
-    const setup = build()
-    const m = emptyMatch(1)
-    m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 5, z: 0 }))
-    for (let i = 0; i < 120; i++) tick(m, [setup], [{ moveX: 1, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }])
-    expect(m.heroes[0].position.y).toBe(5)
+  it('a hero cannot leave the arena or pass the floor, and nobody flies', () => {
+    const { h, step } = solo(8)
+    step(go(1, 1), 2000)
+    expect([h.position.x, h.position.y, h.position.z]).toEqual([ENGINE.arena.halfWidth, 0, ENGINE.arena.halfLength])
+    // a hero up in the air comes down, whatever it's told
+    const high = solo(6, 10)
+    expect(high.h.airborne).toBe(true)
+    high.step(go(0, 0, MOVES.jump), 120)
+    expect(high.h.position.y).toBe(0)
+    expect(high.h.airborne).toBe(false)
+  })
+
+  it('jumps, jumps once more in the air for a stamina pip, and lands (phase 2)', () => {
+    const { h, step } = solo(6)
+    const M = ENGINE.move
+    step(go(0, 0, MOVES.jump))
+    expect(h.airborne).toBe(true)
+    // holding the button doesn't jump again; the top of the jump is its height
+    let top = 0
+    for (let i = 0; i < 20; i++) {
+      step(go(0, 0, MOVES.jump))
+      top = Math.max(top, h.position.y)
+    }
+    expect(top).toBeGreaterThan(M.jump - 0.15)
+    expect(top).toBeLessThan(M.jump + 0.05)
+    expect(h.stamina).toBeCloseTo(M.stamina.max)
+    // a fresh press in the air jumps again and spends a pip; a third does nothing
+    step(go(0, 0))
+    const from = h.position.y
+    step(go(0, 0, MOVES.jump))
+    expect(h.airJumps).toBe(1)
+    expect(h.stamina).toBeCloseTo(M.stamina.max - 1, 1)
+    for (let i = 0; i < 20; i++) {
+      step(go(0, 0))
+      top = Math.max(top, h.position.y)
+    }
+    expect(top).toBeGreaterThan(from + M.airJump - 0.3)
+    step(go(0, 0, MOVES.jump))
+    expect(h.airJumps).toBe(1)
+    for (let i = 0; i < 120 && h.airborne; i++) step(go(0, 0))
+    expect(h.airborne).toBe(false)
+    expect(h.position.y).toBe(0)
+    expect(h.airJumps).toBe(0)
+  })
+
+  it('a dash bursts along the way it steers for a pip, and pips refill one at a time (phase 2)', () => {
+    const { h, step } = solo(6)
+    const M = ENGINE.move
+    step(go(1, 0, MOVES.dash))
+    expect(h.stamina).toBeCloseTo(M.stamina.max - 1, 1)
+    step(go(1, 0), 30)
+    // the dash covers its reach, and the run after it the rest of the half second
+    expect(h.position.x).toBeGreaterThan(M.dash.speed * M.dash.time)
+    expect(h.velocity.x).toBeCloseTo(6)
+    // two more dashes empty the pips; a fourth press does nothing
+    for (const _ of [1, 2]) {
+      step(go(1, 0, MOVES.dash))
+      step(go(1, 0), 15)
+    }
+    expect(h.stamina).toBeLessThan(1)
+    const x = h.position.x
+    step(go(1, 0, MOVES.dash))
+    step(go(1, 0), 3)
+    expect(h.position.x - x).toBeLessThan(6 * 4.1 / 60)
+    // each pip takes its own refill time
+    const before = h.stamina
+    step(undefined, Math.round(M.stamina.regen * 60))
+    expect(h.stamina).toBeCloseTo(before + 1, 1)
+  })
+
+  it('crouching at a run slides: fast at first, then slower, low to the ground, until let go (phase 2)', () => {
+    const { h, step } = solo(6)
+    const M = ENGINE.move
+    const standing = capsule(h).height
+    step(go(0, 1), 30)
+    step(go(0, 1, MOVES.crouch))
+    expect(h.slide).toBeDefined()
+    expect(h.velocity.z).toBeCloseTo(6 * M.slide.boost, 1)
+    expect(capsule(h).height).toBeCloseTo(standing * M.slide.height)
+    step(go(0, 1, MOVES.crouch), 30)
+    expect(h.velocity.z).toBeLessThan(6 * M.slide.boost)
+    expect(h.velocity.z).toBeGreaterThan(6 * M.slide.end)
+    step(go(0, 1))
+    expect(h.slide).toBeUndefined()
+    expect(capsule(h).height).toBeCloseTo(standing)
+    // standing still, a crouch is only a crouch
+    step(go(0, 0), 30)
+    step(go(0, 0, MOVES.crouch))
+    expect(h.slide).toBeUndefined()
+  })
+
+  it('lands on top of cover, and walks off its edge to fall to the ground (phase 2)', () => {
+    const { m, h, step } = solo(6, 4)
+    const block: CoverPiece = { shape: { kind: 'block', x: 0, z: 0, hx: 2, hz: 2 }, base: 0, top: 1.3, look: 'plinth' }
+    m.cover = { pieces: [block], health: initialCoverHealth([block]) }
+    step(go(0, 0), 60)
+    expect(h.position.y).toBeCloseTo(1.3)
+    expect(h.airborne).toBe(false)
+    step(go(1, 0), 60)
+    expect(h.position.x).toBeGreaterThan(2)
+    expect(h.position.y).toBe(0)
+    // and from the ground it's a wall: walking back into it stops at its side
+    step(go(-1, 0), 120)
+    expect(h.position.x).toBeGreaterThan(2)
+    expect(h.position.y).toBe(0)
   })
 
   it('snapshot, 300 ticks, restore, 300 ticks gives the same hash both times', () => {
@@ -150,7 +220,7 @@ describe('engine core (U3)', () => {
     const m = emptyMatch(1)
     m.heroes.push(createHero(setup, 0, 0, { x: 0, y: 0, z: 0 }))
     m.heroes[0].stunnedUntil = 30
-    const forward: Command = { moveX: 0, moveZ: 1, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
+    const forward: Command = { moveX: 0, moveZ: 1, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
     for (let i = 0; i < 29; i++) tick(m, [setup], [forward])
     expect(m.heroes[0].position.z).toBe(0)
     for (let i = 0; i < 10; i++) tick(m, [setup], [forward])

@@ -33,12 +33,15 @@ export function tick(match: MatchState, setups: readonly HeroSetup[], commands: 
     const hero = match.heroes[i]
     if (!hero.alive) continue
     for (const slot of BUILD_SLOTS) if (hero.cooldowns[slot] > 0) hero.cooldowns[slot]--
-    // stunned, launched or asleep: nothing this tick
-    if (hero.stunnedUntil > match.tick || hero.cc.sleep > match.tick) continue
+    // stunned, launched or asleep: nothing this tick but slowing to a stop and falling
+    if (hero.stunnedUntil > match.tick || hero.cc.sleep > match.tick) {
+      if (!hero.knockback) move(hero, setups[i], IDLE, match, events)
+      continue
+    }
     const command = compelled(match, hero, commands[i] ?? IDLE)
     hero.yaw = (command.aimYaw / AIM_STEPS) * TAU
     hero.pitch = (command.aimPitch / AIM_STEPS) * TAU
-    if (!hero.knockback) move(hero, setups[i], command, match)
+    if (!hero.knockback) move(hero, setups[i], command, match, events)
     rules.act?.(match, setups, i, command, events)
   }
   rules.after?.(match, setups, events)
@@ -57,7 +60,7 @@ function compelled(match: MatchState, hero: HeroState, command: Command): Comman
     const dx = (other.position.x - hero.position.x) * sign
     const dz = (other.position.z - hero.position.z) * sign
     const len = Math.sqrt(dx * dx + dz * dz) || 1
-    return { ...command, moveX: dx / len, moveZ: dz / len, vertical: hero.airborne ? -1 : 0, buttons: sign > 0 ? slotBit('basic') : 0 }
+    return { ...command, moveX: dx / len, moveZ: dz / len, moves: 0, buttons: sign > 0 ? slotBit('basic') : 0 }
   }
   if (flee?.alive) return toward(flee, -1)
   if (chase?.alive) return toward(chase, 1)

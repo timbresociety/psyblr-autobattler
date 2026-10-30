@@ -108,15 +108,17 @@ describe('per-skill hit geometry (R43)', () => {
   })
 })
 
-describe('locomotion (R28)', () => {
-  it('derives flight and jump reach from move speed, and the hint names all three', () => {
+describe('locomotion (R28, Forge goal phase 2)', () => {
+  it('derives the slide from move speed, and the hint names the run, the jump, the dash and the stamina', () => {
     const l = locomotion(6)
     expect(l.ground).toBe(6)
-    expect(l.flight).toBeLessThan(6)
-    expect(locomotion(8).jumpReach).toBeGreaterThan(l.jumpReach)
+    expect(l.slide).toBeGreaterThan(6)
+    expect(locomotion(8).slide).toBeGreaterThan(l.slide)
     expect(LOCOMOTION_HINT).toMatch(/Ground speed/)
-    expect(LOCOMOTION_HINT).toMatch(/Flight/)
-    expect(LOCOMOTION_HINT).toMatch(/flight meter/)
-    expect(LOCOMOTION_HINT).toMatch(/jump range/)
+    expect(LOCOMOTION_HINT).toMatch(/slide/)
+    expect(LOCOMOTION_HINT).toMatch(/jumps/)
+    expect(LOCOMOTION_HINT).toMatch(/dash/)
+    expect(LOCOMOTION_HINT).toMatch(/stamina/)
+    expect(LOCOMOTION_HINT).not.toMatch(/[Ff]light/)
   })
 })

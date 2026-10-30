@@ -229,6 +229,8 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
         u.stunnedUntil = Math.max(u.stunnedUntil, now + n)
         interrupt(ctx, u)
         u.airborne = true
+        u.velocity = { x: 0, y: 0, z: 0 }
+        u.slide = undefined
         status(ctx, u, 'knockup', now + n)
       }
       break

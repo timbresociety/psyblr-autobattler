@@ -24,8 +24,12 @@ export const ROLE_RGB: Record<RoleId, [number, number, number]> = {
 export type StageClip =
   | 'idle'
   | 'run'
-  | 'fly'
-  | 'hover'
+  | 'jump'
+  | 'air'
+  | 'air_jump'
+  | 'land'
+  | 'dash'
+  | 'slide'
   | 'slash'
   | 'shoot'
   | 'cast'
@@ -42,7 +46,7 @@ export type StageClip =
 export function castClip(template: Pick<Template, 'delivery'>, slot: BuildSlot, look?: Pick<SkillLook, 'pose'>): StageClip {
   if (look?.pose) return poseClip(look.pose) as StageClip
   if (slot === 'ultimate') return 'ultimate'
-  if (slot === 'movement') return 'hover'
+  if (slot === 'movement') return 'dash'
   const kind = template.delivery.kind
   if (kind === 'melee' || kind === 'cone' || kind === 'dash' || kind === 'grapple') return 'slash'
   if (kind === 'projectile') return slot === 'basic' ? 'shoot' : 'cast'

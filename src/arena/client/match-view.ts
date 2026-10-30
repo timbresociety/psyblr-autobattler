@@ -52,8 +52,9 @@ export interface HudHero {
   cooldowns: Record<BuildSlot, { left: number; total: number }>
   damageDealt: number
   airborne: boolean
-  /** The flight meter, 0 empty to 1 full. */
-  flight?: number
+  /** Stamina pips, fractional while one refills, out of `staminaMax` (Forge goal, phase 2). */
+  stamina?: number
+  staminaMax?: number
   /** What is on the hero, worst first (status.ts). */
   statuses?: HeroStatus[]
   fallback: boolean
@@ -164,7 +165,8 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
       maxHp: h.maxHp,
       damageDealt: h.damageDealt,
       airborne: h.airborne,
-      flight: (h.flight ?? ENGINE.flight.max) / ENGINE.flight.max,
+      stamina: h.stamina,
+      staminaMax: ENGINE.move.stamina.max,
       statuses: statusesOf(h, match.tick).slice(0, 3),
       fallback: views[h.id]?.fallback ?? false,
       cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
@@ -439,12 +441,12 @@ function drawHeroes(
     const scaled = frame.dt * frame.timeScale
     const moving = moved > 0.01
     // the hips turn partway toward the way the hero moves, the legs run the rest at an angle and the chest twists to
-    // its aim, casting on the move too, since its legs keep running under the cast; standing, the feet stay put until
-    // the aim is far round; in the air, the whole body faces the aim. A view that can't twist faces its aim whole. The
-    // run keeps pace with the ground covered
+    // its aim, casting on the move too, since its legs keep running under the cast, and dashing, on the ground or off
+    // it; a slide faces along its line; standing, the feet stay put until the aim is far round; in the air, the whole
+    // body faces the aim. A view that can't twist faces its aim whole. The run keeps pace with the ground covered
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
-    const mode = h.airborne ? 'square' : striding ? 'run' : 'stand'
+    const mode = pose.kind === 'slide' ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled) : undefined
     stances[i] = s
     // standing on the ground, the feet stay where they land

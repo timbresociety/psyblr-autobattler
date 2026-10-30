@@ -223,7 +223,7 @@ describe('while steering a hero (R14, R42)', () => {
 
     const group = screen.getByRole('group', { name: 'Controlled hero' })
     expect(within(group).getByRole('meter', { name: 'Health' }).getAttribute('aria-valuenow')).toBe('800')
-    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['LMB', 'SHIFT', 'Q', 'E', 'R'])
+    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['LMB', 'F', 'Q', 'E', 'R'])
 
     const crosshair = container.querySelector('.hud-crosshair')!
     act(() => (m.events([hit(0, 2)]), m.frame()))

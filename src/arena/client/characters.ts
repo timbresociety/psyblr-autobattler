@@ -79,7 +79,11 @@ function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.
   return m
 }
 
-const LOCOMOTION = new Set(['idle', 'run', 'fly', 'hover', 'stunned'])
+const LOCOMOTION = new Set(['idle', 'run', 'air', 'stunned'])
+/** Clips that play once and hold their last pose, but give way the moment the hero runs, jumps or stands again. */
+const YIELDING = new Set(['fall', 'slide', 'land'])
+/** Seconds each movement blends in over: a jump or a dash snaps, a slide drops in. */
+const MOVE_FADE: Record<string, number> = { jump: 0.06, air_jump: 0.05, dash: 0.04, dash_back: 0.04, land: 0.06, slide: 0.1, air: 0.18 }
 
 /** The bones a cast on the move leaves to the run: the hips and both legs (Forge goal, phase 2). */
 const LEG_BONES = new Set(['hips', 'thigh_L', 'shin_L', 'foot_L', 'thigh_R', 'shin_R', 'foot_R'])
@@ -325,9 +329,15 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   const run = actions.get('run')
   const runLegs = run && mixer.clipAction(halvesOf(run.getClip()).legs)
+  // in the air the legs under a cast hang as they do in a jump
+  const air = actions.get('air')
+  const airLegs = air && mixer.clipAction(halvesOf(air.getClip()).legs)
   let shown: Halves<THREE.AnimationAction> | undefined
   let layer = 0
   let striding = 0
+  let hanging = 0
+  // the last movement played, so a second dash straight after the first starts over
+  let moveSeq = 0
   // a twist goes on after the clip has posed the bones, each bone turning about its own length. The mixer only writes
   // a bone whose clip value changed, so a held pose (idle, a cast frozen in a hit-stop) would keep last frame's twist
   // and twist again: each bone's clip pose is kept and put back before the next update.
@@ -412,9 +422,12 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       unswing()
       untwist()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
-      const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
+      // a dash away from the aim hops backwards, where the model has the clip
+      const named = state.kind === 'dash' && backwards && actions.has('dash_back') ? 'dash_back' : state.kind
+      const wanted = cast ? cast.clip : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : named
       const layered = layer > 0
       const onFoot = ground !== undefined && ground > STANCE.stride
+      const aloft = state.kind === 'cast' && !!state.air
       const pair = state.kind === 'cast' && state.prep !== undefined ? pairOf(wanted) : undefined
       if (pair && state.kind === 'cast') {
         // on the engine's clock: the clip starts from its guard with the wind-up and is held to it, frame by frame. A
@@ -431,17 +444,24 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         }
         if (!layered) {
           runLegs?.reset().play()
+          airLegs?.reset().play()
           striding = onFoot ? 1 : 0
+          hanging = aloft ? 1 : 0
         }
         pair.legs.time = pair.top.time = castTime(wanted, pair.top.getClip().duration, state.prep ?? 0, state.recover ?? 0)
         layer = Math.min(1, layer + dt / CAST_FADE)
         striding = onFoot ? Math.min(1, striding + dt / LEG_FADE) : Math.max(0, striding - dt / LEG_FADE)
+        hanging = aloft ? Math.min(1, hanging + dt / LEG_FADE) : Math.max(0, hanging - dt / LEG_FADE)
         if (onFoot && currentName !== 'run') play('run', LEG_FADE)
+        else if (aloft && currentName !== 'air') play('air', LEG_FADE)
       } else {
-        // a swing or a blast finishes before running or idling takes over; a new cast, a hit or death cuts in at once
-        const oneShotPlaying = current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
-        const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : 0.15
-        if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, fade, cast?.from)
+        // a swing, a blast, a jump or a dash finishes before running, idling or hanging in the air takes over; a new
+        // cast, a hit, a movement or death cuts in at once, and a slide or a landing gives way as soon as it's done with
+        const oneShotPlaying = current && !LOCOMOTION.has(currentName) && !YIELDING.has(currentName) && current.time < current.getClip().duration - 0.12
+        const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : (MOVE_FADE[wanted] ?? 0.15)
+        const again = 'seq' in state && state.kind !== 'cast' && state.seq !== moveSeq
+        if (again) moveSeq = state.seq
+        if (again || (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted)))) play(wanted, fade, cast?.from)
         // a cast on the engine's clock gives the body back as it ends, or is cut short
         layer = Math.max(0, layer - dt / fade)
         if (!layer) shown = undefined
@@ -455,12 +475,16 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         for (const action of actions.values()) action.weight = 1 - layer
         for (const half of pairs.values()) {
           half.top.weight = layer
-          half.legs.weight = layer * (1 - striding)
+          half.legs.weight = layer * Math.max(0, 1 - striding - hanging)
         }
         if (runLegs && run) {
           runLegs.weight = layer * striding
           runLegs.time = run.time
           runLegs.timeScale = run.timeScale
+        }
+        if (airLegs && air) {
+          airLegs.weight = layer * hanging
+          airLegs.time = air.time
         }
       }
       mixer.update(dt)

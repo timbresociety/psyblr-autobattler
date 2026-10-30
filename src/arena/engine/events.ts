@@ -14,6 +14,8 @@ export type MatchEvent =
   | { type: 'impact'; hero: number; slot: BuildSlot; at: Vec3; radius: number; arcDegrees?: number; width?: number; range: number }
   | { type: 'hit'; source: number; target: number; slot: BuildSlot; amount: number; heavy: boolean }
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
+  /** A jump, a second jump in the air, a dash or a slide began, or the hero landed, falling at `speed` m/s (phase 2). */
+  | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land'; speed?: number }
   /** A transformation began or ended; `size` is the class the hero has now (a form may keep its own). */
   | { type: 'form'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }

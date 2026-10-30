@@ -239,6 +239,24 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
   return touched
 }
 
+/**
+ * What a hero at `p` stands on (Forge goal, phase 2): the highest top of a standing piece under its centre that's no
+ * higher than `reach`, or the ground (0). A hero on top of a wall stands on it; one under a lintel stands on the ground.
+ */
+export function floorUnder(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, reach: number): number {
+  const bounds = boundsOf(pieces)
+  let floor = 0
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i]
+    if (health[i] === 0 || piece.top <= floor || piece.top > reach) continue
+    if (p.x < bounds.minX[i] || p.x > bounds.maxX[i] || p.z < bounds.minZ[i] || p.z > bounds.maxZ[i]) continue
+    const s = piece.shape
+    const over = s.kind === 'block' ? Math.abs(p.x - s.x) <= s.hx && Math.abs(p.z - s.z) <= s.hz : (p.x - s.x) * (p.x - s.x) + (p.z - s.z) * (p.z - s.z) <= s.r * s.r
+    if (over) floor = piece.top
+  }
+  return floor
+}
+
 /** The pieces a disc of `radius` around `at` overlaps, for area attacks that wear barriers down. */
 export function coverInDisc(pieces: readonly CoverPiece[], health: readonly CoverHealth[], at: Vec3, radius: number): number[] {
   const out: number[] = []

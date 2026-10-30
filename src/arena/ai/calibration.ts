@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 8
+export const AI_CALIBRATION_VERSION = 9
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */
@@ -44,8 +44,18 @@ export const AI = {
   vaultReach: 4,
   /** Furthest cover it will run to when falling back. */
   hideReach: 16,
-  /** A melee hero takes off after a target flying more than this many metres above it. */
-  chaseUp: 1.5,
+  /**
+   * Moving like Deadlock (Forge goal, phase 2). A dodge dashes this often, while it has more than `staminaKeep` pips;
+   * a melee hero dashes at a target between `dashGap` metres off, at most every `dashEvery` ticks; a hero falling
+   * back dashes away from an enemy this close (`nearRadius`) with any pip; and one with `slideGap` metres to cover
+   * slides this often a decision.
+   */
+  dodgeDash: 0.5,
+  staminaKeep: 1,
+  dashGap: { min: 5, max: 12 },
+  dashEvery: 120,
+  slideGap: 10,
+  slideChance: 0.08,
   /** Metres each role keeps behind its team's front line (its lead tank, else fighter); tanks lead and are not held. */
   behindFront: { fighter: -1, assassin: 2, mage: 3, marksman: 3.5, support: 3, controller: 2.5, summoner: 3.5 },
   /** The front has met the enemy once its leader is this close to one, metres; fighters and assassins then go in. */

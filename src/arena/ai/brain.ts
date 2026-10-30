@@ -7,7 +7,7 @@ import { alliesOf, enemiesOf, hpFraction } from '../engine/effects.js'
 import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths.js'
 import type { Arena } from '../engine/match.js'
 import { next } from '../engine/rng.js'
-import { AIM_STEPS, bodyRadius, capsule, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
+import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
 import { aimPoint, anglesTo, trackAim } from './aim.js'
 import { AI } from './calibration.js'
 
@@ -152,7 +152,7 @@ function frontOf(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): 
 }
 
 function newBrain(hero: HeroState): BrainState {
-  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0, vertical: 0 }, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0 }
+  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0 }, press: 0, nextDash: 0, slideUntil: 0, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0 }
 }
 
 /** The far side of the nearest piece of cover from `threat`, within reach: where a hurt hero breaks line of sight. */
@@ -249,8 +249,9 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     const side = next(m.ai) < 0.5 ? 1 : -1
     brain.action = 'dodge'
     brain.dodgeUntil = m.tick + AI.dodgeTicks
-    // sidestep across the shot's path; in the air, juke up or down as well
-    brain.dodge = { x: (-threat.step.z / len) * side, z: (threat.step.x / len) * side, vertical: hero.airborne ? (next(m.ai) < 0.5 ? 1 : -1) : 0 }
+    // sidestep across the shot's path, often with a dash while it has stamina to spare
+    brain.dodge = { x: (-threat.step.z / len) * side, z: (threat.step.x / len) * side }
+    if (hero.stamina >= AI.staminaKeep + 1 && next(m.ai) < AI.dodgeDash) brain.press |= MOVES.dash
   } else if (m.tick >= brain.dodgeUntil) {
     const gap = gapTo(hero, target)
     // falls back only toward living teammates; alone, it fights to the end rather than kiting forever
@@ -258,11 +259,20 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     if (allies && hpFraction(hero) < AI.retreatBelow && nearestGap(m, hero) <= AI.nearRadius && !best) {
       brain.action = 'retreat'
       brain.hide = hidingSpot(m, hero, target)
+      // a hurt hero with an enemy on top of it dashes clear
+      if (hero.stamina >= 1) brain.press |= MOVES.dash
     } else {
       // with no line on its target a hero moves until it has one, rather than shooting the wall; a sword in reach
       // across low cover would otherwise stand there swinging at stone, so it hops or rounds it too
       const blind = !canSee(m, chest(hero), chest(target))
       brain.action = gap > preferredDistance(setup) + 0.5 || blind ? 'approach' : 'hold'
+      if (brain.action === 'approach' && !hero.airborne) {
+        // a melee hero closes the last few metres with a dash; anyone with far to go slides now and then
+        if (!isRanged(setup) && gap >= AI.dashGap.min && gap <= AI.dashGap.max && m.tick >= brain.nextDash && hero.stamina >= AI.staminaKeep + 1) {
+          brain.press |= MOVES.dash
+          brain.nextDash = m.tick + AI.dashEvery
+        } else if (gap > AI.slideGap && m.tick >= brain.slideUntil && next(m.ai) < AI.slideChance) brain.slideUntil = m.tick + Math.round(ENGINE.move.slide.time * ENGINE.tickHz)
+      }
     }
     if (next(m.ai) < AI.strafeFlip) brain.strafe = brain.strafe === 1 ? -1 : 1
   }
@@ -279,7 +289,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     brain.pending = undefined
   }
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
-  if (!target || !target.alive || hidden(m, hero, target)) return { moveX: 0, moveZ: 0, vertical: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
+  if (!target || !target.alive || hidden(m, hero, target)) return { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
   const shotSpeed = (castTemplate ?? setup.kit.basic).delivery.kind === 'projectile' ? geometryOf((castTemplate ?? setup.kit.basic).delivery).speed : undefined
@@ -295,12 +305,9 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   const flat = Math.sqrt(dx * dx + dz * dz) || 1
   let moveX = 0
   let moveZ = 0
-  let vertical: -1 | 0 | 1 = 0
-  const dy = target.position.y - hero.position.y
   const closing = gapTo(hero, target) > preferredDistance(setup) + 0.5
   if (m.tick < brain.dodgeUntil) {
     // sidestep the shot, but keep closing in while doing it, the way a player weaves forward
-    ;({ vertical } = brain.dodge)
     moveX = brain.dodge.x + (closing ? (dx / flat) * AI.dodgeAdvance : 0)
     moveZ = brain.dodge.z + (closing ? (dz / flat) * AI.dodgeAdvance : 0)
   } else if (brain.action === 'approach') [moveX, moveZ] = [dx / flat, dz / flat]
@@ -336,10 +343,14 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   // walk around walls, or hop low cover
   const steered = steer(m, hero, brain, moveX, moveZ, gapTo(hero, target) > AI.vaultReach)
   ;[moveX, moveZ] = [steered.x, steered.z]
-  // the fight belongs on the ground among the ruins: a sword follows a flying target up (a shot can reach it from
-  // below), and everyone else who is airborne comes back down once the dodge is over
-  if (m.tick >= brain.dodgeUntil) vertical = !isRanged(setup) && dy > AI.chaseUp ? 1 : hero.airborne ? -1 : 0
-  if (steered.hop) vertical = 1
+  // movement buttons decided between ticks go now; low cover is jumped, and jumped again near the top of the jump
+  let moves = brain.press
+  brain.press = 0
+  if (steered.hop) {
+    if (!hero.airborne) moves |= MOVES.jump
+    else if (hero.velocity.y < 1.5 && hero.airJumps === 0 && hero.stamina >= 1 && !(hero.held & MOVES.jump)) moves |= MOVES.jump
+  }
+  if (m.tick < brain.slideUntil && m.tick >= brain.dodgeUntil) moves |= MOVES.crouch
 
   // buttons: a decided skill fires once the aim settles (self and auras need no aim); the basic attack when in reach
   let buttons = 0
@@ -359,7 +370,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   const basic = setup.kit.basic.delivery
   const basicTolerance = basic.arcDegrees ? Math.max(AI.fireTolerance, ((basic.arcDegrees / 2) * PI) / 180 * AI.arcUse) : AI.fireTolerance
   if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight()) buttons |= slotBit('basic')
-  return { moveX, moveZ, vertical, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
+  return { moveX, moveZ, moves, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
 }
 
 /** Commands for every hero this tick; the human-controlled hero is left to its player (KTD4). */

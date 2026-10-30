@@ -5,7 +5,7 @@ import { famousMove, formLookOf, lookFromWords, templateWords } from '../arena/r
 import { BUILD_SLOTS, SLOT_KIND } from '../charter/build.js'
 import { MAX_RETUNE_STEPS, RETUNE_STEP, REFERENCE_SHEET, SLOT_BUDGETS } from '../charter/budget.js'
 import { FAMILIES, FAMILY_LABEL, familiesOf, primaryFamily } from '../charter/families.js'
-import { FLIGHT_SPEED_MUL, JUMP_REACH_PER_SPEED } from '../charter/locomotion.js'
+import { LOCOMOTION_HINT } from '../charter/locomotion.js'
 import { FACE_POINTS, GENDER_LABEL, LOOK_SLOTS, type Worn } from '../charter/look.js'
 import { ROLES, getRole } from '../charter/roles.js'
 import { ALL_SIZE_CLASSES, SIZES, sizeHealth } from '../charter/sizes.js'
@@ -90,7 +90,7 @@ const STAT_DOC: Record<SecondaryStat, [label: string, unit: string, meaning: str
   maxHealth: ['Health', 'HP', 'Health points. At zero the hero is out of the fight.'],
   armor: ['Armor', '%', 'Takes this percentage off physical damage.'],
   magicResist: ['Spirit resist', '%', 'Takes this percentage off spirit damage.'],
-  moveSpeed: ['Locomotion', 'm/s', `Ground speed. Flight runs at ${FLIGHT_SPEED_MUL}× it and drains the flight meter, and a jump reaches ${JUMP_REACH_PER_SPEED} m for every m/s.`],
+  moveSpeed: ['Locomotion', 'm/s', LOCOMOTION_HINT],
   attackSpeed: ['Attack speed', '/s', 'Swings a second, for a basic attack that reaches 4 m or less.'],
   weaponDamage: ['Weapon damage', '', 'What a weapon skill adds for each point of its ratio. Most basic attacks scale with it.'],
   fireRate: ['Fire rate', '/s', 'Shots a second, for a basic attack that reaches past 4 m.'],
@@ -107,7 +107,7 @@ const SLOT_DOC: Record<BuildSlot, [key: string, what: string]> = {
   active2: ['E', 'The second active skill, never the same template as the first.'],
   passive: ['None', 'Always on, or set off by a hit, every third hit, low health or a kill.'],
   ultimate: ['R', `The big one. It starts each fight ${ENGINE.ultimateStartCooldown} s into its cooldown.`],
-  movement: ['Shift', 'A dash, blink, leap or grapple, on top of running, jumping and flying.'],
+  movement: ['F', 'A dash, blink, leap or grapple, on top of the run, the jumps, the dash and the slide every hero has.'],
 }
 
 const BUDGET_UNIT: Record<SlotKind, string> = { basic: 'per hit', active: 'per second of cooldown', passive: 'per trigger', ultimate: 'per second of cooldown', movement: 'per second of cooldown' }

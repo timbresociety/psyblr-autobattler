@@ -13,7 +13,7 @@ function brawl(arena: Arena): Command[] {
   const { match } = arena
   return match.heroes.map((h) => {
     const enemies = match.heroes.filter((e) => e.alive && e.team !== h.team)
-    if (!h.alive || !enemies.length) return { moveX: 0, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
+    if (!h.alive || !enemies.length) return { moveX: 0, moveZ: 0, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
     const target = enemies.reduce((a, b) => ((b.position.x - h.position.x) ** 2 + (b.position.z - h.position.z) ** 2 < (a.position.x - h.position.x) ** 2 + (a.position.z - h.position.z) ** 2 ? b : a))
     const from = chest(h)
     const to = chest(target)
@@ -22,7 +22,7 @@ function brawl(arena: Arena): Command[] {
     const flat = Math.sqrt(dx * dx + dz * dz) || 1
     const steps = (a: number) => Math.round(((a < 0 ? a + TAU : a) / TAU) * AIM_STEPS) % AIM_STEPS
     const close = flat < 3
-    return { moveX: close ? 0 : dx / flat, moveZ: close ? 0 : dz / flat, vertical: 0, aimYaw: steps(atan2(dx, dz)), aimPitch: steps(atan2(to.y - from.y, flat)), buttons: 0b111111 }
+    return { moveX: close ? 0 : dx / flat, moveZ: close ? 0 : dz / flat, moves: 0, aimYaw: steps(atan2(dx, dz)), aimPitch: steps(atan2(to.y - from.y, flat)), buttons: 0b111111 }
   })
 }
 
@@ -82,7 +82,7 @@ describe('match setup and rules (U5)', () => {
 
   it('under the gate profile, a stalemated duel ends by 60 s', () => {
     const a = createMatch(team(1, 'tank'), team(1, 'tank'), 1, { profile: GATE_PROFILE })
-    const r = play(a, (x) => x.match.heroes.map(() => ({ moveX: 0, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 })))
+    const r = play(a, (x) => x.match.heroes.map(() => ({ moveX: 0, moveZ: 0, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 })))
     expect(r.seconds).toBeLessThanOrEqual(60)
     expect(r.reason).toBe('time')
   })

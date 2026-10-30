@@ -440,7 +440,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     if (!build) return undefined
     const sheet = deriveSheet(getRole(build.roleId), build.spread, build.sizeClass).sheet
     const move = locomotion(sheet.moveSpeed)
-    return { health: Math.round(sheet.maxHealth), ground: move.ground, flight: move.flight, size: SIZES[build.sizeClass ?? 'medium'].label }
+    return { health: Math.round(sheet.maxHealth), ground: move.ground, slide: move.slide, size: SIZES[build.sizeClass ?? 'medium'].label }
   }, [build])
 
   const uploading = images.some((img) => img.status !== 'ready')
@@ -548,9 +548,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                         </dd>
                       </div>
                       <div>
-                        <dt>Flight</dt>
+                        <dt>Slide</dt>
                         <dd>
-                          {facts.flight.toFixed(1)}
+                          {facts.slide.toFixed(1)}
                           <small>m/s</small>
                         </dd>
                       </div>

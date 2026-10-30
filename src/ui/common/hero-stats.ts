@@ -37,7 +37,7 @@ export interface HeroStats {
   /** Cooldown reduction in %, as the engine caps it. */
   cooldownCut: number
   move: number
-  flight: number
+  slide: number
   /** The derived sheet these come from, for the skills' own numbers. */
   sheet: SecondarySheet
 }
@@ -74,7 +74,7 @@ export function heroStats(build: Build, mods: TraitMods = {}): HeroStats {
     lifesteal: sheet.lifesteal,
     cooldownCut: Math.min(40, sheet.cooldownReduction),
     move: move.ground,
-    flight: move.flight,
+    slide: move.slide,
     sheet,
   }
 }

@@ -54,7 +54,7 @@ export interface HeroView {
   lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number) => void
 }
 
-const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
+const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const hue = heroHue(build.heroName)
@@ -67,7 +67,7 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
     fallback,
     pose: (state, t) => {
       if (state.kind === 'dead') return
-      hero.animate(state.kind === 'idle' ? t * 0.2 : t, state.kind === 'fly')
+      hero.animate(state.kind === 'idle' ? t * 0.2 : t, state.kind === 'air')
     },
   }
 }

@@ -647,8 +647,8 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     f.held = true
     f.liftTo = LIFT
     f.lift = reduced ? LIFT : 0
-    // it blends into its hover and holds it: frames are drawn as the pointer moves, not while it rests
-    f.anim = { kind: 'fly' }
+    // it blends into hanging in the air and holds it: frames are drawn as the pointer moves, not while it rests
+    f.anim = { kind: 'air' }
     f.animUntil = performance.now() + 500
     ghost = { figure: f, hero, side: state.editing, source }
     emphasise()
@@ -733,7 +733,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     const f = g.figure
     f.held = true
     f.liftTo = LIFT
-    f.anim = { kind: 'fly' }
+    f.anim = { kind: 'air' }
     f.animUntil = performance.now() + 500
     styleRing(f)
     gesture = { kind: 'drag', figure: f, side: g.side, index: g.index, id: g.id, verdict: { kind: 'ok' } }

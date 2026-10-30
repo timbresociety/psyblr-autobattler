@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { createMatch } from '../engine/match.js'
-import { AIM_STEPS } from '../engine/state.js'
+import { AIM_STEPS, MOVES } from '../engine/state.js'
 import { BLEND_SECONDS, Cameras, pullIn } from './camera.js'
 import { BINDINGS, commandFrom } from './input.js'
 import { handBack, heroForKey, releaseIfDead, take } from './takeover.js'
@@ -39,9 +39,11 @@ describe('takeover and controls (U17)', () => {
     expect(match.human).toBeUndefined()
   })
 
-  it('Z flies down, Space flies up, and no binding uses Ctrl or Alt', () => {
-    expect(commandFrom({ held: new Set(['KeyZ']) }, 0, 0).vertical).toBe(-1)
-    expect(commandFrom({ held: new Set(['Space']) }, 0, 0).vertical).toBe(1)
+  it('Space jumps, Shift dashes, C crouches, and no binding uses Ctrl or Alt', () => {
+    expect(commandFrom({ held: new Set(['Space']) }, 0, 0).moves).toBe(MOVES.jump)
+    expect(commandFrom({ held: new Set(['ShiftLeft']) }, 0, 0).moves).toBe(MOVES.dash)
+    expect(commandFrom({ held: new Set(['ShiftRight', 'KeyC']) }, 0, 0).moves).toBe(MOVES.dash | MOVES.crouch)
+    expect(commandFrom({ held: new Set(['KeyZ']) }, 0, 0).moves).toBe(0)
     expect(Object.keys(BINDINGS).some((k) => /Control|Alt|Meta/.test(k))).toBe(false)
   })
 

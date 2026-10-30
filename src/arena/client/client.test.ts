@@ -55,8 +55,36 @@ describe('arena client core (U13)', () => {
     expect(settle(a, hero, 1, 50, 1 / 60).kind).toBe('dead')
     hero.airborne = true
     const b = createAnimator()
-    expect(settle(b, hero, 0, 1, 1 / 60).kind).toBe('fly')
+    expect(settle(b, hero, 0, 1, 1 / 60).kind).toBe('air')
     expect(emptyMatch(1).tick).toBe(0)
+  })
+
+  it('plays each jump, dash and landing once as it happens, then gives the body back (phase 2)', () => {
+    const hero = createHero(prepareHero(defaultBuild('fighter')), 0, 0, { x: 0, y: 0, z: 0 })
+    const a = createAnimator()
+    const frames = (n: number, moved = 0) => {
+      for (let i = 0; i < n; i++) settle(a, hero, moved, 0, 1 / 60)
+      return a.state
+    }
+    hero.airborne = true
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'jump' }], 1)
+    expect(frames(1)).toMatchObject({ kind: 'jump', seq: 1 })
+    expect(frames(30).kind).toBe('air')
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'air-jump' }], 40)
+    expect(frames(1)).toMatchObject({ kind: 'air_jump', seq: 2 })
+    // a dash straight after a dash starts over
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'dash' }], 50)
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'dash' }], 52)
+    expect(frames(1)).toMatchObject({ kind: 'dash', seq: 4 })
+    // a soft landing gives way at once to a hero that runs on; a standing one sinks into it a moment
+    hero.airborne = false
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'land', speed: 4 }], 60)
+    expect(frames(1, 0.1).kind).toBe('run')
+    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'land', speed: 4 }], 70)
+    expect(frames(2).kind).toBe('land')
+    expect(frames(20).kind).toBe('idle')
+    hero.slide = { from: 80, until: 120, x: 0, z: 1 }
+    expect(frames(1, 0.2).kind).toBe('slide')
   })
 })
 

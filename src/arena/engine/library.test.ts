@@ -12,7 +12,7 @@ import { dealDamage, heal as applyHeal } from './effects.js'
 import type { MatchEvent } from './events.js'
 import { atan2 } from './maths.js'
 import { hashState, restore, snapshot } from './snapshot.js'
-import { createHero, emptyMatch, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
+import { createHero, emptyMatch, MOVES, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
 import { tick } from './tick.js'
 
 const base = { id: 'lib', name: 'Lib', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
@@ -46,7 +46,7 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number 
   return { m, setups, ctx, events, fire, run, aimAt, of }
 }
 
-const walk = (moveX: number, moveZ: number, buttons = 0): Command => ({ moveX, moveZ, vertical: 0, aimYaw: 0, aimPitch: 0, buttons })
+const walk = (moveX: number, moveZ: number, buttons = 0): Command => ({ moveX, moveZ, moves: 0, aimYaw: 0, aimPitch: 0, buttons })
 const zone = (radius = 3, range = 0) => at.zone(range, radius)
 
 describe('skill library: crowd control', () => {
@@ -90,16 +90,18 @@ describe('skill library: crowd control', () => {
     expect(a.of('miss')).toHaveLength(1)
   })
 
-  it('a grounded hero cannot take off, and one in the air comes down', () => {
+  it('a grounded hero cannot jump or dash, and one in the air drops at once', () => {
     const a = arena(skill(zone(4), [ground(4)]), [{ z: 2 }])
     a.fire()
-    a.run(10, [undefined, { ...walk(0, 0), vertical: 1 }])
+    const stamina = a.m.heroes[1].stamina
+    for (let i = 0; i < 10; i++) a.run(1, [undefined, { ...walk(1, 0), moves: i % 2 ? MOVES.jump : MOVES.dash }])
     expect(a.m.heroes[1].airborne).toBe(false)
-    const flier = arena(skill(at.aura(6), [ground(6)]), [{ z: 2, y: 3 }])
-    flier.m.heroes[1].airborne = true
-    flier.fire()
-    flier.run(240, [undefined, { ...walk(0, 0), vertical: 1 }])
-    expect(flier.m.heroes[1].position.y).toBe(0)
+    expect(a.m.heroes[1].stamina).toBeGreaterThanOrEqual(stamina)
+    const jumper = arena(skill(at.aura(6), [ground(6)]), [{ z: 2, y: 3 }])
+    jumper.m.heroes[1].airborne = true
+    jumper.fire()
+    jumper.run(30, [undefined, { ...walk(0, 0), moves: MOVES.jump }])
+    expect(jumper.m.heroes[1].position.y).toBe(0)
   })
 
   it('fear sends a hero running from the caster and stops it acting; taunt walks it at the caster and makes it attack', () => {

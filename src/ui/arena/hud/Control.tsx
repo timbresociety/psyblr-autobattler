@@ -104,7 +104,7 @@ export function HealthBlock({ hero, info, shield }: { hero: HudHero; info: HudHe
           ))}
         </span>
         <span className="hud-health-hint">
-          <kbd>Tab</kbd> hands back · <kbd>Esc</kbd> frees the mouse · <kbd>Space</kbd> flies
+          <kbd>Tab</kbd> hands back · <kbd>Space</kbd> jumps · <kbd>Shift</kbd> dashes · <kbd>C</kbd> slides
         </span>
       </div>
     </div>
@@ -201,12 +201,13 @@ export function TargetFrame({ controller, state, heroes, team }: { controller?: 
 }
 
 /**
- * Under the reticle: the flight meter while it is in use (flying costs it, landing refills it), and whatever is on
- * the hero right now, so a silence or a root is never a mystery.
+ * Under the reticle: the stamina pips while one is spent (a dash or a second jump costs one, and they refill one at a
+ * time), and whatever is on the hero right now, so a silence or a root is never a mystery.
  */
 export function SelfStatus({ hero }: { hero: HudHero }) {
-  const flight = hero.flight ?? 1
-  const showMeter = hero.airborne || flight < 0.995
+  const max = hero.staminaMax ?? 3
+  const stamina = hero.stamina ?? max
+  const showMeter = stamina < max - 0.005
   const statuses = hero.statuses ?? []
   if (!showMeter && !statuses.length) return null
   return (
@@ -221,9 +222,13 @@ export function SelfStatus({ hero }: { hero: HudHero }) {
         </span>
       )}
       {showMeter && (
-        <span className={`hud-flight${flight < 0.12 ? ' low' : ''}`} role="meter" aria-label="Flight" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(flight * 100)}>
-          <i style={{ transform: `scaleX(${flight.toFixed(3)})` }} />
-          <small>Flight</small>
+        <span className={`hud-stamina${stamina < 1 ? ' low' : ''}`} role="meter" aria-label="Stamina" aria-valuemin={0} aria-valuemax={max} aria-valuenow={Math.floor(stamina)}>
+          {Array.from({ length: max }, (_, k) => (
+            <b key={k} className={stamina >= k + 1 ? 'full' : undefined}>
+              <i style={{ transform: `scaleX(${Math.min(1, Math.max(0, stamina - k)).toFixed(3)})` }} />
+            </b>
+          ))}
+          <small>Stamina</small>
         </span>
       )}
     </div>

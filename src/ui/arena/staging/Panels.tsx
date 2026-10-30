@@ -190,7 +190,7 @@ export function DetailsPanel({ build, entry, portrait, view3d = false, army = []
         <Stat icon="regen" label="Regen" value={n(stats.regen, 1)} unit="/s" tip="Health back every second" />
         <Stat icon="lifesteal" label="Lifesteal" value={n(stats.lifesteal, 1)} unit="%" tip="Of its damage it heals back" />
         <Stat icon="move" label="Move" value={n(stats.move, 1)} unit="m/s" tip={LOCOMOTION_HINT} />
-        <Stat icon="flight" label="Flight" value={n(stats.flight, 1)} unit="m/s" tip="Flight speed; flying drains the flight meter" />
+        <Stat icon="flight" label="Slide" value={n(stats.slide, 1)} unit="m/s" tip="How fast a slide starts: crouch at a run" />
         <Stat icon="cooldown" label="Cooldowns" value={`−${n(stats.cooldownCut)}`} unit="%" tip="Cooldown reduction, capped at 40%" />
       </div>
       <div className="card-attrs" aria-label="Attribute split">

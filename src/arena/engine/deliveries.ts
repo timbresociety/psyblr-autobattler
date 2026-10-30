@@ -4,8 +4,8 @@ import type { BuildSlot, Effect, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
 import { tickWorld } from './world.js'
-import { coverHit, coverInDisc } from './cover.js'
-import { keepOut } from './locomotion.js'
+import { coverHit, coverInDisc, floorUnder } from './cover.js'
+import { keepOut, standOn } from './locomotion.js'
 import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths.js'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import type { TickRules } from './tick.js'
@@ -251,6 +251,7 @@ function release(ctx: Ctx, index: number, slot: BuildSlot) {
     if (e.kind !== 'mobility') continue
     if (e.invulnerable) caster.invulnerableUntil = Math.max(caster.invulnerableUntil, match.tick + ticks(e.invulnerable))
     if (e.distance) {
+      const startY = caster.position.y
       let p = add(caster.position, scale(aim(caster), e.distance))
       // a dash stops at the wall in its way; a blink jumps past it; a leap clears anything lower than its arc
       if (template.delivery.kind !== 'blink') {
@@ -265,8 +266,9 @@ function release(ctx: Ctx, index: number, slot: BuildSlot) {
         if (t < 1) p = add(from, scale(sub(p, from), Math.max(0, t - 0.02)))
       }
       caster.position = p
-      if (p.y > 0) caster.airborne = true
       keepOut(caster, match)
+      // aimed up, a leap or a blink ends in the air, and the hero falls from there
+      standOn(caster, match, Math.max(caster.position.y, startY))
     }
   }
   if (template.delivery.kind === 'projectile') {
@@ -341,14 +343,15 @@ function moveKnockbacks(ctx: Ctx) {
     const kb = hero.knockback
     if (!kb || !hero.alive) continue
     hero.position = add(hero.position, kb.step)
-    if (hero.position.y > 0) hero.airborne = true
     keepOut(hero, ctx.match)
     if (ctx.match.tick >= kb.until) {
-      // the lift is a launch, not a switch into flight: a hero knocked off the ground comes back down
+      // a hero knocked along the ground lands where it ends up; one knocked out of the air falls from there
+      hero.velocity = { x: 0, y: 0, z: 0 }
+      const cover = ctx.match.cover
       if (kb.grounded) {
-        hero.position = { ...hero.position, y: 0 }
+        hero.position = { ...hero.position, y: cover ? floorUnder(cover.pieces, cover.health, hero.position, hero.position.y) : 0 }
         hero.airborne = false
-      }
+      } else standOn(hero, ctx.match)
       hero.knockback = undefined
       ctx.events.push({ type: 'knockback', hero: hero.id, phase: 'end' })
     }

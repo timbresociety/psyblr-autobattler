@@ -1,6 +1,6 @@
 """
-The clips every arena character plays (idle, run, fly, hover, slash, shoot, cast, ultimate, hurt, stunned, fall, and
-the ten cast poses a skill's look can pick: see CAST_POSES), keyframed by script on the game rig. The poses are the ones first authored for the T-posed mannequin; the
+The clips every arena character plays (idle, run, slash, shoot, cast, ultimate, hurt, stunned, fall, the six ways it
+moves like Deadlock, see MOVES, and the ten cast poses a skill's look can pick: see CAST_POSES), keyframed by script on the game rig. The poses are the ones first authored for the T-posed mannequin; the
 rig's per-bone T-pose corrections (rig.py) make the same numbers mean the same thing on MakeHuman's A-posed body.
 
 Poses: bone -> (x, y, z) degrees, applied in armature space about the bone's head, in the order y, then x, then z. The
@@ -162,29 +162,6 @@ def author(rig, arms_out=0.0):
 
     make_action(rig, 'run', [(0, contact(1), -0.045, 0), (0.17, passing(1), 0.035, 0), (0.34, contact(-1), -0.045, 0), (0.51, passing(-1), 0.035, 0), (0.68, contact(1), -0.045, 0)])
 
-    # fly: the Superman pose - body flat out, one fist leading, the other arm swept back, legs trailing, a slow bob
-    fly_a = merged(
-        both(thigh=(6, -2, 0), shin=(28, 0, 0), foot=(40, 0, 0)),
-        {
-            'hips': (78, 0, 0),
-            'spine': (-8, 0, 0),
-            'chest': (-4, 0, 0),
-            'neck': (-20, 0, 0),
-            'head': (-35, 0, 0),
-            'upper_arm_R': (0, -88, 0),
-            'forearm_R': (0, 0, -6),
-            'upper_arm_L': (25, 80, 0),
-            'forearm_L': (0, 0, -25),
-        },
-    )
-    fly_b = merged(fly_a, {'spine': (2, 2, 0), 'thigh_L': (8, 0, 0), 'thigh_R': (-6, 0, 0), 'upper_arm_L': (-5, 0, 0)})
-    make_action(rig, 'fly', [(0, fly_a, 0.25, 0), (0.9, fly_b, 0.31, 0), (1.8, fly_a, 0.25, 0)])
-
-    # hover: upright in the air, knees drawn up a little, arms loose and out, bobbing
-    hover_a = merged(both(arm=(-10, 52, 0), forearm=(0, 0, -30), thigh=(-25, -6, 0), shin=(45, 0, 0), foot=(25, 0, 0)), {'spine': (4, 0, 0)})
-    hover_b = merged(hover_a, both(arm=(0, 6, 0), thigh=(5, 0, 0), shin=(-8, 0, 0)), {'spine': (-2, 0, 0), 'head': (3, 0, 0)})
-    make_action(rig, 'hover', [(0, hover_a, 0.0, 0), (0.8, hover_b, 0.07, 0), (1.6, hover_a, 0.0, 0)])
-
     # slash: wind up over the right shoulder, a fast diagonal cut across, follow through, recover (fits the 0.45 s cast)
     guard_l = {'upper_arm_L': (-30, 50, 0), 'forearm_L': (0, 0, -95)}
     wind = over(down, guard_l, {'upper_arm_R': (20, -45, 0), 'forearm_R': (0, 0, -105), 'spine': (0, 0, -22), 'chest': (0, 0, -18), 'thigh_L': (-28, -6, 0), 'shin_L': (28, 0, 0), 'thigh_R': (18, -6, 0), 'shin_R': (18, 0, 0)})
@@ -222,7 +199,71 @@ def author(rig, arms_out=0.0):
     flat = merged(both(arm=(0, 15, 10), forearm=(0, 0, -20)), {'hips': (-90, 0, 0), 'spine': (-4, 0, 0), 'head': (-12, 0, 22), 'thigh_L': (8, -10, 0), 'thigh_R': (22, -8, 0), 'shin_R': (32, 0, 0)})
     make_action(rig, 'fall', [(0, down, 0, 0), (0.2, buckle, -0.1, 0.1), (0.55, flat, -0.86, 0.6), (1.2, flat, -0.86, 0.6)], loop=False)
 
+    moves(rig, down)
     cast_poses(rig, down, stance)
+
+
+def moves(rig, down):
+    """
+    Moving like Deadlock (Forge goal, phase 2): a jump, the air, a landing, the second jump, a dash and a slide. A
+    jump leaves the ground at once (the engine doesn't wait for a wind-up), so its clip starts at take-off. A foot that
+    should stay flat on the ground undoes its leg's bend: foot x = -(thigh x + shin x).
+    """
+    # jump: off the lead foot, its knee driving up and the arms lifting with it, then tucked at the top
+    take_off = merged(
+        both(arm=(-28, 50, 0), forearm=(0, 0, -45)),
+        {'thigh_L': (-38, -4, 0), 'shin_L': (55, 0, 0), 'foot_L': (-8, 0, 0), 'thigh_R': (12, -4, 0), 'shin_R': (18, 0, 0), 'foot_R': (30, 0, 0), 'spine': (-6, 0, 0), 'head': (-4, 0, 0)},
+    )
+    tuck = merged(both(arm=(-12, 58, 0), forearm=(0, 0, -55), thigh=(-44, -7, 0), shin=(70, 0, 0), foot=(-10, 0, 0)), {'spine': (8, 0, 0), 'head': (-6, 0, 0)})
+    make_action(rig, 'jump', [(0, take_off, 0.04, 0), (0.22, tuck, 0.1, 0), (0.45, tuck, 0.08, 0)], loop=False)
+
+    # air: coming down, legs reaching for the ground one ahead of the other, arms out for balance, a slow paddle
+    air_a = merged(both(arm=(4, 68, 10), forearm=(0, 0, -26)), {'thigh_L': (-34, -8, 0), 'shin_L': (48, 0, 0), 'foot_L': (-6, 0, 0), 'thigh_R': (6, -8, 0), 'shin_R': (38, 0, 0), 'foot_R': (12, 0, 0), 'spine': (5, 0, 0)})
+    air_b = merged(air_a, both(arm=(6, 4, -4)), {'thigh_L': (6, 0, 0), 'thigh_R': (-8, 0, 0), 'spine': (-3, 0, 0), 'head': (3, 0, 0)})
+    make_action(rig, 'air', [(0, air_a, 0, 0), (0.6, air_b, 0.01, 0), (1.2, air_a, 0, 0)])
+
+    # land: the knees take the drop, hips sinking and the chest pitching over the feet, then up again
+    squash = merged(
+        both(arm=(-32, 52, 0), forearm=(0, 0, -55), thigh=(-58, -10, 0), shin=(98, 0, 0), foot=(-40, 0, 0)),
+        {'spine': (24, 0, 0), 'chest': (6, 0, 0), 'head': (-16, 0, 0)},
+    )
+    touch = merged(down, both(thigh=(-18, -6, 0), shin=(30, 0, 0), foot=(-12, 0, 0)), {'spine': (6, 0, 0)})
+    make_action(rig, 'land', [(0, touch, -0.04, 0), (0.08, squash, -0.3, 0), (0.18, squash, -0.27, 0), (0.42, down, 0, 0)], loop=False)
+
+    # air_jump: the second jump, knees snapped to the chest and then kicked down hard, arms flung up with it
+    snap = merged(both(arm=(28, 58, 0), forearm=(0, 0, -50), thigh=(-84, -10, 0), shin=(122, 0, 0), foot=(-24, 0, 0)), {'spine': (22, 0, 0), 'head': (-10, 0, 0)})
+    kick = merged(both(arm=(-62, 22, 8), forearm=(0, 0, -20), thigh=(-6, -6, 0), shin=(14, 0, 0), foot=(24, 0, 0)), {'spine': (-12, 0, 0), 'head': (-8, 0, 0)})
+    make_action(rig, 'air_jump', [(0, snap, 0.22, 0), (0.14, kick, 0.02, 0), (0.42, air_a, 0, 0)], loop=False)
+
+    # dash: a burst off the back foot, low and leaning into it, arms swept back, then a stride to catch it
+    burst = merged(
+        both(arm=(48, 58, 0), forearm=(0, 0, -22)),
+        {'thigh_L': (-55, -6, 0), 'shin_L': (68, 0, 0), 'foot_L': (-13, 0, 0), 'thigh_R': (34, -6, 0), 'shin_R': (36, 0, 0), 'foot_R': (34, 0, 0), 'spine': (26, 0, 0), 'chest': (10, 0, 0), 'head': (-24, 0, 0)},
+    )
+    catch = merged(down, both(forearm=(0, 0, -60)), {'thigh_L': (-30, -4, 0), 'shin_L': (40, 0, 0), 'foot_L': (-10, 0, 0), 'thigh_R': (24, -4, 0), 'shin_R': (50, 0, 0), 'foot_R': (20, 0, 0), 'upper_arm_L': (30, 0, 0), 'upper_arm_R': (-30, 0, 0), 'spine': (14, 0, 0)})
+    make_action(rig, 'dash', [(0, burst, -0.1, 0), (0.18, burst, -0.1, 0), (0.32, catch, -0.05, 0)], loop=False)
+
+    # dash_back: a hop away from the aim, pushed off the front foot with the chest kept over it and the guard up, the
+    # back foot reaching for the ground behind and catching the weight
+    guard = both(arm=(-36, 54, 0), forearm=(0, 0, -58))
+    push = merged(guard, {'thigh_L': (-20, -4, 0), 'shin_L': (45, 0, 0), 'foot_L': (-25, 0, 0), 'thigh_R': (32, -4, 0), 'shin_R': (24, 0, 0), 'foot_R': (18, 0, 0), 'spine': (14, 0, 0), 'chest': (4, 0, 0), 'head': (-16, 0, 0)})
+    reach = merged(guard, {'thigh_L': (-8, -4, 0), 'shin_L': (30, 0, 0), 'foot_L': (-10, 0, 0), 'thigh_R': (26, -4, 0), 'shin_R': (40, 0, 0), 'foot_R': (-20, 0, 0), 'spine': (10, 0, 0), 'head': (-10, 0, 0)})
+    settle = merged(guard, {'thigh_L': (-26, -4, 0), 'shin_L': (30, 0, 0), 'foot_L': (-4, 0, 0), 'thigh_R': (16, -4, 0), 'shin_R': (34, 0, 0), 'foot_R': (-50, 0, 0), 'spine': (12, 0, 0), 'head': (-8, 0, 0)})
+    make_action(rig, 'dash_back', [(0, push, -0.08, 0), (0.16, reach, -0.02, 0), (0.32, settle, -0.06, 0)], loop=False)
+
+    # slide: dropped onto the right hip, the left leg out ahead, the right folded under, leaning back with the right
+    # hand trailing near the ground and the left out in front for balance, eyes ahead
+    slide = merged(
+        {
+            'thigh_L': (-78, -6, 0), 'shin_L': (10, 0, 0), 'foot_L': (-22, 0, 0),
+            'thigh_R': (-38, -28, 0), 'shin_R': (118, 0, 0), 'foot_R': (-30, 0, 0),
+            'spine': (-26, 0, 0), 'chest': (-6, 0, 0), 'neck': (10, 0, 0), 'head': (22, 0, 0),
+            'upper_arm_L': (-30, 34, 0), 'forearm_L': (0, 0, -40),
+            'upper_arm_R': (24, 78, 16), 'forearm_R': (0, 0, -12),
+        },
+    )
+    drop = merged(down, {'thigh_L': (-58, -6, 0), 'shin_L': (34, 0, 0), 'thigh_R': (-20, -18, 0), 'shin_R': (80, 0, 0), 'spine': (-8, 0, 0)})
+    make_action(rig, 'slide', [(0, drop, -0.42, 0), (0.12, slide, -0.72, 0), (0.9, slide, -0.72, 0)], loop=False)
 
 
 def cast_poses(rig, down, stance):
@@ -285,4 +326,5 @@ def cast_poses(rig, down, stance):
 
 # the cast poses a skill look can pick, beside the hip charge (`cast`)
 CAST_POSES = ['cast_palms', 'cast_palm', 'cast_fingers', 'cast_overhead', 'cast_cross', 'cast_clap', 'cast_slam', 'cast_summon', 'cast_breath', 'cast_spin']
-CLIPS = ['idle', 'run', 'fly', 'hover', 'slash', 'shoot', 'cast', 'ultimate', 'hurt', 'stunned', 'fall'] + CAST_POSES
+MOVES = ['jump', 'air', 'land', 'air_jump', 'dash', 'dash_back', 'slide']
+CLIPS = ['idle', 'run', 'slash', 'shoot', 'cast', 'ultimate', 'hurt', 'stunned', 'fall'] + MOVES + CAST_POSES

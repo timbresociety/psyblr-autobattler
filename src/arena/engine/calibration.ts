@@ -2,15 +2,13 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 9
+export const ENGINE_CALIBRATION_VERSION = 10
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
   tickHz: 60,
   /** The arena: x is across, z runs from one half to the other, y is up. Metres. */
   arena: { halfWidth: 40, halfLength: 30, ceiling: 25 },
-  /** Vertical speed when flying up or down, as a fraction of flight speed. */
-  climbFraction: 0.7,
   /** Every hero is a vertical capsule this tall and wide at medium size, plus its size class's hitbox. */
   /** Largest radius a hero collides with walls at; hit capsules can be bigger (huge, colossal). */
   bodyRadiusCap: 0.9,
@@ -44,11 +42,28 @@ export const ENGINE = {
   /** Ground-disc zones reach heroes this close to the floor, metres. */
   groundReach: 1.5,
   /**
-   * Flight (R8): slower than running and paid for from a meter, so the air is a tactical burst over the ruins rather
-   * than the way to travel. Taking off costs `takeoff`, staying up drains `drain` a second, and standing on the ground
-   * refills `refill` a second after `refillDelay` seconds. An empty meter can't climb and glides down.
+   * Moving like Deadlock (Forge goal, phase 2): nobody flies. On the ground a hero eases toward the speed it wants at
+   * `accel` (m/s²); in the air it keeps its momentum and steers at `airAccel`, falling at `gravity` up to `fall` m/s. A
+   * jump rises `jump` metres; a second jump in the air rises `airJump` from wherever it starts and spends a stamina pip.
+   * A dash spends a pip to cover `dash.speed` m/s for `dash.time` seconds along the way the hero steers (or faces),
+   * level in the air too. Crouching at `slide.from` of run speed or more slides: it starts at `slide.boost` times run
+   * speed and eases to `slide.end` over `slide.time` seconds, turning at most `slide.steer` radians a second, with the
+   * body `slide.height` of its height, low enough for a shot at the chest to pass over. Stamina holds `stamina.max`
+   * pips and refills one every `stamina.regen` seconds. A hero steps up anything `step` metres high without jumping
+   * and stands on top of cover.
    */
-  flight: { max: 100, takeoff: 10, drain: 18, refill: 30, refillDelay: 1 },
+  move: {
+    accel: 60,
+    airAccel: 12,
+    gravity: 24,
+    fall: 30,
+    jump: 1.4,
+    airJump: 1.1,
+    dash: { speed: 18, time: 0.2 },
+    slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
+    stamina: { max: 3, regen: 3.5 },
+    step: 0.4,
+  },
   /** Shreds can't push a resist below this. */
   resistFloor: -20,
   /** No armor or spirit resist takes more than this percentage off a hit. */

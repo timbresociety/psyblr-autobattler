@@ -3,7 +3,7 @@ import { ENGINE, ticks } from './calibration.js'
 import type { CoverPiece } from './cover.js'
 import { coverHit } from './cover.js'
 import { dealDamage, enemiesOf, resolve, world, type Area, type Ctx } from './effects.js'
-import { keepOut } from './locomotion.js'
+import { keepOut, standOn } from './locomotion.js'
 import { distance, type Vec3 } from './maths.js'
 import { capsule, type HeroState, type MatchState } from './state.js'
 
@@ -94,12 +94,11 @@ export function tickWorld(ctx: Ctx) {
     const t = Math.min(1, (now - l.from) / Math.max(1, l.until - l.from))
     h.position.y = l.base + 4 * l.height * t * (1 - t)
     if (now >= l.until || !h.alive) {
+      // back where it was launched from; from there it falls if that was in the air
       h.position.y = l.base
-      if (l.base <= 0) {
-        h.airborne = false
-        h.landedAt = now
-      }
       h.launch = undefined
+      h.velocity.y = 0
+      standOn(h, m)
     }
   }
   if (m.fields?.length) {

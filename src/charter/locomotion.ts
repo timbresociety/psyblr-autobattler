@@ -1,15 +1,18 @@
-/**
- * Locomotion (R8, R28, KTD2). Every hero can fly, and one stat, `moveSpeed`, drives running, flying and jumping.
- * The engine and the tooltips both read these multiples, so they never disagree. Flight is slower than running and
- * paid for from a meter (ENGINE.flight), so the ground among the ruins is where fights happen and the air is a burst:
- * over a wall, out of a melee, after a flier.
- */
-export const FLIGHT_SPEED_MUL = 0.75
-/** Metres of jump or air-dash reach per m/s of move speed. */
-export const JUMP_REACH_PER_SPEED = 1.5
+import { ENGINE } from '../arena/engine/calibration.js'
 
-export function locomotion(moveSpeed: number): { ground: number; flight: number; jumpReach: number } {
-  return { ground: moveSpeed, flight: moveSpeed * FLIGHT_SPEED_MUL, jumpReach: moveSpeed * JUMP_REACH_PER_SPEED }
+/**
+ * Locomotion (R8, R28, KTD2; Forge goal, phase 2). Nobody flies: like Deadlock, every hero runs, jumps, jumps again in
+ * the air or dashes on stamina, and slides. One stat, `moveSpeed`, sets the run, and a slide starts faster than it;
+ * the jumps, the dash and the stamina are the same for everyone. The engine and the tooltips read the same numbers
+ * (ENGINE.move), so they never disagree.
+ */
+const M = ENGINE.move
+
+/** Metres a dash covers. */
+export const DASH_REACH = M.dash.speed * M.dash.time
+
+export function locomotion(moveSpeed: number): { ground: number; slide: number } {
+  return { ground: moveSpeed, slide: moveSpeed * M.slide.boost }
 }
 
-export const LOCOMOTION_HINT = `Ground speed in m/s. Flight runs at ${FLIGHT_SPEED_MUL}× that and drains the flight meter, and jump range is ${JUMP_REACH_PER_SPEED} m per point.`
+export const LOCOMOTION_HINT = `Ground speed in m/s; a slide starts at ${M.slide.boost}× it. Everyone jumps ${M.jump} m and has ${M.stamina.max} stamina pips: a ${DASH_REACH.toFixed(1)} m dash or a second jump in the air spends one, and one refills every ${M.stamina.regen} s.`

@@ -23,8 +23,8 @@ export interface Command {
   /** Desired horizontal direction in world space; the engine clamps its length to 1. */
   moveX: number
   moveZ: number
-  /** Fly up (1), down (-1) or hold (0). */
-  vertical: -1 | 0 | 1
+  /** The movement buttons (`MOVES`): jump and dash count when first pressed, crouch while held. */
+  moves: number
   /** Aim in steps of a full turn (`AIM_STEPS` per turn). */
   aimYaw: number
   aimPitch: number
@@ -33,7 +33,9 @@ export interface Command {
 }
 
 export const AIM_STEPS = 4096
-export const IDLE: Command = { moveX: 0, moveZ: 0, vertical: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
+export const IDLE: Command = { moveX: 0, moveZ: 0, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
+/** Bits of `Command.moves` (Forge goal, phase 2). */
+export const MOVES = { jump: 1, dash: 2, crouch: 4 } as const
 export const slotBit = (slot: BuildSlot) => 1 << BUILD_SLOTS.indexOf(slot)
 
 export type Stat = BuffStat
@@ -69,9 +71,19 @@ export interface HeroState {
   stealthUntil: number
   /** Weakening from enemies: flat resist down, more damage taken, less healing taken, marked for a team. */
   debuffs: { type: DebuffType; amount: number; until: number; source: number }[]
-  /** The flight meter: taking off and staying up spend it, standing on the ground refills it. */
-  flight: number
-  /** The tick it last touched the ground, for the meter's refill delay. */
+  /** Metres a second it moves: across the ground (x, z) and up or down (y). */
+  velocity: Vec3
+  /** Stamina pips, fractional while one refills: a dash or a jump in the air spends one (ENGINE.move). */
+  stamina: number
+  /** Jumps made in the air since it last stood on something. */
+  airJumps: number
+  /** The movement buttons held last tick, so a press counts once. */
+  held: number
+  /** A dash carries it until this tick. */
+  dashUntil: number
+  /** A slide in progress: from the tick it started until the tick it ends, along `x`, `z`. */
+  slide?: { from: number; until: number; x: number; z: number }
+  /** The tick it last landed. */
   landedAt: number
   /** A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. */
   launch?: { from: number; until: number; height: number; base: number }
@@ -176,7 +188,12 @@ export interface BrainState {
   strafe: 1 | -1
   /** Until this tick, keep dodging along `dodge`. */
   dodgeUntil: number
-  dodge: { x: number; z: number; vertical: -1 | 0 | 1 }
+  dodge: { x: number; z: number }
+  /** Movement buttons (MOVES) to press with the next command: a dash or a jump decided between ticks. */
+  press: number
+  /** Not before this tick does it dash again to close a gap; it slides until `slideUntil` (Forge goal, phase 2). */
+  nextDash: number
+  slideUntil: number
   /** The skill it has decided to use, pressed once the aim settles. */
   cast?: { slot: 'movement' | 'ultimate' | 'active1' | 'active2'; escape: boolean }
   /** Where the hand is pointing now, radians; it lags, overshoots and settles on the target. */
@@ -229,7 +246,8 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     id, team, alive: true, position: { ...position }, airborne: position.y > 0, yaw: team === 0 ? 0 : Math.PI, pitch: 0,
     hp: setup.sheet.maxHealth, maxHp: setup.sheet.maxHealth, shield: 0, shieldUntil: 0, stunnedUntil: 0, invulnerableUntil: 0,
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, formUntil: 0,
-    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], flight: ENGINE.flight.max, landedAt: 0,
+    cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], landedAt: 0,
+    velocity: { x: 0, y: 0, z: 0 }, stamina: ENGINE.move.stamina.max, airJumps: 0, held: 0, dashUntil: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }
@@ -242,8 +260,11 @@ export function emptyMatch(seed: number): MatchState {
 /** The body that bumps into walls: the hit capsule's radius, capped so big heroes still fit through gaps. */
 export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, capsule(hero).radius)
 
-/** The hit capsule: the medium one scaled by the size class's body, so it matches the model the audience sees (R23). */
+/**
+ * The hit capsule: the medium one scaled by the size class's body, so it matches the model the audience sees (R23).
+ * A sliding hero is down low (ENGINE.move.slide.height of its height).
+ */
 export function capsule(hero: HeroState): { radius: number; height: number } {
   const scale = SIZES[hero.size].scale
-  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale }
+  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale * (hero.slide ? ENGINE.move.slide.height : 1) }
 }

@@ -276,14 +276,16 @@
 .hud-crosshair { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; }
 /* an enemy where the next basic attack would land: the reticle turns gold */
 .hud-crosshair.in-range .hud-ch-dot, .hud-crosshair.in-range .hud-ch-ticks i { background: var(--accent); box-shadow: 0 0 6px rgba(var(--accent-rgb), 0.9); }
-/* under the reticle: what is on the controlled hero, and the flight meter while it is in use */
+/* under the reticle: what is on the controlled hero, and the stamina pips while one is spent */
 .hud-self { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; pointer-events: none; z-index: 2; }
 .hud-self-status { display: flex; gap: 4px; }
 .hud-self-status .hud-oh-chip { font-size: 11px; padding: 2px 6px 3px; }
-.hud-flight { position: relative; display: block; width: 120px; height: 5px; border-radius: 3px; overflow: hidden; background: rgba(var(--surface-lo-rgb), 0.7); box-shadow: 0 0 0 1px rgba(var(--shade-rgb), calc(0.6 * var(--shade-a))); }
-.hud-flight i { position: absolute; inset: 0; transform-origin: 0 50%; background: linear-gradient(90deg, #7fe3ff, #e8fbff); transition: transform 0.1s linear; }
-.hud-flight.low i { background: #ff6a4a; }
-.hud-flight small { position: absolute; left: 50%; top: 7px; transform: translateX(-50%); font: 600 9px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
+.hud-stamina { position: relative; display: flex; gap: 4px; width: 120px; height: 5px; }
+.hud-stamina b { position: relative; flex: 1; border-radius: 3px; overflow: hidden; background: rgba(var(--surface-lo-rgb), 0.7); box-shadow: 0 0 0 1px rgba(var(--shade-rgb), calc(0.6 * var(--shade-a))); }
+.hud-stamina b i { position: absolute; inset: 0; transform-origin: 0 50%; background: rgba(232, 251, 255, 0.55); transition: transform 0.1s linear; }
+.hud-stamina b.full i { background: linear-gradient(90deg, #7fe3ff, #e8fbff); }
+.hud-stamina.low b.full i, .hud-stamina.low b i { background: #ff6a4a; }
+.hud-stamina small { position: absolute; left: 50%; top: 7px; transform: translateX(-50%); font: 600 9px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); white-space: nowrap; }
 .hud-ch-dot { position: absolute; left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(var(--shade-rgb), calc(0.55 * var(--shade-a))), 0 0 6px rgba(var(--accent-rgb), 0.85); }
 .hud-ch-ticks, .hud-hitmark { position: absolute; left: 0; top: 0; width: 0; height: 0; }
 .hud-ch-ticks i { position: absolute; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px rgba(var(--shade-rgb), calc(0.5 * var(--shade-a))); }
