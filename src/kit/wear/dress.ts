@@ -34,6 +34,21 @@ const DRAPE_HOLD = 0.05
 const HOLD_FROM = 0.2
 const HOLD_TO = 0.3
 const DRAPE_PASSES = 24
+/** Stiff cloth is measured in level slices this far apart, along this many rays round one upright axis (hangsOf). */
+const HANG_SLICE = 0.01
+const HANG_RAYS = 96
+/** Stiff cloth stands no further than this out over a hollow, in metres. */
+const HANG_MAX = 0.05
+/** Cloth hangs from nothing higher up the torso than this (bodyFields' hem), so a shoulder doesn't tent the armpit under it. */
+const HANG_TOP = 0.85
+/** Stiff cloth hangs over the torso only: it stops this far down an arm or a leg, fades in up from the crotch and out toward the base of the neck. */
+const HANG_LIMB = 0.06
+const HANG_CROTCH_FROM = 0.04
+const HANG_CROTCH_TO = 0.12
+const HANG_NECK_FROM = 0.9
+const HANG_NECK_TO = 1
+/** Hanging cloth turns its normals to its own surface by the time it stands this far out. */
+const HANG_TURN = 0.004
 
 const rank = (slot: ItemSlot) => {
   const r = LAYERS.indexOf(slot)
@@ -222,6 +237,13 @@ export function dress(input: DressInput): Dressed {
     }
   })
 
+  // stiff cloth hangs over the hollows under it, and whatever is worn over it stands out with it
+  const hang = hangsOf(body, worn, covers, ranks, fields)
+  const pushes = worn.map((w, i): Push | undefined => {
+    const grid = hang?.out[i]
+    return hang && grid?.some((x) => x > 0) ? { hang, grid, limb: fieldAt(hang.limbs, w.item.binding.tri, w.item.binding.st) } : undefined
+  })
+
   // outermost first, so each item is pressed under the outer ones as they are finally dressed
   const items: DressedItem[] = new Array(worn.length)
   const shells: TriangleBVH[] = []
@@ -230,9 +252,9 @@ export function dress(input: DressInput): Dressed {
     const over: { shell: TriangleBVH; cover: Cover }[] = []
     for (let j = i + 1; j < worn.length; j++)
       if (ranks[j] > ranks[i] && covers[j].hides && items[j].index.length) over.push({ shell: (shells[j] ??= new TriangleBVH(items[j].positions, items[j].index)), cover: covers[j] })
-    let mesh = evaluateItem(w, lifts[i], body)
+    let mesh = evaluateItem(w, lifts[i], body, pushes[i])
     // a pressed triangle can land under another sag nearby: look again, a few times at most
-    for (let pass = 0; pass < 3 && over.length && press(w.item, lifts[i], mesh.positions, body, over, covers[i].hides ? -GAP : MIN_LIFT); pass++) mesh = evaluateItem(w, lifts[i], body)
+    for (let pass = 0; pass < 3 && over.length && press(w.item, lifts[i], mesh.positions, body, over, covers[i].hides ? -GAP : MIN_LIFT); pass++) mesh = evaluateItem(w, lifts[i], body, pushes[i])
     // a vertex is inside an outer layer when it lies over what that layer hides and beneath its inner surface
     const inside = new Uint8Array(mesh.count)
     const outers = [...covers.filter((_, j) => j > i && ranks[j] > ranks[i]), ...rigid.filter((c) => rank(c.slot) > ranks[i])].filter((c) => c.hides)
@@ -366,7 +388,7 @@ function press(item: SurfaceItem, lift: Float32Array, positions: Float32Array, b
 type Mesh = Omit<DressedItem, 'id' | 'slot' | 'chains'> & { inside: Uint8Array; fields: Float32Array[] }
 
 /** An item on this body: positions at its lifts, normals turned with the surface, skin blended from the triangle. */
-function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 'inside' | 'fields'> {
+function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape, push?: Push): Omit<Mesh, 'inside' | 'fields'> {
   const { item } = w
   const n = item.count
   const { tri, st } = item.binding
@@ -430,6 +452,7 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
     finish.set([look.roughness, look.metalness, look.sheen, look.glow], k * 4)
     weave[k] = look.weave
   }
+  const stood = push && standOut(push, positions)
   if (item.meta.slot === 'hair' || item.meta.slot === 'beard') {
     // strands part toward the hairline: past HAIR_LOOK's weave, how far in from it each vertex sits
     const fringe = fringeOf(item, positions, lift)
@@ -437,6 +460,7 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
   }
   if (item.meta.hard) ride(joints, weights)
   drape(item, lift, positions, normals)
+  if (stood) faceHung(item, stood, positions, normals)
   return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index, ...(item.chain ? { chain: Float32Array.from(item.chain) } : {}) }
 }
 
@@ -582,6 +606,303 @@ function drape(item: SurfaceItem, lift: Float32Array, positions: Float32Array, n
   }
   for (let k = 0; k < n; k++) {
     const s = share[id[k]]
+    if (!s) continue
+    const g = [face[id[k] * 3], face[id[k] * 3 + 1], face[id[k] * 3 + 2]]
+    const gl = Math.hypot(g[0], g[1], g[2])
+    if (!gl) continue
+    const side = g[0] * normals[k * 3] + g[1] * normals[k * 3 + 1] + g[2] * normals[k * 3 + 2] < 0 ? -1 : 1
+    const m = [0, 1, 2].map((d) => normals[k * 3 + d] * (1 - s) + ((side * g[d]) / gl) * s)
+    const ml = Math.hypot(m[0], m[1], m[2]) || 1
+    for (let d = 0; d < 3; d++) normals[k * 3 + d] = m[d] / ml
+  }
+}
+
+/**
+ * Where stiff cloth hangs (hangsOf), round an upright axis through the torso: level slices HANG_SLICE apart from
+ * `bottom` up, each read along HANG_RAYS rays, and per item how far its cloth stands out at each slice along each ray.
+ */
+interface Hang {
+  axis: readonly [number, number]
+  bottom: number
+  slices: number
+  out: (Float32Array | undefined)[]
+  /** Per body vertex: 1 on the torso, fading to nothing down the arms and legs. */
+  limbs: Float32Array
+}
+
+/** An item's share of the hang, and how much of it each of the item's vertices takes (the hang's limbs at its binding). */
+interface Push {
+  hang: Hang
+  grid: Float32Array
+  limb: Float32Array
+}
+
+/**
+ * Stiff cloth hangs off the body's high points instead of following the skin into every hollow. Round the torso it
+ * spans each hollow in a straight line, as a top does between the breasts and over the spine. Down the torso it falls
+ * from each high point and tucks back in no faster than its finish's hang: a leather jacket drops nearly plumb from the
+ * chest and the belly, a tee comes back in under the bust. Both are measured on an item's outer surface (its cover),
+ * cut in level slices along rays from one upright axis, and the cloth stands out level along those rays: lifted along
+ * its normals instead, the two sides of a deep cleavage would cross. The hang is a field in space, read where each
+ * vertex lies rather than where it's bound, so hair lying on a robe stands out with the robe under it. It fades out
+ * toward the base of the neck and down into the crotch, where it would stand a collar off the throat or bridge the
+ * thighs, and (through each vertex's binding) down the arms and legs, where it would web an armpit. A layer worn over
+ * an item holds it in: under it, the item doesn't hang. Each item stands out as far as it or anything worn under it
+ * hangs, whichever is more. Undefined when nothing worn hangs.
+ */
+function hangsOf(body: BodyShape, worn: readonly Worn[], covers: readonly Cover[], ranks: readonly number[], fields: BodyFields | undefined): Hang | undefined {
+  if (!fields) return undefined
+  const hangs = worn.map((w) => {
+    const finish = w.finishes[0] ?? w.item.meta.channels[0]?.finish
+    return w.item.meta.slot === 'hair' || w.item.meta.slot === 'beard' || !finish ? undefined : FINISH_LOOK[finish].hang
+  })
+  if (hangs.every((h) => h === undefined)) return undefined
+  const P = body.positions
+  const N = body.normals
+  const T = body.surface.triangles
+  const V = P.length / 3
+  const { arm, leg, hem } = fields
+  const ramp = (x: number, from: number, to: number) => {
+    const t = Math.min(1, Math.max(0, (x - from) / (to - from)))
+    return t * t * (3 - 2 * t)
+  }
+  const torso = (v: number) => arm[v] === 0 && leg[v] === 0 && hem[v] >= 0 && hem[v] <= 1
+  // the axis, upright through the middle of the torso's span, and the slices from below its foot to above its top
+  let x0 = Infinity
+  let x1 = -Infinity
+  let z0 = Infinity
+  let z1 = -Infinity
+  let y0 = Infinity
+  let y1 = -Infinity
+  for (let v = 0; v < V; v++) {
+    if (!torso(v)) continue
+    x0 = Math.min(x0, P[v * 3])
+    x1 = Math.max(x1, P[v * 3])
+    y0 = Math.min(y0, P[v * 3 + 1])
+    y1 = Math.max(y1, P[v * 3 + 1])
+    z0 = Math.min(z0, P[v * 3 + 2])
+    z1 = Math.max(z1, P[v * 3 + 2])
+  }
+  if (!(x1 > x0)) return undefined
+  const cx = (x0 + x1) / 2
+  const cz = (z0 + z1) / 2
+  const bottom = y0 - HANG_MAX
+  const slices = Math.floor((y1 - y0 + 2 * HANG_MAX) / HANG_SLICE) + 1
+  const R = HANG_RAYS
+  const rays = Array.from({ length: R }, (_, k) => [Math.sin((k / R) * Math.PI * 2), Math.cos((k / R) * Math.PI * 2)] as const)
+  const limbs = new Float32Array(V)
+  const height = new Float32Array(V)
+  for (let v = 0; v < V; v++) {
+    limbs[v] = (1 - ramp(arm[v], 0, HANG_LIMB)) * (1 - ramp(leg[v], 0, HANG_LIMB))
+    height[v] = ramp(hem[v], HANG_CROTCH_FROM, HANG_CROTCH_TO) * (1 - ramp(hem[v], HANG_NECK_FROM, HANG_NECK_TO))
+  }
+
+  // each item's cover cut in slices: how far out it stands along each ray and how much of the hang it takes there
+  // (its height on the torso), and for hanging items the points to span its hollows by, and those high enough to hang from
+  const cuts = covers.map((cover, i) => {
+    if (hangs[i] === undefined && !cover.hides) return undefined
+    const out = cover.outer
+    const stand = new Float32Array(slices * R).fill(NaN)
+    const takes = new Float32Array(slices * R)
+    const all: number[][] = Array.from({ length: slices }, () => [])
+    const from: number[][] = Array.from({ length: slices }, () => [])
+    const at = (v: number, d: number) => P[v * 3 + d] + N[v * 3 + d] * out[v]
+    const cross: number[] = []
+    for (let t = 0; t < T.length; t += 3) {
+      const a = T[t]
+      const b = T[t + 1]
+      const c = T[t + 2]
+      if (!torso(a) || !torso(b) || !torso(c) || !covered(cover, a) || !covered(cover, b) || !covered(cover, c)) continue
+      const high = hem[a] <= HANG_TOP && hem[b] <= HANG_TOP && hem[c] <= HANG_TOP
+      const ya = at(a, 1)
+      const yb = at(b, 1)
+      const yc = at(c, 1)
+      const lo = Math.max(0, Math.ceil((Math.min(ya, yb, yc) - bottom) / HANG_SLICE))
+      const hi = Math.min(slices - 1, Math.floor((Math.max(ya, yb, yc) - bottom) / HANG_SLICE))
+      for (let j = lo; j <= hi; j++) {
+        const y = bottom + j * HANG_SLICE
+        cross.length = 0
+        for (const [p, q] of [[a, b], [b, c], [c, a]]) {
+          const yp = at(p, 1)
+          const yq = at(q, 1)
+          if (yp < y === yq < y) continue
+          const s = (y - yp) / (yq - yp)
+          const x = at(p, 0) + (at(q, 0) - at(p, 0)) * s - cx
+          const z = at(p, 2) + (at(q, 2) - at(p, 2)) * s - cz
+          cross.push(x, z, height[p] + (height[q] - height[p]) * s)
+          all[j].push(x, z)
+          if (high) from[j].push(x, z)
+        }
+        if (cross.length === 6) standsAlong(stand, takes, j, cross, rays)
+      }
+    }
+    return { stand, takes, all, from }
+  })
+
+  // how far each hanging item stands out over its own surface: spanning each slice's hollows, and hanging from above
+  const own = cuts.map((cut, i) => {
+    const hang = hangs[i]
+    if (!cut || hang === undefined) return undefined
+    const grid = new Float32Array(slices * R)
+    const hung = new Float32Array(R).fill(-Infinity)
+    for (let j = slices - 1; j >= 0; j--) {
+      const span = outline(cut.all[j])
+      const held = outline(cut.from[j])
+      for (let k = 0; k < R; k++) {
+        const r = alongRay(span, rays[k][0], rays[k][1])
+        if (r !== r) {
+          hung[k] = -Infinity
+          continue
+        }
+        const cell = j * R + k
+        const reach = Math.max(r, hung[k])
+        if (cut.stand[cell] === cut.stand[cell]) grid[cell] = Math.min(HANG_MAX, Math.max(0, reach - cut.stand[cell])) * cut.takes[cell]
+        hung[k] = Math.max(hung[k], alongRay(held, rays[k][0], rays[k][1]) || -Infinity) - hang * HANG_SLICE
+      }
+    }
+    // a layer worn over it holds it in: a tee tucked into a skirt hangs only above the waistband (and a cell clear of
+    // it, so nothing under the band reads any hang between cells)
+    const holds = new Uint8Array(grid.length)
+    cuts.forEach((over, o) => {
+      if (!over || ranks[o] <= ranks[i] || !covers[o].hides) return
+      for (let j = 0; j < slices; j++)
+        for (let k = 0; k < R; k++) {
+          if (over.stand[j * R + k] !== over.stand[j * R + k]) continue
+          for (let dj = Math.max(0, j - 1); dj <= Math.min(slices - 1, j + 1); dj++) for (let dk = k - 1; dk <= k + 1; dk++) holds[dj * R + ((dk + R) % R)] = 1
+        }
+    })
+    for (let cell = 0; cell < grid.length; cell++) if (holds[cell]) grid[cell] = 0
+    return grid
+  })
+  const out = worn.map((_, j) => {
+    let most: Float32Array | undefined
+    own.forEach((g, i) => {
+      if (!g || ranks[i] > ranks[j]) return
+      if (!most) most = Float32Array.from(g)
+      else for (let cell = 0; cell < g.length; cell++) most[cell] = Math.max(most[cell], g[cell])
+    })
+    return most
+  })
+  return { axis: [cx, cz], bottom, slices, out, limbs }
+}
+
+/**
+ * Where a segment of a slice's outline ([x0, z0, h0, x1, z1, h1], from the axis, with each end's height on the torso)
+ * crosses the rays: as far out as anything in slice j yet, it's what that slice's ray meets, and its height there is
+ * how much of the hang it takes.
+ */
+function standsAlong(stand: Float32Array, takes: Float32Array, j: number, seg: readonly number[], rays: readonly (readonly [number, number])[]): void {
+  const R = rays.length
+  const [ax, az, ah, bx, bz, bh] = seg
+  const turn = (x: number, z: number) => (Math.atan2(x, z) / (Math.PI * 2)) * R
+  let lo = Math.min(turn(ax, az), turn(bx, bz))
+  let hi = Math.max(turn(ax, az), turn(bx, bz))
+  // the short way round, across the back if need be
+  if (hi - lo > R / 2) [lo, hi] = [hi, lo + R]
+  const ex = bx - ax
+  const ez = bz - az
+  for (let k = Math.ceil(lo); k <= Math.floor(hi); k++) {
+    const ray = ((k % R) + R) % R
+    const [dx, dz] = rays[ray]
+    const across = dx * ez - dz * ex
+    if (!across) continue
+    const t = (ax * ez - az * ex) / across
+    const u = Math.min(1, Math.max(0, (ax * dz - az * dx) / across))
+    const cell = j * R + ray
+    if (t > 0 && !(stand[cell] >= t)) {
+      stand[cell] = t
+      takes[cell] = ah + (bh - ah) * u
+    }
+  }
+}
+
+/** Stand an item's vertices out level from the hang's axis, each as far as its share of the hang reaches where it lies; how far each moved. */
+function standOut(push: Push, positions: Float32Array): Float32Array {
+  const { hang, grid, limb } = push
+  const R = HANG_RAYS
+  const n = positions.length / 3
+  const by = new Float32Array(n)
+  for (let k = 0; k < n; k++) {
+    if (!limb[k]) continue
+    const x = positions[k * 3] - hang.axis[0]
+    const z = positions[k * 3 + 2] - hang.axis[1]
+    const r = Math.hypot(x, z)
+    const up = (positions[k * 3 + 1] - hang.bottom) / HANG_SLICE
+    if (!r || !(up >= 0) || up >= hang.slices - 1) continue
+    const turn = ((Math.atan2(x, z) / (Math.PI * 2) + 1) % 1) * R
+    const j = Math.floor(up)
+    const q = Math.floor(turn)
+    const fj = up - j
+    const fq = turn - q
+    const at = (jj: number, qq: number) => grid[jj * R + (qq % R)]
+    const reach = (at(j, q) * (1 - fq) + at(j, q + 1) * fq) * (1 - fj) + (at(j + 1, q) * (1 - fq) + at(j + 1, q + 1) * fq) * fj
+    by[k] = reach * limb[k]
+    if (!by[k]) continue
+    positions[k * 3] += (x / r) * by[k]
+    positions[k * 3 + 2] += (z / r) * by[k]
+  }
+  return by
+}
+
+/** The convex outline of points [x0, z0, x1, z1, ...], anticlockwise, as the same kind of list. */
+function outline(points: readonly number[]): number[] {
+  const n = points.length / 2
+  if (n < 3) return []
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => points[a * 2] - points[b * 2] || points[a * 2 + 1] - points[b * 2 + 1])
+  const turn = (o: number, a: number, b: number) => (points[a * 2] - points[o * 2]) * (points[b * 2 + 1] - points[o * 2 + 1]) - (points[a * 2 + 1] - points[o * 2 + 1]) * (points[b * 2] - points[o * 2])
+  const hull: number[] = []
+  for (const pass of [order, [...order].reverse()]) {
+    const start = hull.length
+    for (const i of pass) {
+      while (hull.length >= start + 2 && turn(hull[hull.length - 2], hull[hull.length - 1], i) <= 0) hull.pop()
+      hull.push(i)
+    }
+    hull.pop()
+  }
+  return hull.flatMap((i) => [points[i * 2], points[i * 2 + 1]])
+}
+
+/** How far out from the origin a ray (dx, dz) leaves a convex outline (outline()), or NaN if it misses. */
+function alongRay(hull: readonly number[], dx: number, dz: number): number {
+  const n = hull.length / 2
+  let far = NaN
+  for (let i = 0; i < n; i++) {
+    const px = hull[i * 2]
+    const pz = hull[i * 2 + 1]
+    const ex = hull[((i + 1) % n) * 2] - px
+    const ez = hull[((i + 1) % n) * 2 + 1] - pz
+    const across = dx * ez - dz * ex
+    if (!across) continue
+    const t = (px * ez - pz * ex) / across
+    const u = (px * dz - pz * dx) / across
+    if (t > 0 && u >= 0 && u <= 1 && !(t <= far)) far = t
+  }
+  return far
+}
+
+/**
+ * Hanging cloth shades as the surface it now makes, not the skin under it: each vertex's normal turns toward its
+ * welded surface's own (area-weighted) as far as how far it stands out (`added`) reaches HANG_TURN, so a jacket
+ * spanning the breastbone no longer lights up the pecs beneath it.
+ */
+function faceHung(item: SurfaceItem, added: Float32Array, positions: Float32Array, normals: Float32Array): void {
+  const rest = item.rest
+  if (!rest) return
+  const { id, links } = weldOf(item, rest)
+  const face = new Float32Array(links.length * 3)
+  for (let t = 0; t < item.index.length; t += 3) {
+    const [a, b, c] = [item.index[t] * 3, item.index[t + 1] * 3, item.index[t + 2] * 3]
+    const ux = positions[b] - positions[a]
+    const uy = positions[b + 1] - positions[a + 1]
+    const uz = positions[b + 2] - positions[a + 2]
+    const vx = positions[c] - positions[a]
+    const vy = positions[c + 1] - positions[a + 1]
+    const vz = positions[c + 2] - positions[a + 2]
+    const fn = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx]
+    for (const v of [item.index[t], item.index[t + 1], item.index[t + 2]]) for (let d = 0; d < 3; d++) face[id[v] * 3 + d] += fn[d]
+  }
+  for (let k = 0; k < item.count; k++) {
+    const s = Math.min(1, added[k] / HANG_TURN)
     if (!s) continue
     const g = [face[id[k] * 3], face[id[k] * 3 + 1], face[id[k] * 3 + 2]]
     const gl = Math.hypot(g[0], g[1], g[2])

@@ -16,15 +16,20 @@ export interface FinishLook {
    * from its edge each vertex sits past the 5 (dress.ts fringeOf), where the strands part.
    */
   weave: number
+  /**
+   * How steeply the cloth tucks back in under a high point of the body, in metres in for each metre down (dress.ts
+   * hangsOf): leather hangs nearly plumb from the chest, a tee comes back in under the bust. Absent, it clings.
+   */
+  hang?: number
 }
 
 export const FINISH_LOOK: Record<Finish, FinishLook> = {
-  cotton: { roughness: 0.86, metalness: 0, sheen: 0.35, glow: 0, weave: 1 },
-  silk: { roughness: 0.32, metalness: 0, sheen: 0.85, glow: 0, weave: 0 },
-  denim: { roughness: 0.9, metalness: 0, sheen: 0.2, glow: 0, weave: 2 },
-  knit: { roughness: 0.95, metalness: 0, sheen: 0.45, glow: 0, weave: 3 },
-  leather: { roughness: 0.42, metalness: 0, sheen: 0.1, glow: 0, weave: 4 },
-  metal: { roughness: 0.28, metalness: 0.92, sheen: 0, glow: 0, weave: 0 },
+  cotton: { roughness: 0.86, metalness: 0, sheen: 0.35, glow: 0, weave: 1, hang: 0.2 },
+  silk: { roughness: 0.32, metalness: 0, sheen: 0.85, glow: 0, weave: 0, hang: 0.6 },
+  denim: { roughness: 0.9, metalness: 0, sheen: 0.2, glow: 0, weave: 2, hang: 0.15 },
+  knit: { roughness: 0.95, metalness: 0, sheen: 0.45, glow: 0, weave: 3, hang: 0.35 },
+  leather: { roughness: 0.42, metalness: 0, sheen: 0.1, glow: 0, weave: 4, hang: 0.1 },
+  metal: { roughness: 0.28, metalness: 0.92, sheen: 0, glow: 0, weave: 0, hang: 0.05 },
   glow: { roughness: 0.5, metalness: 0, sheen: 0, glow: 1, weave: 0 },
 }
 

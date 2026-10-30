@@ -211,6 +211,34 @@ describe('dressing', () => {
     expect(dress({ body: ref, worn: [worn(trousers), worn(tee)] }).items.map((i) => i.id)).toEqual(['trousers', 'tee'])
   })
 
+  it('hangs stiff cloth over the hollows under it: a tee spans the cleavage, and the stiffer the cloth the further out', async () => {
+    const { item: shirt } = await readItemFile(pub('/kit/wear/tee.glb'), ref.surface.count)
+    const body = shapes.get('f-medium')!
+    const as = (finish: Worn['finishes'][number]) => dress({ body, fields: fieldsOf.get('f-medium'), worn: [{ ...worn(shirt), finishes: [finish] }] }).items[0].positions
+    const clings = as('glow')
+    const level = (P: Float32Array, k: number) => Math.hypot(P[k * 3] - clings[k * 3], P[k * 3 + 2] - clings[k * 3 + 2])
+    const [silk, cotton, leather] = (['silk', 'cotton', 'leather'] as const).map(as)
+    let deepest = 0
+    let at = 0
+    for (let k = 0; k < shirt.count; k++) {
+      // out level from the torso, never up or down, and never far
+      expect(Math.abs(cotton[k * 3 + 1] - clings[k * 3 + 1])).toBeLessThan(1e-5)
+      expect(level(leather, k)).toBeLessThan(0.05)
+      expect(level(leather, k)).toBeGreaterThanOrEqual(level(silk, k) - 1e-5)
+      if (level(cotton, k) > deepest) {
+        deepest = level(cotton, k)
+        at = k
+      }
+    }
+    // the most between the breasts, across the breastbone
+    expect(deepest).toBeGreaterThan(0.008)
+    expect(Math.abs(clings[at * 3])).toBeLessThan(0.02)
+    expect(clings[at * 3 + 2]).toBeGreaterThan(0.1)
+    const total = (P: Float32Array) => Array.from({ length: shirt.count }, (_, k) => level(P, k)).reduce((a, b) => a + b, 0)
+    expect(total(silk)).toBeLessThan(total(cotton))
+    expect(total(cotton)).toBeLessThan(total(leather))
+  })
+
   it('drapes loose cloth on every body, so no robe turns inside out between the knees', async () => {
     const face = (P: ArrayLike<number>, index: ArrayLike<number>, t: number) => {
       const [a, b, c] = [index[t] * 3, index[t + 1] * 3, index[t + 2] * 3]
