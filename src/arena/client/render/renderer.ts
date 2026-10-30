@@ -19,9 +19,16 @@ export function chooseBackend(env: BackendEnv): Backend {
 /** `?webgl` in the URL forces the WebGL2 backend. */
 export const forceWebGLFlag = (search: string) => new URLSearchParams(search).has('webgl')
 
-export async function createRenderer(canvas: HTMLCanvasElement, options: { forceWebGL: boolean }): Promise<{ renderer: WebGPURenderer; backend: Backend }> {
+/**
+ * `?gputime` in a dev build times every render pass on the GPU (`renderer.resolveTimestampsAsync()`), so a script can
+ * read what a frame costs even when the browser caps the frame rate (Chrome's energy saver holds a laptop on low
+ * battery to 30 FPS) or vsync rounds it.
+ */
+export const gpuTimeFlag = (search: string) => import.meta.env.DEV && new URLSearchParams(search).has('gputime')
+
+export async function createRenderer(canvas: HTMLCanvasElement, options: { forceWebGL: boolean; trackTimestamp?: boolean }): Promise<{ renderer: WebGPURenderer; backend: Backend }> {
   const { WebGPURenderer } = await import('three/webgpu')
-  const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: options.forceWebGL })
+  const renderer = new WebGPURenderer({ canvas, antialias: true, forceWebGL: options.forceWebGL, trackTimestamp: options.trackTimestamp === true })
   await renderer.init()
   const backend: Backend = (renderer.backend as { isWebGPUBackend?: boolean }).isWebGPUBackend ? 'webgpu' : 'webgl2'
   return { renderer, backend }

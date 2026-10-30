@@ -10,7 +10,7 @@ import type { Vec3 } from '../engine/maths.js'
 
 export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2 }
 /** The watching camera's limits: how low, high and far it goes, how steep it tilts, and the edge of the map. */
-export const WATCH = { minHeight: 1.5, maxHeight: 55, minDistance: 5, maxDistance: 75, levelDistance: 20, minPitch: -1.4, maxPitch: 0.15, bounds: 60 }
+export const WATCH = { minHeight: 1.5, maxHeight: 70, minDistance: 5, maxDistance: 95, levelDistance: 20, minPitch: -1.4, maxPitch: 0.15, bounds: 72 }
 export const BLEND_SECONDS = 0.5
 
 /** Where a camera at `from` can sit on the way to `to` without passing through a box. */
@@ -29,7 +29,7 @@ export class Cameras {
   yaw = 0
   // a low, close opening view sells the ruins and the fighters; the streamer flies out from here
   pitch = -0.32
-  readonly free = new THREE.Vector3(0, 13, -27)
+  readonly free = new THREE.Vector3(0, 12, -21)
   private blend = 1
   private from = new THREE.Vector3()
   private fromQ = new THREE.Quaternion()

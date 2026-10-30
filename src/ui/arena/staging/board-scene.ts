@@ -352,8 +352,8 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   // the camera stands far back to take in the whole arena: push the haze out with it so the floor stays clear
   const fog = scene.fog as THREE.Fog | null
   if (fog) {
-    fog.near = 190
-    fog.far = 620
+    fog.near = 420
+    fog.far = 1500
   }
   scene.add(buildMap().group)
   lights(scene)

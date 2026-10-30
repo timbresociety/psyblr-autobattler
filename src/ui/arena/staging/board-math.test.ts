@@ -147,7 +147,7 @@ describe('the ghost judges a spot with the formation rules', () => {
     const f = emptyFormation()
     expect(judge(f, { side: 0, hero: 0 }, { x: 0, z: -12 })).toEqual({ kind: 'ok' })
     expect(judge(f, { side: 0, hero: 0 }, { x: 0, z: 12 })).toEqual({ kind: 'bad', reason: 'wrong-half' })
-    expect(judge(f, { side: 0, hero: 0 }, { x: -21, z: -8.5 })).toEqual({ kind: 'bad', reason: 'in-ruins' })
+    expect(judge(f, { side: 0, hero: 0 }, { x: 0, z: -9 })).toEqual({ kind: 'bad', reason: 'in-ruins' })
     expect(judge(f, { side: 0, hero: 0 }, { x: W - 0.5, z: -12 })).toEqual({ kind: 'bad', reason: 'edge' })
     expect(judge(f, { side: 0, hero: 0 }, { x: 0, z: -L - 5 })).toEqual({ kind: 'bad', reason: 'off-arena' })
     expect(judge(f, { side: 0, hero: 0 }, undefined)).toEqual({ kind: 'bad', reason: 'off-arena' })

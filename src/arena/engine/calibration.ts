@@ -8,7 +8,7 @@ export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
   tickHz: 60,
   /** The arena: x is across, z runs from one half to the other, y is up. Metres. */
-  arena: { halfWidth: 40, halfLength: 30, ceiling: 25 },
+  arena: { halfWidth: 56, halfLength: 42, ceiling: 25 },
   /** Every hero is a vertical capsule this tall and wide at medium size, plus its size class's hitbox. */
   /** Largest radius a hero collides with walls at; hit capsules can be bigger (huge, colossal). */
   bodyRadiusCap: 0.9,

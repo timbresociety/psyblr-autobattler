@@ -16,11 +16,12 @@ import { handBack, releaseIfDead, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
 import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
+import { VIEW_FAR } from './sky.js'
 import { buildRuins } from './ruins.js'
 import { CosmeticPhysics, PHYSICS } from './physics.js'
 import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
-import { createRenderer, forceWebGLFlag, type Backend } from './render/renderer.js'
+import { createRenderer, forceWebGLFlag, gpuTimeFlag, type Backend } from './render/renderer.js'
 import { createStore, type Store } from './store.js'
 import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status.js'
 
@@ -200,7 +201,7 @@ async function newRenderer(host: HTMLElement, forceWebGL: boolean) {
   canvas.style.cssText = 'width:100%;height:100%;display:block'
   host.prepend(canvas)
   try {
-    const { renderer, backend } = await createRenderer(canvas, { forceWebGL })
+    const { renderer, backend } = await createRenderer(canvas, { forceWebGL, trackTimestamp: gpuTimeFlag(window.location.search) })
     renderer.shadowMap.enabled = true
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -272,7 +273,8 @@ async function createStage(host: HTMLElement) {
     // and then jumped to 2x on the guard's first step down
     first.renderer.setPixelRatio(pixelRatio)
     const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
+    // far enough to draw the sky dome and the mountains in front of it
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, VIEW_FAR)
     atmosphere(scene)
     const map = buildMap()
     scene.add(map.group)

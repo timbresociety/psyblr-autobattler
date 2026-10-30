@@ -1,10 +1,10 @@
-import type { Vec3 } from './maths.js'
+import { cos, sin, type Vec3 } from './maths.js'
 
 /**
  * Cover (R1, R25): the ruins heroes hide behind. Every piece is engine geometry, so the renderer draws exactly what
  * blocks: an axis-aligned block (walls, fallen columns, barricades, lintels) or an upright cylinder (columns). A piece
- * spans `base`..`top` in height; flying over it, or under a lintel, clears it. Breakable pieces have health and are
- * gone once it reaches zero. Pure arithmetic, so it stays deterministic (KTD1).
+ * spans `base`..`top` in height; jumping over it, or walking under an arch, clears it, and a hero can stand on top.
+ * Breakable pieces have health and are gone once it reaches zero. Pure arithmetic, so it stays deterministic (KTD1).
  */
 
 export type CoverShape =
@@ -19,48 +19,80 @@ export interface CoverPiece {
   /** Health of a breakable barrier; absent means it cannot be broken. */
   health?: number
   /** What the renderer builds here; the engine ignores it. */
-  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth'
+  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step'
 }
 
 /** One piece's state in a match: its health, or -1 for unbreakable; 0 means broken and gone. */
 export type CoverHealth = number
 
-/** The broken Roman ruins (R25): near-mirror halves, a low fallen column across the middle, barricades to break. */
+/**
+ * The valley ruins (R25; Forge goal, phase 2): a broken courtyard at the foot of the mountains, 112 by 84 m, in
+ * near-mirror halves. A low dais holds the middle under four broken pillars; colonnades flank it; each half has a great
+ * arch in a broken wall, low walls to jump, and a raised terrace on one flank reached by steps, for a shot from above.
+ * Anything at or under 0.4 m is stepped onto; a 1.4 m jump clears a low wall, a second jump the rest.
+ */
 export const RUINS: readonly CoverPiece[] = (() => {
   const pieces: CoverPiece[] = []
   const block = (x: number, z: number, hx: number, hz: number, top: number, look: CoverPiece['look'], health?: number, base = 0) =>
     pieces.push({ shape: { kind: 'block', x, z, hx, hz }, base, top, look, ...(health ? { health } : {}) })
-  const column = (x: number, z: number, r: number, top: number, look: CoverPiece['look'] = 'column') => pieces.push({ shape: { kind: 'column', x, z, r }, base: 0, top, look })
-  // the middle: a toppled column to duck behind, flanked by standing columns and two barricades
-  block(0, 0, 3.6, 0.6, 1.3, 'fallen')
+  const pillar = (x: number, z: number, top: number, half = 0.65) => block(x, z, half, half, top, 'pillar')
+  const column = (x: number, z: number, r: number, top: number) => pieces.push({ shape: { kind: 'column', x, z, r }, base: 0, top, look: 'column' })
+  // the middle: a dais a step high, a toppled pillar across it to duck behind, broken pillars at its corners
+  block(0, 0, 6, 4, 0.4, 'terrace')
+  block(0, 0, 3.2, 0.6, 1.5, 'fallen')
+  pillar(-5, -3.2, 4.6)
+  pillar(5, -3.2, 2.4)
+  pillar(-5, 3.2, 2.6)
+  pillar(5, 3.2, 5.8)
   for (const s of [-1, 1]) {
-    column(9 * s, 2.6 * s, 0.9, 7.5)
-    column(9.5 * s, -2.4 * s, 0.85, 4.2)
-    column(19 * s, 0.6 * s, 1, 3.2)
-    block(14 * s, 0, 1.7, 0.45, 2.3, 'barricade', 1400)
+    // barricades either side of the dais, and colonnades along the flanks, some pillars broken low enough to jump
+    block(11 * s, 0, 0.45, 1.8, 2.2, 'barricade', 1400)
+    for (const [z, top] of [[-12, 6.8], [-6, 1.3], [0, 7.4], [6, 3.1], [12, 1.4]] as const) pillar(17 * s, z * s, top)
   }
   // each half, mirrored through the middle with small differences (Dire and Radiant, R1)
   for (const side of [-1, 1]) {
     const z = (v: number) => v * side
     const nudge = side > 0 ? 1.5 : 0
-    block(-21 + nudge, z(8.5), 5, 0.55, 3.4, 'wall')
-    block(21, z(9.5) + side * 0.5, 4, 0.55, 2.8, 'wall')
-    block(-7 - nudge, z(19), 0.55, 2.8, 3.1, 'wall')
-    block(8, z(20), 0.55, 2.4, 2.6, 'wall')
-    block(-12, z(5), 1.8, 0.45, 2.2, 'barricade', 1200)
-    block(12 + nudge, z(5.5), 1.8, 0.45, 2.2, 'barricade', 1200)
-    block(0, z(7.5), 2, 0.45, 2.2, 'barricade', 1200)
-    // an arch: two columns and a lintel overhead that a hero can walk under
-    column(-2.2, z(23), 0.75, 6.2)
-    column(2.2, z(23), 0.75, 6.2)
-    block(0, z(23), 3, 0.8, 7, 'lintel', undefined, 5.6)
-    // colonnade ruins along the flanks
-    column(-31 + nudge, z(12), 1, 8)
-    column(-28, z(18), 0.8, 5)
-    column(31, z(14), 1, 7)
-    column(27 - nudge, z(21), 0.9, 3)
-    block(-33, z(25), 3.5, 2.5, 1.6, 'plinth')
-    block(34, z(3), 2.5, 3.5, 1.6, 'plinth')
+    block(0, z(9), 2, 0.45, 2.2, 'barricade', 1200)
+    block(-15, z(8) + nudge, 1.8, 0.45, 2.2, 'barricade', 1200)
+    block(15 - nudge, z(9), 1.8, 0.45, 2.2, 'barricade', 1200)
+    // low walls in the field: a jump clears them
+    block(-9 - nudge, z(16), 3.5, 0.5, 1.2, 'wall')
+    block(10, z(17.5), 3, 0.5, 1.5, 'wall')
+    block(-25, z(14), 0.5, 3, 1.3, 'wall')
+    block(27 + nudge, z(13), 0.5, 3.5, 1.6, 'wall')
+    // the great arch in a broken wall: walk through it or round the ends, never over
+    block(-3.4, z(24), 1.1, 1.1, 8.6, 'pier')
+    block(3.4, z(24), 1.1, 1.1, 8.6, 'pier')
+    block(0, z(24), 4.5, 1.1, 9.6, 'arch', undefined, 6.4)
+    block(-8.6, z(24), 4.1, 0.6, 3.4, 'wall')
+    block(8.6, z(24) + side * 0.3, 4.1, 0.6, 2.6, 'wall')
+    // a raised terrace on one flank, three steps up from the field, a parapet along its edge and a colonnade on it
+    const tx = side > 0 ? 1 : -1
+    const tz = 14
+    block(42 * tx, z(tz), 8, 7, 1.2, 'terrace')
+    block(33.5 * tx, z(tz + 3), 0.5, 2.5, 0.8, 'step')
+    block(32.5 * tx, z(tz + 3), 0.5, 2.5, 0.4, 'step')
+    block(34.4 * tx, z(tz - 4), 0.4, 2.6, 2.2, 'wall')
+    pillar(47 * tx, z(tz - 5), 7.6, 0.7)
+    pillar(47 * tx, z(tz), 3.4, 0.7)
+    pillar(47 * tx, z(tz + 5), 6.4, 0.7)
+    // on the other flank, a ruined round temple: a ring of columns, some fallen to stumps
+    const cx = -38 * tx
+    const cz = z(tz + 4)
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + 0.3
+      column(cx + 6.5 * sin(a), cz + 6.5 * cos(a), 0.75, [7.2, 1.2, 5.5, 2.6, 6.8, 1.0][k])
+    }
+    block(cx, cz, 2.6, 2.6, 0.8, 'plinth')
+    // the back: a broken gatehouse wall, tall pillars, a fallen one and a plinth near where each side musters
+    block(-15, z(33), 3, 0.6, 2.6, 'wall')
+    block(17, z(34), 0.6, 3, 3, 'wall')
+    pillar(-6, z(37), 7)
+    pillar(6 + nudge, z(37), 4.2)
+    block(3, z(30.5), 2.6, 0.55, 1.1, 'fallen')
+    block(-33, z(36), 3, 2.5, 1.6, 'plinth')
+    block(34 - nudge, z(37), 2.5, 2.5, 1.6, 'plinth')
   }
   return pieces
 })()

@@ -1,8 +1,10 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
+import { normalViewGeometry } from 'three/tsl'
 import type { CoverPiece } from '../engine/cover.js'
 import { rockGeometry, sceneryMaterial } from './scenery.js'
-import { grassTexture, travertine } from './textures.js'
+import { travertine } from './textures.js'
 
 /**
  * The ruins on screen (R25), built from the engine's own cover pieces so every wall the audience sees is a wall the
@@ -87,23 +89,65 @@ function shaft(r: number, h: number, rnd: () => number, broken: boolean): THREE.
 
 const textureLoader = new THREE.TextureLoader()
 
-/** A material from a painted texture set in public/textures: albedo, normal and roughness, tiling in world metres. */
-export function paintedMaterial(name: string, normalScale = 1): THREE.MeshStandardMaterial {
-  const load = (kind: string, color: boolean) => {
-    const t = textureLoader.load(`/textures/${name}_${kind}.webp`)
+/** The ashlar painting's tiling: one tile every 3.2 m, so a course of its stone is about a third of a metre. */
+const ASHLAR = 1 / 3.2
+
+const painted = new Map<string, THREE.Texture>()
+
+/**
+ * One map of a painted texture set in public/textures (`albedo`, `normal` or `rough`), loaded once and shared by every
+ * material that uses it, so a set costs its memory once however many pieces wear it. Shared maps keep their default
+ * transform: a surface that tiles differently says so in its own UVs.
+ */
+export function paintedTexture(name: string, kind: 'albedo' | 'normal' | 'rough'): THREE.Texture {
+  const key = `${name}_${kind}`
+  let t = painted.get(key)
+  if (!t) {
+    t = textureLoader.load(`/textures/${key}.webp`)
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.anisotropy = 8
-    if (color) t.colorSpace = THREE.SRGBColorSpace
-    return t
+    if (kind === 'albedo') t.colorSpace = THREE.SRGBColorSpace
+    painted.set(key, t)
   }
+  return t
+}
+
+/** A material from a painted texture set: albedo, normal and roughness, tiling in world metres. */
+export function paintedMaterial(name: string, normalScale = 1): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({
-    map: load('albedo', true),
-    normalMap: load('normal', false),
-    roughnessMap: load('rough', false),
+    map: paintedTexture(name, 'albedo'),
+    normalMap: paintedTexture(name, 'normal'),
+    roughnessMap: paintedTexture(name, 'rough'),
     normalScale: new THREE.Vector2(normalScale, normalScale),
     vertexColors: true,
     roughness: 1,
   })
+}
+
+/**
+ * A card crossed with itself at right angles, standing on its bottom edge: a clump that reads from every side. Its
+ * normals point up, so it lights like the ground it grows from.
+ */
+export function crossedCard(width: number, height: number): THREE.BufferGeometry {
+  const card = new THREE.PlaneGeometry(width, height).translate(0, height / 2, 0)
+  const geo = mergeGeometries([card, card.clone().rotateY(Math.PI / 2)])
+  const n = geo.getAttribute('normal')
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0)
+  return geo
+}
+
+let tuftCards: MeshStandardNodeMaterial | undefined
+
+/** Clumps of meadow grass (generated art, tools/textures/cutout.py), keeping their upward normals on both faces. */
+export function tuftMaterial(): MeshStandardNodeMaterial {
+  if (!tuftCards) {
+    const map = textureLoader.load('/textures/tuft_card.webp')
+    map.colorSpace = THREE.SRGBColorSpace
+    map.anisotropy = 4
+    tuftCards = new MeshStandardNodeMaterial({ map, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 1 })
+    tuftCards.normalNode = normalViewGeometry
+  }
+  return tuftCards
 }
 
 export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
@@ -112,14 +156,18 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   const rnd = seeded(23)
   const stone = travertine(31)
   const stoneMat = new THREE.MeshStandardMaterial({ ...stone, vertexColors: true, roughness: 1, normalScale: new THREE.Vector2(0.9, 0.9) })
-  // painted masonry (generated art, processed by tools/textures/process.py) for walls, lintels and plinths
-  const masonry = paintedMaterial('wall')
+  // weathered limestone ashlar (generated art, processed by tools/textures/process.py) for walls, piers, arches and
+  // pillars, after the owner's reference sheet; the older painted masonry stays on the plinths
+  const masonry = paintedMaterial('ashlar')
   const masonry2 = paintedMaterial('wall2')
   // weathered cream marble with gold veins for the columns and the fallen drums (generated art, same pipeline)
   const marbleMat = paintedMaterial('marble', 0.5)
   marbleMat.roughness = 0.8
   // dark oak planks with iron nails (generated art) for the barricades
   const woodMat = paintedMaterial('timber', 0.8)
+  // paving on top of a terrace or a step, the stone of its sides below
+  const paving = paintedMaterial('paving', 1.1)
+  paving.vertexColors = false
   const bronze = new THREE.MeshStandardMaterial({ color: 0xb98a4a, metalness: 0.85, roughness: 0.35 })
   // a legionary scutum painted front-on (generated art), wrapped once around each curved shield
   const shieldMap = textureLoader.load('/textures/scutum_albedo.webp')
@@ -225,6 +273,68 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
         planks.castShadow = planks.receiveShadow = true
         node.add(planks, bands, shields)
         scatter(s.x, s.z, s.hx, s.hz, 6)
+      } else if (piece.look === 'pillar' || piece.look === 'pier') {
+        // a square pillar of stacked blocks, each a little inside the footprint and a touch askew; a broken one is
+        // jagged on top, a whole one carries a slab the full width of the footprint
+        const whole = piece.look === 'pier' || h >= 6
+        const slab = whole ? Math.min(0.45, h * 0.08) : 0
+        const parts: THREE.BufferGeometry[] = []
+        let y = 0
+        while (y < h - slab - 0.05) {
+          const ch = Math.min(h - slab - y, 0.55 + rnd() * 0.35)
+          const inset = 0.04 + rnd() * 0.05
+          const g = new THREE.BoxGeometry(w - inset * 2, ch - 0.02, d - inset * 2, 3, 2, 3).rotateY((rnd() - 0.5) * 0.04).translate((rnd() - 0.5) * inset, y + ch / 2, (rnd() - 0.5) * inset)
+          const top = !whole && y + ch >= h - 0.05
+          parts.push(worldUV(paint(weather(g, rnd, top ? 0.16 : 0.07), new THREE.Color(1, 1, 1).multiplyScalar(0.86 + rnd() * 0.16), -y, 2.4), ASHLAR))
+          y += ch
+        }
+        if (slab) parts.push(worldUV(paint(weather(new THREE.BoxGeometry(w, slab, d, 3, 1, 3).translate(0, h - slab / 2, 0), rnd, 0.05), new THREE.Color(0.95, 0.94, 0.92), -h, 2.4), ASHLAR))
+        const mesh = new THREE.Mesh(mergeGeometries(parts), masonry)
+        mesh.castShadow = mesh.receiveShadow = true
+        node.add(mesh)
+        if (piece.base <= 0) scatter(s.x, s.z, s.hx, s.hz, whole ? 4 : 8)
+      } else if (piece.look === 'arch') {
+        // the arch over the opening between its piers: one mass with a curved soffit cut into its underside, rising
+        // from where each pier's inner face meets it to a crown a little under half its height
+        const across = long ? w : d
+        const deep = long ? d : w
+        const opening = Math.max(1, across - 4.4)
+        const rise = Math.min(h * 0.5, opening * 0.35)
+        // a segmental arch through the two springing points and the crown
+        const c = (rise * rise - (opening / 2) ** 2) / (2 * rise)
+        const radius = rise - c
+        const from = Math.atan2(-c, -opening / 2)
+        const to = Math.atan2(-c, opening / 2)
+        const shape = new THREE.Shape()
+        shape.moveTo(-across / 2, 0)
+        shape.lineTo(-opening / 2, 0)
+        for (let k = 1; k < 24; k++) {
+          const a = from + ((to - from) * k) / 24
+          shape.lineTo(radius * Math.cos(a), c + radius * Math.sin(a))
+        }
+        shape.lineTo(opening / 2, 0)
+        shape.lineTo(across / 2, 0)
+        shape.lineTo(across / 2, h)
+        shape.lineTo(-across / 2, h)
+        shape.closePath()
+        const g = new THREE.ExtrudeGeometry(shape, { depth: deep, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 1, curveSegments: 1 })
+        g.translate(0, 0, -deep / 2)
+        if (!long) g.rotateY(Math.PI / 2)
+        const mesh = new THREE.Mesh(worldUV(paint(g, new THREE.Color(0.97, 0.95, 0.92), -piece.base, 3), ASHLAR), masonry)
+        mesh.castShadow = mesh.receiveShadow = true
+        node.add(mesh)
+      } else if (piece.look === 'terrace' || piece.look === 'step') {
+        // a raised floor: paved on top, a retaining wall of masonry around it, its edges worn
+        const g = weather(new THREE.BoxGeometry(w, h, d, Math.max(2, Math.round(w)), 1, Math.max(2, Math.round(d))).translate(0, h / 2, 0), rnd, 0.015)
+        const sides = worldUV(paint(g, new THREE.Color(1, 1, 1), 0, 0.6), ASHLAR)
+        // the paving on top tiles as the courtyard's does, once every 5 m
+        const uv = sides.getAttribute('uv')
+        const normal = sides.getAttribute('normal')
+        for (let i = 0; i < uv.count; i++) if (normal.getY(i) > 0.9) uv.setXY(i, (uv.getX(i) / ASHLAR + s.x) / 5, (uv.getY(i) / ASHLAR + s.z) / 5)
+        const mesh = new THREE.Mesh(sides, [masonry, masonry, paving, masonry, masonry, masonry])
+        mesh.castShadow = mesh.receiveShadow = true
+        node.add(mesh)
+        if (piece.look === 'terrace') scatter(s.x, s.z, s.hx, s.hz, Math.round((s.hx + s.hz) * 1.5))
       } else {
         // walls, plinths and lintels: one weathered mass wrapped in the painted masonry at real scale (a course of the
         // painting is about 0.55 m), its faces gently bowed and its edges worn so it never reads as a crisp box
@@ -239,7 +349,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
           const g = new THREE.BoxGeometry(w, h, d, Math.max(4, Math.round(w * 3)), Math.max(3, Math.round(h * 3)), Math.max(3, Math.round(d * 3))).translate(0, h / 2, 0)
           parts.push(weather(g, rnd, 0.06))
         }
-        const mesh = new THREE.Mesh(mergeGeometries(parts.map((g) => worldUV(paint(g, new THREE.Color(1, 1, 1), 0, 1.0), 0.48))), piece.look === 'plinth' ? masonry2 : masonry)
+        const mesh = new THREE.Mesh(mergeGeometries(parts.map((g) => worldUV(paint(g, new THREE.Color(1, 1, 1), 0, 1.0), piece.look === 'plinth' ? 0.48 : ASHLAR))), piece.look === 'plinth' ? masonry2 : masonry)
         mesh.castShadow = mesh.receiveShadow = true
         node.add(mesh)
         if (piece.base <= 0) scatter(s.x, s.z, s.hx, s.hz, Math.round((s.hx + s.hz) * 2.5))
@@ -270,10 +380,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
       old.dispose()
     })
     .catch(() => undefined)
-  const blade = new THREE.PlaneGeometry(0.7, 0.55).translate(0, 0.27, 0)
-  const tuft = mergeGeometries([blade, blade.clone().rotateY(Math.PI / 2)])
-  const grassMat = new THREE.MeshStandardMaterial({ map: grassTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 1 })
-  const grass = new THREE.InstancedMesh(tuft, grassMat, tufts.length)
+  const grass = new THREE.InstancedMesh(crossedCard(0.6, 0.6), tuftMaterial(), tufts.length)
   grass.name = 'grass'
   tufts.forEach((m, i) => grass.setMatrixAt(i, m))
   group.add(rubbleMesh, grass)
