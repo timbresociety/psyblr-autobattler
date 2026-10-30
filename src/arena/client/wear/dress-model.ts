@@ -54,6 +54,13 @@ export interface WearMaterials {
 /** How dark and how rough a hair shell goes under its cards, so it reads as the depth of the hair between them. */
 const UNDER_CARDS = 0.45
 const UNDER_ROUGH = 0.9
+/**
+ * How far into the hair's fringe (dress.ts FRINGE, 12 mm) the shell's edge draws back under the cards, as a share of
+ * it, cut clean instead of parting into strands: the hairline is then the cards' own roots lying on the skin. Parted
+ * there, the shell's strands (which run straight down) met its edge on the slant over each temple in a staircase,
+ * and the cards showed it through.
+ */
+const UNDER_RECEDE = 0.45
 
 /** The items with their hair cards kept, the shell under them darkened, or left off. */
 export function withCards(items: DressedItem[], keep: boolean): DressedItem[] {
@@ -65,15 +72,19 @@ export function withCards(items: DressedItem[], keep: boolean): DressedItem[] {
     if (keep) {
       const color = Float32Array.from(item.color)
       const finish = Float32Array.from(item.finish)
+      const weave = Float32Array.from(item.weave)
       for (let v = 0; v < item.count; v++) {
         if (card(v)) continue
         // its ragged edge along the hairline (weave's fraction past HAIR_LOOK's, 0 there) keeps its colour, so what
         // shows of it there reads as more strands, not as a dark fringe
-        const t = THREE.MathUtils.smoothstep(item.weave[v] - 5, 0, 0.8)
+        const fringe = item.weave[v] - 5
+        const t = THREE.MathUtils.smoothstep(fringe, 0, 0.8)
         for (let c = 0; c < 3; c++) color[v * 3 + c] *= 1 - (1 - UNDER_CARDS) * t
         finish[v * 4] += (UNDER_ROUGH - finish[v * 4]) * t
+        // and draws back: the fringe moves on past 6, which the strands shader cuts at UNDER_RECEDE
+        if (fringe >= 0 && fringe < 1) weave[v] = 6 + fringe
       }
-      return { ...item, color, finish }
+      return { ...item, color, finish, weave }
     }
     // left off: their triangles go, and their vertices with them, so twenty heroes don't carry them all
     const kept: number[] = []
@@ -445,8 +456,13 @@ else if (vWeave > 4.5) {
   float clump = mix(0.5, strandNoise(turn * 96.0 + wave, 96.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 96.0));
   float fine = mix(0.5, strandNoise(turn * 433.0 + wave * 3.0, 433.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 433.0));
   float lock = strandNoise(turn * 40.0 + wave * 0.6, 40.0);
-  float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
-  if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
+  if (vWeave > 5.995) {
+    // under a hair's cards its fringe runs on past 6 (withCards), and its edge draws back clean under their roots
+    if (vWeave - 6.0 < ${UNDER_RECEDE}) discard;
+  } else {
+    float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
+    if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
+  }
   diffuseColor.rgb *= mix(0.76, 1.06, lock) * mix(0.72, 1.12, clump) * mix(0.88, 1.06, fine);
   roughnessFactor = clamp(roughnessFactor + (0.5 - clump) * 0.22 + (0.5 - fine) * 0.1, 0.2, 1.0);
   hairRelief = lock * 0.0035 + clump * 0.0008;
@@ -484,6 +500,12 @@ if (vWeave > 3.5) normal = grainNormal(-vViewPosition, normal, reliefX, reliefY,
  */
 const CARD_GLSL = `
 float cardShade = 0.5;
+// how squarely a card faces the eye, and how nearly its strands run straight at it (vStrandFlow): there (over the
+// crown from the front, say) its clumps shrink to dashes while the gaps between them stay whole, so they widen until
+// they close the gaps
+vec3 cardEye = normalize(vViewPosition);
+float cardFacing = abs(dot(normalize(vNormal), cardEye));
+float cardFill = smoothstep(0.5, 0.85, abs(dot(normalize(vStrandFlow), cardEye)));
 if (vCardUv.x > 1.5) {
   float cardSeed = floor(vCardUv.x);
   float along = vCardUv.y;
@@ -497,33 +519,30 @@ if (vCardUv.x > 1.5) {
     float h3 = strandHash(cardSeed * 5.21 + c * 0.73 + 0.25);
     float h4 = strandHash(cardSeed * 1.93 + c * 3.37 + 0.75);
     float end = 0.5 + 0.5 * h3;
-    float start = 0.3 * h4;
-    float reach = (0.3 + 0.3 * h2) * (1.0 - 0.6 * smoothstep(0.0, end, along));
-    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.12, along) * (1.0 - smoothstep(end - 0.1, end, along));
+    float start = 0.1 * h4;
+    float reach = mix(0.3 + 0.3 * h2, 0.8, cardFill) * (1.0 - 0.6 * smoothstep(0.0, end, along));
+    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.08, along) * (1.0 - smoothstep(end - 0.1, end, along));
     if (a > cover) {
       cover = a;
       cardShade = h2;
     }
   }
-  // and thins out toward the card's long edges, so no strand is cut along them
-  cover *= smoothstep(0.0, 1.2, k) * smoothstep(9.0, 7.8, k);
+  // and thins out toward the card's long edges, so no strand is cut along them, and fades seen edge-on, where the
+  // shell under it holds the shape
+  cover *= smoothstep(0.0, 1.2, k) * smoothstep(9.0, 7.8, k) * smoothstep(0.1, 0.35, cardFacing);
   if (cover < 0.02) discard;
   diffuseColor.a = cover;
-  diffuseColor.rgb *= mix(0.45, 1.0, smoothstep(0.0, 0.45, along)) * mix(0.8, 1.15, cardShade);
+  diffuseColor.rgb *= mix(0.7, 1.0, smoothstep(0.0, 0.35, along)) * mix(0.8, 1.15, cardShade);
 }`
 
 /**
- * The way a hair card's strands run, in view space: where its v (root to tip) climbs, from the screen derivatives of
- * the position and the UVs. Worked out for every pixel, as derivatives inside a branch are undefined, and used on
- * cards alone (hairCard).
+ * The way a hair card's strands run, in view space, for its highlights (used on cards alone, hairCard): from tip to
+ * root, as the highlights' shifts were set. It comes smooth from the vertices (vStrandFlow). Worked out per triangle
+ * from the screen derivatives, each centimetre of a card bent round a temple caught its highlight as one flat plate,
+ * and they stacked into steps.
  */
 const CARD_TANGENT_GLSL = `
-vec3 cardDx = dFdx(vViewPosition);
-vec3 cardDy = dFdy(vViewPosition);
-vec2 cardUx = dFdx(vCardUv);
-vec2 cardUy = dFdy(vCardUv);
-vec3 cardAlong = (cardDx * cardUy.x - cardDy * cardUx.x) * sign(cardUx.x * cardUy.y - cardUx.y * cardUy.x);
-hairTangent = length(cardAlong) > 1e-9 ? normalize(cardAlong) : vec3(0.0, 1.0, 0.0);
+hairTangent = -normalize(vStrandFlow);
 hairCard = step(1.5, vCardUv.x);
 hairShade = cardShade;`
 
@@ -558,6 +577,7 @@ varying float vWeave;
 varying vec3 vStrandNormal;
 varying float vStrandY;
 varying vec3 vRest;
+varying vec3 vStrandFlow;
 ${GRAIN_GLSL}
 float strandHash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
 // value noise along x, repeating every period cells
@@ -567,11 +587,33 @@ float strandNoise(float x, float period) {
   return mix(strandHash(mod(i, period)), strandHash(mod(i + 1.0, period)), f * f * (3.0 - 2.0 * f));
 }`
 
+/**
+ * The way hair runs where its surface faces n, at rest: tools/blender/wardrobe.py hair_cards' flow, in glTF's axes. Up
+ * and back over the brow, straight back over the crown, back and down at the sides. A card's strands run along it
+ * (less the few degrees each card is turned), so it gives their direction smooth from vertex to vertex.
+ */
+const HAIR_FLOW_GLSL = `
+varying vec3 vStrandFlow;
+vec3 hairFlow(vec3 n) {
+  vec3 along = cross(n, vec3(1.0, 0.0, 0.0));
+  vec3 d = vec3(0.0, -0.65, -1.0);
+  d -= n * dot(d, n);
+  if (length(along) < 1e-6) return length(d) < 1e-6 ? vec3(0.0, -1.0, 0.0) : normalize(d);
+  if (length(d) < 1e-6) return normalize(along);
+  vec3 f = mix(normalize(along), normalize(d), smoothstep(0.0, 1.0, (abs(n.x) - 0.35) / 0.45));
+  return length(f) > 1e-6 ? normalize(f) : vec3(0.0, -1.0, 0.0);
+}`
+
 /** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow; hair's strands and leather's grain. */
 function finishShader(shader: { vertexShader: string; fragmentShader: string }) {
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;\nvarying vec3 vRest;\nvarying vec2 vCardUv;')
+    .replace('#include <common>', `#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;\nvarying vec3 vRest;\nvarying vec2 vCardUv;\n${HAIR_FLOW_GLSL}`)
     .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;\nvRest = position;\nvCardUv = uv;')
+    // the flow turns with the bone the hair rides, like its normal
+    .replace(
+      '#include <defaultnormal_vertex>',
+      '#include <defaultnormal_vertex>\nvec3 strandFlow = hairFlow(normal);\n#ifdef USE_SKINNING\nstrandFlow = (skinMatrix * vec4(strandFlow, 0.0)).xyz;\n#endif\nvStrandFlow = normalize(mat3(modelViewMatrix) * strandFlow);',
+    )
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>\nvarying vec4 vFinish;\nvarying vec2 vCardUv;\n${STRAND_NOISE_GLSL}`)
     .replace('#include <alphamap_fragment>', `#include <alphamap_fragment>\n${CARD_GLSL}`)

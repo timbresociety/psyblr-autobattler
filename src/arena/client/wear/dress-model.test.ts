@@ -100,6 +100,13 @@ describe('hair cards', () => {
     expect(kept.color[6 * 3]).toBeCloseTo(0.8)
   })
 
+  it("move the shell's fringe on past 6, where the strands shader cuts its edge back clean, and leave the cards'", () => {
+    const [kept] = withCards([hair()], true)
+    expect(kept.weave[0]).toBeCloseTo(6)
+    expect(kept.weave[3]).toBeCloseTo(6.99)
+    expect(kept.weave[6]).toBeCloseTo(5.99)
+  })
+
   it('leave an item without them as it was', () => {
     const tee = part('tee', 2, [1, 0, 0])
     expect(withCards([tee], false)[0]).toBe(tee)
