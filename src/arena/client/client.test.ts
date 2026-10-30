@@ -63,45 +63,62 @@ describe('arena client core (U13)', () => {
 describe('how a hero stands while it moves (Forge goal, phase 1)', () => {
   const deg = (d: number) => (d * Math.PI) / 180
   // a long frame, so the hips finish turning
-  const still = { body: 0, twist: 0, back: false, pivot: false }
+  const still = { body: 0, twist: 0, back: false, pivot: false, legs: 0 }
   const settled = (aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square' = 'run') => stance(still, aim, move, mode, 1)
 
-  it('runs where it goes and twists its chest back to its aim, strafing', () => {
-    // aiming along +z, moving along +x: the hips face +x and the chest turns back a quarter turn
+  it('strafes on a diagonal: the hips turn partway, the legs run the rest, the chest stays on the aim (phase 2)', () => {
+    // aiming along +z, moving along +x: the hips turn as far as they go, the legs carry the body the rest of the way
+    // round to +x, and the chest turns back to the aim
     const s = settled(0, { x: 1, z: 0 })
-    expect(s.body).toBeCloseTo(deg(90))
-    expect(s.twist).toBeCloseTo(deg(-90))
-    expect(s.back).toBe(false)
+    expect(s.body).toBeCloseTo(STANCE.warp)
+    expect(s.legs).toBeCloseTo(deg(90) - STANCE.warp)
+    expect(s.body + s.legs).toBeCloseTo(deg(90))
     expect(s.body + s.twist).toBeCloseTo(0)
+    expect(s.back).toBe(false)
+    // nearly straight ahead, the hips face where it goes and the legs run straight under them
+    const ahead = settled(0, { x: Math.sin(deg(20)), z: Math.cos(deg(20)) })
+    expect(ahead.body).toBeCloseTo(deg(20))
+    expect(ahead.legs).toBeCloseTo(0)
+  })
+
+  it('swings its legs round over a few frames rather than in one', () => {
+    const s = stance({ ...still, body: STANCE.warp }, 0, { x: 1, z: 0 }, 'run', 1 / 60)
+    expect(s.legs).toBeCloseTo(STANCE.swing / 60)
+    // stopping, they come back under the hips the same way
+    const stopped = stance({ ...still, legs: deg(30) }, 0, undefined, 'stand', 1 / 60)
+    expect(stopped.legs).toBeCloseTo(deg(30) - STANCE.swing / 60)
   })
 
   it('faces its aim and runs backwards when it backs away, and doesn\u2019t flip back and forth near the line', () => {
     const s = settled(0, { x: 0.1, z: -1 })
     expect(s.back).toBe(true)
     expect(Math.abs(s.twist)).toBeLessThan(deg(10))
-    // a quarter turn off the aim: whichever way it was running, it keeps running that way
-    const off = { x: 1, z: 0 }
-    expect(stance({ ...still, body: deg(90), twist: deg(-90) }, 0, off, 'run', 1 / 60).back).toBe(false)
-    expect(stance({ ...still, body: deg(-90), twist: deg(90), back: true }, 0, off, 'run', 1 / 60).back).toBe(true)
-    // and neither way twists the chest past its limit, so the hips stay on the line the legs run along
+    // 100 degrees off the aim: whichever way it was running, it keeps running that way
+    const off = { x: Math.sin(deg(100)), z: Math.cos(deg(100)) }
+    expect(stance({ ...still, body: STANCE.warp }, 0, off, 'run', 1 / 60).back).toBe(false)
+    expect(stance({ ...still, body: -STANCE.warp, back: true }, 0, off, 'run', 1 / 60).back).toBe(true)
+    // whichever way it goes, forwards or backwards, the legs carry it along the line it moves on, with the hips no
+    // further round than they go and the chest back on the aim
     for (let a = 0; a <= 180; a += 5) {
       const move = { x: Math.sin(deg(a)), z: Math.cos(deg(a)) }
       for (const back of [false, true]) {
-        const s = stance({ ...still, body: back ? deg(a + 180) : deg(a), back }, 0, move, 'run', 1)
-        expect(Math.abs(s.twist)).toBeLessThanOrEqual(STANCE.twist + 1e-9)
-        expect(Math.abs(Math.sin(s.body - deg(a)))).toBeLessThan(1e-9)
+        const s = stance({ ...still, back }, 0, move, 'run', 1)
+        const along = s.body + s.legs + (s.back ? Math.PI : 0)
+        expect(Math.cos(along - deg(a))).toBeCloseTo(1, 9)
+        expect(Math.abs(s.twist)).toBeLessThanOrEqual(STANCE.warp + 1e-9)
+        expect(s.body + s.twist).toBeCloseTo(0)
       }
     }
   })
 
   it('squares up to its aim flying', () => {
-    expect(settled(deg(30), undefined, 'square')).toEqual({ body: expect.closeTo(deg(30)), twist: expect.closeTo(0), back: false, pivot: false })
+    expect(settled(deg(30), undefined, 'square')).toEqual({ body: expect.closeTo(deg(30)), twist: expect.closeTo(0), back: false, pivot: false, legs: 0 })
     expect(settled(0, { x: 1, z: 0 }, 'square').body).toBeCloseTo(0)
   })
 
   it('keeps its feet still standing: the chest follows the aim, and the hips turn only once it is far round', () => {
     // a small turn of the aim twists the chest and leaves the hips (and so the feet) where they were
-    expect(settled(deg(30), undefined, 'stand')).toEqual({ body: 0, twist: expect.closeTo(deg(30)), back: false, pivot: false })
+    expect(settled(deg(30), undefined, 'stand')).toEqual({ body: 0, twist: expect.closeTo(deg(30)), back: false, pivot: false, legs: 0 })
     // a big one turns the hips at their rate, and they keep turning until they face the aim, past the dead zone
     let s = stance(still, deg(90), undefined, 'stand', 1 / 60)
     expect(s.pivot).toBe(true)

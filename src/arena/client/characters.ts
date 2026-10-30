@@ -8,7 +8,7 @@ import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
 import { STANCE, type AnimState } from './animation.js'
-import { hipYaw, legReach, planter } from './feet.js'
+import { hipYaw, legReach, planter, turn } from './feet.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel, type ClothPrint } from './wear/dress-model.js'
@@ -210,13 +210,15 @@ export interface CharacterView {
   /**
    * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and cover
    * the ground at `speed` metres a second: the run plays at whatever pace keeps a planted foot from sliding. `planted`,
-   * the hero stands on the ground, so its feet stay where they land (see feet.ts).
+   * the hero stands on the ground, so its feet stay where they land (see feet.ts). `legs` turns each leg about its hip
+   * joint, so a strafing hero runs on a diagonal under hips that face nearer its aim.
    */
-  lean: (twist: number, back: boolean, speed?: number, planted?: boolean) => void
+  lean: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number) => void
 }
 
 /** How a twist is shared up the back, hips to head. */
 const TWIST_SHARE: Record<string, number> = { spine: 0.3, chest: 0.3, upper_chest: 0.25, neck: 0.15 }
+const UP = new THREE.Vector3(0, 1, 0)
 
 /** How far past the wrist the palm is, as a share of the forearm. */
 const PALM = 0.35
@@ -359,6 +361,27 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     if (bent) legs.forEach(([thigh, shin], k) => (thigh.quaternion.copy(unbent[k][0]), shin.quaternion.copy(unbent[k][1])))
     bent = false
   }
+  // running at an angle to the hips (see `stance`), each whole leg turns about the upright through its hip joint after
+  // the clip has posed it, and is put back before the next update, like the twist
+  let swing = 0
+  const unswung = [new THREE.Quaternion(), new THREE.Quaternion()]
+  const yawQ = new THREE.Quaternion()
+  let swung = false
+  const unswing = () => {
+    if (swung) legs.forEach(([thigh], k) => thigh.quaternion.copy(unswung[k]))
+    swung = false
+  }
+  const swingLegs = () => {
+    if (!swing || !legs.every(([thigh]) => thigh)) return
+    legs[0][0].parent!.updateWorldMatrix(true, false)
+    yawQ.setFromAxisAngle(UP, swing)
+    legs.forEach(([thigh], k) => {
+      unswung[k].copy(thigh.quaternion)
+      thigh.updateMatrixWorld()
+      turn(thigh, yawQ)
+    })
+    swung = true
+  }
   const plantFeet = () => {
     if (!plants || posed === undefined) return
     const dt = posed
@@ -384,8 +407,10 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   return {
     root,
     pose: (state, dt, moving) => {
-      untwist()
+      // undone in the reverse order they went on: the feet's bend, then the legs' swing, then the twist
       unbend()
+      unswing()
+      untwist()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
       const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
       const layered = layer > 0
@@ -440,6 +465,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       }
       mixer.update(dt)
       turnChest()
+      swingLegs()
       posed = dt
     },
     settle: (dt, far, still) => {
@@ -449,11 +475,12 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       return false
     },
     hand: (dir, out) => leadHand(hands, dir, out),
-    lean: (t, b, speed, onGround = false) => {
+    lean: (t, b, speed, onGround = false, angle = 0) => {
       twist = t
       backwards = b
       ground = speed
       planted = onGround
+      swing = angle
     },
     tip: (out) => {
       if (tip === null) tip = heldTip(holder!)

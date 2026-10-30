@@ -77,45 +77,52 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
 const DEG = Math.PI / 180
 
 /**
- * How fast hips turn (radians a second) and how far the chest twists from them. A hero moving further than `back.enter`
- * from its aim runs backwards, and runs forwards again under `back.leave`: the gap keeps a hero strafing near the line
- * from flipping between the two every few frames, and both sit within `twist` of a quarter turn, so neither way of
- * running ever twists the chest past its limit and drags the hips off the line the legs run along. A hero casting while it covers more than `stride` metres a second
- * keeps running under the cast, and a standing hero's hips hold until its aim is `pivot` round from them (Forge goal,
- * phase 2).
+ * How fast hips turn (radians a second) and how far the chest twists from them. Running, the hips turn at most `warp`
+ * toward where the hero goes and the legs run the rest of the way at an angle under them, at most `legs`, easing
+ * there at `swing` radians a second; so a hero strafing past its aim runs on a diagonal with its chest square to the
+ * aim, the way a player strafes, instead of turning its hips side on and wringing its spine round (Forge goal, phase
+ * 2). A hero moving further than `back.enter` from its aim runs backwards, and runs forwards again under `back.leave`,
+ * so a hero strafing near the line doesn't flip between the two every few frames. A hero casting while it covers more
+ * than `stride` metres a second keeps running under the cast, and a standing hero's hips hold until its aim is `pivot`
+ * round from them.
  */
-export const STANCE = { turn: 12, twist: 100 * DEG, back: { enter: 100 * DEG, leave: 80 * DEG }, stride: 0.6, pivot: 45 * DEG }
+export const STANCE = { turn: 12, twist: 100 * DEG, warp: 55 * DEG, legs: 60 * DEG, swing: 8, back: { enter: 110 * DEG, leave: 90 * DEG }, stride: 0.6, pivot: 45 * DEG }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
 /**
- * Where a hero's hips face, how far its chest twists back toward its aim, whether it runs backwards, and whether it's
- * turning on the spot to face its aim.
+ * Where a hero's hips face, how far its chest twists back toward its aim, whether it runs backwards, whether it's
+ * turning on the spot to face its aim, and how far its legs run at an angle to its hips (radians, the same way round
+ * as yaw).
  */
 export interface Stance {
   body: number
   twist: number
   back: boolean
   pivot: boolean
+  legs: number
 }
 
 /**
- * How a hero stands this frame (Forge goal, phases 1 and 2). Running, its legs follow where it moves and its chest
- * twists toward where it aims, so a hero shooting while it strafes or backs away doesn't skate; moving away from its
- * aim it faces the aim and runs backwards. Standing, its feet stay put: the hips hold while the chest follows the aim,
- * and only once the aim is STANCE.pivot round do the hips turn, all the way to face it. Flying, the whole body faces
- * the aim. `last` is last frame's stance: the hips turn from there at STANCE.turn. `move` is how far the hero moved,
- * if it did.
+ * How a hero stands this frame (Forge goal, phases 1 and 2). Running, its hips turn part of the way toward where it
+ * moves, its legs run the rest at an angle, and its chest twists to where it aims, so a hero shooting while it strafes
+ * or backs away doesn't skate; moving away from its aim it faces the aim and runs backwards. Standing, its feet stay
+ * put: the hips hold while the chest follows the aim, and only once the aim is STANCE.pivot round do the hips turn, all
+ * the way to face it. In the air the whole body faces the aim. `last` is last frame's stance: the hips turn from there
+ * at STANCE.turn. `move` is how far the hero moved, if it did.
  */
 export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square', dt: number): Stance {
   const from = last?.body ?? aim
   let target = aim
   let back = false
   let pivot = false
+  let heading: number | undefined
   if (mode === 'run' && move) {
-    const heading = Math.atan2(move.x, move.z)
-    back = Math.abs(wrap(aim - heading)) > (last?.back ? STANCE.back.leave : STANCE.back.enter)
-    target = back ? wrap(heading + Math.PI) : heading
+    heading = Math.atan2(move.x, move.z)
+    const off = wrap(heading - aim)
+    back = Math.abs(off) > (last?.back ? STANCE.back.leave : STANCE.back.enter)
+    // the hips go part of the way round toward the line the legs run along, forwards or backwards
+    target = wrap(aim + clamp(back ? wrap(off + Math.PI) : off, STANCE.warp))
   } else if (mode === 'stand') {
     pivot = Math.abs(wrap(aim - from)) > (last?.pivot ? 1e-3 : STANCE.pivot)
     if (!pivot) target = from
@@ -128,5 +135,11 @@ export function stance(last: Stance | undefined, aim: number, move: { x: number;
     twist = Math.sign(twist) * STANCE.twist
     hips = wrap(aim - twist)
   }
-  return { body: hips, twist, back, pivot }
+  // the legs make up the rest of the way to the line they run along, easing there
+  const wanted = heading === undefined ? 0 : clamp(wrap((back ? heading + Math.PI : heading) - hips), STANCE.legs)
+  const was = last?.legs ?? 0
+  const legs = was + Math.sign(wanted - was) * Math.min(Math.abs(wanted - was), STANCE.swing * dt)
+  return { body: hips, twist, back, pivot, legs }
 }
+
+const clamp = (a: number, limit: number) => Math.max(-limit, Math.min(limit, a))

@@ -102,8 +102,8 @@ const parentTurn = new THREE.Quaternion()
 const boneTurn = new THREE.Quaternion()
 const scratch = new THREE.Vector3()
 
-/** Turn `bone` by `world` (a rotation in world space), from its current world matrices. */
-function turn(bone: THREE.Object3D, world: THREE.Quaternion) {
+/** Turn `bone` by `world` (a rotation in world space), from its current world matrices, and keep them current. */
+export function turn(bone: THREE.Object3D, world: THREE.Quaternion) {
   bone.parent!.matrixWorld.decompose(scratch, parentTurn, scratch)
   bone.matrixWorld.decompose(scratch, boneTurn, scratch)
   bone.quaternion.copy(parentTurn.invert().multiply(world).multiply(boneTurn))
