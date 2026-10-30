@@ -222,16 +222,17 @@ export const clearLine = (pieces: readonly CoverPiece[], health: readonly CoverH
 
 /**
  * Push a hero's body (an upright capsule of `radius` and `height`) out of every standing piece it overlaps, sliding
- * along walls rather than stopping dead. Returns whether it touched anything.
+ * along walls rather than stopping dead. A piece whose top is no more than `clearance` above the feet doesn't push:
+ * the hero walks onto it, and steps up once its centre is over it. Returns whether it touched anything.
  */
-export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number): boolean {
+export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number, clearance = 0): boolean {
   const bounds = boundsOf(pieces)
   let touched = false
   for (let i = 0; i < pieces.length; i++) {
     if (health[i] === 0) continue
     if (p.x + radius < bounds.minX[i] || p.x - radius > bounds.maxX[i] || p.z + radius < bounds.minZ[i] || p.z - radius > bounds.maxZ[i]) continue
     const piece = pieces[i]
-    if (p.y >= piece.top || p.y + height <= piece.base) continue
+    if (p.y + clearance >= piece.top || p.y + height <= piece.base) continue
     const s = piece.shape
     if (s.kind === 'block') {
       const cx = Math.max(s.x - s.hx, Math.min(p.x, s.x + s.hx))

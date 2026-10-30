@@ -193,6 +193,21 @@ describe('engine core (U3)', () => {
     expect(h.position.y).toBe(0)
   })
 
+  it('walks up a step and a second one, and is stopped by anything higher (phase 2)', () => {
+    const { m, h, step } = solo(6)
+    const low: CoverPiece = { shape: { kind: 'block', x: 0, z: 3, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step, look: 'step' }
+    const next: CoverPiece = { shape: { kind: 'block', x: 0, z: 5, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step * 2, look: 'step' }
+    const high: CoverPiece = { shape: { kind: 'block', x: 0, z: -3, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step + 0.2, look: 'plinth' }
+    m.cover = { pieces: [low, next, high], health: initialCoverHealth([low, next, high]) }
+    step(go(0, 1), 45)
+    expect(h.position.z).toBeGreaterThan(4)
+    expect(h.position.y).toBeCloseTo(ENGINE.move.step * 2)
+    expect(h.airborne).toBe(false)
+    step(go(0, -1), 120)
+    expect(h.position.y).toBe(0)
+    expect(h.position.z).toBeGreaterThan(-2)
+  })
+
   it('snapshot, 300 ticks, restore, 300 ticks gives the same hash both times', () => {
     const { m, setups } = match(7)
     run(m, setups, 50, 7)
