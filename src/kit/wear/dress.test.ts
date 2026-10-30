@@ -211,6 +211,28 @@ describe('dressing', () => {
     expect(dress({ body: ref, worn: [worn(trousers), worn(tee)] }).items.map((i) => i.id)).toEqual(['trousers', 'tee'])
   })
 
+  it('hides the skin a jacket closes round, deep in each armpit, and nothing else', async () => {
+    const { item: jacket } = await readItemFile(pub('/kit/wear/leather_jacket.glb'), ref.surface.count)
+    const hide = coverOf(jacket.meta, ref.surface.count).hide
+    const T = ref.surface.triangles
+    for (const body of BODIES) {
+      const shape = shapes.get(body)!
+      const shown = new Set(dress({ body: shape, fields: fieldsOf.get(body), worn: [worn(jacket)] }).body)
+      const shoulders = ['upper_arm_L', 'upper_arm_R'].map((b) => files.get(body)!.rest[b])
+      const sides = new Set<number>()
+      for (let t = 0; t < T.length / 3; t++) {
+        // a triangle the jacket's own hide rule leaves shown, that the dress hides anyway
+        if ((hide[T[t * 3]] && hide[T[t * 3 + 1]] && hide[T[t * 3 + 2]]) || shown.has(t)) continue
+        const c = [0, 1, 2].map((d) => (shape.positions[T[t * 3] * 3 + d] + shape.positions[T[t * 3 + 1] * 3 + d] + shape.positions[T[t * 3 + 2] * 3 + d]) / 3)
+        // under a shoulder's joint: in the crease of the armpit, not on the chest, the back or the arm
+        const side = shoulders.findIndex((s) => Math.abs(c[0] - s[0]) < 0.07 && Math.abs(c[2] - s[2]) < 0.07 && c[1] - s[1] < -0.04 && c[1] - s[1] > -0.17)
+        expect(side, `${body} triangle ${t} at ${c.map((x) => x.toFixed(3))}`).toBeGreaterThanOrEqual(0)
+        sides.add(side)
+      }
+      expect(sides.size, body).toBe(2)
+    }
+  })
+
   it('hangs stiff cloth over the hollows under it: a tee spans the cleavage, and the stiffer the cloth the further out', async () => {
     const { item: shirt } = await readItemFile(pub('/kit/wear/tee.glb'), ref.surface.count)
     const body = shapes.get('f-medium')!

@@ -24,6 +24,8 @@ export const GAP = 0.003
 /** Nothing is pressed closer to the skin than this. */
 const MIN_LIFT = 0.0015
 const PRESSED: ReadonlySet<ItemSlot> = new Set(['hair', 'beard'])
+/** Shown skin this small, with hidden skin all round it, is hidden too (see enclose). */
+const POCKET = 3
 /** How much further out a lower garment must stand than the top or shoes over it to be worn outside them, in metres. */
 const LOOSER = 0.01
 /** Cloth this far from the skin starts draping from its neighbours, and drapes fully by LOOSE_TO. */
@@ -290,6 +292,7 @@ export function dress(input: DressInput): Dressed {
   // the body shows wherever no item hides all three corners of a triangle
   const hidden = new Uint8Array(V)
   for (const c of [...covers, ...rigid]) if (c.hides) for (let v = 0; v < V; v++) if (c.hide[v]) hidden[v] = 1
+  enclose(body, hidden)
   const T = body.surface.triangles
   const shown: number[] = []
   for (let t = 0; t < T.length / 3; t++) if (!(hidden[T[t * 3]] && hidden[T[t * 3 + 1]] && hidden[T[t * 3 + 2]])) shown.push(t)
@@ -514,6 +517,44 @@ function fringeOf(item: SurfaceItem, positions: Float32Array, lift: Float32Array
   const fringe = new Float32Array(item.count)
   for (let k = 0; k < item.count; k++) fringe[k] = Math.min(1, far[id[k]] / FRINGE)
   return fringe
+}
+
+/** Each welded body vertex's neighbours, by the body's triangles: the same on every body. */
+const bodyLinks = new WeakMap<Uint32Array, number[][]>()
+
+/**
+ * Hide every pocket of skin the clothes hide all round (POCKET vertices at most). The fit hides only the skin that cloth
+ * lies close over, and deep in an armpit the sleeve stands off or runs alongside, so a vertex or two there stays
+ * shown and pokes through the jacket once the arm comes down. Skin hidden all round shows only through the clothes.
+ */
+function enclose(body: BodyShape, hidden: Uint8Array): void {
+  const T = body.surface.triangles
+  let links = bodyLinks.get(T)
+  if (!links) {
+    const known: number[][] = Array.from({ length: body.surface.count }, () => [])
+    const link = (a: number, b: number) => !known[a].includes(b) && (known[a].push(b), known[b].push(a))
+    for (let t = 0; t < T.length; t += 3) {
+      link(T[t], T[t + 1])
+      link(T[t + 1], T[t + 2])
+      link(T[t + 2], T[t])
+    }
+    links = known
+    bodyLinks.set(T, links)
+  }
+  const seen = new Uint8Array(hidden.length)
+  for (let v = 0; v < hidden.length; v++) {
+    if (seen[v] || hidden[v] || !body.skin[v]) continue
+    // all the shown skin joined to v
+    const piece = [v]
+    seen[v] = 1
+    for (let k = 0; k < piece.length; k++)
+      for (const u of links[piece[k]])
+        if (!seen[u] && !hidden[u] && body.skin[u]) {
+          seen[u] = 1
+          piece.push(u)
+        }
+    if (piece.length <= POCKET) for (const u of piece) hidden[u] = 1
+  }
 }
 
 /** An item's vertices welded by where they sit on the reference, and each welded vertex's neighbours: the same on every body. */
