@@ -962,20 +962,30 @@ def spikes(w, mat, count=18, length=0.06, width=0.018, name='spikes'):
 
 
 # hair that gets cards over its shell, and how: the layers' lift off the shell and spacing between roots (metres), the
-# cards' lengths and width
-HAIR_CARDS = {'swept': dict(layers=((0.0015, 0.015), (0.0045, 0.02), (0.0075, 0.028)), length=(0.075, 0.14), width=0.017)}
+# cards' lengths and width, which way they run (see hair_cards' runs), how long they are at the sides against the top,
+# how far past the hairline they reach, how far their tips stand off, and how long a step each takes (short hair turns
+# in fewer centimetres)
+HAIR_CARDS = {
+    'swept': dict(layers=((0.0015, 0.015), (0.0045, 0.02), (0.0075, 0.028)), length=(0.075, 0.14), width=0.017),
+    'quiff': dict(layers=((0.0015, 0.015), (0.0045, 0.02), (0.0075, 0.028)), length=(0.08, 0.15), width=0.017),
+    'side_part': dict(layers=((0.0015, 0.012), (0.004, 0.017)), length=(0.05, 0.1), width=0.014, flow='part', part=0.4, sides=0.6, tip=0.0015, step=0.008),
+    'short': dict(layers=((0.001, 0.009), (0.003, 0.012), (0.005, 0.018)), length=(0.035, 0.06), width=0.012, sides=0.6, below=0.005, tip=0.001, step=0.006),
+    'fringe_white': dict(layers=((0.001, 0.009), (0.0025, 0.012), (0.004, 0.018)), length=(0.03, 0.05), width=0.011, sides=0.6, below=0.005, tip=0.001, step=0.006),
+    'thin': dict(layers=((0.001, 0.01), (0.0025, 0.014)), length=(0.025, 0.045), width=0.011, tip=0.001, step=0.006),
+}
 # the extra roots that thicken the hairline, this far apart along it
 HAIRLINE_ROOTS = 0.008
 
 
-def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, mat='hair', name='cards', step=0.01, seed=11):
+def hair_cards(w, shell_obj, layers, length, width, flow='back', part=0.0, sides=1.0, below=0.012, tip=0.002, bare=None,
+               recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, mat='hair', name='cards', step=0.01, seed=11):
     """
     Cards over a hair shell, for the close look of the creator's studio (Forge goal, phase C): strips a clump of strands
-    wide, each laid from a root over the scalp along the hair's flow (straight back on top, back and down at the sides,
-    down at the back), in layers lifted off the shell, the outer ones sparser, and thickest along the hairline, where
-    they start on the skin. Their UVs mark them for the runtime, which draws their strands (dress-model.ts) and leaves
-    them off where it draws the shell alone: u is 2, plus a whole number that seeds the card's strand pattern, plus the
-    place across the card; v runs from the root to the tip.
+    wide, each laid from a root over the scalp along the hair's flow (`flow`, see runs below), in layers lifted off the
+    shell, the outer ones sparser, and thickest along the hairline, where they start on the skin. Their UVs mark them
+    for the runtime, which draws their strands (dress-model.ts) and leaves them off where it draws the shell alone: u is
+    2, plus a whole number that seeds the card's strand pattern, plus the place across the card; v runs from the root to
+    the tip.
     """
     import bisect
     import random
@@ -1007,21 +1017,35 @@ def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape
             return k + nk * 0.002, nk
         return out, n
 
-    def flow(n, turn):
+    # the whorl at the back of the crown, where a side part ends, and where the part runs (on the hero's left, +x)
+    crown = V((h.centre.x, h.centre.y + 0.3 * (h.centre.y - h.front), h.top))
+    parting = h.centre.x + part * h.half_width
+
+    def runs(p, n, turn, sign):
         """
-        Which way the hair runs where the surface faces `n`, turned a little about it by `turn` (radians). Over the top
-        it keeps to its own slice along the head (the surface's normal across the head's width): up and back over the
-        brow, straight back over the crown, down the back. The surface turning sideways would otherwise pull it out to
-        the sides, parting it down the middle. At the sides it runs back and down toward the nape.
+        Which way the hair runs at p, where the surface faces `n`, turned a little about it by `turn` (radians).
+        'back' (swept back, a quiff, short cuts, thinning hair): over the top it keeps to its own slice along the head
+        (the surface's normal across the head's width): up and back over the brow, straight back over the crown, down
+        the back. The surface turning sideways would otherwise pull it out to the sides, parting it down the middle. At
+        the sides it runs back and down toward the nape.
+        'part': across the top and away from the part, toward the side `sign` gives, rising off the brow as it goes, and
+        at the sides and behind the crown as 'back' runs.
         """
         along = n.cross(V((1, 0, 0)))
+        top = along
+        if flow == 'part' and along.length > 1e-6:
+            across = V((sign, 0, 0))
+            across -= n * across.dot(n)
+            if across.length > 1e-6:
+                top = (across.normalized() + along.normalized() * 0.45).normalized()
+                top = top.lerp(along.normalized(), smooth01((p.y - crown.y + 0.02) / 0.04))
         d = V((0, 1, -0.65))
         d -= n * d.dot(n)
         side = smooth01((abs(n.x) - 0.35) / 0.45)
-        if along.length < 1e-6 or d.length < 1e-6:
-            d = along if d.length < 1e-6 else d
+        if top.length < 1e-6 or d.length < 1e-6:
+            d = top if d.length < 1e-6 else d
         else:
-            d = along.normalized().lerp(d.normalized(), side)
+            d = top.normalized().lerp(d.normalized(), side)
         d = d.normalized() if d.length > 1e-6 else V((0, 0, -1))
         return d * math.cos(turn) + n.cross(d) * math.sin(turn)
 
@@ -1047,21 +1071,42 @@ def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape
             if s + t > 1:
                 s, t = 1 - s, 1 - t
             p = a + (b - a) * s + (c - a) * t
-            if p.z >= line(p) + 0.004 and free(p):
+            # clear of the hairline and of a bare crown's edge
+            if p.z >= line(p) + 0.004 and not (bare and bare(p + V((0, 0, 0.004)))) and free(p):
                 picked.append(p)
         return picked
 
+    body = w.d._full_bvh()
+
     def hairline_roots():
-        # round the forehead and the temples: further back the hairline runs over the ears
+        """
+        Roots all round the hairline, wherever hair grows over it, for the cards over it thin out to their tips. Where
+        the hair runs up off the skin (swept back over the brow) a root sits on the hairline. Where it runs along it
+        (above the ears) a root sits 6 mm up the slope, so its card covers the line, and where it runs down over it
+        (round the back) up to 2 cm up, so its card ends over it.
+        """
         out = []
-        a = -1.2
-        while a <= 1.2:
+        a = -math.pi
+        while a < math.pi:
             # a point on the hairline at bearing a: out from the head's centre, at the hairline's height there
             probe = V((h.centre.x + math.sin(a) * 0.3, h.centre.y - math.cos(a) * 0.3, 0))
             probe.z = line(probe) + 0.003
-            k, _n = w.snap(V((probe.x, probe.y, probe.z)), (V((h.centre.x, h.centre.y, probe.z)) - probe).normalized())
-            out.append(k)
+            k, nk = w.snap(V((probe.x, probe.y, probe.z)), (V((h.centre.x, h.centre.y, probe.z)) - probe).normalized())
             a += HAIRLINE_ROOTS / max(0.04, h.half_width)
+            # not on an ear (skin with more skin behind it), nor on the bare crown of thinning hair (`bare`)
+            if H.flap(body, k, nk, body.find_nearest(k)[2]) or (bare and bare(k)):
+                continue
+            p, n = k, nk
+            up = V((0, 0, 1)) - nk * nk.z
+            climb = runs(k, nk, 0.0, -1 if k.x < parting else 1).dot(up.normalized()) if up.length > 1e-6 else 0.0
+            if climb < 0.3:
+                rise = 0.006 + 0.014 * max(0.0, -climb)
+                for _ in range(8):
+                    up = V((0, 0, 1)) - n * n.z
+                    if p.z >= line(p) + rise or up.length < 1e-6:
+                        break
+                    p, n = on(p + up.normalized() * 0.005, 0.0)
+            out.append(p)
         return out
 
     bm = bmesh.new()
@@ -1073,11 +1118,14 @@ def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape
             turn = math.radians(rnd.uniform(-7, 7))
             full = rnd.uniform(*length)
             p, n = on(root, lift)
+            # a card keeps to its side of a part; at the sides the hair's cut shorter than on top
+            sign = -1 if root.x < parting else 1
+            full *= 1.0 - (1.0 - sides) * smooth01((abs(n.x) - 0.35) / 0.45)
             path = [(p, n)]
             while len(path) * step < full:
-                d = flow(n, turn)
+                d = runs(p, n, turn, sign)
                 p, n = on(p + d * step, lift)
-                if p.z < line(p) - 0.012 or (p - path[-1][0]).length < step * 0.3:
+                if p.z < line(p) - below or (p - path[-1][0]).length < step * 0.3:
                     break
                 path.append((p, n))
             if len(path) < 3:
@@ -1086,11 +1134,11 @@ def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape
             rows = []
             for i, (q, nq) in enumerate(path):
                 t = i / (len(path) - 1)
-                d = flow(nq, turn)
+                d = runs(q, nq, turn, sign)
                 across = nq.cross(d).normalized()
                 half = width * (1.0 - 0.5 * t) / 2
                 # the tips lift a little off the hair under them, for volume
-                q = q + nq * 0.002 * t * t
+                q = q + nq * tip * t * t
                 rows.append((bm.verts.new(q - across * half), bm.verts.new(q + across * half), t))
             for i in range(len(rows) - 1):
                 a0, b0, t0 = rows[i]
@@ -1123,7 +1171,7 @@ def hair(w, style, mat='hair', **k):
         paint(h, 'hang', lambda p: (line(p) - 0.02 - p.z) / max(0.03, drop * 0.8))
         paint(h, 'len', lambda p: (line(p) - p.z) / max(0.03, drop))
     edge = {key: k[key] for key in ('recede', 'temple', 'nape', 'sideburn') if key in k}
-    cards = [hair_cards(w, h, mat=mat, **HAIR_CARDS[style], **edge)] if style in HAIR_CARDS else []
+    cards = [hair_cards(w, h, mat=mat, bare=lambda p: H.bald(w.head, style, p), **HAIR_CARDS[style], **edge)] if style in HAIR_CARDS else []
     return [h] + ([spikes(w, mat, detail['spikes'])] if 'spikes' in detail else []) + cards
 
 

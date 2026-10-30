@@ -76,8 +76,8 @@ describe("an outfit's one geometry", () => {
 
 describe('hair cards', () => {
   /** Hair: a shell triangle at its edge (weave 5), one inside it, then two card triangles (u past CARD_U). */
-  function hair(): DressedItem {
-    const h: DressedItem = { ...part('hair_swept', 4, [0.8, 0.8, 0.8]), slot: 'hair' }
+  function hair(color: [number, number, number] = [0.05, 0.05, 0.05]): DressedItem {
+    const h: DressedItem = { ...part('hair_swept', 4, color), slot: 'hair' }
     for (let v = 6; v < 12; v++) h.uv[v * 2] = 7.5
     h.weave.set([5, 5, 5, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99, 5.99])
     h.positions.forEach((_, k) => (h.positions[k] = k))
@@ -95,9 +95,22 @@ describe('hair cards', () => {
   it('stay in a close look, the shell under them darkened but for its edge', () => {
     const [kept] = withCards([hair()], true)
     expect(kept.index.length).toBe(12)
-    expect(kept.color[0]).toBeCloseTo(0.8)
-    expect(kept.color[3 * 3]).toBeCloseTo(0.36)
-    expect(kept.color[6 * 3]).toBeCloseTo(0.8)
+    expect(kept.color[0]).toBeCloseTo(0.05)
+    expect(kept.color[3 * 3]).toBeCloseTo(0.05 * 0.45)
+    expect(kept.color[6 * 3]).toBeCloseTo(0.05)
+  })
+
+  it('darken a white shell less than a dark one, for light reaches its depths', () => {
+    const [kept] = withCards([hair([0.8, 0.8, 0.8])], true)
+    expect(kept.color[3 * 3]).toBeCloseTo(0.8 * 0.75)
+  })
+
+  it('darken a blond shell toward golden brown, deeper in its weaker colours', () => {
+    const [kept] = withCards([hair([0.8, 0.6, 0.2])], true)
+    const [r, g, b] = kept.color.subarray(3 * 3, 3 * 3 + 3)
+    expect(r).toBeLessThan(0.8)
+    expect(g / r).toBeLessThan(0.6 / 0.8)
+    expect(b / r).toBeLessThan((g / r) * (0.2 / 0.6))
   })
 
   it("move the shell's fringe on past 6, where the strands shader cuts its edge back clean, and leave the cards'", () => {

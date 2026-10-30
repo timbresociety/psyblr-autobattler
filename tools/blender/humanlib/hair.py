@@ -99,12 +99,48 @@ STYLES = {
 }
 
 
+def flap(bvh, p, n, own, reach=0.02):
+    """
+    Whether more skin lies within `reach` behind p, where the body's face `own` faces `n`: the ears, a flap of skin with
+    skin behind it. A face that isn't flat can hide its own other half just behind p, so it doesn't count.
+    """
+    o = p - n * 0.0005
+    while (o - p).length < reach:
+        hit, _n, i, _d = bvh.ray_cast(o, -n, reach - (o - p).length)
+        if hit is None or i != own:
+            return hit is not None
+        o = hit - n * 0.0001
+    return False
+
+
+def bald_edge(head, style, p):
+    """
+    The height over which thinning hair leaves the crown bare at p's bearing (None for every other style): low over the
+    ears, rising round the back, so it keeps a horseshoe of hair, and dropping under the hairline in front of the ears,
+    where the temples were left in tufts.
+    """
+    if style != 'thin':
+        return None
+    a = abs(head.azimuth(p))
+    back = max(0.0, min(1.0, (a - 1.6) / (math.pi - 1.6)))
+    front = max(0.0, min(1.0, (1.5 - a) / 0.4))
+    return head.eyes.z + 0.07 + 0.03 * back * back * (3 - 2 * back) - 0.06 * front * front * (3 - 2 * front)
+
+
+def bald(head, style, p, margin=0.0):
+    """Whether p is on the bare crown of thinning hair, `margin` or more over its edge."""
+    edge = bald_edge(head, style, p)
+    return edge is not None and p.z > edge + margin
+
+
 def make_hair(d, head, style, recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, bangs=0.0, mat='hair', thickness=0.005):
     """A hair shell lifted off the scalp in the style's shape; returns the object (or None for 'bald')."""
     if style in (None, 'bald'):
         return None
     st = STYLES[style]
     skin_idx = [i for i, m in enumerate(d.obj.data.materials) if m.name in ('skin', 'face')]
+    body = d._full_bvh()
+    ears = not st.get('drop') and st['side'] < 0.03
 
     def scalp(poly):
         c = poly.center
@@ -112,17 +148,25 @@ def make_hair(d, head, style, recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, ba
             return False
         if c.z < head.eyes.z - 0.12:
             return False
-        if style == 'thin' and abs(head.azimuth(c)) < 1.4 and c.z > head.eyes.z + 0.07:
-            return False  # a bald crown with hair round the sides and back
-        # take a margin below the hairline: the shell dips under the skin there, so the visible edge is a smooth
-        # curve where the shell crosses the skin, not the steps of whole faces
-        return c.z >= head.hairline(c, recede, temple, nape, sideburn) - 0.03
+        # take a margin past the hairline and a bare crown's edge: the shell dips under the skin there, so the visible
+        # edge is a smooth curve where the shell crosses the skin, not the steps of whole faces
+        if bald(head, style, c, 0.03):
+            return False
+        if c.z < head.hairline(c, recede, temple, nape, sideburn) - 0.03:
+            return False
+        # not the ears, where the hair is cut round them: above the ear the margin takes in the top of it, and the
+        # shell, pushed along the ear's every fold, crumpled into lumps round it. Hair that hangs, or stands out far
+        # round the head, covers them.
+        return not (ears and flap(body, c, poly.normal, poly.index))
 
     top_z = head.top
 
     def grown(p):
-        """0 below the hairline, 1 just above it (smooth)."""
+        """0 below the hairline and over a bare crown's edge, 1 just inside them (smooth)."""
         t = max(0.0, min(1.0, (p.z - head.hairline(p, recede, temple, nape, sideburn) + 0.012) / 0.022))
+        edge = bald_edge(head, style, p)
+        if edge is not None:
+            t = min(t, max(0.0, min(1.0, (edge - p.z + 0.012) / 0.022)))
         return t * t * (3 - 2 * t)
 
     def lift(p, n):

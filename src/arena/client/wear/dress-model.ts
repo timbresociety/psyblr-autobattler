@@ -51,8 +51,18 @@ export interface WearMaterials {
   cards?: boolean
 }
 
-/** How dark and how rough a hair shell goes under its cards, so it reads as the depth of the hair between them. */
+/**
+ * How dark and how rough a hair shell goes under its cards, so it reads as the depth of the hair between them: dark
+ * hair this dark, and light hair, which lets light through to its depths, only UNDER_LIGHT. As dark as dark hair,
+ * white hair's depths showed between its strands as grey patches.
+ */
 const UNDER_CARDS = 0.45
+const UNDER_LIGHT = 0.75
+/**
+ * And how much richer in its own hue: light that went through more hair takes on more of its colour, so a blond's
+ * depths go golden brown. Darkened evenly they went olive.
+ */
+const UNDER_RICHER = 0.6
 const UNDER_ROUGH = 0.9
 /**
  * How far into the hair's fringe (dress.ts FRINGE, 12 mm) the shell's edge draws back under the cards, as a share of
@@ -79,7 +89,10 @@ export function withCards(items: DressedItem[], keep: boolean): DressedItem[] {
         // shows of it there reads as more strands, not as a dark fringe
         const fringe = item.weave[v] - 5
         const t = THREE.MathUtils.smoothstep(fringe, 0, 0.8)
-        for (let c = 0; c < 3; c++) color[v * 3 + c] *= 1 - (1 - UNDER_CARDS) * t
+        const [r, g, b] = item.color.subarray(v * 3, v * 3 + 3)
+        const under = UNDER_CARDS + (UNDER_LIGHT - UNDER_CARDS) * THREE.MathUtils.smoothstep(0.2126 * r + 0.7152 * g + 0.0722 * b, 0.1, 0.6)
+        const top = Math.max(r, g, b, 1e-6)
+        for (let c = 0; c < 3; c++) color[v * 3 + c] *= 1 - (1 - under * (item.color[v * 3 + c] / top) ** UNDER_RICHER) * t
         finish[v * 4] += (UNDER_ROUGH - finish[v * 4]) * t
         // and draws back: the fringe moves on past 6, which the strands shader cuts at UNDER_RECEDE
         if (fringe >= 0 && fringe < 1) weave[v] = 6 + fringe
@@ -521,7 +534,7 @@ if (vCardUv.x > 1.5) {
     float end = 0.5 + 0.5 * h3;
     float start = 0.1 * h4;
     float reach = mix(0.3 + 0.3 * h2, 0.8, cardFill) * (1.0 - 0.6 * smoothstep(0.0, end, along));
-    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.08, along) * (1.0 - smoothstep(end - 0.1, end, along));
+    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.25, along) * (1.0 - smoothstep(end - 0.1, end, along));
     if (a > cover) {
       cover = a;
       cardShade = h2;
@@ -564,10 +577,10 @@ void RE_Direct_Hair(const in IncidentLight directLight, const in vec3 geometryPo
   if (hairCard < 0.5) return;
   vec3 h = normalize(directLight.direction + geometryViewDir);
   float lit = saturate(dot(geometryNormal, directLight.direction) * 0.6 + 0.4);
-  float catchLight = mix(0.6, 1.3, hairShade);
-  float sharp = strandSpecular(hairTangent, geometryNormal, h, -0.08, 90.0);
+  float catchLight = mix(0.7, 1.2, hairShade);
+  float sharp = strandSpecular(hairTangent, geometryNormal, h, -0.08, 70.0);
   float broad = strandSpecular(hairTangent, geometryNormal, h, 0.12, 22.0);
-  reflectedLight.directSpecular += directLight.color * lit * catchLight * (vec3(sharp * 0.3) + broad * 0.35 * material.diffuseColor);
+  reflectedLight.directSpecular += directLight.color * lit * catchLight * (vec3(sharp * 0.1) + broad * 0.35 * material.diffuseColor);
 }
 #undef RE_Direct
 #define RE_Direct RE_Direct_Hair`

@@ -288,8 +288,10 @@ function core(ref: Reference, slot: ItemSlot): { name: string; verts: number[]; 
       // a sandal is a sole and a few straps
       return [{ name: 'feet', verts: pick((v) => leanOn(ref, v, ['foot_L', 'foot_R']) >= 0.6), need: 0.1 }]
     case 'head':
-    case 'hair':
       return [{ name: 'crown of the head', verts: crown(), need: 0.3 }]
+    case 'hair':
+      // thinning hair leaves the top of the head bare, keeping a horseshoe round the sides and back
+      return [{ name: 'crown of the head', verts: crown(), need: 0.2 }]
     case 'back':
       // a scarf's tails cover less than a cape
       return [{ name: 'back', verts: pick((v) => leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5 && z(v) < (ref.rest.chest?.[2] ?? 0)), need: 0.15 }]
