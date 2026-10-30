@@ -8,7 +8,7 @@ import { linearRgb } from '../../../kit/wear/finish.js'
 import { CARD_U, coverOf, type Cover } from '../../../kit/wear/item.js'
 import { PRINT_SCALE, drawPrint, inkFor, type PrintId } from '../../../kit/wear/prints.js'
 import { bodyKitLoaded } from '../body-kit.js'
-import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from '../character-look.js'
+import { characterMap, characterNormalMap, GRAIN_GLSL, metaChannel, type CharacterLook } from '../character-look.js'
 import { faceShape } from '../face/shape.js'
 import { hangPieces, shapedSockets, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
@@ -558,28 +558,7 @@ varying float vWeave;
 varying vec3 vStrandNormal;
 varying float vStrandY;
 varying vec3 vRest;
-float grainHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
-// value noise in three dimensions, 0 to 1
-float grainNoise(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(mix(grainHash(i), grainHash(i + vec3(1, 0, 0)), f.x), mix(grainHash(i + vec3(0, 1, 0)), grainHash(i + vec3(1, 1, 0)), f.x), f.y),
-    mix(mix(grainHash(i + vec3(0, 0, 1)), grainHash(i + vec3(1, 0, 1)), f.x), mix(grainHash(i + vec3(0, 1, 1)), grainHash(i + vec3(1, 1, 1)), f.x), f.y),
-    f.z);
-}
-// a normal bumped by a height (in metres) that changes dhx and dhy across a pixel: the height's slope along the surface
-// (Mikkelsen's surface gradient, from the position's own change across the pixel), so the bump holds at any distance
-vec3 grainNormal(vec3 surf, vec3 n, float dhx, float dhy, float faceDirection) {
-  vec3 sx = dFdx(surf);
-  vec3 sy = dFdy(surf);
-  vec3 r1 = cross(sy, n);
-  vec3 r2 = cross(n, sx);
-  float det = dot(sx, r1) * faceDirection;
-  det = det < 0.0 ? min(det, -1e-12) : max(det, 1e-12);
-  return normalize(n - (dhx * r1 + dhy * r2) / det);
-}
+${GRAIN_GLSL}
 float strandHash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
 // value noise along x, repeating every period cells
 float strandNoise(float x, float period) {

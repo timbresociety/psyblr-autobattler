@@ -128,23 +128,80 @@ export function characterNormalMap(mesh: THREE.Mesh): THREE.Texture | null {
  * The classic (WebGL) material the previews and busts draw a character with. Its skin (_skin, from dress-model.ts)
  * lets light in: light scattered under the surface blurs the relief its diffuse shows, red the most, and carries on a
  * little past where the surface turns from the light, warm. Its highlights keep the full relief, at skin's own
- * reflectance (IOR 1.4), and a faint sheen at grazing angles stands for its fine hair. The eyes stay wet and glossy.
+ * reflectance (IOR 1.4), and a faint sheen at grazing angles stands for its fine hair. Up close it has pores and faint
+ * blotches (PORES_GLSL, BLOTCH_GLSL), where the atlas round a photo face is one flat colour. The eyes stay wet and glossy.
  */
 export function classicCharacterMaterial(map: THREE.Texture | null, normalMap: THREE.Texture | null = null): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, map, normalMap, roughness: 0.52, metalness: 0, ior: 1.4 })
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float _skin;\nvarying float vSkin;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = _skin;')
+      .replace('#include <common>', '#include <common>\nattribute float _skin;\nvarying float vSkin;\nvarying vec3 vSkinRest;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = _skin;\nvSkinRest = position;')
     shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vSkinRest;\n${GRAIN_GLSL}`)
       .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SKIN_GLSL}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${BLOTCH_GLSL}`)
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.1, roughnessFactor, vSkin);')
       .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nskinFlatNormal = nonPerturbedNormal;')
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${PORES_GLSL}`)
       .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_SHEEN\nmaterial.sheenColor *= vSkin;\n#endif')
   }
   m.customProgramCacheKey = () => 'psyblr-skin'
   return m
 }
+
+/**
+ * Value noise in three dimensions, and a normal bumped by a height in metres, for relief drawn without UVs on where a
+ * surface sits at rest: skin's pores here, leather's grain and hair's locks in wear/dress-model.ts.
+ */
+export const GRAIN_GLSL = `float grainHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+// value noise in three dimensions, 0 to 1
+float grainNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(grainHash(i), grainHash(i + vec3(1, 0, 0)), f.x), mix(grainHash(i + vec3(0, 1, 0)), grainHash(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(grainHash(i + vec3(0, 0, 1)), grainHash(i + vec3(1, 0, 1)), f.x), mix(grainHash(i + vec3(0, 1, 1)), grainHash(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}
+// a normal bumped by a height (in metres) that changes dhx and dhy across a pixel: the height's slope along the surface
+// (Mikkelsen's surface gradient, from the position's own change across the pixel), so the bump holds at any distance
+vec3 grainNormal(vec3 surf, vec3 n, float dhx, float dhy, float faceDirection) {
+  vec3 sx = dFdx(surf);
+  vec3 sy = dFdy(surf);
+  vec3 r1 = cross(sy, n);
+  vec3 r2 = cross(n, sx);
+  float det = dot(sx, r1) * faceDirection;
+  det = det < 0.0 ? min(det, -1e-12) : max(det, 1e-12);
+  return normalize(n - (dhx * r1 + dhy * r2) / det);
+}`
+
+/**
+ * Skin isn't one flat colour: faint blotches a centimetre or so across and finer ones a few millimetres across, a
+ * little redder or paler. The body's atlas is flat round the photo face, so without them a forehead reads as plastic.
+ */
+const BLOTCH_GLSL = `
+float blotch = grainNoise(vSkinRest * 70.0) * 0.6 + grainNoise(vSkinRest * 230.0 + 3.0) * 0.4;
+diffuseColor.rgb *= mix(vec3(1.0), mix(vec3(0.93, 0.965, 0.98), vec3(1.06, 1.0, 0.985), blotch), vSkin);`
+
+/**
+ * Pores: small pits about a millimetre apart over a finer, shallower roughness, bumping the normal by their slope in
+ * metres (grainNormal), and a little less glossy in the pits, so a highlight on skin breaks up the way it does on a
+ * face instead of sliding off it. They fade out where their cells shrink under a pixel or so, where they'd only
+ * shimmer: the hero seen whole, or anything further than the creator's close look.
+ */
+const PORES_GLSL = `
+{
+  vec3 at = vSkinRest * 1000.0;
+  float seen = vSkin * (1.0 - smoothstep(0.7, 1.4, length(fwidth(at))));
+  // deeper in some patches than others, as a nose's pores are and a temple's aren't
+  float pore = smoothstep(0.62, 0.86, grainNoise(at)) * mix(0.35, 1.0, smoothstep(0.25, 0.75, grainNoise(vSkinRest * 40.0 + 9.0)));
+  float fine = grainNoise(at * 2.3 + 7.0);
+  float relief = (fine * 0.00003 - pore * 0.00007) * seen;
+  normal = grainNormal(-vViewPosition, normal, dFdx(relief), dFdy(relief), faceDirection);
+  roughnessFactor = min(roughnessFactor + pore * 0.08 * seen, 1.0);
+}`
 
 /**
  * Direct light on skin, in place of three's RE_Direct_Physical (which it matches where _skin is 0, on the eyes). The
