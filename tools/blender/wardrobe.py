@@ -995,9 +995,13 @@ def hair_cards(w, shell_obj, layers, length, width, recede=0.0, temple=0.0, nape
     line = lambda p: h.hairline(p, recede, temple, nape, sideburn)  # noqa: E731
 
     def on(p, lift):
-        """p moved onto the outside of the hair, `lift` off the shell, and never under the skin."""
+        """
+        p moved onto the outside of the hair, `lift` off the shell, and never under the skin. Where the head faces
+        sideways the lift is up to 60% less: hair lies flat over the temples, and stood off there the layers' edges
+        stacked into steps seen from the front.
+        """
         q, n, _i, _d = shell.find_nearest(p)
-        out = q + n * lift
+        out = q + n * lift * (1.0 - 0.6 * smooth01((abs(n.x) - 0.5) / 0.35))
         k, nk = w.snap(out)
         if (out - k).dot(nk) < 0.002:
             return k + nk * 0.002, nk
