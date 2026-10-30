@@ -156,6 +156,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   pieces.forEach((piece, index) => {
     const s = piece.shape
     const node = new THREE.Group()
+    node.name = `cover:${piece.look}`
     const h = piece.top - piece.base
     if (s.kind === 'column') {
       const broken = piece.top < 6
@@ -256,6 +257,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   // rubble and grass at the feet of the ruins, instanced so hundreds cost two draw calls
   const rubbleMesh = new THREE.InstancedMesh<THREE.BufferGeometry, THREE.Material>(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ ...stone, color: 0xc9bca6, roughness: 1 }), rubble.length)
   rubble.forEach((m, i) => rubbleMesh.setMatrixAt(i, m))
+  rubbleMesh.name = 'rubble'
   rubbleMesh.receiveShadow = true
   // the stand-in chips give way to a sculpted, painted rock (tools/blender/scenery.py) once it loads
   void rockGeometry(0)
@@ -272,6 +274,7 @@ export function buildRuins(pieces: readonly CoverPiece[]): RuinsView {
   const tuft = mergeGeometries([blade, blade.clone().rotateY(Math.PI / 2)])
   const grassMat = new THREE.MeshStandardMaterial({ map: grassTexture(), alphaTest: 0.4, side: THREE.DoubleSide, roughness: 1 })
   const grass = new THREE.InstancedMesh(tuft, grassMat, tufts.length)
+  grass.name = 'grass'
   tufts.forEach((m, i) => grass.setMatrixAt(i, m))
   group.add(rubbleMesh, grass)
 

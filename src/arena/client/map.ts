@@ -88,6 +88,7 @@ export function buildMap(): ArenaMap {
     for (const t of [mat.map, mat.normalMap, mat.roughnessMap]) t?.repeat.set((W * 2) / 6, L / 6)
     mat.color = new THREE.Color(0xffffff).lerp(new THREE.Color(TEAM_COLORS[side]), 0.06)
     const top = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, L), mat)
+    top.name = 'floor'
     top.rotation.x = -Math.PI / 2
     top.position.z = (side ? 1 : -1) * (L / 2)
     top.receiveShadow = true
@@ -103,6 +104,7 @@ export function buildMap(): ArenaMap {
   // one tile of the painting every 5 m
   for (let i = 0; i < lawnUv.count; i++) lawnUv.setXY(i, (lawnUv.getX(i) * (W * 2 + rim * 2)) / 5, (lawnUv.getY(i) * (L * 2 + rim * 2)) / 5)
   const lawn = new THREE.Mesh(lawnGeo, sceneryMaterial('grass'))
+  lawn.name = 'lawn'
   lawn.rotation.x = -Math.PI / 2
   lawn.position.y = -0.02
   lawn.receiveShadow = true
@@ -111,6 +113,7 @@ export function buildMap(): ArenaMap {
   // the centre line and the edge trim glow a little so bloom picks them up
   const glow = (w: number, d: number, x: number, z: number, color: number) => {
     const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color, toneMapped: false }))
+    strip.name = 'line'
     strip.rotation.x = -Math.PI / 2
     strip.position.set(x, 0.015, z)
     group.add(strip)
@@ -130,6 +133,7 @@ export function buildMap(): ArenaMap {
       new THREE.PlaneGeometry(w, ceiling),
       new THREE.MeshBasicMaterial({ color, map: fade, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }),
     )
+    m.name = 'barrier'
     m.position.set(x, ceiling / 2, z)
     m.rotation.y = rotY
     group.add(m)
@@ -190,6 +194,7 @@ function skyMaterial(): { material: MeshBasicNodeMaterial; flash: SkyFlash } {
 export function atmosphere(scene: THREE.Scene) {
   const { material, flash } = skyMaterial()
   const dome = new THREE.Mesh(new THREE.SphereGeometry(380, 48, 24), material)
+  dome.name = 'sky'
   dome.renderOrder = -1
   dome.frustumCulled = false
   scene.add(dome)

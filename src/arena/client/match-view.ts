@@ -466,6 +466,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
   // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
   arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
+  rings.name = 'team rings'
   scene.add(rings)
   // the controlled hero's basic attack reach, on the floor
   const range = createRangeIndicator(scene)
@@ -491,6 +492,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let drawn: Vec3[] = prev.map((p) => ({ ...p }))
   let last = performance.now()
   let stopped = false
+  let unprobe: (() => void) | undefined
   let frameNo = 0
   const publish = () => {
     store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
@@ -595,6 +597,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     quality: quality.current,
     stop: () => {
       stopped = true
+      unprobe?.()
       physics?.dispose()
       stage.dispose()
       // a stopped match must not stay reachable as the dev handle (a Vite reload or a double mount left one behind)
@@ -603,5 +606,19 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   }
   // a dev-only handle for checking art and UI from a script, like the cameras and the match (never in production)
   if (import.meta.env.DEV) (window as unknown as { __arena?: ArenaController }).__arena = controller
+  // dev only too: `__probe` reads the scene with rays and `__listen` records the sound, so a script can see and hear it
+  if (import.meta.env.DEV)
+    void Promise.all([import('./probe.js'), import('./effects/listen.js')]).then(([probe, listen]) => {
+      listen.install()
+      if (stopped) return
+      unprobe = probe.watch('arena', {
+        scene,
+        camera,
+        get canvas() {
+          return stage.renderer.domElement
+        },
+        heroes: () => views.map((v, i) => ({ root: v.root, name: builds[i].heroName, team: arena.match.heroes[i].team, alive: arena.match.heroes[i].alive })),
+      })
+    })
   return controller
 }

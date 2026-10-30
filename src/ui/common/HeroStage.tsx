@@ -144,6 +144,10 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     const hitbox = new THREE.Mesh(flat(new THREE.RingGeometry(0.94, 1, 96), 0.005), new THREE.MeshBasicMaterial({ color: 0xffcf5a, transparent: true, opacity: 0.85, depthWrite: false }))
     hitbox.visible = false
     const shadow = new THREE.Mesh(flat(new THREE.CircleGeometry(0.62, 48), 0.006), new THREE.MeshBasicMaterial({ map: radialTexture([[0, 'rgba(0,0,0,0.8)'], [0.55, 'rgba(0,0,0,0.3)'], [1, 'rgba(0,0,0,0)']]), transparent: true, depthWrite: false }))
+    glow.name = 'plinth glow'
+    ring.name = 'plinth ring'
+    hitbox.name = 'hitbox ring'
+    shadow.name = 'contact shadow'
     const turntable = new THREE.Group()
     const sizer = new THREE.Group()
     turntable.rotation.y = pace.current.facing ?? START_ANGLE
@@ -153,6 +157,15 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
 
     const state: Live = { renderer, scene, camera, sizer, turntable, glow, ring, hitbox, scale: 1, targetScale: 1, dirty: true }
     live.current = state
+
+    // dev only: `__probe` can read this close-up with rays (src/arena/client/probe.ts; never in production)
+    let unprobe: (() => void) | undefined
+    let unmounted = false
+    if (import.meta.env.DEV)
+      void import('../../arena/client/probe.js').then(({ watch }) => {
+        const name = label ?? 'hero'
+        if (!unmounted) unprobe = watch(`stage:${name}`, { scene, camera, canvas: renderer.domElement, heroes: () => (state.model ? [{ root: state.model, name }] : []) })
+      })
 
     // frame the whole body at three quarters of the height (smaller sizes keep the medium framing, so they read as small),
     // a little from above so the plinth reads
@@ -256,6 +269,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     })
 
     return () => {
+      unmounted = true
+      unprobe?.()
       renderer.setAnimationLoop(null)
       ro.disconnect()
       io.disconnect()

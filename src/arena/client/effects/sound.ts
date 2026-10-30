@@ -9,7 +9,8 @@ let master: GainNode | undefined
 let volume = 0.6
 let muted = false
 
-function audio(): { ctx: AudioContext; master: GainNode } | undefined {
+/** The context and master gain every sound plays through, made on first use (the dev listener taps the master). */
+export function audio(): { ctx: AudioContext; master: GainNode } | undefined {
   if (typeof window === 'undefined' || !('AudioContext' in window)) return undefined
   if (!ctx) {
     ctx = new AudioContext()
