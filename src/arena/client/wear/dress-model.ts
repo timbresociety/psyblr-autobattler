@@ -383,10 +383,51 @@ if (vWeave > 4.5) {
   roughnessFactor = clamp(roughnessFactor + (0.5 - clump) * 0.22 + (0.5 - fine) * 0.1, 0.2, 1.0);
 }`
 
+/**
+ * Leather (weave 4), drawn without UVs on where the cloth sits on the body at rest: a pebbled grain two millimetres
+ * across, a soft swell a couple of centimetres across where the hide doesn't lie quite flat, and broad patches worn
+ * a little smoother or drier. They bump the surface by their slope in metres, so the relief holds its depth at any
+ * distance, and the jacket catches light the way hide does instead of in one smooth sweep like vinyl. The grain fades
+ * out where its cells shrink under a couple of pixels (a hero seen whole), where it would only shimmer.
+ */
+const LEATHER_GLSL = `
+if (vWeave > 3.5 && vWeave < 4.5) {
+  vec3 at = vRest * 520.0;
+  float seen = 1.0 - smoothstep(0.6, 1.2, length(fwidth(at)));
+  float grain = grainNoise(at);
+  float worn = grainNoise(vRest * 9.0 + 17.0);
+  float relief = grain * 0.0003 * seen + grainNoise(vRest * 38.0 + 5.0) * 0.0022;
+  roughnessFactor = clamp(roughnessFactor + 0.06 + (worn - 0.5) * 0.3 + (grain - 0.5) * 0.16 * seen, 0.2, 0.95);
+  normal = grainNormal(-vViewPosition, normal, dFdx(relief), dFdy(relief), faceDirection);
+}`
+
 const STRAND_NOISE_GLSL = `
 varying float vWeave;
 varying vec3 vStrandNormal;
 varying float vStrandY;
+varying vec3 vRest;
+float grainHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+// value noise in three dimensions, 0 to 1
+float grainNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(grainHash(i), grainHash(i + vec3(1, 0, 0)), f.x), mix(grainHash(i + vec3(0, 1, 0)), grainHash(i + vec3(1, 1, 0)), f.x), f.y),
+    mix(mix(grainHash(i + vec3(0, 0, 1)), grainHash(i + vec3(1, 0, 1)), f.x), mix(grainHash(i + vec3(0, 1, 1)), grainHash(i + vec3(1, 1, 1)), f.x), f.y),
+    f.z);
+}
+// a normal bumped by a height (in metres) that changes dhx and dhy across a pixel: the height's slope along the surface
+// (Mikkelsen's surface gradient, from the position's own change across the pixel), so the bump holds at any distance
+vec3 grainNormal(vec3 surf, vec3 n, float dhx, float dhy, float faceDirection) {
+  vec3 sx = dFdx(surf);
+  vec3 sy = dFdy(surf);
+  vec3 r1 = cross(sy, n);
+  vec3 r2 = cross(n, sx);
+  float det = dot(sx, r1) * faceDirection;
+  det = det < 0.0 ? min(det, -1e-12) : max(det, 1e-12);
+  return normalize(n - (dhx * r1 + dhy * r2) / det);
+}
 float strandHash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
 // value noise along x, repeating every period cells
 float strandNoise(float x, float period) {
@@ -395,15 +436,16 @@ float strandNoise(float x, float period) {
   return mix(strandHash(mod(i, period)), strandHash(mod(i + 1.0, period)), f * f * (3.0 - 2.0 * f));
 }`
 
-/** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow; and hair's strands. */
+/** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow; hair's strands and leather's grain. */
 function finishShader(shader: { vertexShader: string; fragmentShader: string }) {
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;')
+    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;\nvarying vec3 vRest;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;\nvRest = position;')
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>\nvarying vec4 vFinish;\n${STRAND_NOISE_GLSL}`)
     .replace('#include <roughnessmap_fragment>', `float roughnessFactor = vFinish.x;\n${STRANDS_GLSL}`)
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vFinish.y;')
+    .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${LEATHER_GLSL}`)
     .replace(
       '#include <emissivemap_fragment>',
       '#include <emissivemap_fragment>\nfloat grazing = pow(1.0 - abs(dot(normal, normalize(vViewPosition))), 2.0);\ntotalEmissiveRadiance += diffuseColor.rgb * (vFinish.w + vFinish.z * 0.3 * grazing);',
