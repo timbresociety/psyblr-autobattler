@@ -28,9 +28,23 @@ code { font-size: 13px; }
 <body>
 <main>
 <h1>Jensen, up close</h1>
-<p class="lede">You said the Forge looked bad, and up close it did. So I shot Jensen the way the creator shows him and fixed what stood out, worst first. Eight fixes landed today on <code>feat/forge-creator</code>, and nothing is pushed.</p>
-<p class="lede">Tonight's three come first. His hair is made of strands now, his jacket is a real jacket and his skin is shaded as skin. This afternoon's five follow them.</p>
+<p class="lede">You said the Forge looked bad, and up close it did. So I shot Jensen the way the creator shows him and fixed what stood out, worst first. Twelve fixes landed today on <code>feat/forge-creator</code>, and nothing is pushed.</p>
+<p class="lede">The latest come first. His face meets his skin with no line now, his hair is made of strands, his jacket is a real jacket and his skin is shaded as skin. This afternoon's five follow them.</p>
 <p class="lede">In every picture the top row is Jensen before and the bottom row is Jensen now. Where two pictures sit side by side, before is on the left.</p>
+
+<section>
+<h2>His face ended in a line</h2>
+<p>Once the hair read as hair, his face was the weakest part.</p>
+<p>Four things gave it away, and each one's fixed.</p>
+<ul>
+<li><strong>The photo stopped in an edge.</strong> The skin round his photo face is one flat colour, while the photo carries its own light and shade, so his jaw came out 24 levels darker than the skin it met, out of 255. Near its edge the photo now keeps its fine detail but takes the skin's colour. It also fades out before the last triangle it's drawn on, which cleared a staircase low on his cheek.</li>
+<li><strong>The skin round it was plastic.</strong> Across his forehead it varied by less than 2 levels. Now it has pores about a millimetre apart, deeper in some patches than others, and faint blotches a little redder or paler. They show up close and fade out further back, so they won't shimmer.</li>
+<li><strong>The glasses were thick grey bars.</strong> They're thin metal now, a round wire 1.8 mm across with rounded corners, an arched bridge, nose pads and 2 mm temples.</li>
+<li><strong>The hairline was the hair shell's ragged edge.</strong> A grey band of shell sat between his skin and the strands, with skin poking up into it in spikes. Now the shell draws back 5 mm under the cards and the strands start right on the skin, so what you see at his hairline is hair, the way it is on a real head, and not the edge of a cap.</li>
+</ul>
+<figure class="small"><img src="img/2026-10-30-face.jpg" alt="Jensen's face from the front and three-quarters, thick grey glasses and a hard hairline above, thin metal glasses and strands lying on the forehead below"><figcaption>His face from the front and three-quarters. Top row before, bottom row now.</figcaption></figure>
+<figure class="small"><img src="img/2026-10-30-cheek.jpg" alt="Jensen's cheek and jaw from three-quarters, a dark stepped patch low on the cheek on the left, smooth skin with faint pores on the right"><figcaption>His cheek and jaw up close, before on the left and now on the right.</figcaption></figure>
+</section>
 
 <section>
 <h2>His hair was a shell</h2>
@@ -51,7 +65,8 @@ code { font-size: 13px; }
 <li>Seams run over the shoulders, round the armholes and elbows, across the back yoke and down the middle of the back. The hem and cuffs have real thickness now, so their edges catch the light.</li>
 </ul>
 <p>The tech jacket's glowing lines run like circuit traces now. They zigzag down each front panel, branch from the collar toward each shoulder and step from side to side down the sleeves. They also used to come out pale lime, because the creator lit the glow like any cloth and then squeezed the brightest greens toward white. Now it shows its own green.</p>
-<p>Two smaller fixes rode along. A sliver of skin showed through the back of the jacket under his right arm, and the skin a jacket closes round in each armpit now stays hidden. And every top hangs from the body's high points instead of shrink-wrapping it, so a tee spans a cleavage instead of tucking into it.</p>
+<p>Two smaller fixes rode along.</p>
+<p>A sliver of skin showed through the back of the jacket under his right arm, and the skin a jacket closes round in each armpit now stays hidden. And every top hangs from the body's high points instead of shrink-wrapping it, so a tee spans a cleavage instead of tucking into it.</p>
 <figure><img src="img/2026-10-30-jacket.jpg" alt="Jensen's bust from four sides and his full body, a closed wetsuit-like jacket with pale lime lines above, an open cropped moto jacket with a stand collar, silver zips, seams and green circuit traces below"><figcaption>The bust from four sides, then the full body. Top row before, bottom row now.</figcaption></figure>
 </section>
 
@@ -89,15 +104,14 @@ code { font-size: 13px; }
 <section>
 <h2>What still looks wrong</h2>
 <ul>
-<li><strong>The face is a photo on a plain head.</strong> The photo covers his eyes, nose, mouth and cheeks. Above his brows and round the sides of his head is the body's own skin, smooth and flat with no pores, and in the three-quarter view the photo's edge shows along his jaw. The head's outline shows its polygons there too. Now that the hair reads as hair, this is the biggest tell left.</li>
-<li><strong>The glasses are thick grey bars.</strong> They read as plastic tubes. Thin metal rims would sit lighter on his face.</li>
-<li><strong>The hair has rough edges.</strong> The hairline is a hard line where the cards meet the skin, a few cards stack into blocks above his ears, and from the side the hair sits a little too full at the back. And only the swept style has cards so far. Every other style is still a shell.</li>
-<li><strong>Most of this only shows in the creator.</strong> Our arena draws with a different renderer, and I haven't ported the grain, the locks, the cards or the skin shading there yet. The jacket's new build does show in the arena, and so do the shoulders and the glasses.</li>
+<li><strong>The hair stacks into plates over his temples.</strong> Seen from the front, the cards there run straight away from you at a grazing angle, and they pile up like shingles. I tried three fixes in the shading tonight and none of them cleared it. I think the cards there need laying differently, and that's a change to how they're built. From the side the hair also sits a little too full at the back.</li>
+<li><strong>Only the swept style has cards.</strong> Every other style's hair is still a shell.</li>
+<li><strong>Most of this only shows in the creator.</strong> Our arena draws with a different renderer, and I haven't ported the grain, the locks, the cards, the pores or the skin shading there yet. The jacket's new build does show in the arena, and so do the shoulders and the glasses.</li>
 </ul>
-<p>Next I'll take the face.</p>
-<p>I'll give the skin round the photo the photo's colour and some pores, soften the photo's edge and give the creator a smoother head. Then thin metal glasses, then cards for the other hair styles.</p>
+<p>Next I'll give the other hair styles cards, starting with the ones our starter heroes wear.</p>
+<p>Then the temples.</p>
 <p>If something else bothers you more, tell me and I'll start there.</p>
-<p class="muted">Tonight's commits are dd0a018 for the hair, 9c8c980, 62e585c, d79ad3e and c2de12b for the jacket, f30a64d for the traces and 87cba75 for the skin. This afternoon's are ef3f1ea for the glasses and hats, e050b04 for the crowns and frames, 0d72f79 for the shoulders, 9053210 for the leather and 04a1b64 for the locks.</p>
+<p class="muted">The latest commits are 236c0af for the photo's edge, 268eeb5 for the pores, c1d0e7c for the glasses and 95c205b for the hairline. Tonight's before them are dd0a018 for the hair, 9c8c980, 62e585c, d79ad3e and c2de12b for the jacket, f30a64d for the traces and 87cba75 for the skin. This afternoon's are ef3f1ea for the glasses and hats, e050b04 for the crowns and frames, 0d72f79 for the shoulders, 9053210 for the leather and 04a1b64 for the locks.</p>
 </section>
 </main>
 </body>
