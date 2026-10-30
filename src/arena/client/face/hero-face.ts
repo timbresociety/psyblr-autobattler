@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { characterMap, type CharacterLook, type Gltf } from '../character-look.js'
 import { bodyKit, bodyKitNow } from '../body-kit.js'
-import { compositeFace, paintMarks, surface, type Surface } from './composite.js'
+import { compositeFace, facingField, paintMarks, surface, type Surface } from './composite.js'
 import { buildFacePatch, type FaceMeta, type Rgba } from './patch.js'
 import { faceBasisFile, faceBasisSettled } from './shape.js'
 import type { Pt } from './warp.js'
@@ -12,6 +12,9 @@ import type { Pt } from './warp.js'
  * photo and skin colour, so twenty heroes sharing a face do the work once. Anything that fails leaves the hero on its
  * body's shared atlas: a missing face never stops a fight.
  */
+
+/** Where a photo face fades into the skin: gone where the surface's normal is this edge-on to the camera, whole past this. */
+const FADE = [0.22, 0.5] as const
 
 /** A body's face data, from its kit sidecar. */
 export function faceMeta(body: string): Promise<FaceMeta | undefined> {
@@ -96,6 +99,9 @@ export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Textur
         const points: Pt[] = []
         for (let i = 0; i < face.points.length; i += 2) points.push([face.points[i] * sx, face.points[i + 1] * sy])
         const { patch } = buildFacePatch(photo, points, meta, 512)
+        // the photo fades out where the face turns away from the camera, into the skin, instead of smearing over the turn
+        const facing = facingField(mesh.geometry, meta.frame, patch.width)
+        for (let i = 0; i < facing.length; i++) patch.data[i * 4 + 3] *= THREE.MathUtils.smoothstep(facing[i], FADE[0], FADE[1])
         canvas = compositeFace(mesh.geometry, image, meta.frame, toCanvas(patch), look.colors.skin)
       } else {
         // marks alone go on a plain copy: without a photo the skin is still tinted per vertex, so nothing is baked

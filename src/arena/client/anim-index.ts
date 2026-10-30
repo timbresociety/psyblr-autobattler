@@ -1,4 +1,5 @@
 import type { Gender } from '../../charter/look.js'
+import type { Gait } from './gait.js'
 
 /**
  * The motion library's index (public/anim/index.json, from scripts/rpm-anim.ts): each gender's clips by set, with
@@ -16,8 +17,11 @@ export interface AnimIndex {
   /** What the stored rotations and hips positions were multiplied by. */
   rot: number
   pos: number
-  /** Per gender: the medium body's rest rotations and hips, and each set's clips with their lengths in seconds. */
-  genders: Record<Gender, { rest: number[][]; hips: number[]; sets: Record<AnimSet, Record<string, number>> }>
+  /**
+   * Per gender: the medium body's rest rotations and hips, each set's clips with their lengths in seconds, and each
+   * looping move's gait (how fast it goes, its strides, where its left foot lands), for blending moves in step.
+   */
+  genders: Record<Gender, { rest: number[][]; hips: number[]; sets: Record<AnimSet, Record<string, number>>; gait?: Record<string, Gait> }>
 }
 
 let index: Promise<AnimIndex | undefined> | undefined

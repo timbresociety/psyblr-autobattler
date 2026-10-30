@@ -110,6 +110,51 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
   return out
 }
 
+/**
+ * How squarely each pixel of a front-on face patch (the body's face frame, `res` pixels across) faces the camera that
+ * took the photo, from 0 edge-on to 1 head-on: the skin triangles facing it drawn into the patch with their normals'
+ * z, the nearest kept where two overlap. Where the face turns away (the cheeks' sides, under the jaw) a photo has
+ * little to give, and stretched over the turn it smears into flat patches, so the face fades into the skin there.
+ */
+export function facingField(geometry: THREE.BufferGeometry, frame: FaceMeta['frame'], res: number): Float32Array {
+  const field = new Float32Array(res * res)
+  const depth = new Float32Array(res * res).fill(-Infinity)
+  const pos = geometry.getAttribute('position')
+  const nrm = geometry.getAttribute('normal')
+  const meta = geometry.getAttribute(metaChannel(geometry))
+  const index = geometry.getIndex()
+  const count = index ? index.count : pos.count
+  const vertex = (k: number) => (index ? index.getX(k) : k)
+  const px = (i: number) => ((pos.getX(i) - frame.cx) / frame.size + 0.5) * res
+  const py = (i: number) => (0.5 - (pos.getY(i) - frame.cz) / frame.size) * res
+  for (let k = 0; k < count; k += 3) {
+    const t = [vertex(k), vertex(k + 1), vertex(k + 2)]
+    if (t.some((i) => Math.floor(meta.getX(i)) !== 0 || nrm.getZ(i) <= 0)) continue
+    const [x0, x1, x2] = t.map(px)
+    const [y0, y1, y2] = t.map(py)
+    const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+    if (Math.abs(det) < 1e-9) continue
+    const lo = (a: number, b: number, c: number) => Math.max(0, Math.floor(Math.min(a, b, c)))
+    const hi = (a: number, b: number, c: number) => Math.min(res - 1, Math.ceil(Math.max(a, b, c)))
+    for (let y = lo(y0, y1, y2); y <= hi(y0, y1, y2); y++)
+      for (let x = lo(x0, x1, x2); x <= hi(x0, x1, x2); x++) {
+        // barycentric weights of the pixel's centre
+        const cx = x + 0.5
+        const cy = y + 0.5
+        const w1 = ((cx - x0) * (y2 - y0) - (x2 - x0) * (cy - y0)) / det
+        const w2 = ((x1 - x0) * (cy - y0) - (cx - x0) * (y1 - y0)) / det
+        const w0 = 1 - w1 - w2
+        if (w0 < -1e-6 || w1 < -1e-6 || w2 < -1e-6) continue
+        const z = w0 * pos.getZ(t[0]) + w1 * pos.getZ(t[1]) + w2 * pos.getZ(t[2])
+        const at = y * res + x
+        if (z <= depth[at]) continue
+        depth[at] = z
+        field[at] = w0 * nrm.getZ(t[0]) + w1 * nrm.getZ(t[1]) + w2 * nrm.getZ(t[2])
+      }
+  }
+  return field
+}
+
 /** A front-on patch drawn into the atlas over the given triangles, each from where its corners sit in the patch. */
 function drawPatch(ctx: Ctx, faces: number[][], toPatch: (i: number) => number[], toAtlas: (i: number) => number[], patch: Sized) {
   for (const [a, b, c] of faces) {

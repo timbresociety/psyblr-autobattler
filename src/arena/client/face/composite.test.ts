@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
+import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { whiskerStrokes } from './composite.js'
+import { facingField, whiskerStrokes } from './composite.js'
 import type { FaceMeta } from './patch.js'
 
 const meta = JSON.parse(readFileSync(new URL('../../../../public/heroes/m-medium.kit.json', import.meta.url), 'utf8')) as FaceMeta
@@ -22,5 +23,31 @@ describe("a form's whisker marks", () => {
   it('leaves out a cheek whose landmarks are missing', () => {
     const some = meta.landmarks.map((p, i) => (i === 352 ? undefined : p))
     expect(whiskerStrokes(some as FaceMeta['landmarks'])).toHaveLength(3)
+  })
+})
+
+describe('how squarely a face patch faces the camera', () => {
+  // a 1 m frame centred on the origin, 10 pixels across: a skin square facing the camera on the left half, a skin
+  // triangle turned away over the right half and part of the square, but behind it; and an eye triangle (not skin)
+  const frame = { cx: 0, cz: 0, size: 1, res: 10 }
+  const geo = new THREE.BufferGeometry()
+  const square = [-0.5, -0.5, 0, 0, -0.5, 0, 0, 0.5, 0, -0.5, -0.5, 0, 0, 0.5, 0, -0.5, 0.5, 0]
+  const turned = [-0.2, -0.5, -0.1, 0.5, -0.5, -0.1, 0.5, 0.5, -0.1]
+  const eye = [0.1, 0.1, 0.2, 0.4, 0.1, 0.2, 0.4, 0.4, 0.2]
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([...square, ...turned, ...eye], 3))
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute([...Array(6).fill([0, 0, 1]).flat(), ...Array(3).fill([0.95, 0, 0.3]).flat(), ...Array(3).fill([0, 0, 1]).flat()], 3))
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute([...Array(9).fill([0, 0]).flat(), ...Array(3).fill([1, 0]).flat()], 2))
+  const field = facingField(geo, frame, 10)
+  const at = (x: number, y: number) => field[y * 10 + x]
+
+  it('reads each pixel off the nearest skin facing it, and nothing where no skin is', () => {
+    expect(at(2, 5)).toBeCloseTo(1)
+    // over the square, the turned triangle behind it doesn't count; past the square's edge it does
+    expect(at(4, 8)).toBeCloseTo(1)
+    expect(at(6, 8)).toBeCloseTo(0.3)
+    // the eye isn't skin, so the turned skin behind it shows through
+    expect(at(8, 3)).toBeCloseTo(0.3)
+    // above the turned triangle's diagonal, nothing
+    expect(at(6, 1)).toBe(0)
   })
 })

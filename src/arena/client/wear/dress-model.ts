@@ -14,6 +14,7 @@ import { hangPieces, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
 import { rigCloth } from './cloth-model.js'
 import { BODY_VERTICES, type LoadedWear } from './items.js'
+import { refineGeometry } from '../../../kit/body/refine.js'
 
 /**
  * Dressing a cloned body for one hero: its physique and face baked into its own copy of the body's positions, the
@@ -312,9 +313,10 @@ function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>
 
 /**
  * Dress a cloned body (from SkeletonUtils.clone) for one hero. Returns false for a model that isn't one of the bodies,
- * which then draws as its file made it.
+ * which then draws as its file made it. `refine` splits the body's triangles that many times over for a close look
+ * (src/kit/body/refine.ts): the creator's studio, not the arena.
  */
-export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: LoadedWear | undefined, materials: WearMaterials, atlas?: THREE.Texture | null): boolean {
+export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: LoadedWear | undefined, materials: WearMaterials, atlas?: THREE.Texture | null, refine = 0): boolean {
   const mesh = bodyMesh(model)
   if (!mesh || !onSharedSurface(mesh)) return false
   const cache = bodyCache(mesh)
@@ -327,6 +329,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const normalMap = characterNormalMap(mesh)
   const fileMaterial = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial
   mesh.geometry = bodyGeometry(source, cache, shape, dressed.body, look)
+  if (refine) mesh.geometry = refineGeometry(mesh.geometry, refine)
   // the physique is baked in, so the file's morphs go
   mesh.morphTargetInfluences = undefined
   mesh.morphTargetDictionary = undefined
