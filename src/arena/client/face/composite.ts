@@ -1,13 +1,14 @@
 import * as THREE from 'three'
 import type { FormMark } from '../../../charter/skill-look.js'
 import { metaChannel } from '../character-look.js'
-import type { FaceMeta } from './patch.js'
+import type { FaceMeta, Rgb, Rgba } from './patch.js'
 
 /**
  * A hero's own copy of its body's atlas, with its skin colour baked into every skin texel and its photo face painted
  * over the face. Each front-facing skin triangle inside the head frame is drawn from the face patch: its corners'
  * positions say where they sit in the patch (the frame is a front-on projection), its UVs where they sit in the atlas.
- * So this needs nothing from the atlas packer, however it split the face into islands.
+ * So this needs nothing from the atlas packer, however it split the face into islands. The photo is shifted to the
+ * skin round it first, so the forehead and temples it fades into are the same skin as the face.
  */
 
 export type Surface = HTMLCanvasElement | OffscreenCanvas
@@ -56,7 +57,7 @@ const path = (ctx: Ctx, t: number[]) => {
   ctx.closePath()
 }
 
-export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, frame: FaceMeta['frame'], patch: Sized, skin: THREE.Color): Surface {
+export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, frame: FaceMeta['frame'], patch: Rgba, tone: Rgb, skin: THREE.Color): Surface {
   const W = atlas.width
   const H = atlas.height
   const out = surface(W, H)
@@ -105,8 +106,45 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
   ctx.drawImage(mask, 0, 0)
   ctx.globalCompositeOperation = 'source-over'
 
-  // 2. the photo face, triangle by triangle, feathered by the patch's own alpha
-  drawPatch(ctx, faces, toPatch, toAtlas, patch)
+  // 2. the photo face, its skin shifted to the skin it sits in, triangle by triangle, feathered by its own alpha
+  drawPatch(ctx, faces, toPatch, toAtlas, tonedPatch(patch, tone, faceSkin(ctx, faces, toAtlas)))
+  return out
+}
+
+/** The skin the face sits in, once tinted: the median texel at the face triangles' centres, sRGB 0 to 1. */
+function faceSkin(ctx: Ctx, faces: number[][], toAtlas: (i: number) => number[]): Rgb | undefined {
+  if (!faces.length) return undefined
+  const centres = faces.map((t) => {
+    const [a, b, c] = t.map(toAtlas)
+    return [Math.floor((a[0] + b[0] + c[0]) / 3), Math.floor((a[1] + b[1] + c[1]) / 3)]
+  })
+  const x0 = Math.min(...centres.map((p) => p[0]))
+  const y0 = Math.min(...centres.map((p) => p[1]))
+  const w = Math.max(...centres.map((p) => p[0])) - x0 + 1
+  const h = Math.max(...centres.map((p) => p[1])) - y0 + 1
+  const px = ctx.getImageData(x0, y0, w, h).data
+  const channel = (c: number) => {
+    const values = centres.map(([x, y]) => px[((y - y0) * w + (x - x0)) * 4 + c]).sort((p, q) => p - q)
+    return values[Math.floor(values.length / 2)] / 255
+  }
+  return [channel(0), channel(1), channel(2)]
+}
+
+/** How far a photo's colour may be pulled toward the skin, per channel, either way: past it a photo is a poor match anyway. */
+const TONE_LIMITS = [0.6, 1.6] as const
+
+/** The patch as an image, every pixel scaled per channel so its skin `from` comes out as `to`. */
+function tonedPatch(patch: Rgba, from: Rgb, to: Rgb | undefined): Sized {
+  const gain = [0, 1, 2].map((c) => (to ? THREE.MathUtils.clamp(to[c] / Math.max(from[c], 0.02), ...TONE_LIMITS) : 1))
+  const data = new Uint8ClampedArray(patch.data.length)
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] = patch.data[i] * gain[0]
+    data[i + 1] = patch.data[i + 1] * gain[1]
+    data[i + 2] = patch.data[i + 2] * gain[2]
+    data[i + 3] = patch.data[i + 3]
+  }
+  const out = surface(patch.width, patch.height)
+  ;(out.getContext('2d') as Ctx).putImageData(new ImageData(data, patch.width, patch.height), 0, 0)
   return out
 }
 

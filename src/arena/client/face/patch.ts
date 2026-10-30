@@ -31,6 +31,8 @@ export interface FacePatch {
   patch: Rgba
   /** sRGB 0 to 1, measured on the photo. */
   skin: Rgb
+  /** The patch's own skin, sRGB 0 to 1: measured like `skin`, at the body's landmarks, once the photo is evened out. */
+  tone: Rgb
   hair?: Rgb
   iris?: Rgb
 }
@@ -249,5 +251,7 @@ export function buildFacePatch(photo: Rgba, photoLm: readonly Pt[], meta: FaceMe
     data[i * 4 + 2] = rgb[i * 3 + 2] * 255
     data[i * 4 + 3] = mask[i] * 255
   }
-  return { patch: { width: res, height: res, data }, skin, hair: hairColour(photo, photoLm, skin), iris: irisColour(photo, photoLm) }
+  const patch = { width: res, height: res, data }
+  const tone = [234, 454, ...SKIN_SAMPLES].every((i) => mesh[i]) ? skinColour(patch, mesh as Pt[]) : skin
+  return { patch, skin, tone, hair: hairColour(photo, photoLm, skin), iris: irisColour(photo, photoLm) }
 }

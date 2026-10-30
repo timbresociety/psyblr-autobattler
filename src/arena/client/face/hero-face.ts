@@ -50,14 +50,6 @@ export function photoPixels(url: string): Promise<Rgba | undefined> {
   return photo
 }
 
-function toCanvas(rgba: Rgba): HTMLCanvasElement {
-  const canvas = document.createElement('canvas')
-  canvas.width = rgba.width
-  canvas.height = rgba.height
-  canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.data), rgba.width, rgba.height), 0, 0)
-  return canvas
-}
-
 /** The skinned mesh of a character file, whose geometry and atlas the face is painted onto. */
 export function fileMesh(file: Gltf): THREE.SkinnedMesh | undefined {
   let found: THREE.SkinnedMesh | undefined
@@ -98,11 +90,11 @@ export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Textur
         const sy = photo.height / face.height
         const points: Pt[] = []
         for (let i = 0; i < face.points.length; i += 2) points.push([face.points[i] * sx, face.points[i + 1] * sy])
-        const { patch } = buildFacePatch(photo, points, meta, 512)
+        const { patch, tone } = buildFacePatch(photo, points, meta, 512)
         // the photo fades out where the face turns away from the camera, into the skin, instead of smearing over the turn
         const facing = facingField(mesh.geometry, meta.frame, patch.width)
         for (let i = 0; i < facing.length; i++) patch.data[i * 4 + 3] *= THREE.MathUtils.smoothstep(facing[i], FADE[0], FADE[1])
-        canvas = compositeFace(mesh.geometry, image, meta.frame, toCanvas(patch), look.colors.skin)
+        canvas = compositeFace(mesh.geometry, image, meta.frame, patch, tone, look.colors.skin)
       } else {
         // marks alone go on a plain copy: without a photo the skin is still tinted per vertex, so nothing is baked
         canvas = surface(image.width, image.height)
