@@ -205,13 +205,17 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   // with a photo face the skin colour is baked into the hero's own atlas, so the skin stays untinted here
   const skin = look.face ? new THREE.Color(1, 1, 1) : look.colors.skin
   const eye = look.colors.eye
+  // 1 where it is skin, for the classic material's skin shading (character-look.ts), 0 on the eyes
+  const isSkin = new Float32Array(n)
   for (let i = 0; i < n; i++) {
-    const c = Math.floor(meta.getX(i)) === 0 ? skin : eye
+    isSkin[i] = Math.floor(meta.getX(i)) === 0 ? 1 : 0
+    const c = isSkin[i] ? skin : eye
     colors[i * 3] = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
   }
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+  geo.setAttribute('_skin', new THREE.BufferAttribute(isSkin, 1))
   const index = source.getIndex()!.array
   const kept = new Uint32Array(shown.length * 3)
   shown.forEach((t, i) => kept.set([index[t * 3], index[t * 3 + 1], index[t * 3 + 2]], i * 3))

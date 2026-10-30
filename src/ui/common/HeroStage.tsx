@@ -84,6 +84,11 @@ const FPS = 30
 const STUDIO_FPS = 60
 /** How many times the studio splits the body's triangles (each pass four for one). */
 const STUDIO_REFINE = 2
+/**
+ * How many times the body's atlas across the studio paints a photo face into: at 2048 the face gets about as many
+ * pixels as its 512 patch has, where the body's own 1024 halves them. Any more only magnifies the patch.
+ */
+const STUDIO_ATLAS = 2
 const HERO_HEIGHT = 1.8
 const START_ANGLE = 0.38
 /** What each close framing fills the frame with, in heads (chin to crown), and how many heads below the head's middle it centres. */
@@ -458,7 +463,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex()])
+        const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex()])
         if (cancelled || live.current !== state) return undefined
         const model = cloneSkinned(file.scene)
         // its rest, read before anything moves it, fits the library's clips to this body

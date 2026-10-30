@@ -124,7 +124,60 @@ export function characterNormalMap(mesh: THREE.Mesh): THREE.Texture | null {
   return (Array.isArray(m) ? m[0]?.normalMap : m?.normalMap) ?? null
 }
 
-/** The classic (WebGL) material the previews and busts draw a character with. */
-export function classicCharacterMaterial(map: THREE.Texture | null, normalMap: THREE.Texture | null = null): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ vertexColors: true, map, normalMap, roughness: 0.58, metalness: 0.04 })
+/**
+ * The classic (WebGL) material the previews and busts draw a character with. Its skin (_skin, from dress-model.ts)
+ * lets light in: light scattered under the surface blurs the relief its diffuse shows, red the most, and carries on a
+ * little past where the surface turns from the light, warm. Its highlights keep the full relief, at skin's own
+ * reflectance (IOR 1.4), and a faint sheen at grazing angles stands for its fine hair. The eyes stay wet and glossy.
+ */
+export function classicCharacterMaterial(map: THREE.Texture | null, normalMap: THREE.Texture | null = null): THREE.MeshPhysicalMaterial {
+  const m = new THREE.MeshPhysicalMaterial({ vertexColors: true, map, normalMap, roughness: 0.52, metalness: 0, ior: 1.4 })
+  m.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float _skin;\nvarying float vSkin;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkin = _skin;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <lights_physical_pars_fragment>', `#include <lights_physical_pars_fragment>\n${SKIN_GLSL}`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.1, roughnessFactor, vSkin);')
+      .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\nskinFlatNormal = nonPerturbedNormal;')
+      .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_SHEEN\nmaterial.sheenColor *= vSkin;\n#endif')
+  }
+  m.customProgramCacheKey = () => 'psyblr-skin'
+  return m
 }
+
+/**
+ * Direct light on skin, in place of three's RE_Direct_Physical (which it matches where _skin is 0, on the eyes). The
+ * diffuse lights each channel by the normal partway back to the surface's own, before its relief, and adds a band
+ * along the terminator: the soft, warm edge pre-integrated skin shading gives, kept to the edge so the lit side keeps
+ * the skin's colour.
+ */
+const SKIN_GLSL = `varying float vSkin;
+vec3 skinFlatNormal = vec3(0.0, 0.0, 1.0);
+vec3 skinScatter(const in vec3 n, const in vec3 l) {
+  vec3 nl = vec3(
+    dot(normalize(mix(n, skinFlatNormal, 0.2 * vSkin)), l),
+    dot(n, l),
+    dot(n, l));
+  vec3 band = vec3(0.08, 0.02, 0.01) * vSkin * (1.0 - smoothstep(vec3(0.0), vec3(0.45, 0.3, 0.25), abs(nl)));
+  return saturate(nl) + band;
+}
+void RE_Direct_Skin(const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in PhysicalMaterial material, inout ReflectedLight reflectedLight) {
+  float dotNL = saturate(dot(geometryNormal, directLight.direction));
+  vec3 irradiance = dotNL * directLight.color;
+  vec3 scattered = skinScatter(geometryNormal, directLight.direction) * directLight.color;
+  #ifdef USE_SHEEN
+    sheenSpecularDirect += irradiance * BRDF_Sheen(directLight.direction, geometryViewDir, geometryNormal, material.sheenColor, material.sheenRoughness);
+    float sheenAlbedoV = IBLSheenBRDF(geometryNormal, geometryViewDir, material.sheenRoughness);
+    float sheenAlbedoL = IBLSheenBRDF(geometryNormal, directLight.direction, material.sheenRoughness);
+    float sheenEnergyComp = 1.0 - max3(material.sheenColor) * max(sheenAlbedoV, sheenAlbedoL);
+    irradiance *= sheenEnergyComp;
+    scattered *= sheenEnergyComp;
+  #endif
+  reflectedLight.directSpecular += irradiance * BRDF_GGX(directLight.direction, geometryViewDir, geometryNormal, material) * material.multiScatteringCompensation;
+  vec3 halfDir = normalize(directLight.direction + geometryViewDir);
+  vec3 F = F_Schlick(material.specularColor, material.specularF90, saturate(dot(geometryViewDir, halfDir)));
+  reflectedLight.directDiffuse += scattered * BRDF_Lambert(material.diffuseContribution) * (1.0 - F);
+}
+#undef RE_Direct
+#define RE_Direct RE_Direct_Skin`

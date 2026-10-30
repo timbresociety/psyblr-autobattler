@@ -57,12 +57,14 @@ const path = (ctx: Ctx, t: number[]) => {
   ctx.closePath()
 }
 
-export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, frame: FaceMeta['frame'], patch: Rgba, tone: Rgb, skin: THREE.Color): Surface {
-  const W = atlas.width
-  const H = atlas.height
+export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, frame: FaceMeta['frame'], patch: Rgba, tone: Rgb, skin: THREE.Color, scale = 1): Surface {
+  // `scale` paints into an atlas that many times the body's across, so a close look keeps the photo's detail: at the
+  // body's own size the face gets about half the patch's pixels each way
+  const W = atlas.width * scale
+  const H = atlas.height * scale
   const out = surface(W, H)
   const ctx = out.getContext('2d') as Ctx
-  ctx.drawImage(atlas, 0, 0)
+  ctx.drawImage(atlas, 0, 0, W, H)
   const pos = geometry.getAttribute('position')
   const nrm = geometry.getAttribute('normal')
   const uv = geometry.getAttribute('uv')
@@ -94,7 +96,7 @@ export function compositeFace(geometry: THREE.BufferGeometry, atlas: Sized, fram
     if (inFace(a) && inFace(b) && inFace(c)) faces.push([a, b, c])
   }
   m.fillStyle = m.strokeStyle = '#fff'
-  m.lineWidth = 3
+  m.lineWidth = 3 * scale
   m.lineJoin = 'round'
   m.fill()
   m.stroke()

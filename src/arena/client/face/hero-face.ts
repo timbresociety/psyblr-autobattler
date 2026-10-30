@@ -66,16 +66,17 @@ const keyOf = (look: CharacterLook) => (look.face || look.marks ? `${look.build}
 
 /**
  * The hero's own atlas: its photo face, and any marks its form paints on the face. Null when it has neither, or when
- * its face could not be made.
+ * its face could not be made. `scale` makes it that many times the body's atlas across, for a close look (the
+ * creator's studio); the arena keeps the body's size, as twenty heroes' larger atlases would fill an 8 GB laptop's GPU.
  */
-export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Texture | null> {
+export function heroAtlas(file: Gltf, look: CharacterLook, scale = 1): Promise<THREE.Texture | null> {
   const face = look.face
   const mesh = fileMesh(file)
   const atlas = mesh ? characterMap(mesh) : null
   // a sculpted face needs the basis and the body's kit when the hero is dressed, though nothing is baked for it
   if (!face && !look.marks) return look.sculpt ? Promise.all([faceBasisFile(), bodyKit(look.build)]).then(() => null) : Promise.resolve(null)
   if (!mesh || !atlas?.image) return Promise.resolve(null)
-  const key = keyOf(look)
+  const key = scale === 1 ? keyOf(look) : `${keyOf(look)}|x${scale}`
   let made = atlases.get(key)
   if (!made) {
     made = (async () => {
@@ -94,11 +95,11 @@ export function heroAtlas(file: Gltf, look: CharacterLook): Promise<THREE.Textur
         // the photo fades out where the face turns away from the camera, into the skin, instead of smearing over the turn
         const facing = facingField(mesh.geometry, meta.frame, patch.width)
         for (let i = 0; i < facing.length; i++) patch.data[i * 4 + 3] *= THREE.MathUtils.smoothstep(facing[i], FADE[0], FADE[1])
-        canvas = compositeFace(mesh.geometry, image, meta.frame, patch, tone, look.colors.skin)
+        canvas = compositeFace(mesh.geometry, image, meta.frame, patch, tone, look.colors.skin, scale)
       } else {
         // marks alone go on a plain copy: without a photo the skin is still tinted per vertex, so nothing is baked
-        canvas = surface(image.width, image.height)
-        ;(canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(image, 0, 0)
+        canvas = surface(image.width * scale, image.height * scale)
+        ;(canvas.getContext('2d') as CanvasRenderingContext2D).drawImage(image, 0, 0, canvas.width, canvas.height)
       }
       if (look.marks) paintMarks(canvas, mesh.geometry, meta, look.marks)
       const texture = new THREE.CanvasTexture(canvas as HTMLCanvasElement)
