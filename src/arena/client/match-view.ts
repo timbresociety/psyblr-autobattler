@@ -9,7 +9,7 @@ import type { Vec3 } from '../engine/maths.js'
 import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
 import { capsule, type Command, type Team } from '../engine/state.js'
 import { tick } from '../engine/tick.js'
-import { createAnimator, onEvents, settle, stance, type Animator, type Stance } from './animation.js'
+import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
 import { Cameras } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, releaseIfDead, take } from './takeover.js'
@@ -438,12 +438,13 @@ function drawHeroes(
     const pose = settle(animators[i], h, moved, frame.clock, frame.dt)
     const scaled = frame.dt * frame.timeScale
     const moving = moved > 0.01
-    // legs follow the way the hero moves and the chest its aim; a view that can't twist faces its aim whole
-    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, pose.kind !== 'run', scaled) : undefined
+    // legs follow the way the hero moves and the chest its aim, casting on the move too, since its legs keep running
+    // under the cast; a view that can't twist faces its aim whole. The run keeps pace with the ground covered
+    const ground = h.airborne ? 0 : moved * ENGINE.tickHz
+    const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
+    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, !striding, scaled) : undefined
     stances[i] = s
-    // the run keeps pace with the ground covered: slower when slowed or striding through a swing, quicker hasted
-    const stride = Math.min(1.5, Math.max(0.4, (moved * ENGINE.tickHz) / arena.setups[i].sheet.moveSpeed))
-    if (s) view.lean!(s.twist, s.back, stride)
+    if (s) view.lean!(s.twist, s.back, ground)
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed

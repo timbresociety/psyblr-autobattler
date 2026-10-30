@@ -8,7 +8,7 @@ import { lookFor } from '../recipes/looks.js'
 import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
 import { castClip as stageClip } from '../../ui/common/hero-look.js'
 import * as THREE from 'three'
-import { castClip, heldTip, leadHand } from './characters.js'
+import { castClip, groundSpeed, heldTip, leadHand, splitClip } from './characters.js'
 
 const ids = (outfit: ReturnType<typeof characterLook>['outfit']) => Object.fromEntries(Object.entries(outfit).map(([slot, w]) => [slot, w!.id]))
 
@@ -173,5 +173,38 @@ describe('where a skill leaves the body (Forge goal, phase 1)', () => {
     expect(tip.x).toBeCloseTo(0)
     expect(tip.y).toBeCloseTo(0)
     expect(tip.z).toBeCloseTo(1.1)
+  })
+})
+
+describe('feet that stay planted (Forge goal, phase 2)', () => {
+  it('splits a clip at the hips: hips and legs below, the rest of the body above', () => {
+    const turn = (bone: string) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, [0, 1], [0, 0, 0, 1, 0, 0, 0, 1])
+    const { legs, top } = splitClip(new THREE.AnimationClip('slash', 1, ['hips', 'spine', 'thigh_L', 'foot_R', 'hand_R', 'head'].map(turn)))
+    expect(legs.tracks.map((t) => t.name)).toEqual(['hips.quaternion', 'thigh_L.quaternion', 'foot_R.quaternion'])
+    expect(top.tracks.map((t) => t.name)).toEqual(['spine.quaternion', 'hand_R.quaternion', 'head.quaternion'])
+    expect([legs.duration, top.duration]).toEqual([1, 1])
+  })
+
+  /** Two feet on a body; over a 1 s stride each one plants half a metre ahead, slides back a metre, then lifts and swings forward. */
+  const runner = () => {
+    const body = new THREE.Group()
+    for (const name of ['foot_L', 'foot_R']) body.add(Object.assign(new THREE.Object3D(), { name }))
+    // [time, height, how far ahead]: planted for the first half second, then up and forward
+    const keys = [[0, 0, 0.5], [0.5, 0, -0.5], [0.55, 0.2, -0.5], [0.95, 0.2, 0.5], [1, 0, 0.5]]
+    const step = (foot: string) => new THREE.VectorKeyframeTrack(`${foot}.position`, keys.map((k) => k[0]), keys.flatMap((k) => [0, k[1], k[2]]))
+    return { body, clip: new THREE.AnimationClip('run', 1, [step('foot_L'), step('foot_R')]) }
+  }
+
+  it('measures how fast a run carries the body: how fast a planted foot slides back under it', () => {
+    const { body, clip } = runner()
+    expect(groundSpeed(body, clip)).toBeCloseTo(2, 1)
+    // the model itself is never posed
+    expect(body.getObjectByName('foot_L')!.position.z).toBe(0)
+  })
+
+  it('measures nothing on a body without both feet', () => {
+    const { body, clip } = runner()
+    body.remove(body.getObjectByName('foot_R')!)
+    expect(groundSpeed(body, clip)).toBeUndefined()
   })
 })

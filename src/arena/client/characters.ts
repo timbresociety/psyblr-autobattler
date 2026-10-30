@@ -7,7 +7,7 @@ import { CAST_POSES, POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
-import type { AnimState } from './animation.js'
+import { STANCE, type AnimState } from './animation.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel, type ClothPrint } from './wear/dress-model.js'
@@ -80,6 +80,85 @@ function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.
 
 const LOCOMOTION = new Set(['idle', 'run', 'fly', 'hover', 'stunned'])
 
+/** The bones a cast on the move leaves to the run: the hips and both legs (Forge goal, phase 2). */
+const LEG_BONES = new Set(['hips', 'thigh_L', 'shin_L', 'foot_L', 'thigh_R', 'shin_R', 'foot_R'])
+/** A foot within this many metres of its lowest point carries weight. */
+const PLANTED = 0.03
+/** Slowest and quickest the run plays to keep up with the ground: quicker strides beat feet sliding, up to a point. */
+const PACE = [0.4, 2.6] as const
+/** Seconds a cast takes to take over the body, and the legs to change between running and the cast's stance. */
+const CAST_FADE = 0.08
+const LEG_FADE = 0.12
+
+type Halves<T> = { legs: T; top: T }
+
+/** A clip split in two: its legs (hips down) and the rest of the body. */
+export function splitClip(clip: THREE.AnimationClip): Halves<THREE.AnimationClip> {
+  const leg = (track: THREE.KeyframeTrack) => LEG_BONES.has(THREE.PropertyBinding.parseTrackName(track.name).nodeName)
+  return {
+    legs: new THREE.AnimationClip(`${clip.name}:legs`, clip.duration, clip.tracks.filter(leg)),
+    top: new THREE.AnimationClip(`${clip.name}:top`, clip.duration, clip.tracks.filter((track) => !leg(track))),
+  }
+}
+
+/** Each file clip's halves, split once and shared by every hero wearing that body. */
+const split = new WeakMap<THREE.AnimationClip, Halves<THREE.AnimationClip>>()
+function halvesOf(clip: THREE.AnimationClip): Halves<THREE.AnimationClip> {
+  let halves = split.get(clip)
+  if (!halves) split.set(clip, (halves = splitClip(clip)))
+  return halves
+}
+
+/**
+ * How fast a looping clip carries the body over the ground at 1x, in the model's metres a second: a planted foot slides
+ * back under the hips at that speed. Measured on a bare copy of the skeleton, so the model itself is never posed.
+ * Undefined without both feet, or when they never plant.
+ */
+export function groundSpeed(model: THREE.Object3D, clip: THREE.AnimationClip): number | undefined {
+  const bare = (o: THREE.Object3D): THREE.Object3D => {
+    const copy = new THREE.Object3D()
+    copy.name = o.name
+    copy.position.copy(o.position)
+    copy.quaternion.copy(o.quaternion)
+    copy.scale.copy(o.scale)
+    for (const child of o.children) copy.add(bare(child))
+    return copy
+  }
+  const root = bare(model)
+  const feet = ['foot_L', 'foot_R'].map((name) => root.getObjectByName(name))
+  if (feet.some((foot) => !foot)) return undefined
+  const mixer = new THREE.AnimationMixer(root)
+  const action = mixer.clipAction(clip).play()
+  const steps = 120
+  const dt = clip.duration / steps
+  const paths = feet.map(() => [] as THREE.Vector3[])
+  for (let k = 0; k <= steps; k++) {
+    action.time = k * dt
+    mixer.update(0)
+    root.updateMatrixWorld(true)
+    feet.forEach((foot, j) => paths[j].push(foot!.getWorldPosition(new THREE.Vector3())))
+  }
+  const speeds: number[] = []
+  for (const path of paths) {
+    const low = Math.min(...path.map((p) => p.y))
+    for (let k = 0; k < steps; k++) if (path[k].y <= low + PLANTED && path[k + 1].y <= low + PLANTED) speeds.push(Math.abs(path[k].z - path[k + 1].z) / dt)
+  }
+  if (!speeds.length) return undefined
+  speeds.sort((a, b) => a - b)
+  return speeds[speeds.length >> 1]
+}
+
+/** Each model file's run, in metres a second at 1x (see groundSpeed); null when it can't be measured. */
+const runSpeeds = new WeakMap<Gltf, number | null>()
+function runSpeed(file: Gltf): number | null {
+  let speed = runSpeeds.get(file)
+  if (speed === undefined) {
+    const run = file.animations.find((clip) => clip.name === 'run')
+    runSpeeds.set(file, (speed = (run && groundSpeed(file.scene, run)) || null))
+  }
+  return speed
+}
+
 /**
  * Seconds into each one-shot clip where its blow lands or its shot leaves (tools/blender/humanlib/clips.py): the strike
  * of a slash, the shot, the hip charge's thrust, the ultimate's burst, and each cast pose's release. A cast that runs
@@ -128,10 +207,10 @@ export interface CharacterView {
   /** The far end of what the right hand holds, as last posed; undefined when it holds nothing. */
   tip: (out: THREE.Vector3) => THREE.Vector3 | undefined
   /**
-   * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and step at
-   * `stride` times the run's own pace, so the feet keep up with the ground the hero covers instead of sliding.
+   * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and cover
+   * the ground at `speed` metres a second: the run plays at whatever pace keeps a planted foot from sliding.
    */
-  lean: (twist: number, back: boolean, stride?: number) => void
+  lean: (twist: number, back: boolean, speed?: number) => void
 }
 
 /** How a twist is shared up the back, hips to head. */
@@ -201,8 +280,6 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   let current: THREE.AnimationAction | undefined
   let currentName = ''
-  // the cast the current clip belongs to: a new one restarts the clip even when it's the same skill again
-  let castSeq = -1
   const play = (name: string, fade: number, from = 0) => {
     const next = actions.get(name) ?? actions.get('idle')
     if (!next) return
@@ -224,7 +301,29 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const back = Object.keys(TWIST_SHARE).flatMap((name) => scene.getObjectByName(name) ?? [])
   let twist = 0
   let backwards = false
-  let pace = 1
+  // metres a second the hero covers, as last told (see `lean`); undefined, the run plays as it was made
+  let ground: number | undefined
+  const keyed = runSpeed(file)
+  // a cast on the engine's clock plays in halves (see splitClip): the cast above the hips, and below them its own stance
+  // or, on the move, the run, so the feet keep up with the ground while the arms cast (Forge goal, phase 2). `layer` is
+  // how much of the body the halves own and `striding` how much of their legs runs; the run carries on underneath
+  // meanwhile, so its legs keep its step and it's there when the cast ends
+  const pairs = new Map<string, Halves<THREE.AnimationAction>>()
+  const pairOf = (name: string) => {
+    let pair = pairs.get(name)
+    if (!pair) {
+      const clip = (actions.get(name) ?? actions.get('idle'))?.getClip()
+      if (!clip) return undefined
+      const { legs, top } = halvesOf(clip)
+      pairs.set(name, (pair = { legs: mixer.clipAction(legs), top: mixer.clipAction(top) }))
+    }
+    return pair
+  }
+  const run = actions.get('run')
+  const runLegs = run && mixer.clipAction(halvesOf(run.getClip()).legs)
+  let shown: Halves<THREE.AnimationAction> | undefined
+  let layer = 0
+  let striding = 0
   // a twist goes on after the clip has posed the bones, each bone turning about its own length. The mixer only writes
   // a bone whose clip value changed, so a held pose (idle, a cast frozen in a hit-stop) would keep last frame's twist
   // and twist again: each bone's clip pose is kept and put back before the next update.
@@ -251,26 +350,56 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       untwist()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
       const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
-      if (state.kind === 'cast' && state.prep !== undefined) {
-        // on the engine's clock: the clip starts from its guard with the wind-up and is held to it, frame by frame
-        if (wanted !== currentName || state.seq !== castSeq) play(wanted, 0.08)
-        castSeq = state.seq ?? castSeq
-        if (current) {
-          current.timeScale = 0
-          current.time = castTime(currentName, current.getClip().duration, state.prep, state.recover ?? 0)
+      const layered = layer > 0
+      const onFoot = ground !== undefined && ground > STANCE.stride
+      const pair = state.kind === 'cast' && state.prep !== undefined ? pairOf(wanted) : undefined
+      if (pair && state.kind === 'cast') {
+        // on the engine's clock: the clip starts from its guard with the wind-up and is held to it, frame by frame. A
+        // new cast's halves take over from the last one's, or from the whole body; the same clip again starts over
+        if (pair !== shown) {
+          const handover = layered && shown
+          if (handover) for (const half of [shown!.legs, shown!.top]) half.fadeOut(CAST_FADE)
+          for (const half of [pair.legs, pair.top]) {
+            half.reset().play()
+            half.timeScale = 0
+            if (handover) half.fadeIn(CAST_FADE)
+          }
+          shown = pair
         }
-        mixer.update(dt)
-        turnChest()
-        return
+        if (!layered) {
+          runLegs?.reset().play()
+          striding = onFoot ? 1 : 0
+        }
+        pair.legs.time = pair.top.time = castTime(wanted, pair.top.getClip().duration, state.prep ?? 0, state.recover ?? 0)
+        layer = Math.min(1, layer + dt / CAST_FADE)
+        striding = onFoot ? Math.min(1, striding + dt / LEG_FADE) : Math.max(0, striding - dt / LEG_FADE)
+        if (onFoot && currentName !== 'run') play('run', LEG_FADE)
+      } else {
+        // a swing or a blast finishes before running or idling takes over; a new cast, a hit or death cuts in at once
+        const oneShotPlaying = current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
+        const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : 0.15
+        if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, fade, cast?.from)
+        // a cast on the engine's clock gives the body back as it ends, or is cut short
+        layer = Math.max(0, layer - dt / fade)
+        if (!layer) shown = undefined
       }
-      // a cast on the engine's clock has already played its recovery, or was cut short and must not land now
-      const timed = current?.timeScale === 0
-      if (current && timed) current.timeScale = 1
-      // a swing or a blast finishes before running or idling takes over; a new cast, a hit or death cuts in at once
-      const oneShotPlaying = !timed && current && !LOCOMOTION.has(currentName) && currentName !== 'fall' && current.time < current.getClip().duration - 0.12
-      if (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted))) play(wanted, wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : 0.15, cast?.from)
-      // backing away, the run plays backwards
-      if (current && currentName === 'run') current.timeScale = backwards ? -pace : pace
+      // the run keeps pace with the ground it covers, so a planted foot stays put; backing away, it plays backwards
+      if (current && currentName === 'run') {
+        const pace = keyed && ground !== undefined ? Math.min(PACE[1], Math.max(PACE[0], ground / (keyed * root.scale.x))) : 1
+        current.timeScale = backwards ? -pace : pace
+      }
+      if (layer > 0 || layered) {
+        for (const action of actions.values()) action.weight = 1 - layer
+        for (const half of pairs.values()) {
+          half.top.weight = layer
+          half.legs.weight = layer * (1 - striding)
+        }
+        if (runLegs && run) {
+          runLegs.weight = layer * striding
+          runLegs.time = run.time
+          runLegs.timeScale = run.timeScale
+        }
+      }
       mixer.update(dt)
       turnChest()
     },
@@ -280,10 +409,10 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       return false
     },
     hand: (dir, out) => leadHand(hands, dir, out),
-    lean: (t, b, stride = 1) => {
+    lean: (t, b, speed) => {
       twist = t
       backwards = b
-      pace = stride
+      ground = speed
     },
     tip: (out) => {
       if (tip === null) tip = heldTip(holder!)

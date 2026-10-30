@@ -79,9 +79,10 @@ const DEG = Math.PI / 180
 /**
  * How fast hips turn (radians a second) and how far the chest twists from them. A hero moving further than `back.enter`
  * from its aim runs backwards, and runs forwards again under `back.leave`: the gap keeps a hero strafing near the line
- * from flipping between the two every few frames.
+ * from flipping between the two every few frames. A hero casting while it covers more than `stride` metres a second
+ * keeps running under the cast (Forge goal, phase 2).
  */
-export const STANCE = { turn: 12, twist: 100 * DEG, back: { enter: 140 * DEG, leave: 120 * DEG } }
+export const STANCE = { turn: 12, twist: 100 * DEG, back: { enter: 140 * DEG, leave: 120 * DEG }, stride: 0.6 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 

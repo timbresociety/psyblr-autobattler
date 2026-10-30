@@ -50,8 +50,8 @@ export interface HeroView {
   hand?: (dir: THREE.Vector3, out: THREE.Vector3) => THREE.Vector3 | undefined
   /** The far end of what the hero holds in its right hand, as last posed: where a weapon's swing trail runs from. */
   tip?: (out: THREE.Vector3) => THREE.Vector3 | undefined
-  /** Twist the chest from the hips, run backwards or not, at a pace (see CharacterView.lean); without it, the view faces its aim whole. */
-  lean?: (twist: number, back: boolean, stride?: number) => void
+  /** Twist the chest from the hips, run backwards or not, covering the ground this fast (see CharacterView.lean); without it, the view faces its aim whole. */
+  lean?: (twist: number, back: boolean, speed?: number) => void
 }
 
 const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', fly: 'dive', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
@@ -120,7 +120,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     settle: (dt, far, still) => shown().settle(dt, far, still),
     hand: (dir, out) => shown().hand(dir, out),
     tip: (out) => shown().tip(out),
-    lean: (twist, back, stride) => shown().lean(twist, back, stride),
+    lean: (twist, back, speed) => shown().lean(twist, back, speed),
     setForm: (transformed, next) => {
       if (formView) {
         if (formView.root.visible === transformed) return
