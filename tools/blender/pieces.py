@@ -224,10 +224,12 @@ def transform(faces, m):
 
 
 class Piece:
-    def __init__(self, pid, name, kind, tags, primary=None, emit=0.0):
+    def __init__(self, pid, name, kind, tags, primary=None, emit=0.0, metal=0.0):
         self.id, self.name, self.kind, self.tags = pid, name, kind, tags
         self.primary = primary
         self.emit = emit
+        # a 'primary' that is metal, satin like the palette's
+        self.metal = metal
         self.bm = bmesh.new()
         self.mats = []
         # how far the piece is tipped about x in its socket (the thumbnail turns it back)
@@ -246,9 +248,9 @@ class Piece:
 PIECES = []
 
 
-def piece(pid, name, kind, tags, primary=None, emit=0.0):
+def piece(pid, name, kind, tags, primary=None, emit=0.0, metal=0.0):
     def wrap(fn):
-        PIECES.append((Piece, (pid, name, kind, tags, primary, emit), fn))
+        PIECES.append((Piece, (pid, name, kind, tags, primary, emit, metal), fn))
         return fn
 
     return wrap
@@ -688,19 +690,37 @@ def visor(p):
     p.paint(sweep(bm, sections), 'primary', smooth=True)
 
 
-@piece('square_glasses', 'Square glasses', 'face', ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], primary='#1c1c20')
+def rounded_rect(cx, cz, w, h, rc, steps=4):
+    """A rectangle's outline across y (x, z, and the outward angle at each point), its corners rounded, anticlockwise."""
+    pts = []
+    for sx, sz, a0 in ((1, 1, 0.0), (-1, 1, math.pi / 2), (-1, -1, math.pi), (1, -1, 1.5 * math.pi)):
+        ox, oz = cx + sx * (w - rc), cz + sz * (h - rc)
+        for k in range(steps + 1):
+            a = a0 + (math.pi / 2) * k / steps
+            pts.append((ox + rc * math.cos(a), oz + rc * math.sin(a), a))
+    return pts
+
+
+@piece('square_glasses', 'Square glasses', 'face', ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], primary='#1c1c20', metal=0.65)
 def square_glasses(p):
     bm = p.bm
-    # slim rectangular lenses, 48 by 31 mm, in a fine frame, centred a little below the eyes, as a pair is worn
-    w, h, t, cz = 0.024, 0.0155, 0.0017, -0.003
+    # slim rectangular lenses, 48 by 31 mm, centred a little below the eyes as a pair is worn, in a fine metal frame: a
+    # round wire 1.8 mm across, an arched bridge, nose pads and 2 mm temples
+    w, h, cz, wire = 0.024, 0.0155, -0.003, 0.0009
     for s in (1, -1):
         cx = s * 0.034
-        top, bottom = cz + h, cz - h
-        for lo, hi in (((cx - w, -t, top - t), (cx + w, t, top + t)), ((cx - w, -t, bottom - t), (cx + w, t, bottom + t)), ((cx - w - t, -t, bottom), (cx - w + t, t, top)), ((cx + w - t, -t, bottom), (cx + w + t, t, top))):
-            p.paint(box(bm, lo, hi), 'primary')
-        p.paint(slab(bm, [(cx - w + t, bottom + t), (cx + w - t, bottom + t), (cx + w - t, top - t), (cx - w + t, top - t)], 0.0015, axis='y'), 'glass')
-        p.paint(tube(bm, [V((s * (0.034 + w), 0, 0.008)), V((s * 0.096, 0.06, 0.006)), V((s * 0.098, 0.125, -0.006))], [0.0024, 0.0022, 0.0022], seg=5), 'primary', smooth=True)
-    p.paint(box(bm, (-0.034 + w, -0.002, 0.006), (0.034 - w, 0.002, 0.011)), 'primary')
+        rim = rounded_rect(cx, cz, w, h, 0.005)
+        p.paint(sweep(bm, [ring(V((x, 0, z)), V((math.cos(a), 0, math.sin(a))), V((0, 1, 0)), wire, wire * 1.2, 6) for x, z, a in rim], closed=True), 'primary', smooth=True)
+        p.paint(slab(bm, [(x, z) for x, z, _ in rounded_rect(cx, cz, w - 0.0005, h - 0.0005, 0.0045)], 0.0012, axis='y'), 'glass')
+        # the hinge block on the rim's outer top corner, and the temple back from it over the ear
+        out = s * (0.034 + w)
+        p.paint(box(bm, (min(out, out + s * 0.003), -0.0012, 0.0045), (max(out, out + s * 0.003), 0.0035, 0.0095)), 'primary')
+        p.paint(tube(bm, [V((s * (0.034 + w + 0.0025), 0.0035, 0.007)), V((s * 0.096, 0.06, 0.006)), V((s * 0.098, 0.125, -0.006))], [0.0011, 0.001, 0.001], seg=6), 'primary', smooth=True)
+        # a nose pad on a short arm behind the rim's inner side
+        pad = V((s * 0.0085, 0.007, -0.009))
+        p.paint(tube(bm, [V((s * (0.034 - w + 0.0005), 0.001, -0.004)), pad + V((s * 0.0015, -0.002, 0.0))], [0.0005, 0.0005], seg=4), 'primary', smooth=True)
+        p.paint(ball(bm, pad, 0.004, seg=8, rings_=4, scale=(0.35, 0.5, 1.0)), 'glass', smooth=True)
+    p.paint(tube(bm, [V((-(0.034 - w) - 0.0004, 0, 0.007)), V((0, -0.0015, 0.0095)), V(((0.034 - w) + 0.0004, 0, 0.007))], [wire, wire, wire], seg=6), 'primary', smooth=True)
 
 
 @piece('scouter', 'Scouter', 'face', ['scouter', 'power scanner', 'saiyan scouter', 'power level', 'dragon ball scouter'], primary='#3df27a', emit=1.3)
@@ -730,7 +750,7 @@ def build(entry):
     obj = bpy.data.objects.new(p.id, me)
     bpy.context.scene.collection.objects.link(obj)
     for name in p.mats:
-        spec = dict(color=p.primary or '#888888', roughness=0.5, emit=p.emit) if name == 'primary' else PALETTE[name]
+        spec = dict(color=p.primary or '#888888', roughness=0.3 if p.metal else 0.5, metallic=p.metal, emit=p.emit) if name == 'primary' else PALETTE[name]
         me.materials.append(make_material(name, spec))
     me.validate()
     tris = sum(len(poly.vertices) - 2 for poly in me.polygons)

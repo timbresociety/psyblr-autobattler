@@ -34,6 +34,6 @@ export const BUILT_IN_PIECES: readonly BuiltInPiece[] = [
   { id: 'shades', name: 'Shades', kind: 'face', tags: ['sunglasses', 'shades', 'aviators', 'cool glasses'], tint: '#111216', tris: 104 },
   { id: 'eyepatch', name: 'Eyepatch', kind: 'face', tags: ['eyepatch', 'eye patch', 'pirate'], tint: '#0e0e10', tris: 304 },
   { id: 'visor', name: 'Visor', kind: 'face', tags: ['visor', 'cyber visor', 'cyborg', 'goggles', 'hud', 'cyberpunk'], tint: '#38e1ff', tris: 116 },
-  { id: 'square_glasses', name: 'Square glasses', kind: 'face', tags: ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], tint: '#1c1c20', tris: 184 },
+  { id: 'square_glasses', name: 'Square glasses', kind: 'face', tags: ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], tint: '#1c1c20', tris: 872 },
   { id: 'scouter', name: 'Scouter', kind: 'face', tags: ['scouter', 'power scanner', 'saiyan scouter', 'power level', 'dragon ball scouter'], tint: '#3df27a', tris: 152 },
 ]
