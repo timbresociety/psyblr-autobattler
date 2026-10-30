@@ -35,6 +35,33 @@ export function socketMatrix(s: BodySocket): THREE.Matrix4 {
   return m.setPosition(...s.pos)
 }
 
+/** How far round a socket the body's surface counts toward where it moves, in metres. */
+const SOCKET_REACH = 0.05
+
+/**
+ * Sockets moved with a hero's shape. The pipeline places them on the body as built, but a physique or a face moves the
+ * surface under them: an older or heavier hero's head sits up to two centimetres lower, and a socket left where it was
+ * floats glasses and hats above it. Each socket moves by how the surface within SOCKET_REACH of it moved, from the
+ * built body's welded rest `positions` to the hero's (`shaped`), nearer points counting more. One with no surface that
+ * near stays put.
+ */
+export function shapedSockets(sockets: BodySockets, positions: ArrayLike<number>, shaped: ArrayLike<number>): BodySockets {
+  const out: BodySockets = {}
+  for (const [slot, s] of Object.entries(sockets) as [GearSlot, BodySocket][]) {
+    const move = [0, 0, 0]
+    let total = 0
+    for (let i = 0; i < positions.length; i += 3) {
+      const d = Math.hypot(positions[i] - s.pos[0], positions[i + 1] - s.pos[1], positions[i + 2] - s.pos[2])
+      if (d >= SOCKET_REACH) continue
+      const w = (1 - d / SOCKET_REACH) ** 2
+      for (let k = 0; k < 3; k++) move[k] += (shaped[i + k] - positions[i + k]) * w
+      total += w
+    }
+    out[slot] = total ? { ...s, pos: [s.pos[0] + move[0] / total, s.pos[1] + move[1] / total, s.pos[2] + move[2] / total] } : s
+  }
+  return out
+}
+
 function skinnedMesh(model: THREE.Object3D): THREE.SkinnedMesh | undefined {
   let found: THREE.SkinnedMesh | undefined
   model.traverse((o) => {

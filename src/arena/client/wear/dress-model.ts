@@ -10,7 +10,7 @@ import { PRINT_SCALE, drawPrint, inkFor, type PrintId } from '../../../kit/wear/
 import { bodyKitLoaded } from '../body-kit.js'
 import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from '../character-look.js'
 import { faceShape } from '../face/shape.js'
-import { hangPieces, type Piece } from '../gear.js'
+import { hangPieces, shapedSockets, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
 import { rigCloth } from './cloth-model.js'
 import { BODY_VERTICES, type LoadedWear } from './items.js'
@@ -298,8 +298,11 @@ export function clothGeometry(parts: DressedItem[], textured: ReadonlyMap<string
 
 const SOCKET: Partial<Record<LookSlot, GearSlot>> = { head: 'head', face: 'face', back: 'back', hand_r: 'hand_r', hand_l: 'hand_l' }
 
-/** Hang each rigid item on its socket, its first channel tinting the piece's 'primary' material. */
-function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear): THREE.Object3D[] {
+/**
+ * Hang each rigid item on its socket, its first channel tinting the piece's 'primary' material. The sockets move with
+ * the hero's shape (`shape`, from the built body's `rest` positions), so glasses sit on the eyes the hero has.
+ */
+function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear, rest: ArrayLike<number>, shape: BodyShape): THREE.Object3D[] {
   if (!wear.sockets) return []
   const pieces: Piece[] = []
   for (const [slot, w] of Object.entries(outfit) as [LookSlot, Worn][]) {
@@ -308,7 +311,7 @@ function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>
     if (loaded?.kind !== 'rigid' || !socket) continue
     pieces.push({ name: slot, socket, file: loaded.file, ...(w.colors?.[0] ? { color: w.colors[0] } : {}) })
   }
-  return hangPieces(model, pieces, wear.sockets)
+  return pieces.length ? hangPieces(model, pieces, shapedSockets(wear.sockets, rest, shape.positions)) : []
 }
 
 /**
@@ -356,7 +359,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
     // whatever hangs loose swings on its own bones (settleCloth each frame)
     rigCloth(model, outfit, parts, shape, (bone) => cache.rest.get(bone))
   }
-  if (wear) hangRigid(model, look.outfit, wear)
+  if (wear) hangRigid(model, look.outfit, wear, cache.base.positions, shape)
   return true
 }
 

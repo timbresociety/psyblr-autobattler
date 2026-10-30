@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
-import { hangPieces, hangSockets, socketMatrix, type BodySockets } from './gear.js'
+import { hangPieces, hangSockets, shapedSockets, socketMatrix, type BodySockets } from './gear.js'
 
 /** A one-bone skinned body whose bone sits at (0, 1, 0) at rest. */
 function body() {
@@ -56,6 +56,16 @@ describe('gear on a body', () => {
     expect(primary.color.getHexString()).toBe('ff0000')
     expect(b.material).toBe(steel)
     expect(a.castShadow).toBe(true)
+  })
+
+  it('moves a socket with the surface round it, and leaves one with no surface near it where it was', () => {
+    // a patch of face round the lens socket, which the hero's physique lowers 2 cm; the hand's socket is nowhere near
+    const rest = [0, 1.68, 0.16, 0.03, 1.68, 0.15, -0.03, 1.68, 0.15, 0, 1.7, 0.15]
+    const shaped = rest.map((v, i) => (i % 3 === 1 ? v - 0.02 : v))
+    const moved = shapedSockets({ face: { bone: 'head', pos: [0, 1.68, 0.177], scale: 1.2 }, ...sockets }, rest, shaped)
+    expect(moved.face!.pos.map((v) => +v.toFixed(5))).toEqual([0, 1.66, 0.177])
+    expect(moved.face!.scale).toBe(1.2)
+    expect(moved.hand_r).toEqual(sockets.hand_r)
   })
 
   it('skips a piece whose socket the body lacks', () => {
