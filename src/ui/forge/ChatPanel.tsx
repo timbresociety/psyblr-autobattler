@@ -17,6 +17,8 @@ interface Props {
   onSend: (text: string) => void
   /** The reference image drop zone. */
   refs?: ReactNode
+  /** Shows the name field; the creator names the hero in its Hero section instead. */
+  named?: boolean
 }
 
 /** Openers that show how much a sentence can carry; picking one fills the message box. */
@@ -26,7 +28,7 @@ const EXAMPLES = ['a time-bending samurai who rewinds fights', 'a GPU god who ra
  * Making a hero is conversational first (R13): reference images, a name if you have one, then the hero in plain words.
  * The prompt names the hero when the name is left blank.
  */
-export function ChatPanel({ started, reading = false, heroName, messages, busy, onName, onSend, refs }: Props) {
+export function ChatPanel({ started, reading = false, heroName, messages, busy, onName, onSend, refs, named = true }: Props) {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLOListElement>(null)
   const box = useRef<HTMLTextAreaElement>(null)
@@ -47,10 +49,12 @@ export function ChatPanel({ started, reading = false, heroName, messages, busy, 
 
   return (
     <section className="panel chat" aria-label="Chat">
-      <label className="name-field">
-        <span className="field-label">Hero name</span>
-        <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder={started ? 'Jensen, Goku, Unit 7…' : 'Optional: Jensen, Goku…'} onChange={(e) => onName(e.target.value)} />
-      </label>
+      {named && (
+        <label className="name-field">
+          <span className="field-label">Hero name</span>
+          <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder={started ? 'Jensen, Goku, Unit 7…' : 'Optional: Jensen, Goku…'} onChange={(e) => onName(e.target.value)} />
+        </label>
+      )}
       {refs}
       <ol className="log" ref={log} aria-live="polite">
         {!started && messages.length === 0 && <li className="engine greeting">Tell me who your hero is: who they are, how they look, what their skills are called and what they do. I read it back to you, ask what I can't tell, and build only when you say so.</li>}

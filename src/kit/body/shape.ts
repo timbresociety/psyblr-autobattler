@@ -104,6 +104,8 @@ export interface FaceShape {
   scale: number
   /** 0 to 1: how much of the photo's shape the hero takes. */
   strength?: number
+  /** Weights sculpted by hand on the same groups, added whole on top of the photo's. */
+  sculpt?: ArrayLike<number>
 }
 
 /** A hero's body: welded positions and normals, and the skin they're drawn with. */
@@ -121,7 +123,7 @@ export function shapeBody(base: BodyBase, morphNames: readonly string[], physiqu
   })
   if (face) {
     const strength = Math.min(1, Math.max(0, face.strength ?? 1))
-    const weights = Array.from(face.base, (b, i) => ((face.weights[i] ?? b) - b) * strength)
+    const weights = Array.from(face.base, (b, i) => ((face.weights[i] ?? b) - b) * strength + (face.sculpt?.[i] ?? 0))
     applyFace(face.basis, weights, face.scale, positions)
   }
   return { surface: base.surface, positions, normals: weldedNormals(base.surface, positions), joints: base.joints, weights: base.weights, skin: base.skin }

@@ -137,6 +137,7 @@ export function readingLook(reading: Reading, { catalog, hue, face, outfit = {} 
   return {
     gender: l.gender,
     ...(l.physique ? { physique: l.physique } : {}),
+    ...(l.sculpt ? { sculpt: l.sculpt } : {}),
     wear,
     // the fields from before the wardrobe: a look with one never reads them
     hair: 'none',

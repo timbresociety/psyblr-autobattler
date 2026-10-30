@@ -4,6 +4,7 @@ import { poolFor } from '../charter/templates/catalog'
 import { ENCORE_COVER_ANSWER, ENCORE_PROMPT } from './examples'
 import { answerQuestion, buildFromReading, hydrateReading, namedSkills, offlineReading, readingSchema, withForm, withRole } from './reading'
 import { atRung, canReach, physiqueFromPrompt, wearFromPrompt } from './wardrobe-read'
+import { sculptFromPrompt } from './sculpt-read'
 
 const ENCORE = ENCORE_PROMPT
 const none = { colors: [], finishes: [], print: '', knobs: [] }
@@ -99,6 +100,37 @@ describe('the offline reader', () => {
     expect(again.wear.find((w) => w.slot === 'hair')?.item).toBe('hair_long')
     expect(again.wear.find((w) => w.slot === 'hand_r')?.item).toBe('katana')
     expect(again.kit.active1.name).toBe('Moon Slash')
+  })
+})
+
+describe('a face from words', () => {
+  it('sculpts the features a prompt describes, and stacks words that agree, held to each slider’s range', () => {
+    expect(sculptFromPrompt('a knight with a square jaw, big eyes and high cheekbones')).toEqual({
+      shape_square: 0.6,
+      chin_width: 0.4,
+      chin_prominence: 0.3,
+      eye_size: 0.7,
+      eye_opening: 0.4,
+      cheekbones: 0.7,
+      cheek_volume: -0.3,
+    })
+    // "big anime eyes" and "wide-set eyes" both move the eyes; "gaunt" and "hollow cheeks" both empty the cheeks
+    expect(sculptFromPrompt('anime eyes, wide-set eyes, gaunt, hollow cheeks')).toMatchObject({ eye_size: 0.7, eye_spacing: 0.5, cheek_volume: -0.7, head_fullness: -0.4 })
+    expect(sculptFromPrompt('a wizard in a blue robe')).toBeUndefined()
+  })
+
+  it('reads the face onto the offline reading, and a correction changes only what it names', () => {
+    const first = offlineReading({ prompt: 'a samurai with a long face and thin lips' })
+    expect(first.look.sculpt).toMatchObject({ shape_rectangular: 0.6, head_width: -0.3, mouth_fullness: -0.6 })
+    const next = offlineReading({ prompt: 'a samurai with a long face and thin lips', previous: first, note: 'give him a strong chin' })
+    expect(next.look.sculpt).toMatchObject({ shape_rectangular: 0.6, mouth_fullness: -0.6, chin_prominence: 0.6, chin_height: 0.3 })
+  })
+
+  it('takes an AI reader’s listed sliders, known ones only, and the offline face when it lists none', () => {
+    const listed = hydrateReading({ look: { sculpt: [{ feature: 'eye_size', value: 0.8 }, { feature: 'not_a_slider', value: 1 }, { feature: 'nose_width', value: -4 }] } }, { prompt: 'a ninja' }, 'claude')
+    expect(listed.look.sculpt).toEqual({ eye_size: 0.8, nose_width: -1 })
+    const none = hydrateReading({ look: { sculpt: [] } }, { prompt: 'a ninja with a button nose' }, 'claude')
+    expect(none.look.sculpt).toEqual({ nose_length: -0.5, nose_width: -0.3 })
   })
 })
 

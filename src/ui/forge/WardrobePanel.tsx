@@ -24,6 +24,10 @@ interface Props {
   referenceUrl?: string
   /** Items found in a search or just generated, for the catalog. */
   onFound?: (entries: LibraryEntry[]) => void
+  /** The tabs to offer (the creator splits the wardrobe across its sections); all of them by default. */
+  tabs?: readonly WardrobeTab[]
+  /** A heading of its own; none inside a creator section, which has one. */
+  titled?: boolean
 }
 
 /** What a gear slot's generated piece is made as; the six wardrobe slots make garments instead. */
@@ -51,8 +55,9 @@ interface Making {
  * shows the four rungs: wear it as made, recolour its parts and finishes, restyle it with a print and its cuts, or
  * generate a new one for credits. All free but the last, and all cosmetic.
  */
-export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], referenceUrl, onFound }: Props) {
-  const [tab, setTab] = useState<WardrobeTab>('hair')
+export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], referenceUrl, onFound, tabs, titled = true }: Props) {
+  const shown = WARDROBE_TABS.filter((t) => !tabs || tabs.includes(t.id))
+  const [tab, setTab] = useState<WardrobeTab>(shown[0].id)
   const [query, setQuery] = useState('')
   const [making, setMaking] = useState<Making | null>(null)
   const wear = wardrobeOf(look)
@@ -70,7 +75,7 @@ export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], refere
   }, [q, pieces])
 
   // a gap is open while its stand-in (or nothing) is still worn there: anything else the player put on closes it
-  const open = gaps.filter((g) => wear[g.slot]?.id === g.under)
+  const open = gaps.filter((g) => wear[g.slot]?.id === g.under && shown.some((t) => (t.slots as readonly LookSlot[]).includes(g.slot)))
   const current = WARDROBE_TABS.find((t) => t.id === tab)!
 
   const generator = (slot: LookSlot) =>
@@ -98,8 +103,8 @@ export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], refere
   return (
     <section className="look-panel wardrobe" aria-label="Wardrobe">
       <header className="look-head gear-head">
-        <h2 className="section-title">Wardrobe</h2>
-        <p className="muted">Wear, recolour and restyle anything in the library free. Generate what it lacks.</p>
+        {titled && <h2 className="section-title">Wardrobe</h2>}
+        {titled && <p className="muted">Wear, recolour and restyle anything in the library free. Generate what it lacks.</p>}
         <input className="gear-search" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the wardrobe" aria-label="Search the wardrobe" />
       </header>
       {pieces && open.length > 0 && !making && (
@@ -121,8 +126,8 @@ export function WardrobePanel({ look, catalog, onLook, pieces, gaps = [], refere
           ))}
         </div>
       )}
-      <div className="wardrobe-tabs" role="tablist" aria-label="Wardrobe slots">
-        {WARDROBE_TABS.map((t) => {
+      <div className="wardrobe-tabs" role="tablist" aria-label="Wardrobe slots" hidden={shown.length < 2}>
+        {shown.map((t) => {
           const worn = (t.slots as readonly LookSlot[]).some((s) => wear[s])
           return (
             <button key={t.id} type="button" role="tab" id={`wardrobe-tab-${t.id}`} aria-selected={tab === t.id} aria-controls="wardrobe-panel" className={`wardrobe-tab${tab === t.id ? ' on' : ''}`} onClick={() => setTab(t.id)}>

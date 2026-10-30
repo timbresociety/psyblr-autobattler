@@ -27,6 +27,7 @@ import { SIZE_CLASSES, SIZES, type SizeClass } from '../charter/sizes.js'
 import { CATALOG, poolFor } from '../charter/templates/catalog.js'
 import type { BuildSlot, Effect, RoleId, Template } from '../charter/types.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
+import { SCULPT_IDS, hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { FINISHES, KNOBS, RUNGS } from '../kit/wear/item.js'
 import { LIBRARY } from '../kit/wear/library.js'
 import { BUILT_IN_ITEMS } from '../kit/wear/library.gen.js'
@@ -35,6 +36,7 @@ import { FORM_TEMPLATES, formChange, formFromWords, transformOf } from './form.j
 import { keywordFlags } from './keywords.js'
 import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
 import { correctWear, physiqueFromPrompt, readWear, wearAnswer, wearFromPrompt, type WearWish } from './wardrobe-read.js'
+import { sculptFromPrompt } from './sculpt-read.js'
 
 /**
  * The Forge reads before it builds. A reading is what the Forge understood from a prompt and its reference images: the
@@ -90,6 +92,8 @@ export interface ReadingLook {
   wearFace: boolean
   /** How much of the photo's shape the face takes, 0 to 1; all of it when absent. */
   faceStrength?: number
+  /** The head and face sculpted (src/kit/body/sculpt.ts), on top of the photo's when the hero wears one. */
+  sculpt?: Sculpt
 }
 
 export interface Reading {
@@ -171,6 +175,7 @@ export function readingSchema(): Record<string, unknown> {
       physique: object({ weight: num, muscle: num, age: num }),
       colors: list(object({ region: choice(BODY_COLORS, false), hex: str })),
       wearFace: bool,
+      sculpt: list(object({ feature: choice(SCULPT_IDS, false), value: num })),
     }),
     wear: list(
       object({
@@ -223,6 +228,7 @@ The body:
 - physique: weight, muscle and age, each 0 to 1. The body as made is weight 0.5, muscle 0.5 and age 0; age 1 is 75.
 - colors: a '#rrggbb' for each of skin, hair (it colours the beard too), iris and brow that you can see or the player asks for. Leave out what you can't tell.
 - wearFace: true when an image is a photo of a real face the hero should wear; false for an illustration, a mask, or when the player wants a stylised hero.
+- sculpt: the head and face as a player creator's sliders. List only the features that stand out, each from -1 to 1 with 0 an average face; a head shape (shape_*) runs from 0 to 1. Head: head_width, head_length, head_fullness, forehead. Eyes: eye_spacing, eye_height, eye_size, eye_opening, eye_inner and eye_outer (corners up or down). Nose: nose_width, nose_length, nose_height, nose_flare. Mouth: mouth_width, mouth_fullness, mouth_height, lip_upper, lip_lower. Cheeks: cheekbones, cheek_volume. Jaw: chin_width, chin_height, chin_prominence. Shapes: shape_oval, shape_round, shape_square, shape_rectangular (long), shape_triangular (pear), shape_invertedtriangular (heart), shape_diamond. A worn photo face already has the photo's shape, so then sculpt only what the player asks to change. An illustrated or anime character is sculpted to its look (anime eyes are large: eye_size 0.6 to 0.9). Leave the list empty when nothing stands out.
 
 The wardrobe. A hero wears one item a slot: hair, beard, head (hats, helmets, hoods, crowns), upper (torso and arms), lower (legs), full (torso, arms and legs, in place of upper and lower), back (capes, cloaks, scarves, wings, what's slung on the back), feet, face (glasses, masks), and hand_r and hand_l (what they hold). Give a wish for each slot you can see or the player names, and leave the rest out for the role to dress:
 - phrase: the thing in one to five words, the way the player or the image would put it ("wide straw hat").
@@ -279,7 +285,7 @@ function answerOf(reading: Reading) {
   const { source: _source, look, wear, questions, ...rest } = reading
   return {
     ...rest,
-    look: { ...look, physique: look.physique ?? NEUTRAL_PHYSIQUE, colors: Object.entries(look.colors).map(([region, hex]) => ({ region, hex })) },
+    look: { ...look, physique: look.physique ?? NEUTRAL_PHYSIQUE, colors: Object.entries(look.colors).map(([region, hex]) => ({ region, hex })), sculpt: Object.entries(look.sculpt ?? {}).map(([feature, value]) => ({ feature, value })) },
     wear: wearAnswer(wear),
     questions: questions.map((q) => ({ ...q, options: q.options.map((o) => o.label) })),
   }
@@ -374,6 +380,17 @@ function readPhysique(raw: unknown): Physique | undefined {
   return out.weight === NEUTRAL_PHYSIQUE.weight && out.muscle === NEUTRAL_PHYSIQUE.muscle && out.age === NEUTRAL_PHYSIQUE.age ? undefined : out
 }
 
+/** A sculpt as an AI reader lists it (feature and value) or as a reading keeps it (by feature); none when it moves nothing. */
+function readSculpt(raw: unknown): Sculpt | undefined {
+  if (!Array.isArray(raw)) return hydrateSculpt(raw)
+  const out: Record<string, unknown> = {}
+  for (const f of raw) {
+    const { feature, value } = record(f)
+    if (typeof feature === 'string') out[feature] = value
+  }
+  return hydrateSculpt(out)
+}
+
 /** A form look as a reader flattens it (hair, eyes and wear beside the entry) or as a reading keeps it. */
 function readForm(raw: unknown): TransformationLook | undefined {
   const f = record(raw)
@@ -402,6 +419,7 @@ export function hydrateReading(raw: unknown, input: ReadInput, source: ReadingSo
     if (region && HEX.test(hex)) colors[region] ??= hex
   }
   const physique = readPhysique(lookIn.physique)
+  const sculpt = readSculpt(lookIn.sculpt) ?? fallback.look.sculpt
   const wearFace = !!input.faceFound && lookIn.wearFace !== false
   const strength = lookIn.faceStrength
   const look: ReadingLook = {
@@ -411,6 +429,7 @@ export function hydrateReading(raw: unknown, input: ReadInput, source: ReadingSo
     colors,
     wearFace,
     ...(wearFace && typeof strength === 'number' && strength >= 0 && strength < 1 ? { faceStrength: strength } : {}),
+    ...(sculpt ? { sculpt } : {}),
   }
   const kitIn = record(value.kit)
   const kit = {} as Record<BuildSlot, ReadingSkill>
@@ -623,12 +642,14 @@ export function offlineReading(input: ReadInput): Reading {
   const suggested = inferRole(heroName, asked)
   const roleId = transform ? formRole(sized, prompt, suggested) : suggested
   const physique = physiqueFromPrompt(prompt)
+  const sculpt = sculptFromPrompt(prompt)
   const look: ReadingLook = {
     gender: genderFromPrompt(prompt) ?? ROLE_GENDER[roleId] ?? 'm',
     size: sizeFromPrompt(prompt) ?? 'medium',
     ...(physique ? { physique } : {}),
     colors: bodyColours(prompt),
     wearFace: !!input.faceFound,
+    ...(sculpt ? { sculpt } : {}),
   }
   const kit = {} as Record<BuildSlot, ReadingSkill>
   for (const slot of BUILD_SLOTS) {
@@ -659,12 +680,14 @@ function correctOffline(previous: Reading, note: string, input: ReadInput): Read
   const aboutForm = /\b(?:ult\w*|transform\w*|form)\b/i.test(note)
   const size = aboutForm ? undefined : sizeFromPrompt(note)
   const physique = physiqueFromPrompt(note)
+  const sculpt = sculptFromPrompt(note)
   const look: ReadingLook = {
     ...previous.look,
     gender: genderFromPrompt(note) ?? previous.look.gender,
     ...(size ? { size } : {}),
     ...(physique ? { physique } : {}),
     colors: { ...previous.look.colors, ...bodyColours(note) },
+    ...(sculpt ? { sculpt: { ...previous.look.sculpt, ...sculpt } } : {}),
   }
   if (/\b(no|without|lose|drop)\s+(?:the\s+)?face\b/i.test(note)) look.wearFace = false
   const named = namedSkills(note)

@@ -4,6 +4,7 @@ import { defaultLook, outfitOf, ROLE_GENDER, WEAR_SLOTS, wearUrl, type FacePhoto
 import type { FormBody, FormMark } from '../../charter/skill-look.js'
 import { libraryItem } from '../../kit/wear/library.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
+import type { Sculpt } from '../../kit/body/sculpt.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 import { DEMO_HEROES } from '../demo/roster.js'
 
@@ -31,6 +32,8 @@ export interface CharacterLook {
   face?: FacePhoto
   /** Marks painted on the face, as a form wears them (face/composite). */
   marks?: FormMark
+  /** The head and face as sculpted by hand, on top of the photo's. */
+  sculpt?: Sculpt
 }
 
 /**
@@ -84,6 +87,7 @@ export function characterLook(build: Build, hue: number): CharacterLook {
     colors: { skin: new THREE.Color().setStyle(look.colors.skin ?? base.colors.skin, THREE.SRGBColorSpace), eye: new THREE.Color().setHSL(0, 0, 0.96, THREE.SRGBColorSpace) },
   }
   if (look.face) out.face = look.face
+  if (look.sculpt) out.sculpt = look.sculpt
   return out
 }
 

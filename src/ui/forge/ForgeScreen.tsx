@@ -1,7 +1,8 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   BUILD_SLOTS,
   MAX_PHOTOS,
+  TEXT_LIMITS,
   changeRole,
   editSkillText,
   proposedSpread,
@@ -36,8 +37,13 @@ import { SkillIcon } from '../common/SkillIcon'
 import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
-import { BodyPanel } from './BodyPanel'
 import { WardrobePanel } from './WardrobePanel'
+import { MovesPanel } from './creator/MovesPanel'
+import { BuildPanel, SkinPanel } from './creator/LookPanels'
+import { SculptPanel } from './creator/SculptPanel'
+import { SECTIONS, SectionIcon, sectionOf, type SectionId } from './creator/sections'
+import type { StageFraming } from '../common/HeroStage'
+import './creator/creator.css'
 import { wardrobeCatalog } from './wardrobe'
 import { facePhoto, gapsOf, isGap, photoColours, readingLook, resolvedLook, withOutfit, type Dressing, type FaceCandidate } from './look'
 import type { OutfitColours } from './outfit'
@@ -56,18 +62,39 @@ const TryIt = lazy(() => import('../arena/ArenaScreen').then((m) => ({ default: 
 
 type Subject = Pick<Build, 'heroName' | 'roleId' | 'sizeClass' | 'look'>
 
+interface StageView {
+  /** The creator's studio: facing the camera, framed by section. */
+  studio?: boolean
+  framing?: StageFraming
+  facing?: number
+  play?: string
+}
+
 /** The plinth: the hero in 3D where WebGL runs, its initials where it does not. */
-function Stage({ subject, cue }: { subject?: Subject; cue?: { clip: StageClip; at: number } }) {
+function Stage({ subject, cue, view = {} }: { subject?: Subject; cue?: { clip: StageClip; at: number }; view?: StageView }) {
   const name = subject?.heroName ?? ''
   const label = name || 'your hero'
-  const backdrop = <div className={`hero-stage${subject ? ` role-${subject.roleId}` : ' is-empty'}`} role="img" aria-label={`3D preview of ${label}`} />
+  const backdrop = <div className={`hero-stage${subject ? ` role-${subject.roleId}` : ' is-empty'}${view.studio ? ' is-studio' : ''}`} role="img" aria-label={`3D preview of ${label}`} />
   if (!webglAvailable()) return backdrop
   return (
     <Suspense fallback={backdrop}>
-      <HeroStage look={subject} hue={heroHue(name)} cue={cue} size={subject?.sizeClass ?? 'medium'} label={label} />
+      <HeroStage look={subject} hue={heroHue(name)} cue={cue} size={subject?.sizeClass ?? 'medium'} label={label} {...view} />
     </Suspense>
   )
 }
+
+/** The stage's turns, as a player creator offers them. */
+const ANGLES: { label: string; facing: number }[] = [
+  { label: 'Front', facing: 0 },
+  { label: '¾', facing: 0.62 },
+  { label: 'Side', facing: Math.PI / 2 },
+  { label: 'Back', facing: Math.PI },
+]
+const FRAMINGS: { id: StageFraming; label: string }[] = [
+  { id: 'body', label: 'Body' },
+  { id: 'bust', label: 'Bust' },
+  { id: 'face', label: 'Face' },
+]
 
 /** A look to change: the hero's own, or, the first time, what its role gave it (colours stay its defaults until picked). */
 function lookOf(build: Build): HeroLook {
@@ -121,6 +148,11 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   // the Forge reads before it builds: the reading of the first prompt, and that prompt
   const [reading, setReading] = useState<Reading>()
   const [prompt, setPrompt] = useState('')
+  // the creator, once there is a hero: the section open, how the stage frames and turns the hero, and a move on loop
+  const [section, setSection] = useState<SectionId>('hero')
+  const [framed, setFramed] = useState<StageFraming>()
+  const [facing, setFacing] = useState(0)
+  const [playing, setPlaying] = useState<string>()
   // bumped on every change the player makes; an async result started before a change is discarded
   const edits = useRef(0)
   const changed = () => {
@@ -253,6 +285,17 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     setMessages([])
     setReading(undefined)
     setPrompt('')
+    setSection('hero')
+    setFramed(undefined)
+    setFacing(0)
+    setPlaying(undefined)
+  }
+
+  /** Open a section of the creator: the stage frames it its own way, and a move on loop stops outside Moves. */
+  const open = (id: SectionId) => {
+    setSection(id)
+    setFramed(undefined)
+    if (id !== 'moves') setPlaying(undefined)
   }
 
   async function save() {
@@ -445,185 +488,265 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
 
   const uploading = images.some((img) => img.status !== 'ready')
   const drawn = build && resolvedLook(build.look, build.roleId, build.heroName, heroHue(build.heroName))
+  const dropFiles = (e: DragEvent) => {
+    if (!dragsFiles(e)) return
+    e.preventDefault()
+    const files = imageFiles(e.dataTransfer.files)
+    if (files.length) addImages(files)
+  }
+  const refs = <ImageDrop images={images} max={MAX_PHOTOS} onFiles={addImages} onRemove={dropImage} error={imageError} />
+  const rename = (n: string) => {
+    setHeroName(n)
+    if (build) {
+      changed()
+      setBuild({ ...build, heroName: n })
+    }
+  }
+
+  if (!build)
+    return (
+      <main className="creator" onDragOver={(e) => dragsFiles(e) && e.preventDefault()} onDrop={dropFiles}>
+        <ChatPanel started={false} reading={!!reading} heroName={heroName} messages={messages} busy={busy} onName={rename} onSend={send} refs={refs} />
+        <section className="workbench">
+          <div className="bench-scroll">
+            {offline && (
+              <p className="offline" role="status">
+                Offline mode: the engine is matching skills by keywords until the AI is back.
+              </p>
+            )}
+            {reading ? (
+              <ReadingCard
+                reading={reading}
+                stage={<Stage subject={readingSubject} />}
+                look={resolvedLook(readingSubject!.look, reading.roleId, reading.heroName, heroHue(reading.heroName))}
+                catalog={wardrobe}
+                canFace={!!candidate}
+                onChange={(next) => {
+                  changed()
+                  setReading(next)
+                }}
+              />
+            ) : (
+              <section className="showcase is-empty">
+                <Stage subject={facePreview} />
+                <div className="hero-info intro">
+                  <h1 className="hero-name">Forge a hero</h1>
+                  <p className="lead">Add reference images, give a name if you have one, then describe your hero. I read it back, ask what I can't tell, and build a hero you can then sculpt part by part.</p>
+                  <ol className="steps">
+                    <li className={images.length ? 'done' : ''}>
+                      <b>Add images</b>
+                      <span>Up to three. A clear, front-on face photo becomes the hero's face. Optional.</span>
+                    </li>
+                    <li className={heroName.trim() ? 'done' : ''}>
+                      <b>Name it</b>
+                      <span>Anyone: Jensen, Goku, a superintelligence. Or let the prompt name it.</span>
+                    </li>
+                    <li className="now">
+                      <b>Describe it</b>
+                      <span>Its face, build, hair, clothes and skills, as much as you like. Then sculpt every part by hand.</span>
+                    </li>
+                  </ol>
+                </div>
+              </section>
+            )}
+          </div>
+          {reading && <ReadingBar busy={busy} questions={reading.questions.length} onCorrect={send} onBuild={buildHero} />}
+        </section>
+      </main>
+    )
+
+  const current = sectionOf(section)
+  const framing = framed ?? current.framing
+  const lastWord = [...messages].reverse().find((m) => m.from === 'engine')
+  const skills = BUILD_SLOTS.map((slot) => ({ slot, name: build.slots[slot].name.trim() || getTemplate(build.slots[slot].templateId).name }))
+
+  const panel = (() => {
+    switch (section) {
+      case 'hero':
+        return (
+          <div className="hero-panel">
+            <label className="name-field">
+              <span className="field-label">Hero name</span>
+              <input className="name-input" aria-label="Hero name" value={heroName} maxLength={TEXT_LIMITS.heroName} placeholder="Jensen, Goku, Unit 7…" onChange={(e) => rename(e.target.value)} />
+            </label>
+            <RoleSwitcher roleId={build.roleId} onChange={onRole} />
+            <SizePicker build={build} onChange={onSize} />
+            {facts && (
+              <dl className="facts">
+                <div>
+                  <dt>Health</dt>
+                  <dd>{facts.health}</dd>
+                </div>
+                <div>
+                  <dt>Speed</dt>
+                  <dd>
+                    {facts.ground.toFixed(1)}
+                    <small>m/s</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Slide</dt>
+                  <dd>
+                    {facts.slide.toFixed(1)}
+                    <small>m/s</small>
+                  </dd>
+                </div>
+                <div>
+                  <dt>Size</dt>
+                  <dd>{facts.size}</dd>
+                </div>
+              </dl>
+            )}
+            <div className="maker-actions">
+              {spentPoints(build.spread) === 0 && (
+                <button className="btn primary suggest" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
+                  Use suggested split
+                </button>
+              )}
+              <button className="btn ghost try-it-open" onClick={() => setTrying(true)}>
+                Try it on a training dummy
+              </button>
+            </div>
+          </div>
+        )
+      case 'ask':
+        return <ChatPanel started reading={false} named={false} heroName={heroName} messages={messages} busy={busy} onName={rename} onSend={send} refs={refs} />
+      case 'face':
+        return <SculptPanel look={drawn!} canFace={!!candidate} onLook={onLook} onFace={onFace} />
+      case 'skin':
+        return <SkinPanel look={drawn!} onLook={onLook} />
+      case 'hair':
+        return <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} tabs={['hair']} titled={false} />
+      case 'body':
+        return <BuildPanel look={drawn!} onLook={onLook} />
+      case 'outfit':
+        return <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} tabs={['head', 'upper', 'lower', 'full', 'back', 'feet']} titled={false} />
+      case 'gear':
+        return <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} tabs={['gear']} titled={false} />
+      case 'moves':
+        return (
+          <MovesPanel
+            gender={drawn!.gender}
+            idle={drawn!.idle}
+            playing={playing}
+            onIdle={(clip) => onLook((l) => ({ ...l, idle: clip }))}
+            onPlay={setPlaying}
+            skills={skills}
+            onSkill={(slot) => preview(slot as BuildSlot)}
+          />
+        )
+      case 'kit':
+        return (
+          <section className="kit" aria-label="Kit">
+            <ul className="kit-glance" aria-label="Kit at a glance">
+              {BUILD_SLOTS.map((slot) => {
+                const spec = build.slots[slot]
+                const template = getTemplate(spec.templateId)
+                return (
+                  <li key={slot}>
+                    <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
+                      <SkillIcon template={template} slot={slot} />
+                      <span>{spec.name.trim() || template.name}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="skills">
+              {BUILD_SLOTS.map((slot) => (
+                <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} onLook={onSkillLook} />
+              ))}
+            </div>
+          </section>
+        )
+      case 'stats':
+        return <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
+    }
+  })()
 
   return (
-    <main
-      className="creator"
-      onDragOver={(e) => dragsFiles(e) && e.preventDefault()}
-      onDrop={(e) => {
-        if (!dragsFiles(e)) return
-        e.preventDefault()
-        const files = imageFiles(e.dataTransfer.files)
-        if (files.length) addImages(files)
-      }}
-    >
-      <ChatPanel
-        started={!!build}
-        reading={!!reading}
-        heroName={heroName}
-        messages={messages}
-        busy={busy}
-        onName={(n) => {
-          setHeroName(n)
-          if (build) {
-            changed()
-            setBuild({ ...build, heroName: n })
-          }
-        }}
-        onSend={send}
-        refs={<ImageDrop images={images} max={MAX_PHOTOS} onFiles={addImages} onRemove={dropImage} error={imageError} />}
-      />
-      <section className="workbench">
-        {build && (
-          <header className="bench-head">
-            <span className="bench-title">{buildId ? 'In your loadout' : 'Not saved yet'}</span>
-            <button className="btn sm ghost new-hero" onClick={newHero}>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-              </svg>
-              New hero
-            </button>
-          </header>
-        )}
-        <div className="bench-scroll">
-          {offline && (
-            <p className="offline" role="status">
-              Offline mode: the engine is matching skills by keywords until the AI is back.
+    <main className="creator is-making" onDragOver={(e) => dragsFiles(e) && e.preventDefault()} onDrop={dropFiles}>
+      <nav className="maker-rail" aria-label="Creator">
+        {SECTIONS.map((sec, i) => (
+          <button key={sec.id} type="button" className={`rail-item${section === sec.id ? ' on' : ''}${i && SECTIONS[i - 1].group !== sec.group ? ' gap' : ''}`} aria-current={section === sec.id ? 'true' : undefined} onClick={() => open(sec.id)}>
+            <SectionIcon id={sec.id} />
+            <span>{sec.label}</span>
+          </button>
+        ))}
+      </nav>
+      <section className="maker-panel" aria-label={current.label}>
+        <header className="maker-head">
+          <h2 className="section-title">{current.label}</h2>
+          <p className="muted">{current.blurb}</p>
+          {notice && (
+            <p className="notice" role="status">
+              {notice}
             </p>
           )}
-          {!build && reading ? (
-            <ReadingCard
-              reading={reading}
-              stage={<Stage subject={readingSubject} />}
-              look={resolvedLook(readingSubject!.look, reading.roleId, reading.heroName, heroHue(reading.heroName))}
-              catalog={wardrobe}
-              canFace={!!candidate}
-              onChange={(next) => {
-                changed()
-                setReading(next)
-              }}
-            />
-          ) : !build ? (
-            <section className="showcase is-empty">
-              <Stage subject={facePreview} />
-              <div className="hero-info intro">
-                <h1 className="hero-name">Forge a hero</h1>
-                <p className="lead">Add reference images, give a name if you have one, then describe your hero. You own the look and the names; the engine keeps every fight fair.</p>
-                <ol className="steps">
-                  <li className={images.length ? 'done' : ''}>
-                    <b>Add images</b>
-                    <span>Up to three. Drop, paste or browse. Optional.</span>
-                  </li>
-                  <li className={heroName.trim() ? 'done' : ''}>
-                    <b>Name it</b>
-                    <span>Anyone: Jensen, Goku, a superintelligence. Or let the prompt name it.</span>
-                  </li>
-                  <li className="now">
-                    <b>Describe it</b>
-                    <span>In the chat, as much as you like. I read it back, ask what I can't tell, and build when you say so.</span>
-                  </li>
-                </ol>
-              </div>
-            </section>
-          ) : (
-            <>
-              <section className="showcase">
-                {/* the arena takes the GPU while the hero is tried */}
-                {trying ? <div className={`hero-stage role-${build.roleId}`} aria-hidden="true" /> : <Stage subject={build} cue={cue} />}
-                <div className="hero-info">
-                  <h1 className={`hero-name${build.heroName.length > 16 ? ' long' : ''}`}>{build.heroName}</h1>
-                  <RoleSwitcher roleId={build.roleId} onChange={onRole} />
-                  <SizePicker build={build} onChange={onSize} />
-                  {facts && (
-                    <dl className="facts">
-                      <div>
-                        <dt>Health</dt>
-                        <dd>{facts.health}</dd>
-                      </div>
-                      <div>
-                        <dt>Speed</dt>
-                        <dd>
-                          {facts.ground.toFixed(1)}
-                          <small>m/s</small>
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Slide</dt>
-                        <dd>
-                          {facts.slide.toFixed(1)}
-                          <small>m/s</small>
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Size</dt>
-                        <dd>{facts.size}</dd>
-                      </div>
-                    </dl>
-                  )}
-                  <ul className="kit-glance" aria-label="Kit at a glance">
-                    {BUILD_SLOTS.map((slot) => {
-                      const spec = build.slots[slot]
-                      const template = getTemplate(spec.templateId)
-                      return (
-                        <li key={slot}>
-                          <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
-                            <SkillIcon template={template} slot={slot} />
-                            <span>{spec.name.trim() || template.name}</span>
-                          </button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                  {notice && (
-                    <p className="notice" role="status">
-                      {notice}
-                    </p>
-                  )}
-                  <button className="btn ghost try-it-open" onClick={() => setTrying(true)}>
-                    Try it on a training dummy
-                  </button>
-                  {spentPoints(build.spread) === 0 && (
-                    <button className="btn primary suggest" onClick={() => apply(allocate(build, proposedSpread(build.roleId)))}>
-                      Use suggested split
-                    </button>
-                  )}
-                </div>
-              </section>
-              <BodyPanel look={drawn!} canFace={!!candidate} onLook={onLook} onFace={onFace} />
-              <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} />
-              <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
-              <section className="kit" aria-label="Kit">
-                <header className="kit-head">
-                  <h2 className="section-title">Kit</h2>
-                  <p className="muted">Your names and looks on the engine’s mechanics. Point at a skill to see the hero use it.</p>
-                </header>
-                <div className="skills">
-                  {BUILD_SLOTS.map((slot) => (
-                    <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} onLook={onSkillLook} />
-                  ))}
-                </div>
-              </section>
-            </>
-          )}
+        </header>
+        <div className="maker-scroll" key={section}>
+          {panel}
         </div>
-        {!build && reading && <ReadingBar busy={busy} questions={reading.questions.length} onCorrect={send} onBuild={buildHero} />}
-        {build && trying && (
-          <div className="try-it">
-            <Suspense fallback={null}>
-              <TryIt build={build} onClose={() => setTrying(false)} />
-            </Suspense>
-          </div>
-        )}
-        {build && (
-          <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))}>
-            {build.gate.state === 'ready' && (
-              <button className="btn primary big save" onClick={save} disabled={saving || uploading} title={uploading ? 'Waiting for your images to finish uploading' : undefined}>
-                {buildId ? 'Save changes' : 'Save to loadout'}
-              </button>
+      </section>
+      <section className="maker-stage" aria-label="Preview">
+        <header className="stage-head">
+          <div className="stage-title">
+            <h1 className={`hero-name${build.heroName.length > 16 ? ' long' : ''}`}>{build.heroName}</h1>
+            <p className="stage-meta">
+              <span className="bench-title">{getRole(build.roleId).name}</span>
+              <span className="bench-title">{buildId ? 'In your loadout' : 'Not saved yet'}</span>
+            </p>
+            {offline && (
+              <p className="offline" role="status">
+                Offline mode: the engine is matching skills by keywords until the AI is back.
+              </p>
             )}
-          </GateStatus>
+          </div>
+          <button className="btn sm ghost new-hero" onClick={newHero}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            </svg>
+            New hero
+          </button>
+        </header>
+        {/* the arena takes the GPU while the hero is tried */}
+        {trying ? <div className={`hero-stage is-studio role-${build.roleId}`} aria-hidden="true" /> : <Stage subject={build} cue={cue} view={{ studio: true, framing, facing, play: playing }} />}
+        <div className="stage-tools">
+          <div className="seg" role="group" aria-label="Turn the hero">
+            {ANGLES.map((a) => (
+              <button key={a.label} type="button" aria-pressed={facing === a.facing} className={facing === a.facing ? 'on' : ''} onClick={() => setFacing(a.facing)}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+          <div className="seg" role="group" aria-label="Frame the hero">
+            {FRAMINGS.map((f) => (
+              <button key={f.id} type="button" aria-pressed={framing === f.id} className={framing === f.id ? 'on' : ''} onClick={() => setFramed(f.id)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {lastWord && section !== 'ask' && (
+          <p className="stage-say" role="status">
+            {lastWord.text}
+          </p>
         )}
       </section>
+      {trying && (
+        <div className="try-it">
+          <Suspense fallback={null}>
+            <TryIt build={build} onClose={() => setTrying(false)} />
+          </Suspense>
+        </div>
+      )}
+      <GateStatus build={build} checking={checking} alternatives={alternatives} onReady={ready} onSwap={(s, id) => apply(swapTemplate(build, s, id))}>
+        {build.gate.state === 'ready' && (
+          <button className="btn primary big save" onClick={save} disabled={saving || uploading} title={uploading ? 'Waiting for your images to finish uploading' : undefined}>
+            {buildId ? 'Save changes' : 'Save to loadout'}
+          </button>
+        )}
+      </GateStatus>
     </main>
   )
 }

@@ -1,5 +1,6 @@
 import { landmarkAt, parseFaceBasis, type FaceBasis, type FaceBasisMeta } from '../../../kit/body/face-basis.js'
 import type { FaceShape } from '../../../kit/body/shape.js'
+import { sculptWeights, type Sculpt } from '../../../kit/body/sculpt.js'
 import type { BodyKit } from '../body-kit.js'
 import { FIT } from './landmarks.js'
 import { applySimilarity, similarity, type Pt } from './warp.js'
@@ -178,8 +179,13 @@ export function faceBasisFile(): Promise<BasisFile | undefined> {
   loading ??= Promise.all([fetch('/kit/face-basis.bin').then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))), fetch('/kit/face-basis.json').then((r) => (r.ok ? (r.json() as Promise<FaceBasisMeta>) : Promise.reject(r.status)))])
     .then(([bin, meta]) => (loaded = { basis: parseFaceBasis(bin), meta }))
     .catch(() => undefined)
+    .finally(() => (settled = true))
   return loading
 }
+
+let settled = false
+/** True once the face basis has loaded or failed to: a face drawn now is drawn as it will stay. */
+export const faceBasisSettled = () => settled
 
 const fits = new Map<string, number[]>()
 
@@ -201,4 +207,19 @@ export function photoFaceShape(face: { url: string; points: readonly number[]; s
     fits.set(key, weights)
   }
   return { basis, weights, base: kit.fit, scale, strength: face.strength }
+}
+
+/**
+ * A hero's face for shapeBody: the photo's shape (photoFaceShape) with what was sculpted by hand on top, or the sculpt
+ * alone on the body's own face. Undefined when there is neither, or the basis or the body's kit hasn't loaded
+ * (heroAtlas brings both in for a sculpted hero).
+ */
+export function faceShape(face: { url: string; points: readonly number[]; strength?: number } | undefined, sculpt: Sculpt | undefined, body: string, kit: BodyKit | undefined, positions: ArrayLike<number>): FaceShape | undefined {
+  const photo = photoFaceShape(face, body, kit, positions)
+  const extra = loaded && sculptWeights(sculpt, loaded.meta.groups)
+  if (!extra) return photo
+  if (photo) return { ...photo, sculpt: extra }
+  if (!loaded || !kit?.faceScale) return undefined
+  const none = new Array<number>(extra.length).fill(0)
+  return { basis: loaded.basis, weights: none, base: none, scale: kit.faceScale / loaded.meta.faceScale, sculpt: extra }
 }

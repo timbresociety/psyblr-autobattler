@@ -1,6 +1,7 @@
 import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
 import { PRINT_SCALE, isPrintId, type PrintId } from '../kit/wear/prints.js'
 import type { Physique } from '../kit/body/shape.js'
+import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
 import type { BuildSlot } from './types.js'
 
@@ -73,6 +74,10 @@ export interface HeroLook {
   cape: boolean
   colors: Partial<Record<LookColor, string>>
   face?: FacePhoto
+  /** The head and face sculpted by hand (src/kit/body/sculpt.ts), on top of the photo face when there is one. */
+  sculpt?: Sculpt
+  /** The idle the hero stands in, from the motion library (public/anim/index.json); its gender's first when absent. */
+  idle?: string
   /** Rigid pieces in the body's sockets: a hat, glasses, a weapon in each hand, something on the back. */
   gear?: Partial<Record<GearSlot, GearPiece>>
   /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
@@ -124,6 +129,8 @@ export const pieceUrl = (id: string) => `/kit/pieces/${id}.glb`
 
 const HEX = /^#[0-9a-f]{6}$/
 const PIECE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/
+// a clip in the motion library; one it doesn't have plays its gender's first idle
+const CLIP_ID = /^[a-z][a-z0-9_]{0,31}$/
 // a built-in piece, one the dev server stored, or one in a Blob store; the server checks which (src/server/gear.ts)
 const PIECE_URL = /^(\/kit\/pieces\/[a-z0-9_-]+\.glb|\/dev-store\/pieces\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/pieces\/[0-9a-f-]{36}\.glb)$/
 // a wardrobe item: built in, a built-in piece, or one a player generated (the dev server's or a Blob store's)
@@ -158,6 +165,9 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
   if (physique && typeof physique === 'object' && isFiniteIn(physique.weight, 1) && isFiniteIn(physique.muscle, 1) && isFiniteIn(physique.age, 1)) {
     look.physique = { weight: physique.weight, muscle: physique.muscle, age: physique.age }
   }
+  const sculpt = hydrateSculpt(input.sculpt)
+  if (sculpt) look.sculpt = sculpt
+  if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle
   const wear = hydrateWear(input.wear)
   if (wear) look.wear = wear
   const gearIn = input.gear as Record<string, Record<string, unknown> | undefined> | undefined
