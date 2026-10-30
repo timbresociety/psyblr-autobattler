@@ -8,6 +8,7 @@ import { readItemFile, writeItem } from '../fit/write.js'
 import { bindPoints, evaluate, fromLocal, toLocal } from './bind.js'
 import { dress, GAP, type Dressed, type Worn } from './dress.js'
 import { bodyFields, chainParam, fieldAt, type BodyFields } from './fields.js'
+import { FINISH_LOOK, HAIR_LOOK } from './finish.js'
 import { coverOf, type SurfaceItem } from './item.js'
 
 const pub = (path: string) => new URL(`../../../public${path}`, import.meta.url)
@@ -303,6 +304,22 @@ describe('dressing', () => {
     }
     expect(pressed).toBeGreaterThan(5)
     expect(free).toBeGreaterThan(5)
+  })
+
+  it('gives hair its strands, thinning out along the line where it leaves the skin, unless a finish was chosen', async () => {
+    const { item: crop } = await readItemFile(pub('/kit/wear/hair_crop.glb'), ref.surface.count)
+    const locks = dress({ body: ref, worn: [{ item: crop, colors: [[0.1, 0.07, 0.05]], finishes: [] }] }).items[0]
+    expect(locks.count).toBe(crop.count)
+    // past HAIR_LOOK's weave, how far in from that line: none under the skin, a band along it, the rest whole
+    const fringe = Array.from(locks.weave, (w) => w - HAIR_LOOK.weave)
+    for (const f of fringe) expect(f).toBeGreaterThanOrEqual(0), expect(f).toBeLessThanOrEqual(0.99 + 1e-6)
+    const out = Array.from(crop.binding.lift).filter((l) => l > 0).length
+    for (let k = 0; k < crop.count; k++) if (crop.binding.lift[k] <= 0) expect(fringe[k]).toBe(0)
+    expect(fringe.filter((f) => f > 0 && f < 0.98).length).toBeGreaterThan(20)
+    expect(fringe.filter((f) => f > 0.98).length).toBeGreaterThan(out * 0.6)
+    expect(Array.from(locks.finish.slice(0, 4))).toEqual([HAIR_LOOK.roughness, HAIR_LOOK.metalness, HAIR_LOOK.sheen, HAIR_LOOK.glow].map(Math.fround))
+    const silk = dress({ body: ref, worn: [{ item: crop, colors: [[0.1, 0.07, 0.05]], finishes: ['silk'] }] }).items[0]
+    expect(new Set(silk.weave)).toEqual(new Set([FINISH_LOOK.silk.weave]))
   })
 
   it('wears a mask over the beard and under the hair', () => {

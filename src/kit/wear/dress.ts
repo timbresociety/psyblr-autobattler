@@ -1,6 +1,6 @@
 import { surfaceFrame } from './bind.js'
 import { fieldAt, type BodyFields } from './fields.js'
-import { FINISH_LOOK } from './finish.js'
+import { FINISH_LOOK, HAIR_LOOK } from './finish.js'
 import { TriangleBVH, type V3 } from './ray.js'
 import { coverOf, type ChainGroup, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
 import type { BodyShape } from '../body/shape.js'
@@ -45,7 +45,8 @@ export interface Worn {
   item: SurfaceItem
   /** Linear RGB per channel. */
   colors: readonly (readonly [number, number, number])[]
-  finishes: readonly Finish[]
+  /** The player's finish per channel; none keeps the item's own (hair and beards then take HAIR_LOOK). */
+  finishes: readonly (Finish | undefined)[]
   /** 0 (shortest) to 1 (as made), for the knobs the item allows. */
   knobs?: Partial<Record<Knob, number>>
 }
@@ -423,13 +424,72 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape): Omit<Mesh, 
     const ch = item.channel[k]
     const rgb = w.colors[ch] ?? [0.5, 0.5, 0.5]
     color.set(rgb, k * 3)
-    const look = FINISH_LOOK[w.finishes[ch] ?? item.meta.channels[ch]?.finish ?? 'cotton']
+    const chosen = w.finishes[ch]
+    const stranded = !chosen && (item.meta.slot === 'hair' || item.meta.slot === 'beard')
+    const look = stranded ? HAIR_LOOK : FINISH_LOOK[chosen ?? item.meta.channels[ch]?.finish ?? 'cotton']
     finish.set([look.roughness, look.metalness, look.sheen, look.glow], k * 4)
     weave[k] = look.weave
+  }
+  if (item.meta.slot === 'hair' || item.meta.slot === 'beard') {
+    // strands part toward the hairline: past HAIR_LOOK's weave, how far in from it each vertex sits
+    const fringe = fringeOf(item, positions, lift)
+    for (let k = 0; k < n; k++) if (weave[k] === HAIR_LOOK.weave) weave[k] += fringe[k] * 0.99
   }
   if (item.meta.hard) ride(joints, weights)
   drape(item, lift, positions, normals)
   return { count: n, positions, normals, uv: Float32Array.from(item.uv), joints, weights, color, finish, weave, index: item.index, ...(item.chain ? { chain: Float32Array.from(item.chain) } : {}) }
+}
+
+/** How far in from where it leaves the skin hair stops thinning, along the surface, in metres. */
+const FRINGE = 0.012
+
+/**
+ * How far each vertex sits along the surface from where the item leaves the skin, 0 there to 1 at FRINGE and beyond:
+ * hair's hairline, a beard's border. Hair is tucked under the skin at its edge, so it is measured from where its lift
+ * crosses zero along each edge (or from an open edge left above the skin), not from the mesh's own edge.
+ */
+function fringeOf(item: SurfaceItem, positions: Float32Array, lift: Float32Array): Float32Array {
+  const { id, count } = weldPositions(positions)
+  const at = new Float32Array(count * 3)
+  const rise = new Float32Array(count)
+  for (let k = 0; k < item.count; k++) {
+    at.set(positions.subarray(k * 3, k * 3 + 3), id[k] * 3)
+    rise[id[k]] = lift[k]
+  }
+  const uses = new Map<number, number>()
+  for (let t = 0; t < item.index.length; t += 3)
+    for (let e = 0; e < 3; e++) {
+      const a = id[item.index[t + e]]
+      const b = id[item.index[t + ((e + 1) % 3)]]
+      const key = a < b ? a * count + b : b * count + a
+      if (a !== b) uses.set(key, (uses.get(key) ?? 0) + 1)
+    }
+  const far = new Float32Array(count).fill(Infinity)
+  for (let v = 0; v < count; v++) if (rise[v] <= 0) far[v] = 0
+  const edges: [number, number, number][] = []
+  for (const [key, used] of uses) {
+    const a = Math.floor(key / count)
+    const b = key % count
+    const d = Math.hypot(at[a * 3] - at[b * 3], at[a * 3 + 1] - at[b * 3 + 1], at[a * 3 + 2] - at[b * 3 + 2])
+    if (used === 1) far[a] = far[b] = 0
+    // an edge out of the skin: its outer end is as far from the crossing as the lift says
+    else if ((rise[a] <= 0) !== (rise[b] <= 0)) {
+      const out = rise[a] > 0 ? a : b
+      far[out] = Math.min(far[out], (d * rise[out]) / Math.abs(rise[a] - rise[b]))
+    }
+    edges.push([a, b, d])
+  }
+  // shortest paths out from there, relaxed until they settle within the fringe
+  for (let pass = 0, changed = true; changed && pass < 32; pass++) {
+    changed = false
+    for (const [a, b, d] of edges) {
+      if (far[a] + d < far[b] && far[a] + d < FRINGE) (far[b] = far[a] + d), (changed = true)
+      if (far[b] + d < far[a] && far[b] + d < FRINGE) (far[a] = far[b] + d), (changed = true)
+    }
+  }
+  const fringe = new Float32Array(item.count)
+  for (let k = 0; k < item.count; k++) fringe[k] = Math.min(1, far[id[k]] / FRINGE)
+  return fringe
 }
 
 /** An item's vertices welded by where they sit on the reference, and each welded vertex's neighbours: the same on every body. */

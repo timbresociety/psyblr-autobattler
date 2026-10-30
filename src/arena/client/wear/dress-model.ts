@@ -168,7 +168,7 @@ function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear |
     worn.push({
       item,
       colors: item.meta.channels.map((c, i) => linearRgb(w.colors?.[i] ?? c.color)),
-      finishes: item.meta.channels.map((c, i) => w.finishes?.[i] ?? c.finish),
+      finishes: item.meta.channels.map((_, i) => w.finishes?.[i] ?? undefined),
       ...(w.knobs ? { knobs: w.knobs } : {}),
     })
     if (texture) {
@@ -360,14 +360,46 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   return true
 }
 
-/** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow. */
+/**
+ * Hair strands (weave 5), drawn without UVs: on a head, the way a surface faces round the vertical axis holds steady
+ * down a strand and turns across them, so clumps and fine strands laid round that angle run from the crown down to the
+ * hairline, wavering a little as they fall. Whole cells round the circle, so the back of the head shows no seam.
+ * Each strand lightens or darkens the colour and roughens or smooths the highlight, and toward the hair's edge (the
+ * fraction past 5) the strands part, each ending at its own distance, so the skin shows through a ragged hairline
+ * instead of the mesh's cut edge.
+ */
+const STRANDS_GLSL = `
+if (vWeave > 4.5) {
+  float turn = atan(vStrandNormal.x, vStrandNormal.z) / 6.2831853 + 0.5;
+  float wave = 0.15 * sin(vStrandY * 34.0 + turn * 31.4159265);
+  float clump = strandNoise(turn * 96.0 + wave, 96.0);
+  float fine = strandNoise(turn * 433.0 + wave * 3.0, 433.0);
+  float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
+  if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
+  diffuseColor.rgb *= mix(0.68, 1.14, clump) * mix(0.86, 1.08, fine);
+  roughnessFactor = clamp(roughnessFactor + (0.5 - clump) * 0.22 + (0.5 - fine) * 0.1, 0.2, 1.0);
+}`
+
+const STRAND_NOISE_GLSL = `
+varying float vWeave;
+varying vec3 vStrandNormal;
+varying float vStrandY;
+float strandHash(float n) { return fract(sin(n * 12.9898) * 43758.5453); }
+// value noise along x, repeating every period cells
+float strandNoise(float x, float period) {
+  float i = floor(x);
+  float f = fract(x);
+  return mix(strandHash(mod(i, period)), strandHash(mod(i + 1.0, period)), f * f * (3.0 - 2.0 * f));
+}`
+
+/** The finish read per vertex from _finish: roughness, metalness, a cloth sheen toward the silhouette, and glow; and hair's strands. */
 function finishShader(shader: { vertexShader: string; fragmentShader: string }) {
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;')
-    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;')
+    .replace('#include <common>', '#include <common>\nattribute vec4 _finish;\nvarying vec4 vFinish;\nattribute float _weave;\nvarying float vWeave;\nvarying vec3 vStrandNormal;\nvarying float vStrandY;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFinish = _finish;\nvWeave = _weave;\nvStrandNormal = normal;\nvStrandY = position.y;')
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying vec4 vFinish;')
-    .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vFinish.x;')
+    .replace('#include <common>', `#include <common>\nvarying vec4 vFinish;\n${STRAND_NOISE_GLSL}`)
+    .replace('#include <roughnessmap_fragment>', `float roughnessFactor = vFinish.x;\n${STRANDS_GLSL}`)
     .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vFinish.y;')
     .replace(
       '#include <emissivemap_fragment>',

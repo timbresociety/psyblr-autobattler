@@ -11,7 +11,10 @@ export interface FinishLook {
   sheen: number
   /** 1 for a channel that glows in its own colour. */
   glow: number
-  /** The relief: 0 none, 1 plain weave, 2 twill, 3 rib knit, 4 leather grain. */
+  /**
+   * The relief: 0 none, 1 plain weave, 2 twill, 3 rib knit, 4 leather grain, 5 hair strands. Hair's carries how far in
+   * from its edge each vertex sits past the 5 (dress.ts fringeOf), where the strands part.
+   */
   weave: number
 }
 
@@ -24,6 +27,12 @@ export const FINISH_LOOK: Record<Finish, FinishLook> = {
   metal: { roughness: 0.28, metalness: 0.92, sheen: 0, glow: 0, weave: 0 },
   glow: { roughness: 0.5, metalness: 0, sheen: 0, glow: 1, weave: 0 },
 }
+
+/**
+ * Hair and beards, unless the player chose a finish for them: matte enough not to read as plastic, a soft sheen, and
+ * strands (the classic material draws them; see STRANDS_GLSL).
+ */
+export const HAIR_LOOK: FinishLook = { roughness: 0.6, metalness: 0, sheen: 0.3, glow: 0, weave: 5 }
 
 /** '#rrggbb' (sRGB) to linear 0 to 1 channels, the space vertex colours are shaded in. */
 export function linearRgb(hex: string): [number, number, number] {
