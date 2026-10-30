@@ -75,7 +75,8 @@ function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.
   if (!m.vertexColors) m.colorNode = color
   const grazing = float(1).sub(normalView.dot(positionViewDirection).abs())
   const glow = finish.w.add(finish.z.mul(grazing.pow(2)).mul(0.3))
-  m.emissiveNode = color.mul(glow).add(uniform(team).mul(grazing.pow(2.5)).mul(0.6))
+  // the team rim kept to the silhouette: any wider and it repaints dark cloth in the team's colour (black reads navy)
+  m.emissiveNode = color.mul(glow).add(uniform(team).mul(grazing.pow(4)).mul(0.5))
   return m
 }
 

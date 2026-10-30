@@ -59,8 +59,15 @@ const RECIPES: Record<string, Recipe> = {
     wear: { upper: item('leather_jacket', ['#1a1a1f', BLACK], { finishes: ['cotton', null] }), lower: item('jeans', ['#17171c', null]), feet: item('boots', [BLACK]) },
   },
   huang: {
-    gender: 'm', physique: { weight: 0.5, muscle: 0.33, age: 0.7 }, hair: 'hair_swept', color: '#4a4a4e', style: 'swept',
-    wear: { upper: item('leather_jacket', ['#111112', BLACK]), lower: item('jeans', ['#121214', null]), feet: item('boots', ['#0b0b0c']) },
+    gender: 'm', physique: { weight: 0.5, muscle: 0.33, age: 0.7 }, hair: 'hair_swept', color: '#9d9ea3', style: 'swept',
+    // the owner's anime Jensen (Forge goal reference): silver hair, glasses, the leather jacket with green circuit lines,
+    // black cargos and combat boots
+    wear: {
+      upper: item('tech_jacket', ['#111112', BLACK, '#6dff3a']),
+      lower: item('cargo', ['#141416']),
+      feet: item('combat_boots', ['#0b0b0c', null]),
+      face: piece('square_glasses', '#8c8d93'),
+    },
   },
   bezos: {
     gender: 'm', physique: { weight: 0.33, muscle: 0.4, age: 0.7 }, color: '#3b291b', style: 'none',

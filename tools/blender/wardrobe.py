@@ -1800,6 +1800,43 @@ def _leather(w):
     return [c] + gear(c, 'collar', mat='jacket', height=0.045, gap=0.24, offset=0.004) + gear(c, 'hem', mat='jacket', at='hip', offset=0.004)
 
 
+def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02):
+    """
+    A thin raised strip on surface `c` along the polyline `corners`, snapped onto its front, its width across the line.
+    Lifted clear of the smoothing a smoothed garment gets after it is cut, which would bury a strip laid on the cut.
+    """
+    path = []
+    for a, b in zip(corners, corners[1:]):
+        n = max(1, round((b - a).length / step))
+        path += [a.lerp(b, t / n) for t in range(n)]
+    path.append(corners[-1])
+
+    def across(i, q, nrm):
+        return (path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]).cross(nrm)
+
+    return c.d.strip(name, path, [(width, width)] * len(path), across, lift, mat, faces=faces, snap_dir=lambda i, p: V((0, 1, 0)), thickness=0.002)
+
+
+# the owner's anime Jensen (Forge goal, phase 2): the leather jacket with circuit-like lines glowing down each front
+# panel and each sleeve. The inner lines stay outside the open front, which is 0.076 either side of centre at the collar
+@item('tech_jacket', 'Leather jacket with glowing trim', 'upper', [('jacket', '#141416', 'leather'), ('tee', '#141416', 'cotton'), ('trim', '#6dff3a', 'glow')], knobs=['sleeve'], tags=['tech jacket', 'circuit jacket', 'neon jacket', 'glowing jacket', 'light-up jacket', 'cyberpunk jacket'])
+def _tech_jacket(w):
+    parts = _leather(w)
+    c = parts[0]
+    n = c.d.neck
+    top, low = n.z - 0.07, c.d.hip_z + 0.03
+    torso = c.faces(*G.TORSO)
+    at = lambda x, z: V((x, n.y, z))  # noqa: E731
+    for side, s in (('L', 1), ('R', -1)):
+        parts.append(trace(c, f'trim_front_{side}', [at(s * 0.092, top), at(s * 0.092, top - 0.06), at(s * 0.118, top - 0.1), at(s * 0.118, low)], torso, 'trim'))
+        parts.append(trace(c, f'trim_chest_{side}', [at(s * 0.118, top - 0.15), at(s * 0.138, top - 0.18), at(s * 0.138, top - 0.3)], torso, 'trim'))
+        shoulder, elbow = c.d.bones[f'upper_arm_{side}']
+        wrist = c.d.bones[f'forearm_{side}'][1]
+        arm = c.faces(f'upper_arm_{side}', f'forearm_{side}')
+        parts.append(trace(c, f'trim_sleeve_{side}', [shoulder.lerp(elbow, 0.15), elbow, elbow.lerp(wrist, 0.82)], arm, 'trim'))
+    return parts
+
+
 @item('bomber', 'Bomber jacket', 'upper', [('jacket', '#3b4a2e', 'silk'), ('rib', '#1a1a1c', 'knit')], knobs=['sleeve'], tags=['bomber', 'bomber jacket', 'flight jacket', 'varsity jacket'])
 def _bomber(w):
     c = clothes(w, [top(kind='jacket', mat='jacket', sleeve=1.9, neck='crew', thick=0.022, pad=0.008)], smooth=['jacket'])
