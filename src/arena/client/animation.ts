@@ -79,35 +79,47 @@ const DEG = Math.PI / 180
 /**
  * How fast hips turn (radians a second) and how far the chest twists from them. A hero moving further than `back.enter`
  * from its aim runs backwards, and runs forwards again under `back.leave`: the gap keeps a hero strafing near the line
- * from flipping between the two every few frames. A hero casting while it covers more than `stride` metres a second
- * keeps running under the cast (Forge goal, phase 2).
+ * from flipping between the two every few frames, and both sit within `twist` of a quarter turn, so neither way of
+ * running ever twists the chest past its limit and drags the hips off the line the legs run along. A hero casting while it covers more than `stride` metres a second
+ * keeps running under the cast, and a standing hero's hips hold until its aim is `pivot` round from them (Forge goal,
+ * phase 2).
  */
-export const STANCE = { turn: 12, twist: 100 * DEG, back: { enter: 140 * DEG, leave: 120 * DEG }, stride: 0.6 }
+export const STANCE = { turn: 12, twist: 100 * DEG, back: { enter: 100 * DEG, leave: 80 * DEG }, stride: 0.6, pivot: 45 * DEG }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
-/** Where a moving hero's hips face, how far its chest twists back toward its aim, and whether it runs backwards. */
+/**
+ * Where a hero's hips face, how far its chest twists back toward its aim, whether it runs backwards, and whether it's
+ * turning on the spot to face its aim.
+ */
 export interface Stance {
   body: number
   twist: number
   back: boolean
+  pivot: boolean
 }
 
 /**
- * How a hero stands this frame (Forge goal, phase 1). Its legs follow where it moves and its chest twists toward where
- * it aims, so a hero shooting while it strafes or backs away doesn't skate; moving away from its aim it faces the aim
- * and runs backwards. Standing, casting or flying, the whole body faces the aim. `last` is last frame's stance: the hips
- * turn from there at STANCE.turn. `move` is how far the hero moved, if it did.
+ * How a hero stands this frame (Forge goal, phases 1 and 2). Running, its legs follow where it moves and its chest
+ * twists toward where it aims, so a hero shooting while it strafes or backs away doesn't skate; moving away from its
+ * aim it faces the aim and runs backwards. Standing, its feet stay put: the hips hold while the chest follows the aim,
+ * and only once the aim is STANCE.pivot round do the hips turn, all the way to face it. Flying, the whole body faces
+ * the aim. `last` is last frame's stance: the hips turn from there at STANCE.turn. `move` is how far the hero moved,
+ * if it did.
  */
-export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, square: boolean, dt: number): Stance {
+export function stance(last: Stance | undefined, aim: number, move: { x: number; z: number } | undefined, mode: 'run' | 'stand' | 'square', dt: number): Stance {
+  const from = last?.body ?? aim
   let target = aim
   let back = false
-  if (move && !square) {
+  let pivot = false
+  if (mode === 'run' && move) {
     const heading = Math.atan2(move.x, move.z)
     back = Math.abs(wrap(aim - heading)) > (last?.back ? STANCE.back.leave : STANCE.back.enter)
     target = back ? wrap(heading + Math.PI) : heading
+  } else if (mode === 'stand') {
+    pivot = Math.abs(wrap(aim - from)) > (last?.pivot ? 1e-3 : STANCE.pivot)
+    if (!pivot) target = from
   }
-  const from = last?.body ?? aim
   const step = wrap(target - from)
   let hips = wrap(from + Math.sign(step) * Math.min(Math.abs(step), STANCE.turn * dt))
   // the chest never twists past its limit: past it, the hips come round with it
@@ -116,5 +128,5 @@ export function stance(last: Stance | undefined, aim: number, move: { x: number;
     twist = Math.sign(twist) * STANCE.twist
     hips = wrap(aim - twist)
   }
-  return { body: hips, twist, back }
+  return { body: hips, twist, back, pivot }
 }

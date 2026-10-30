@@ -8,6 +8,7 @@ import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
 import { STANCE, type AnimState } from './animation.js'
+import { hipYaw, legReach, planter } from './feet.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel, type ClothPrint } from './wear/dress-model.js'
@@ -208,9 +209,10 @@ export interface CharacterView {
   tip: (out: THREE.Vector3) => THREE.Vector3 | undefined
   /**
    * Twist the chest this far (radians) from the hips at the next pose, run backwards or not (see `stance`), and cover
-   * the ground at `speed` metres a second: the run plays at whatever pace keeps a planted foot from sliding.
+   * the ground at `speed` metres a second: the run plays at whatever pace keeps a planted foot from sliding. `planted`,
+   * the hero stands on the ground, so its feet stay where they land (see feet.ts).
    */
-  lean: (twist: number, back: boolean, speed?: number) => void
+  lean: (twist: number, back: boolean, speed?: number, planted?: boolean) => void
 }
 
 /** How a twist is shared up the back, hips to head. */
@@ -341,6 +343,41 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     })
     twisted = true
   }
+  // standing, the feet stay where they land (feet.ts): once the hero is placed for the frame, each leg bends to keep its
+  // ankle there. Like the twist, the bend is taken off again before the next update
+  const legs = (['L', 'R'] as const).map((side) => ['thigh', 'shin', 'foot'].map((part) => scene.getObjectByName(`${part}_${side}`)!))
+  const plants = legs.every((leg) => leg.every(Boolean)) ? planter() : undefined
+  const wants = legs.map(() => new THREE.Vector3())
+  const targets = legs.map(() => new THREE.Vector3())
+  const unbent = legs.map(() => [new THREE.Quaternion(), new THREE.Quaternion()])
+  const forward = new THREE.Vector3()
+  let planted = false
+  let bent = false
+  // seconds the last pose moved on, until the feet are placed for it
+  let posed: number | undefined
+  const unbend = () => {
+    if (bent) legs.forEach(([thigh, shin], k) => (thigh.quaternion.copy(unbent[k][0]), shin.quaternion.copy(unbent[k][1])))
+    bent = false
+  }
+  const plantFeet = () => {
+    if (!plants || posed === undefined) return
+    const dt = posed
+    posed = undefined
+    legs[0][0].parent!.updateWorldMatrix(true, false)
+    legs.forEach(([thigh, , foot], k) => {
+      thigh.updateMatrixWorld(true)
+      wants[k].setFromMatrixPosition(foot.matrixWorld)
+    })
+    const yaw = hipYaw(targets[0].setFromMatrixPosition(legs[0][0].matrixWorld), targets[1].setFromMatrixPosition(legs[1][0].matrixWorld))
+    if (!plants.place(wants, yaw, dt, planted, targets)) return
+    forward.set(Math.sin(yaw), 0, Math.cos(yaw))
+    legs.forEach(([thigh, shin, foot], k) => {
+      unbent[k][0].copy(thigh.quaternion)
+      unbent[k][1].copy(shin.quaternion)
+      legReach(thigh, shin, foot, targets[k], forward)
+    })
+    bent = true
+  }
   // what the right hand holds is measured the first time its tip is asked for, once the model is in the scene
   const holder = scene.getObjectByName('socket:hand_r')
   let tip: THREE.Vector3 | undefined | null = holder ? null : undefined
@@ -348,6 +385,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     root,
     pose: (state, dt, moving) => {
       untwist()
+      unbend()
       const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
       const wanted = cast ? cast.clip : state.kind === 'fly' ? (moving ? 'fly' : 'hover') : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : state.kind
       const layered = layer > 0
@@ -402,17 +440,20 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       }
       mixer.update(dt)
       turnChest()
+      posed = dt
     },
     settle: (dt, far, still) => {
+      plantFeet()
       if (!still) return settleCloth(scene, dt, far)
       restClothOn(scene)
       return false
     },
     hand: (dir, out) => leadHand(hands, dir, out),
-    lean: (t, b, speed) => {
+    lean: (t, b, speed, onGround = false) => {
       twist = t
       backwards = b
       ground = speed
+      planted = onGround
     },
     tip: (out) => {
       if (tip === null) tip = heldTip(holder!)

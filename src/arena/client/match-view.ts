@@ -439,12 +439,15 @@ function drawHeroes(
     const scaled = frame.dt * frame.timeScale
     const moving = moved > 0.01
     // legs follow the way the hero moves and the chest its aim, casting on the move too, since its legs keep running
-    // under the cast; a view that can't twist faces its aim whole. The run keeps pace with the ground covered
+    // under the cast; standing, the feet stay put until the aim is far round; flying, the whole body faces the aim. A
+    // view that can't twist faces its aim whole. The run keeps pace with the ground covered
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
-    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, !striding, scaled) : undefined
+    const mode = h.airborne ? 'square' : striding ? 'run' : 'stand'
+    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled) : undefined
     stances[i] = s
-    if (s) view.lean!(s.twist, s.back, ground)
+    // standing on the ground, the feet stay where they land
+    if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead')
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
