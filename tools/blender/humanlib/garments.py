@@ -158,18 +158,25 @@ class Dresser:
         return c.z < n.z + 0.01
 
     def opening(self, g, poly):
-        """The front of an open jacket or vest (it shows what is worn under it)."""
-        if g.get('open') not in ('v', 'deep-v'):
+        """
+        The front of an open jacket or vest (it shows what is worn under it): a V closing a little above the waist
+        ('v') or a little below it ('deep-v'), or open all the way down to the hem, as wide at the hem as at the neck
+        ('open': a moto jacket worn unzipped).
+        """
+        if g.get('open') not in ('v', 'deep-v', 'open'):
             return False
         c = poly.center
         n = self.neck
+        width = g.get('open_width', 0.085)
+        if g['open'] == 'open':
+            # the width alone decides, so the skin turning down under the chest stays open too
+            return c.y < n.y + 0.02 and poly.normal.y < 0.5 and abs(c.x) < width
         if c.y > n.y + 0.02 or poly.normal.y > -0.2:
             return False
         bottom = {'v': self.waist_z + 0.03, 'deep-v': self.waist_z - 0.03}[g['open']]
         top = n.z
         if c.z < bottom:
             return False
-        width = g.get('open_width', 0.085)
         return abs(c.x) < width * (c.z - bottom) / (top - bottom) + 0.006
 
     def dress(self, layers):
@@ -199,7 +206,10 @@ class Dresser:
                 face_thick[poly.index] = self.thickness(chosen, poly)
             else:
                 poly.material_index = slot('skin')
-        self.smooth_boundaries()
+        # a front open all the way down is cut straight later (the wardrobe's even_fronts): sliding its stepped edge
+        # here only folds the narrow faces over the chest
+        fixed = {frozenset((self.mats.mats[g['mat']].name, self.mats.mats[h['mat']].name)) for i, g in enumerate(layers) if g.get('open') == 'open' for h in layers[:i]}
+        self.smooth_boundaries(fixed=fixed)
         # move each vertex out by the thickness of the faces around it (soft at a garment's edge)
         bm = bmesh.new()
         bm.from_mesh(me)
@@ -240,10 +250,11 @@ class Dresser:
                 t += g['flare'] * max(0.0, (self.hip_z - c.z) / 0.25)
         return t
 
-    def smooth_boundaries(self, iterations=5, factor=0.5):
+    def smooth_boundaries(self, iterations=5, factor=0.5, fixed=()):
         """
         A garment's edge follows whole faces, so it steps; slide the edge's vertices along the skin until the line runs
-        smooth (necklines, hems, cuffs). Junctions where three regions meet stay put.
+        smooth (necklines, hems, cuffs). Junctions where three regions meet stay put, and so do the edges between the
+        pairs of materials in `fixed`.
         """
         me = self.obj.data
         names = [m.name for m in me.materials]
@@ -253,7 +264,8 @@ class Dresser:
         bvh = BVHTree.FromBMesh(bm)
         nbr = {}
         for e in bm.edges:
-            if len(e.link_faces) == 2 and group(e.link_faces[0].material_index) != group(e.link_faces[1].material_index):
+            ga, gb = (group(f.material_index) for f in e.link_faces) if len(e.link_faces) == 2 else (None, None)
+            if ga != gb and frozenset((ga, gb)) not in fixed:
                 a, b = e.verts
                 nbr.setdefault(a, set()).add(b)
                 nbr.setdefault(b, set()).add(a)
@@ -357,12 +369,13 @@ class Dresser:
             out.append(centre + d * r)
         return out
 
-    def band(self, name, centre, axis, ref, height, offset, mat, count=20, faces=None, flare=0.0, rigid=None, gap=None, radius=0.6, round_to=None, thickness=0.0):
+    def band(self, name, centre, axis, ref, height, offset, mat, count=20, faces=None, flare=0.0, rigid=None, gap=None, radius=0.6, round_to=None, thickness=0.0, keep=None):
         """
         A ring band (belt, collar, cuff): the body's cross-section, pushed out, `height` tall along the axis. With
         `round_to`, the section is re-centred and no point may stand further out than the narrowest one plus that
         much (a collar circles the neck instead of following the slope of the shoulders). With `thickness`, it's solid
-        that thick inward, so its edges catch the light the way a leather collar's or cuff's do.
+        that thick inward, so its edges catch the light the way a leather collar's or cuff's do. `gap` leaves out
+        quads by their place round the ring, `keep` keeps only the quads whose middle it accepts.
         """
         axis = axis.normalized()
         if round_to is not None:
@@ -395,6 +408,8 @@ class Dresser:
             if gap is not None and gap(k, count):
                 continue
             k2 = (k + 1) % count
+            if keep is not None and not keep((rows[0][k].co + rows[0][k2].co + rows[1][k2].co + rows[1][k].co) / 4):
+                continue
             f = bm.faces.new((rows[0][k], rows[0][k2], rows[1][k2], rows[1][k]))
             for loop, (uu, vv) in zip(f.loops, ((k / count, 0), ((k + 1) / count, 0), ((k + 1) / count, 1), (k / count, 1))):
                 loop[uv].uv = (uu, vv * 0.15)

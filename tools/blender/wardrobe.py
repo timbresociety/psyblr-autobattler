@@ -235,6 +235,7 @@ class Dressed(Surface):
         floor = {i: max(g.get('thick', 0.006) for g in self.layers if self.d.mats.mats[g['mat']] == m) for i, m in enumerate(me.materials) if m != skin}
         stand_off(bm, self.w, floor)
         even_edges(bm, self.w, list(me.materials).index(skin), near(others, 0.012) if others else None)
+        even_fronts(bm, self.w, self.layers, list(me.materials), floor)
         bmesh.ops.delete(bm, geom=[f for f in bm.faces if me.materials[f.material_index] == skin], context='FACES')
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
         bm.to_mesh(me)
@@ -535,6 +536,54 @@ def even_edges(bm, w, skin, covered=None, rings=3):
             rest = [val[v] for v in f.verts if v not in ends]
             f.material_index = m if all(keep(x) for x in rest) else skin
         log(f'  {name} edge cut at {cut:.3f} ({"below" if below else "above"}), {len(ends)} edges split')
+
+
+def even_fronts(bm, w, layers, mats, floor, rings=2):
+    """
+    Cut a jacket's front worn open all the way down (open='open') straight, `open_width` either side of the middle.
+    The jacket takes whole faces, so its edge steps in and out a face at a time down the chest and the zips wobble
+    along it; here the faces along it are cut afresh at that width, the inside given back to the layer under it, and
+    the jacket's side stood out at its full thickness. Call it after even_edges (its vertices no longer match the body's).
+    """
+    if not any(g.get('open') == 'open' for g in layers):
+        return
+    me_mats = [m.name for m in mats]
+    body = w.d.bvh()
+    n = w.d.neck
+    for i, g in enumerate(layers):
+        if g.get('open') != 'open':
+            continue
+        m = me_mats.index(w.d.mats.mats[g['mat']].name)
+        inner = [me_mats.index(w.d.mats.mats[h['mat']].name) for h in layers[:i]]
+        if not inner:
+            continue
+        under = inner[-1]
+        width = g.get('open_width', 0.085)
+
+        def front(f):
+            c = f.calc_center_median()
+            return c.y < n.y + 0.02 and f.normal.y < 0.5 and c.z < n.z - 0.01
+
+        edge = {v for e in bm.edges if len(e.link_faces) == 2 and {f.material_index for f in e.link_faces} == {m, under} and all(front(f) for f in e.link_faces) for v in e.verts}
+        if not edge:
+            continue
+        region = {f for v in edge for f in v.link_faces if f.material_index in (m, under) and front(f)}
+        for _ in range(rings):
+            region |= {g2 for f in region for v in f.verts for g2 in v.link_faces if g2.material_index in (m, under) and front(g2)}
+        val = {v: abs(v.co.x) for f in region for v in f.verts}
+        region, ends = split_along(bm, region, val, width)
+        for f in region:
+            rest = [val[v] for v in f.verts if v not in ends]
+            f.material_index = m if rest and all(x >= width for x in rest) else under
+        t = floor.get(m, 0.0)
+        for v in {v for f in region if f.material_index == m for v in f.verts}:
+            at, normal, _i, _d = body.find_nearest(v.co)
+            if at is None:
+                continue
+            lift = (v.co - at).dot(normal)
+            if lift < t:
+                v.co += normal * (t - lift)
+        log(f'  open front cut at {width:.3f}, {len(ends)} edges split')
 
 
 def relax_edges(obj, iterations=8, factor=0.5, ring=False):
@@ -1802,20 +1851,23 @@ def _leather(w):
     the back and round the elbows, so the light breaks over it in pieces the way it does on a jacket, not in one sweep
     the way it does on a wetsuit.
     """
-    c = clothes(w, [top(mat='tee'), dict(kind='jacket', mat='jacket', sleeve=1.93, hem='hip', neck='collar', open='v', open_width=0.07, thick=0.016, pad=0.01)], smooth=['jacket'])
+    # cut short at the belt and hanging open all the way down, over a tee tucked in at the same height
+    c = clothes(w, [top(mat='tee', hem='waist'), dict(kind='jacket', mat='jacket', sleeve=1.93, hem='waist', neck='collar', open='open', open_width=0.07, thick=0.016, pad=0.01)], smooth=['jacket'])
     parts = [c]
     parts += gear(c, 'collar', mat='jacket', height=0.048, gap=0.26, offset=0.006, flare=0.005, thickness=0.004)
-    parts += gear(c, 'hem', mat='jacket', at='hip', offset=0.004, height=0.04, thickness=0.004)
+    parts += gear(c, 'hem', mat='jacket', at='waist', offset=0.004, height=0.04, thickness=0.004, open_width=0.07)
     parts += gear(c, 'cuffs', mat='jacket', at=0.93, height=0.05, offset=0.004, thickness=0.003)
-    parts += zips(c)
+    parts += zips(c, hem='waist')
     parts += jacket_seams(c)
     return parts
 
 
-def zips(c, mat='zip', width=0.0028, inset=0.006, lift=0.006):
+def zips(c, mat='zip', width=0.0028, inset=0.006, lift=0.006, hem='hip'):
     """
     A jacket's zip: a metal strip down each edge of its open front, `inset` in from the edge onto the leather, and on
-    down the closed front from the bottom of the opening to the hem band.
+    down the closed front from the bottom of the opening to the hem band at `hem`, if the opening stops short of it.
+    A front open all the way down is cut straight later (even_fronts), so its zips run straight down beside the cut,
+    laid on the skin at the jacket's own thickness: the dressed copy here still steps between jacket and what's under it.
     """
     me = c.obj.data
     # materials are named for the item they're made for ('tech_jacket:jacket')
@@ -1837,8 +1889,22 @@ def zips(c, mat='zip', width=0.0028, inset=0.006, lift=0.006):
     parts = []
     torso = c.faces(*G.TORSO)
     bottom = None
+    full = next((g for g in c.layers if g.get('open') == 'open'), None)
+    bare = c.w.d.bvh(torso) if full else None
     for s, pts in sides.items():
         pts.sort(key=lambda p: -p.z)
+        if full:
+            x = s * (full.get('open_width', 0.085) + inset)
+            # from where a ray from the front first meets the front of the body: higher up it passes the neck
+            top = pts[0].z
+            while top > pts[-1].z:
+                hit = bare.ray_cast(V((x, n.y - 0.5, top)), V((0, 1, 0)), 1.0)[0]
+                if hit is not None and hit.y < n.y - 0.03:
+                    break
+                top -= 0.005
+            line = [V((x, n.y, top)), V((x, n.y, pts[-1].z))]
+            parts.append(trace(c, f'zip_{"L" if s > 0 else "R"}', line, torso, mat, width=width, lift=full['thick'] + lift, step=0.012, bare=True))
+            continue
         # one point every 1.5 cm, each the mean of its neighbours: the cut's steps smoothed into a line
         line = []
         for p in pts:
@@ -1849,8 +1915,8 @@ def zips(c, mat='zip', width=0.0028, inset=0.006, lift=0.006):
             p.x += s * inset
         bottom = min(bottom, line[-1].z) if bottom is not None else line[-1].z
         parts.append(trace(c, f'zip_{"L" if s > 0 else "R"}', line, torso, mat, width=width, lift=lift, step=0.012))
-    if bottom is not None:
-        foot = c.d.hip_z - 0.005
+    foot = {'waist': c.d.waist_z - 0.02, 'hip': c.d.hip_z - 0.04}[hem] + 0.035
+    if bottom is not None and bottom > foot:
         parts.append(trace(c, 'zip_closed', [V((0, n.y, bottom)), V((0, n.y, foot))], torso, mat, width=width, lift=lift, step=0.012))
     return parts
 
@@ -1908,10 +1974,11 @@ def jacket_seams(c, mat='jacket'):
     return [x for x in parts if x]
 
 
-def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02):
+def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02, bare=False):
     """
     A thin raised strip on surface `c` along the polyline `corners`, snapped onto its front, its width across the line.
     Lifted clear of the smoothing a smoothed garment gets after it is cut, which would bury a strip laid on the cut.
+    With `bare`, snapped onto the bare body under `c` instead, `lift` measured from the skin.
     """
     path = []
     for a, b in zip(corners, corners[1:]):
@@ -1922,7 +1989,8 @@ def trace(c, name, corners, faces, mat, width=0.0045, lift=0.007, step=0.02):
     def across(i, q, nrm):
         return (path[min(i + 1, len(path) - 1)] - path[max(i - 1, 0)]).cross(nrm)
 
-    return c.d.strip(name, path, [(width, width)] * len(path), across, lift, mat, faces=faces, snap_dir=lambda i, p: V((0, 1, 0)), thickness=0.002)
+    on = c.w.d if bare else c.d
+    return on.strip(name, path, [(width, width)] * len(path), across, lift, mat, faces=faces, snap_dir=lambda i, p: V((0, 1, 0)), thickness=0.002)
 
 
 # the owner's anime Jensen (Forge goal, phase 2): the leather jacket with circuit-like lines glowing down each front
@@ -1932,7 +2000,7 @@ def _tech_jacket(w):
     parts = _leather(w)
     c = parts[0]
     n = c.d.neck
-    top, low = n.z - 0.07, c.d.hip_z + 0.03
+    top, low = n.z - 0.07, c.d.waist_z + 0.03
     torso = c.faces(*G.TORSO)
     at = lambda x, z: V((x, n.y, z))  # noqa: E731
     for side, s in (('L', 1), ('R', -1)):

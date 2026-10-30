@@ -480,10 +480,12 @@ def gear_collar(d, head, body, mat='shirt', height=0.04, gap=0.18, offset=0.007,
     return d.band(name, Vector((0, n.y + 0.012, n.z - drop)), Vector((0, -tilt, 1)), Vector((1, 0, 0)), height, offset, mat, count=18, flare=flare, gap=gapf, radius=0.14, faces=faces, round_to=0.012, thickness=thickness)
 
 
-def gear_hem(d, head, body, mat='jacket', at='hip', height=0.035, offset=0.02, flare=0.01, thickness=0.0):
-    """The bottom edge of a jacket or coat standing off the hips."""
+def gear_hem(d, head, body, mat='jacket', at='hip', height=0.035, offset=0.02, flare=0.01, thickness=0.0, open_width=0.0):
+    """The bottom edge of a jacket or coat standing off the hips, left open across the front `open_width` either side of the middle."""
     z = {'waist': d.waist_z - 0.02, 'hip': d.hip_z - 0.04, 'crotch': d.hip_z - 0.12, 'thigh': d.hip_z - 0.24}[at]
-    return d.band('hem', Vector((0, d.bones['hips'][0].y, z - 0.005)), Vector((0, 0, 1)), Vector((1, 0, 0)), height, offset, mat, count=24, flare=flare, radius=0.34, thickness=thickness)
+    y = d.bones['hips'][0].y
+    keep = (lambda p: p.y > y or abs(p.x) > open_width) if open_width else None
+    return d.band('hem', Vector((0, y, z - 0.005)), Vector((0, 0, 1)), Vector((1, 0, 0)), height, offset, mat, count=48 if open_width else 24, flare=flare, radius=0.34, thickness=thickness, keep=keep)
 
 
 def gear_trouser_hems(d, head, body, mat='trousers', at=0.93, offset=0.008):
