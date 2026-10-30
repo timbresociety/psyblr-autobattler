@@ -86,7 +86,7 @@ STYLES = {
     'crop': dict(top=0.008, side=0.004, back=0.005),
     'short': dict(top=0.014, side=0.006, back=0.007, sweep=0.006, lift=0.004),
     'curly': dict(top=0.02, side=0.008, back=0.01, lumps=0.007),
-    'swept': dict(top=0.03, side=0.007, back=0.01, sweep=0.025, lift=0.02),
+    'swept': dict(top=0.04, side=0.008, back=0.011, sweep=0.025, lift=0.025),
     'quiff': dict(top=0.034, side=0.012, back=0.016, sweep=0.03, lift=0.03),
     'side_part': dict(top=0.016, side=0.006, back=0.008, sweep=0.012, lift=0.008, part=0.4),
     'thin': dict(top=0.003, side=0.004, back=0.005),
@@ -143,15 +143,21 @@ def make_hair(d, head, style, recede=0.0, temple=0.0, nape=0.0, sideburn=0.0, ba
         return None
     bm = bmesh.new()
     bm.from_mesh(hair.data)
-    # sweep and lift: the front-top pushed back and up (a quiff, a swept mane, a side part)
+    depth = head.centre.y - head.front
+
+    def frontness(p):
+        """1 over the brow, fading back over the crown to 0 a little behind it. Measured along the head: a bearing round
+        it flips from ahead to behind at the crown, which pushed only the front half up and back and raised a peak."""
+        return max(0.0, min(1.0, (head.centre.y + 0.3 * depth - p.y) / (1.3 * depth)))
+
+    # sweep and lift: the front-top pushed back and up (a quiff, a swept mane, a side part), most along the midline
     for v in bm.verts:
-        a = head.azimuth(v.co)
-        front = max(0.0, math.cos(a))
+        front = frontness(v.co)
         up = max(0.0, min(1.0, (v.co.z - head.eyes.z - 0.04) / 0.08)) * grown(v.co)
         if st.get('sweep'):
             v.co.y += st['sweep'] * front * up
         if st.get('lift'):
-            v.co.z += st['lift'] * front * up * (1.0 - 0.5 * abs(math.sin(a)))
+            v.co.z += st['lift'] * front * up * (1.0 - 0.5 * min(1.0, abs(v.co.x - head.centre.x) / head.half_width))
         if st.get('part'):
             # more volume on one side of a side part
             v.co += Vector((math.copysign(1, v.co.x), 0, 0.4)) * 0.004 * up * (1 if v.co.x < 0 else 0.3)

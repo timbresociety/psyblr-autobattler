@@ -47,7 +47,7 @@ PALETTE = {
     'black': dict(color='#0b0b0d', roughness=0.45),
     'ivory': dict(color='#e3d7bb', roughness=0.5),
     # clear enough to see the eyes behind, which is most of a face
-    'glass': dict(color='#22303c', roughness=0.04, alpha=0.18),
+    'glass': dict(color='#3a4650', roughness=0.04, alpha=0.1),
     'string': dict(color='#ddd6c8', roughness=0.85),
     'feather': dict(color='#f1efe9', roughness=0.85),
 }
@@ -691,12 +691,14 @@ def visor(p):
 @piece('square_glasses', 'Square glasses', 'face', ['square glasses', 'rectangular glasses', 'reading glasses', 'hipster glasses', 'office glasses'], primary='#1c1c20')
 def square_glasses(p):
     bm = p.bm
-    w, h, t = 0.027, 0.018, 0.0022
+    # slim rectangular lenses, 48 by 31 mm, in a fine frame, centred a little below the eyes, as a pair is worn
+    w, h, t, cz = 0.024, 0.0155, 0.0017, -0.003
     for s in (1, -1):
         cx = s * 0.034
-        for lo, hi in (((cx - w, -t, h - t), (cx + w, t, h + t)), ((cx - w, -t, -h - t), (cx + w, t, -h + t)), ((cx - w - t, -t, -h), (cx - w + t, t, h)), ((cx + w - t, -t, -h), (cx + w + t, t, h))):
+        top, bottom = cz + h, cz - h
+        for lo, hi in (((cx - w, -t, top - t), (cx + w, t, top + t)), ((cx - w, -t, bottom - t), (cx + w, t, bottom + t)), ((cx - w - t, -t, bottom), (cx - w + t, t, top)), ((cx + w - t, -t, bottom), (cx + w + t, t, top))):
             p.paint(box(bm, lo, hi), 'primary')
-        p.paint(slab(bm, [(cx - w + t, -h + t), (cx + w - t, -h + t), (cx + w - t, h - t), (cx - w + t, h - t)], 0.0015, axis='y'), 'glass')
+        p.paint(slab(bm, [(cx - w + t, bottom + t), (cx + w - t, bottom + t), (cx + w - t, top - t), (cx - w + t, top - t)], 0.0015, axis='y'), 'glass')
         p.paint(tube(bm, [V((s * (0.034 + w), 0, 0.008)), V((s * 0.096, 0.06, 0.006)), V((s * 0.098, 0.125, -0.006))], [0.0024, 0.0022, 0.0022], seg=5), 'primary', smooth=True)
     p.paint(box(bm, (-0.034 + w, -0.002, 0.006), (0.034 - w, 0.002, 0.011)), 'primary')
 
