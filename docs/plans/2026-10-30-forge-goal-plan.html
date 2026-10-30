@@ -122,7 +122,11 @@
 <figure><img src="forge-goal/feet-stride.jpg" alt="Jensen in a full running stride, arms out, between two shots"><figcaption>A full stride between shots. Before this change his legs stood frozen in the cast's stance here while he glided.</figcaption></figure>
 </div>
 <p>I measured it with Jensen strafing past a dummy at 7.7 m/s. While he cast, a planted foot used to slide at 7.7 m/s, the full speed of his body. Now it slides at 0.47 m/s on the median frame, and a plain run is at 0.76. Standing still and casting reads 0.4 on the same measure, so that's about as low as it goes.</p>
-<p>Two things are left. Feet still slide when a hero turns on the spot or blends from one clip to the next, which needs the feet pinned to the ground. And heroes still reach full speed in one frame. Easing that in changes how fast they close distance, so it needs a balance re-tune, and I'd do it after his clips are in.</p>
+<p>Standing still was the other half. A standing hero's hips used to follow every change of aim, so both feet swung in little arcs. And the cast clips slide a foot all by themselves. Their stance swings the legs apart from feet-together, so the back foot skated up to 38 cm on every two-handed cast.</p>
+<p>Now a standing hero's feet stay where they land. The legs bend to keep each ankle in place as a cast leans the body over them, and the chest follows the aim while the hips hold. Once the aim is 45° round, the hips turn to face it and the feet step round with them, one at a time, each lifting in a short arc.</p>
+<p>On standing casts, one frame in ten used to have a foot slipping faster than 5.7 m/s. Now no planted foot moves at all, and it costs about a tenth of a millisecond a frame for all 20 heroes.</p>
+<p>Fixing that turned up an older flaw. A hero ran forwards until its aim was 140° off its path, but the chest only twists 100°, so in between the hips got dragged sideways and the feet skidded. Running backwards now starts at 100°, and with that, a planted foot slips 0.39 m/s on the median frame while he casts on the move.</p>
+<p>One thing is left. Heroes still reach full speed in one frame, so the first steps of every run slide. Easing that in changes how fast they close distance, so it needs a balance re-tune, and I'd do it after his clips are in.</p>
 <p>He gets real sound too. Each of his skills gets a wind-up, a release and a hit, the arena gets ambience and music under the fight, and earshot checks every one by ear before it goes in.</p>
 <p>The camera stays where it is for now. You want sound, movement and animation to feel cinematic first, and the camera work comes after that, in phase 6.</p>
 <p class="done">Done when you've compared the slice with your frames and liked it.</p>
@@ -162,7 +166,7 @@
 <li>Jensen is the slice.</li>
 <li>The camera waits. Sound, body movement and animation come first, and then a director mode with an automatic anime camera, which is now phase 6.</li>
 <li>One generated character from the 75 Tripo credits, with no mistakes. You're sorting out the failed payment. The API key still sees 0 credits, so the open question is whether the 75 move to the API account or you run the one job in the web studio.</li>
-<li>Commit the probe and listener work if it's safe. It's done in <code>2fdb142</code>, with the soak test in <code>269bdc3</code> and the quality fix in <code>9e34472</code>, all on <code>feat/dev-probe</code>. Phase 1 is <code>faf9ce5</code> on <code>feat/action-timing</code>, which sits on top, and the planted feet are <code>ef2cd88</code> on <code>feat/planted-feet</code>, above that. The full suite passed before each one, the production build carries no probe code, and nothing is pushed.</li>
+<li>Commit the probe and listener work if it's safe. It's done in <code>2fdb142</code>, with the soak test in <code>269bdc3</code> and the quality fix in <code>9e34472</code>, all on <code>feat/dev-probe</code>. Phase 1 is <code>faf9ce5</code> on <code>feat/action-timing</code>, which sits on top, and the planted feet are <code>ef2cd88</code> and <code>b59a6bc</code> on <code>feat/planted-feet</code>, above that. The full suite passed before each one, the production build carries no probe code, and nothing is pushed.</li>
 </ol>
 </main>
 </body>
