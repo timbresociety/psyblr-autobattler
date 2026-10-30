@@ -365,22 +365,28 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
 
 /**
  * Hair strands (weave 5), drawn without UVs: on a head, the way a surface faces round the vertical axis holds steady
- * down a strand and turns across them, so clumps and fine strands laid round that angle run from the crown down to the
- * hairline, wavering a little as they fall. Whole cells round the circle, so the back of the head shows no seam.
- * Each strand lightens or darkens the colour and roughens or smooths the highlight, and toward the hair's edge (the
- * fraction past 5) the strands part, each ending at its own distance, so the skin shows through a ragged hairline
- * instead of the mesh's cut edge.
+ * down a strand and turns across them, so locks, clumps and fine strands laid round that angle run from the crown down
+ * to the hairline, wavering a little as they fall. Whole cells round the circle, so the back of the head shows no seam.
+ * Each strand lightens or darkens the colour and roughens or smooths the highlight, the grooves between the locks sit
+ * in shade, and the locks bump the surface (hairRelief, applied with leather's relief once the normal is known). Toward
+ * the hair's edge (the fraction past 5) the strands part, each ending at its own distance, so the skin shows through a
+ * ragged hairline instead of the mesh's cut edge. A pattern whose cells cross a pixel in under two fades to its mean
+ * there, where it would only alias into bands; the turn's seam is stepped over by measuring on its far side.
  */
 const STRANDS_GLSL = `
+float turn = atan(vStrandNormal.x, vStrandNormal.z) / 6.2831853 + 0.5;
+float turnStep = min(fwidth(turn), fwidth(fract(turn + 0.5)));
+float wave = 0.15 * sin(vStrandY * 34.0 + turn * 31.4159265);
+float hairRelief = 0.0;
 if (vWeave > 4.5) {
-  float turn = atan(vStrandNormal.x, vStrandNormal.z) / 6.2831853 + 0.5;
-  float wave = 0.15 * sin(vStrandY * 34.0 + turn * 31.4159265);
-  float clump = strandNoise(turn * 96.0 + wave, 96.0);
-  float fine = strandNoise(turn * 433.0 + wave * 3.0, 433.0);
+  float clump = mix(0.5, strandNoise(turn * 96.0 + wave, 96.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 96.0));
+  float fine = mix(0.5, strandNoise(turn * 433.0 + wave * 3.0, 433.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 433.0));
+  float lock = strandNoise(turn * 40.0 + wave * 0.6, 40.0);
   float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
   if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
-  diffuseColor.rgb *= mix(0.68, 1.14, clump) * mix(0.86, 1.08, fine);
+  diffuseColor.rgb *= mix(0.76, 1.06, lock) * mix(0.72, 1.12, clump) * mix(0.88, 1.06, fine);
   roughnessFactor = clamp(roughnessFactor + (0.5 - clump) * 0.22 + (0.5 - fine) * 0.1, 0.2, 1.0);
+  hairRelief = lock * 0.0035 + clump * 0.0008;
 }`
 
 /**
@@ -388,18 +394,23 @@ if (vWeave > 4.5) {
  * across, a soft swell a couple of centimetres across where the hide doesn't lie quite flat, and broad patches worn
  * a little smoother or drier. They bump the surface by their slope in metres, so the relief holds its depth at any
  * distance, and the jacket catches light the way hide does instead of in one smooth sweep like vinyl. The grain fades
- * out where its cells shrink under a couple of pixels (a hero seen whole), where it would only shimmer.
+ * out where its cells shrink under a couple of pixels (a hero seen whole), where it would only shimmer. Hair's locks
+ * (STRANDS_GLSL) bump the same way.
  */
 const LEATHER_GLSL = `
+float relief = hairRelief;
+vec3 at = vRest * 520.0;
+float seen = 1.0 - smoothstep(0.6, 1.2, length(fwidth(at)));
 if (vWeave > 3.5 && vWeave < 4.5) {
-  vec3 at = vRest * 520.0;
-  float seen = 1.0 - smoothstep(0.6, 1.2, length(fwidth(at)));
   float grain = grainNoise(at);
   float worn = grainNoise(vRest * 9.0 + 17.0);
-  float relief = grain * 0.0003 * seen + grainNoise(vRest * 38.0 + 5.0) * 0.0022;
   roughnessFactor = clamp(roughnessFactor + 0.06 + (worn - 0.5) * 0.3 + (grain - 0.5) * 0.16 * seen, 0.2, 0.95);
-  normal = grainNormal(-vViewPosition, normal, dFdx(relief), dFdy(relief), faceDirection);
-}`
+  relief = grain * 0.0003 * seen + grainNoise(vRest * 38.0 + 5.0) * 0.0022;
+}
+// a triangle carries one weave, and a pixel's neighbours in the derivatives come from its own triangle
+float reliefX = dFdx(relief);
+float reliefY = dFdy(relief);
+if (vWeave > 3.5) normal = grainNormal(-vViewPosition, normal, reliefX, reliefY, faceDirection);`
 
 const STRAND_NOISE_GLSL = `
 varying float vWeave;
