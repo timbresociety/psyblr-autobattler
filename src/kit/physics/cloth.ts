@@ -1,5 +1,5 @@
 import type { BodyShape } from '../body/shape.js'
-import { TriangleBVH } from '../wear/ray.js'
+import { segmentDistance, TriangleBVH } from '../wear/ray.js'
 import type { DressedItem } from '../wear/dress.js'
 
 /**
@@ -116,13 +116,6 @@ const SEGMENTS: [string, string][] = [
   ['thigh_R', 'shin_R'],
   ['shin_R', 'foot_R'],
 ]
-
-function segmentDistance(p: ArrayLike<number>, o: number, a: V3, b: V3): number {
-  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
-  const ap = [p[o] - a[0], p[o + 1] - a[1], p[o + 2] - a[2]]
-  const t = Math.min(1, Math.max(0, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2] || 1)))
-  return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t)
-}
 
 /** The four heaviest of a weighted set of bones, renormalised. */
 function topFour(acc: Map<number, number>): [number[], number[]] {

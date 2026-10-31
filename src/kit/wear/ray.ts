@@ -14,6 +14,14 @@ export interface Hit {
   v: number
 }
 
+/** How far the point at `o` in `p` is from the segment from a to b. */
+export function segmentDistance(p: ArrayLike<number>, o: number, a: V3, b: V3): number {
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+  const ap = [p[o] - a[0], p[o + 1] - a[1], p[o + 2] - a[2]]
+  const t = Math.min(1, Math.max(0, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / (ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2] || 1)))
+  return Math.hypot(ap[0] - ab[0] * t, ap[1] - ab[1] * t, ap[2] - ab[2] * t)
+}
+
 const LEAF = 4
 
 export class TriangleBVH {

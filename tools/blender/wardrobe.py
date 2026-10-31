@@ -984,8 +984,8 @@ def hair_cards(w, shell_obj, layers, length, width, flow='back', part=0.0, sides
     wide, each laid from a root over the scalp along the hair's flow (`flow`, see runs below), in layers lifted off the
     shell, the outer ones sparser, and thickest along the hairline, where they start on the skin. Their UVs mark them
     for the runtime, which draws their strands (dress-model.ts) and leaves them off where it draws the shell alone: u is
-    2, plus a whole number that seeds the card's strand pattern, plus the place across the card; v runs from the root to
-    the tip.
+    2, plus a whole number that seeds the card's strand pattern (0 to 63), plus 64 for every 5 mm of the card's length,
+    plus the place across the card; v runs from the root to the tip.
     """
     import bisect
     import random
@@ -1078,12 +1078,26 @@ def hair_cards(w, shell_obj, layers, length, width, flow='back', part=0.0, sides
 
     body = w.d._full_bvh()
 
+    def inward(p, n):
+        """
+        The way across the hairline into the hair at p, along the surface facing n: up the slope of p's height over the
+        line. Over the temples, where the line falls toward the ears, that's up and back.
+        """
+        e = 0.002
+        dx = (line(p + V((e, 0, 0))) - line(p - V((e, 0, 0)))) / (2 * e)
+        dy = (line(p + V((0, e, 0))) - line(p - V((0, e, 0)))) / (2 * e)
+        g = V((-dx, -dy, 1))
+        g -= n * g.dot(n)
+        return g.normalized() if g.length > 1e-6 else None
+
     def hairline_roots():
         """
         Roots all round the hairline, wherever hair grows over it, for the cards over it thin out to their tips. Where
         the hair runs up off the skin (swept back over the brow) a root sits on the hairline. Where it runs along it
         (above the ears) a root sits 6 mm up the slope, so its card covers the line, and where it runs down over it
-        (round the back) up to 2 cm up, so its card ends over it.
+        (round the back) up to 2 cm up, so its card ends over it. Up and down are across the line, not plumb: over the
+        temples hair combed back and down runs along the line as it falls toward the ears, and measured against
+        straight up, its roots climbed 13 mm off it and left the temples bare.
         """
         out = []
         a = -math.pi
@@ -1097,15 +1111,15 @@ def hair_cards(w, shell_obj, layers, length, width, flow='back', part=0.0, sides
             if H.flap(body, k, nk, body.find_nearest(k)[2]) or (bare and bare(k)):
                 continue
             p, n = k, nk
-            up = V((0, 0, 1)) - nk * nk.z
-            climb = runs(k, nk, 0.0, -1 if k.x < parting else 1).dot(up.normalized()) if up.length > 1e-6 else 0.0
+            into = inward(k, nk)
+            climb = runs(k, nk, 0.0, -1 if k.x < parting else 1).dot(into) if into else 0.0
             if climb < 0.3:
                 rise = 0.006 + 0.014 * max(0.0, -climb)
                 for _ in range(8):
-                    up = V((0, 0, 1)) - n * n.z
-                    if p.z >= line(p) + rise or up.length < 1e-6:
+                    into = inward(p, n)
+                    if p.z >= line(p) + rise or not into:
                         break
-                    p, n = on(p + up.normalized() * 0.005, 0.0)
+                    p, n = on(p + into * 0.005, 0.0)
             out.append(p)
         return out
 
@@ -1130,13 +1144,16 @@ def hair_cards(w, shell_obj, layers, length, width, flow='back', part=0.0, sides
                 path.append((p, n))
             if len(path) < 3:
                 continue
-            seed_u = 2.0 + rnd.randrange(64)
+            reach = sum((path[i + 1][0] - path[i][0]).length for i in range(len(path) - 1))
+            seed_u = 2.0 + rnd.randrange(64) + 64 * min(31, round(reach / 0.005))
             rows = []
             for i, (q, nq) in enumerate(path):
                 t = i / (len(path) - 1)
                 d = runs(q, nq, turn, sign)
                 across = nq.cross(d).normalized()
-                half = width * (1.0 - 0.5 * t) / 2
+                # narrowing a little to the tip: down to half, its strands converged, and seen edge-on over the temples
+                # each card read as a chevron
+                half = width * (1.0 - 0.15 * t) / 2
                 # the tips lift a little off the hair under them, for volume
                 q = q + nq * tip * t * t
                 rows.append((bm.verts.new(q - across * half), bm.verts.new(q + across * half), t))

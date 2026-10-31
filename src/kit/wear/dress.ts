@@ -1,7 +1,7 @@
 import { surfaceFrame } from './bind.js'
 import { fieldAt, type BodyFields } from './fields.js'
 import { FINISH_LOOK, HAIR_LOOK } from './finish.js'
-import { TriangleBVH, type V3 } from './ray.js'
+import { segmentDistance, TriangleBVH, type V3 } from './ray.js'
 import { coverOf, type ChainGroup, type Cover, type Finish, type ItemSlot, type Knob, type SurfaceItem } from './item.js'
 import type { BodyShape } from '../body/shape.js'
 import { weldPositions } from './weld.js'
@@ -468,12 +468,15 @@ function evaluateItem(w: Worn, lift: Float32Array, body: BodyShape, push?: Push)
 }
 
 /** How far in from where it leaves the skin hair stops thinning, along the surface, in metres. */
-const FRINGE = 0.012
+export const FRINGE = 0.012
 
 /**
  * How far each vertex sits along the surface from where the item leaves the skin, 0 there to 1 at FRINGE and beyond:
  * hair's hairline, a beard's border. Hair is tucked under the skin at its edge, so it is measured from where its lift
- * crosses zero along each edge (or from an open edge left above the skin), not from the mesh's own edge.
+ * crosses zero (or from an open edge left above the skin), not from the mesh's own edge. Near the crossing, straight
+ * to it: it runs through each triangle it passes as a segment, smoothly along the hairline. Measured along the mesh's
+ * edges, the way to it zigzagged with the triangles, and so did the edge the strands shader cuts back under the cards
+ * (dress-model.ts withCards), in steps over every temple.
  */
 function fringeOf(item: SurfaceItem, positions: Float32Array, lift: Float32Array): Float32Array {
   const { id, count } = weldPositions(positions)
@@ -513,6 +516,35 @@ function fringeOf(item: SurfaceItem, positions: Float32Array, lift: Float32Array
       if (far[a] + d < far[b] && far[a] + d < FRINGE) (far[b] = far[a] + d), (changed = true)
       if (far[b] + d < far[a] && far[b] + d < FRINGE) (far[a] = far[b] + d), (changed = true)
     }
+  }
+  const cross: [V3, V3][] = []
+  for (let t = 0; t < item.index.length; t += 3) {
+    const ends: V3[] = []
+    for (let e = 0; e < 3; e++) {
+      const a = id[item.index[t + e]]
+      const b = id[item.index[t + ((e + 1) % 3)]]
+      if ((rise[a] <= 0) === (rise[b] <= 0)) continue
+      const s = rise[a] / (rise[a] - rise[b])
+      ends.push([0, 1, 2].map((d) => at[a * 3 + d] + s * (at[b * 3 + d] - at[a * 3 + d])) as V3)
+    }
+    if (ends.length === 2) cross.push([ends[0], ends[1]])
+  }
+  // filed by where their middles fall, in cells wide enough that any segment within FRINGE of a vertex sits in its cell
+  // or the next one
+  const size = FRINGE + Math.max(0, ...cross.map(([a, b]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) / 2))
+  const cells = new Map<string, [V3, V3][]>()
+  const cellOf = (x: number, y: number, z: number) => [x, y, z].map((c) => Math.floor(c / size))
+  for (const s of cross) {
+    const key = cellOf((s[0][0] + s[1][0]) / 2, (s[0][1] + s[1][1]) / 2, (s[0][2] + s[1][2]) / 2).join()
+    cells.set(key, [...(cells.get(key) ?? []), s])
+  }
+  // (a vertex on an open edge is there already: every one on a hair card)
+  for (let v = 0; v < count; v++) {
+    if (!(rise[v] > 0 && far[v] > 0 && far[v] < FRINGE)) continue
+    const [i, j, k] = cellOf(at[v * 3], at[v * 3 + 1], at[v * 3 + 2])
+    for (let di = -1; di <= 1; di++)
+      for (let dj = -1; dj <= 1; dj++)
+        for (let dk = -1; dk <= 1; dk++) for (const [a, b] of cells.get(`${i + di},${j + dj},${k + dk}`) ?? []) far[v] = Math.min(far[v], segmentDistance(at, v * 3, a, b))
   }
   const fringe = new Float32Array(item.count)
   for (let k = 0; k < item.count; k++) fringe[k] = Math.min(1, far[id[k]] / FRINGE)

@@ -463,6 +463,10 @@ const STRANDS_GLSL = `
 float turn = atan(vStrandNormal.x, vStrandNormal.z) / 6.2831853 + 0.5;
 float turnStep = min(fwidth(turn), fwidth(fract(turn + 0.5)));
 float wave = 0.15 * sin(vStrandY * 34.0 + turn * 31.4159265);
+// under cards, where strands are laid by place (below): across the head, and level slices tipped toward the nape
+float slice = vRest.y - 0.65 * vRest.z;
+float sliceStep = fwidth(slice);
+float acrossStep = fwidth(vRest.x);
 float hairRelief = 0.0;
 if (vCardUv.x > 1.5) roughnessFactor = mix(0.6, 0.75, cardShade);
 else if (vWeave > 4.5) {
@@ -472,6 +476,16 @@ else if (vWeave > 4.5) {
   if (vWeave > 5.995) {
     // under a hair's cards its fringe runs on past 6 (withCards), and its edge draws back clean under their roots
     if (vWeave - 6.0 < ${UNDER_RECEDE}) discard;
+    // and its strands run with the cards' (wardrobe.py hair_cards, runs), laid by place: straight back over the top and
+    // down the back, and at the sides back and a little down, along level slices tipped toward the nape. Laid round the
+    // way the surface faces, as on a shell alone, they ran from the crown straight down at the sides, and on a shell
+    // rising out of the skin unevenly, they zigzagged into chevrons over the temples and broke into facets on top
+    float side = smoothstep(0.035, 0.065, abs(vRest.x));
+    float sideWave = 0.15 * sin(vRest.z * 40.0);
+    float topWave = 0.15 * sin(vRest.y * 34.0 + vRest.z * 20.0);
+    clump = mix(strandSeen(vRest.x * 160.0 + topWave, acrossStep * 160.0), strandSeen(slice * 140.0 + sideWave, sliceStep * 140.0), side);
+    fine = mix(strandSeen(vRest.x * 700.0 + topWave * 3.0, acrossStep * 700.0), strandSeen(slice * 600.0 + sideWave * 3.0, sliceStep * 600.0), side);
+    lock = mix(strandNoise(vRest.x * 67.0 + topWave * 0.6, 4096.0), strandNoise(slice * 56.0 + sideWave * 0.6, 4096.0), side);
   } else {
     float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
     if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
@@ -520,7 +534,16 @@ vec3 cardEye = normalize(vViewPosition);
 float cardFacing = abs(dot(normalize(vNormal), cardEye));
 float cardFill = smoothstep(0.5, 0.85, abs(dot(normalize(vStrandFlow), cardEye)));
 if (vCardUv.x > 1.5) {
-  float cardSeed = floor(vCardUv.x);
+  // past 2, a whole number: the card's seed (0 to 63), plus 64 for every 5 mm of its length (wardrobe.py hair_cards)
+  float cardCode = floor(vCardUv.x) - 2.0;
+  float cardSeed = 2.0 + mod(cardCode, 64.0);
+  float cardLength = floor(cardCode / 64.0) * 0.005;
+  // each strand starts up to 6 mm along the card and comes in over a centimetre, darker for its first one and a half,
+  // so hair thickens over a centimetre or two from the hairline whatever the card's length. As shares of the card, a
+  // swept card's took up to 5 cm and left a grey band over the temples (cards built before carry no length: shares)
+  float rootFrom = cardLength > 0.0 ? 0.006 / cardLength : 0.1;
+  float rootIn = cardLength > 0.0 ? 0.01 / cardLength : 0.25;
+  float rootDark = cardLength > 0.0 ? 0.015 / cardLength : 0.35;
   float along = vCardUv.y;
   float k = fract(vCardUv.x) * 9.0;
   float cell = floor(k);
@@ -532,9 +555,9 @@ if (vCardUv.x > 1.5) {
     float h3 = strandHash(cardSeed * 5.21 + c * 0.73 + 0.25);
     float h4 = strandHash(cardSeed * 1.93 + c * 3.37 + 0.75);
     float end = 0.5 + 0.5 * h3;
-    float start = 0.1 * h4;
+    float start = rootFrom * h4;
     float reach = mix(0.3 + 0.3 * h2, 0.8, cardFill) * (1.0 - 0.6 * smoothstep(0.0, end, along));
-    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + 0.25, along) * (1.0 - smoothstep(end - 0.1, end, along));
+    float a = (1.0 - smoothstep(reach * 0.5, reach, abs(k - c - 0.5 - (h1 - 0.5) * 0.5))) * smoothstep(start, start + rootIn, along) * (1.0 - smoothstep(end - 0.1, end, along));
     if (a > cover) {
       cover = a;
       cardShade = h2;
@@ -545,7 +568,7 @@ if (vCardUv.x > 1.5) {
   cover *= smoothstep(0.0, 1.2, k) * smoothstep(9.0, 7.8, k) * smoothstep(0.1, 0.35, cardFacing);
   if (cover < 0.02) discard;
   diffuseColor.a = cover;
-  diffuseColor.rgb *= mix(0.7, 1.0, smoothstep(0.0, 0.35, along)) * mix(0.8, 1.15, cardShade);
+  diffuseColor.rgb *= mix(0.7, 1.0, smoothstep(0.0, rootDark, along)) * mix(0.8, 1.15, cardShade);
 }`
 
 /**
@@ -598,7 +621,10 @@ float strandNoise(float x, float period) {
   float i = floor(x);
   float f = fract(x);
   return mix(strandHash(mod(i, period)), strandHash(mod(i + 1.0, period)), f * f * (3.0 - 2.0 * f));
-}`
+}
+// and faded to its mean where its cells cross a pixel in under two (\`cells\`: how many cross one), where it would only
+// alias into bands
+float strandSeen(float x, float cells) { return mix(0.5, strandNoise(x, 4096.0), 1.0 - smoothstep(0.25, 0.5, cells)); }`
 
 /**
  * The way hair runs where its surface faces n, at rest: tools/blender/wardrobe.py hair_cards' flow, in glTF's axes. Up

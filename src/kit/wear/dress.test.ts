@@ -6,7 +6,7 @@ import { shellItem, skinShape } from '../fit/shell.js'
 import { TriangleBVH, type V3 } from './ray.js'
 import { readItemFile, writeItem } from '../fit/write.js'
 import { bindPoints, evaluate, fromLocal, toLocal } from './bind.js'
-import { dress, GAP, type Dressed, type Worn } from './dress.js'
+import { dress, FRINGE, GAP, type Dressed, type Worn } from './dress.js'
 import { bodyFields, chainParam, fieldAt, type BodyFields } from './fields.js'
 import { FINISH_LOOK, HAIR_LOOK } from './finish.js'
 import { coverOf, type SurfaceItem } from './item.js'
@@ -370,6 +370,31 @@ describe('dressing', () => {
     expect(Array.from(locks.finish.slice(0, 4))).toEqual([HAIR_LOOK.roughness, HAIR_LOOK.metalness, HAIR_LOOK.sheen, HAIR_LOOK.glow].map(Math.fround))
     const silk = dress({ body: ref, worn: [{ item: crop, colors: [[0.1, 0.07, 0.05]], finishes: ['silk'] }] }).items[0]
     expect(new Set(silk.weave)).toEqual(new Set([FINISH_LOOK.silk.weave]))
+  })
+
+  it("measures the hair's fringe straight to where it crosses the skin, not along the mesh's edges", async () => {
+    const { item: crop } = await readItemFile(pub('/kit/wear/hair_crop.glb'), ref.surface.count)
+    const locks = dress({ body: ref, worn: [{ item: crop, colors: [[0.1, 0.07, 0.05]], finishes: [] }] }).items[0]
+    const { lift } = crop.binding
+    const at = locks.positions
+    const cross: number[][] = []
+    for (let t = 0; t < crop.index.length; t += 3)
+      for (let e = 0; e < 3; e++) {
+        const a = crop.index[t + e]
+        const b = crop.index[t + ((e + 1) % 3)]
+        if ((lift[a] <= 0) === (lift[b] <= 0)) continue
+        const s = lift[a] / (lift[a] - lift[b])
+        cross.push([0, 1, 2].map((d) => at[a * 3 + d] + s * (at[b * 3 + d] - at[a * 3 + d])))
+      }
+    let near = 0
+    for (let k = 0; k < crop.count; k++) {
+      const fringe = (locks.weave[k] - HAIR_LOOK.weave) / 0.99
+      if (lift[k] <= 0 || fringe > 0.9) continue
+      near++
+      const nearest = Math.min(...cross.map((c) => Math.hypot(c[0] - at[k * 3], c[1] - at[k * 3 + 1], c[2] - at[k * 3 + 2])))
+      expect(fringe * FRINGE).toBeLessThanOrEqual(nearest + 1e-5)
+    }
+    expect(near).toBeGreaterThan(20)
   })
 
   it('wears a mask over the beard and under the hair', () => {
