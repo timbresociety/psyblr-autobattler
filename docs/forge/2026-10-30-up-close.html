@@ -28,9 +28,22 @@ code { font-size: 13px; }
 <body>
 <main>
 <h1>Jensen, up close</h1>
-<p class="lede">You said the Forge looked bad, and up close it did. So I shot Jensen the way the creator shows him and fixed what stood out, worst first. Fourteen fixes landed today on <code>feat/forge-creator</code>, and nothing is pushed.</p>
-<p class="lede">The latest come first. Twelve of our nineteen starters now have hair made of strands, not just Jensen. After that come Jensen's face, hair, jacket and skin, then this afternoon's five.</p>
+<p class="lede">You said the Forge looked bad, and up close it did. So I shot Jensen the way the creator shows him and fixed what stood out, worst first. Fifteen fixes have landed on <code>feat/forge-creator</code> since yesterday, and nothing is pushed.</p>
+<p class="lede">The latest come first: the temples, then hair made of strands for twelve of our nineteen starters, not just Jensen. After that come Jensen's face, hair, jacket and skin, then yesterday afternoon's five.</p>
 <p class="lede">In every picture the top row is before and the bottom row is now. Where two pictures sit side by side, before is on the left.</p>
+
+<section>
+<h2>The temples stepped and stacked into plates</h2>
+<p>From the front, every hero's hair ended at the temple in a grey band with a stepped edge, and over Jensen's swept hair it stacked into plates like shingles. Three things made it.</p>
+<ul>
+<li><strong>The edge was cut along the mesh.</strong> Under the strands, the shell's edge is cut back 5 mm from where the hair leaves the skin. That distance was measured along the mesh's edges, and its triangles are about as big as the gap, so the cut zigzagged with them. It's measured straight now, and the edge runs smooth.</li>
+<li><strong>The strands started too far up.</strong> Over the temples, hair combed back runs along the hairline as it falls toward the ear. Measured against straight up, the roots there climbed 13 mm off the line, and every strand faded in over a quarter of its card, up to 3.5 cm on swept hair. The roots sit 6 mm up now, and every strand comes in over a centimetre.</li>
+<li><strong>Two patterns drew the plates.</strong> The shell under the cards laid its strands by the way its surface faced. That surface wobbles where it rises out of the skin, so they zigzagged into chevrons. Now they're laid by place, back and a little down at the sides like the cards. And each card narrowed to half its width at the tip, so its strands converged, and seen edge-on every card read as a chevron. Now they narrow a little.</li>
+</ul>
+<p>It shows most on swept hair, where the plates were worst. A few cards still show edge-on over Jensen's temples, but the steps are gone and the strands reach the line.</p>
+<figure><img src="img/2026-10-31-temples.jpg" alt="Jensen's forehead and temples from the front, a stepped hairline and stacked grey plates over the temples above, a smoother hairline with strands down to it below"><figcaption>Jensen's forehead and temples from the front. Top before, bottom now.</figcaption></figure>
+<figure><img src="img/2026-10-31-temples-more.jpg" alt="Elon and Emmanuel from three-quarters, a notch in the hairline at the temple above, a smooth curve below"><figcaption>Elon, then Emmanuel, from three-quarters. Top row before, bottom row now.</figcaption></figure>
+</section>
 
 <section>
 <h2>Everyone else's hair was a plastic cap</h2>
@@ -114,15 +127,15 @@ code { font-size: 13px; }
 <section>
 <h2>What still looks wrong</h2>
 <ul>
-<li><strong>The temples.</strong> From the front, every hero's hair ends at the temple in a smooth band with a stepped edge. That's the shell's edge, showing where the strands over it turn away from you. Laying Jensen's cards flatter there cleared most of the steps above his ear from three-quarters, but not this band. From the side his hair also sits a little too full at the back.</li>
+<li><strong>A few cards still show edge-on over the temples,</strong> and some stray strands stand out by the ears. From the side Jensen's hair also sits a little too full at the back.</li>
 <li><strong>Seven starters still wear a shell.</strong> Buzz, crop, curls, bob, long, big volume and unkempt. Hanging hair needs cards that follow it down past the hairline, which ours don't do yet.</li>
 <li><strong>Dark hair is a little mottled up close,</strong> with darker gaps between the cards.</li>
 <li><strong>Most of this only shows in the creator.</strong> Our arena draws with a different renderer, and I haven't ported the grain, the locks, the cards, the pores or the skin shading there yet. The jacket's new build does show in the arena, and so do the shoulders and the glasses.</li>
 </ul>
-<p>Next I'll fix the temples, since every hero shows them from the front.</p>
-<p>Then the seven shells, starting with the crop and the buzz cut.</p>
-<p>If something else bothers you more, tell me and I'll start there.</p>
-<p class="muted">The newest commits are 49bdefc for everyone's hair and the ears, and 8f97c53 for Jensen's temples. Before them come 236c0af for the photo's edge, 268eeb5 for the pores, c1d0e7c for the glasses and 95c205b for the hairline. Tonight's before them are dd0a018 for the hair, 9c8c980, 62e585c, d79ad3e and c2de12b for the jacket, f30a64d for the traces and 87cba75 for the skin. This afternoon's are ef3f1ea for the glasses and hats, e050b04 for the crowns and frames, 0d72f79 for the shoulders, 9053210 for the leather and 04a1b64 for the locks.</p>
+<p>Your canon from this morning, <code>docs/plans/2026-10-31-canon-psyblr-human.md</code>, changes what comes next. It replaces this shell hair with a curated set of about fifteen card styles in phase 5, after the new body, combat, the kit and the animation library. So I've stopped on the hair here, and the seven shells won't get cards of this kind. What's on this page is what every hero wears until phase 5 lands.</p>
+<p>One thing you'll notice in the creator. In this working tree, medium-build heroes like Jensen and Satya load on the new Psyblr Human body from phase 1, which wears no hair until the kit moves onto it in phase 3. The pictures of Jensen here were shot on his old body.</p>
+<p>Tell me which phase you want me on.</p>
+<p class="muted">The newest commit is dd5684b for the temples. Before it come 49bdefc for everyone's hair and the ears, 8f97c53 for Jensen's temples, 236c0af for the photo's edge, 268eeb5 for the pores, c1d0e7c for the glasses and 95c205b for the hairline. The night before's are dd0a018 for the hair, 9c8c980, 62e585c, d79ad3e and c2de12b for the jacket, f30a64d for the traces and 87cba75 for the skin. Yesterday afternoon's are ef3f1ea for the glasses and hats, e050b04 for the crowns and frames, 0d72f79 for the shoulders, 9053210 for the leather and 04a1b64 for the locks.</p>
 </section>
 </main>
 </body>
