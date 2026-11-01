@@ -73,7 +73,7 @@ class Body:
         return (h if end == 'head' else t).copy()
 
 
-def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, scale=None):
+def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, scale=None, rig_name='game_engine', full_mesh=False):
     """
     A human from MPFB: `macro` overrides the default macro dict (gender, age, muscle, weight, proportions, height,
     race), `targets` maps target names to weights, `proxy` names the topology. Scaled so the top of the head is at
@@ -95,12 +95,16 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, sca
         TargetService.load_target(human, path, weight=w)
     if extra:
         extra(human)
-    rig = HumanService.add_builtin_rig(human, 'game_engine')
-    prox = HumanService.add_mhclo_asset(proxy_file(proxy), human, asset_type='Proxymeshes', subdiv_levels=0, material_type='NONE')
-    for mod in list(prox.modifiers):
-        if mod.type != 'ARMATURE':
-            prox.modifiers.remove(mod)
-    mesh = plain_copy(prox, 'body')
+    rig = HumanService.add_builtin_rig(human, rig_name)
+    if full_mesh:
+        prox = None
+        mesh = plain_copy(human, 'body')
+    else:
+        prox = HumanService.add_mhclo_asset(proxy_file(proxy), human, asset_type='Proxymeshes', subdiv_levels=0, material_type='NONE')
+        for mod in list(prox.modifiers):
+            if mod.type != 'ARMATURE':
+                prox.modifiers.remove(mod)
+        mesh = plain_copy(prox, 'body')
     hires = plain_copy(human, 'hires')
     # eyes: the helper eyeballs, read with the helper mask off
     mask = human.modifiers.get('Hide helpers')
@@ -115,6 +119,8 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, sca
         r = sum((p - c).length for p in pts) / len(pts)
         eyes.append((c, r))
     joints = {b.name: (b.head_local.copy(), b.tail_local.copy()) for b in rig.data.bones}
+    # each bone's z axis at rest, so a rig rebuilt from the joints keeps MPFB's rolls (standard.py)
+    axes = {b.name: b.matrix_local.to_3x3().col[2].copy() for b in rig.data.bones}
     # where MediaPipe's face landmarks sit on this shaped head (hair, beards and glasses are placed from them)
     from . import face as F
 
@@ -122,16 +128,17 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, sca
     if os.path.exists(F.BIND_FILE):
         lm = F.landmark_positions(F.full_coords(human), F.load_bind())
     for o in (full, human, rig, prox):
-        bpy.data.objects.remove(o, do_unlink=True)
+        if o is not None:
+            bpy.data.objects.remove(o, do_unlink=True)
     for o in (mesh, hires):
         o.modifiers.clear()
         o.parent = None
     if head_scale != 1.0:
         # stylised realism: a slightly bigger head reads at arena distance (blended by the head's skin weight)
-        J = joints['head'][0].copy()
+        J = joints['head' if 'head' in joints else 'mixamorig:Head'][0].copy()
         k = head_scale - 1.0
         for o in (mesh, hires):
-            w = group_weight(o, 'head')
+            w = group_weight(o, 'head' if o.vertex_groups.get('head') else 'mixamorig:Head')
             for v in o.data.vertices:
                 if w[v.index] > 0:
                     v.co = J + (v.co - J) * (1 + k * w[v.index])
@@ -141,7 +148,8 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, sca
 
             Jn = np.array(J)
             lm = (Jn + (lm[0] - Jn) * head_scale, lm[1])
-        joints['head'] = (joints['head'][0], J + (joints['head'][1] - J) * head_scale)
+        hk = 'head' if 'head' in joints else 'mixamorig:Head'
+        joints[hk] = (joints[hk][0], J + (joints[hk][1] - J) * head_scale)
     s = scale if scale is not None else height / max(v.co.z for v in hires.data.vertices)
     S = Matrix.Scale(s, 4)
     for o in (mesh, hires):
@@ -150,6 +158,7 @@ def make_body(macro, targets, proxy, height=1.8, extra=None, head_scale=1.0, sca
     joints = {k: (h * s, t * s) for k, (h, t) in joints.items()}
     eyes = [(c * s, r * s) for c, r in eyes]
     out = Body(mesh, hires, joints, eyes, height)
+    out.axes = axes
     out.scale = s
     out.lm = (lm[0] * s, lm[1]) if lm is not None else None
     return out

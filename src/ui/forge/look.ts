@@ -18,7 +18,7 @@ export interface FaceCandidate {
 
 /** The stored form of a face: the upload's URL, the image's size and its landmarks as flat x, y pairs. */
 export function facePhoto({ url, finding }: FaceCandidate): FacePhoto {
-  return { url, width: finding.width, height: finding.height, points: finding.points.flatMap(([x, y]) => [x, y]) }
+  return { url, width: finding.width, height: finding.height, points: finding.points.flatMap(([x, y]) => [x, y]), ...(finding.depth ? { depth: [...finding.depth] } : {}) }
 }
 
 /** The colours a photo gives a hero: its skin, and its hair and eyes when the photo shows them. */

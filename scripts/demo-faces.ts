@@ -20,7 +20,7 @@ for (const file of readdirSync(faces).filter((f) => f.endsWith('.webp')).sort())
   const img = { width: info.width, height: info.height, data: new Uint8ClampedArray(data.buffer, data.byteOffset, data.length) }
   const points: Pt[] = lm.points.map((p) => [p[0], p[1]])
   const iris = irisColour(img, points)
-  const face = { width: lm.width, height: lm.height, skin: toHex(skinColour(img, points)), ...(iris ? { iris: toHex(iris) } : {}), points: points.flatMap(([x, y]) => [Math.round(x), Math.round(y)]) }
+  const face = { width: lm.width, height: lm.height, skin: toHex(skinColour(img, points)), ...(iris ? { iris: toHex(iris) } : {}), points: points.flatMap(([x, y]) => [Math.round(x), Math.round(y)]), depth: lm.points.map((p) => Math.round(p[2] ?? 0)) }
   out.push(`${JSON.stringify(id)}:${JSON.stringify(face)}`)
 }
 const path = join(root, 'src', 'arena', 'demo', 'faces.json')

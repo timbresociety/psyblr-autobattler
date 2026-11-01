@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Creator likeness</title>
+<style>
+  :root { --bg: #f7f5f0; --ink: #1d1b18; --soft: #5d5850; --line: #ddd6ca; --accent: #b4521f; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #15140f; --ink: #ece7dd; --soft: #a59e91; --line: #34312a; --accent: #f0915a; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 16px 96px; }
+  h1 { font-size: 32px; line-height: 1.15; margin: 0 0 8px; }
+  .meta { color: var(--soft); font-size: 14px; margin-bottom: 28px; }
+  h2 { font-size: 22px; margin: 44px 0 10px; padding-top: 22px; border-top: 1px solid var(--line); }
+  p { margin: 0 0 12px; }
+  figure { margin: 16px 0 24px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+  figcaption { font-size: 13px; line-height: 1.45; color: var(--soft); margin-top: 6px; }
+  code { font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+<h1>The creator: from a mannequin to a likeness</h1>
+<p class="meta">psyblr-autobattler · 2026-10-31 · canon: <code>docs/plans/2026-10-31-canon-psyblr-human.md</code></p>
+
+<p>The owner's reference is a stylised portrait of Jensen Huang. Until this afternoon the Forge turned it into a bald MakeHuman mean head wearing a photo patch. This page keeps the before and after, and what changed underneath.</p>
+
+<h2>Where it started</h2>
+<figure>
+  <img src="img/2026-10-31-creator-before.webp" alt="The reference portrait, the first starter model, and the first body on the new rig">
+  <figcaption>Left, the reference. Middle, the first starter model. Right, the first body on the Psyblr Human rig this morning: full mesh, but the mean head, bald and undressed.</figcaption>
+</figure>
+
+<h2>The fit learns to leave the mean</h2>
+<p>The face fit used 39 MakeHuman target groups against front-view landmarks, with a ridge set in metres that overpowered the data, so every weight stayed under a quarter. It now fits 200 groups (every face target, left and right paired, ears included), uses MediaPipe's depth per landmark, and runs at a ridge four hundred times lower. Landmark error on Jensen fell from 1.69 mm to 0.85 mm, and the head took his breadth and jaw.</p>
+<figure>
+  <img src="img/2026-10-31-creator-fit.webp" alt="The reference beside three ridge settings, front and profile">
+  <figcaption>Ridge 1e-4, 1e-5 and 1e-6, front and profile, rendered in Blender on the bare head. 1e-5 is the default.</figcaption>
+</figure>
+
+<h2>Hair, glasses, jacket and eyes come back</h2>
+<p>Half of a likeness is silhouette. The wardrobe's 89 raw items were refitted onto the new body's surface (<code>tools/wardrobe/fit.ts --reference v2/m-medium</code>, into <code>public/kit/wear2</code>), so hair, glasses and the jacket hang on it again. The eyeballs gained an iris region with a baked iris and pupil, tinted the hero's eye colour, so eye colour does something at last.</p>
+<figure>
+  <img src="img/2026-10-31-creator-after.webp" alt="The reference, the fitted face in the Forge, the eyes up close, and the bust">
+  <figcaption>The reference, then the Forge this evening: the fitted face, the eyes, the bust. Dark side-parted hair, brown irises, the glasses on their socket.</figcaption>
+</figure>
+
+<h2>Sculpting at the creator's depth</h2>
+<p>The sculpt panel grew from six regions and 26 sliders to ten regions and 98: head, forehead, brows, eyes, ears, nose, cheeks, mouth, jaw and chin, neck. Every slider is a pair of MakeHuman targets on the full face basis, on top of whatever the photo fitted.</p>
+<figure>
+  <img src="img/2026-10-31-creator-sculpt.webp" alt="The Forge's face panel with ten region tabs and the nose sliders">
+  <figcaption>The face panel on Jensen: ten regions, the nose's pad and its first sliders.</figcaption>
+</figure>
+
+<h2>What still stood between this and the reference, at midday</h2>
+<p>The hair was the wardrobe's shell hair, not the reference's swept salt-and-pepper. The brows were only what the photo paints. The skin was a photo under plain lighting, not the stylised shading the canon asks for. And the reference was one front-on picture.</p>
+
+<h2>Evening: the clothes stop breaking over the body</h2>
+<figure>
+  <img src="img/2026-10-31-clothes.webp" alt="Jensen's legs and feet in the afternoon, with the skin through the trousers and the toes out of the boots, and in the evening, closed">
+  <figcaption>Afternoon and evening. The first wardrobe was modelled on a 2,600-point proxy: a trouser leg is a 500-triangle tube whose flat panels cut through the rounder thigh of the new body, and a boot's toe cap fell short of its longer toes. Every item is now carried onto the new skin from the first body, refined against its curve, pushed out of the skin where it hides it, and footwear hides the whole foot.</figcaption>
+</figure>
+
+<h2>Evening: the hair, silver and swept</h2>
+<figure>
+  <img src="img/2026-10-31-hair.webp" alt="The dark side part of the afternoon beside the swept silver hair of the evening, both from three-quarters">
+  <figcaption>The side part in dark grey, and the swept style in silver with wider clumps, a feathered hairline and locks that hold together at a distance. The owner's verdict stands: the parting is nothing like Jensen's, and the shell-plus-cards hair has reached its limit. Authored card hair with strand textures is the next piece of work (the library plan).</figcaption>
+</figure>
+
+<h2>Evening: ask for a change in words</h2>
+<figure>
+  <img src="img/2026-10-31-ask.webp" alt="The Forge's Ask panel after the message a much stronger jaw, whiter hair and a bigger nose, with the reply Done: stronger jaw, bigger nose, whiter hair">
+  <figcaption>"A much stronger jaw, whiter hair and a bigger nose." The chat patches the named parts and nothing else: the sculpt sliders move, the hair colour shifts, every other setting stays.</figcaption>
+</figure>
+
+<h2>Evening: every starter on the new body</h2>
+<figure>
+  <img src="img/2026-10-31-starters.webp" alt="Busts of all twenty starter heroes in the Forge, five across">
+  <figcaption>All twelve bodies are rebuilt on the Psyblr Human, and all twenty starters wear the refitted wardrobe. A two-minute soak on this Air with all twenty on the new bodies held a 16.7 ms median, but the 95th percentile rose to 33 ms (18.7 ms with two of them on v2 this morning) and the 99th to 34.4 ms, just over the 33.4 ms line: twenty full-mesh bodies with refined wardrobes cost more than the proxies did, so the arena needs a lighter level of detail for each body before the acceptance run.</figcaption>
+</figure>
+
+<h2>What stands between this and FC 26 now</h2>
+<p>Breadth and the hair. Twenty hair styles against a hundred, six beards, no brow or skin-detail catalogue, five body morphs where the reference games scale every part, one item per slot where they layer sixty. The study of both creators and the plan to close the gap, library by library on top of the base model and rig, is <code>docs/plans/2026-10-31-creator-library-plan.md</code>.</p>
+</main>
+</body>
+</html>

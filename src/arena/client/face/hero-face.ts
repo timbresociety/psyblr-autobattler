@@ -4,6 +4,7 @@ import { bodyKit, bodyKitNow } from '../body-kit.js'
 import { compositeFace, facingField, paintMarks, surface, type Surface } from './composite.js'
 import { buildFacePatch, type FaceMeta, type Rgba } from './patch.js'
 import { faceBasisFile, faceBasisSettled } from './shape.js'
+import { V2_BODIES } from '../character-look.js'
 import type { Pt } from './warp.js'
 
 /**
@@ -74,7 +75,8 @@ export function heroAtlas(file: Gltf, look: CharacterLook, scale = 1): Promise<T
   const mesh = fileMesh(file)
   const atlas = mesh ? characterMap(mesh) : null
   // a sculpted face needs the basis and the body's kit when the hero is dressed, though nothing is baked for it
-  if (!face && !look.marks) return look.sculpt ? Promise.all([faceBasisFile(), bodyKit(look.build)]).then(() => null) : Promise.resolve(null)
+  const rig = V2_BODIES.has(look.build) ? 'standard' : 'legacy'
+  if (!face && !look.marks) return look.sculpt ? Promise.all([faceBasisFile(rig), bodyKit(look.build)]).then(() => null) : Promise.resolve(null)
   if (!mesh || !atlas?.image) return Promise.resolve(null)
   const key = scale === 1 ? keyOf(look) : `${keyOf(look)}|x${scale}`
   let made = atlases.get(key)
@@ -82,7 +84,7 @@ export function heroAtlas(file: Gltf, look: CharacterLook, scale = 1): Promise<T
     made = (async () => {
       const image = atlas.image as CanvasImageSource & { width: number; height: number }
       // the face basis comes in with the atlas, so the face's shape is fitted (shape.ts) when the hero is dressed in it
-      const [meta, photo] = await Promise.all([faceMeta(look.build), face ? photoPixels(face.url) : undefined, face ? faceBasisFile() : undefined])
+      const [meta, photo] = await Promise.all([faceMeta(look.build), face ? photoPixels(face.url) : undefined, face ? faceBasisFile(rig) : undefined])
       if (!meta || (face && !photo)) return null
       let canvas: Surface
       if (face && photo) {
@@ -123,7 +125,7 @@ export function heroAtlas(file: Gltf, look: CharacterLook, scale = 1): Promise<T
 export function heroAtlasNow(file: Gltf, look: CharacterLook, onReady: () => void): THREE.Texture | null | undefined {
   if (!look.face && !look.marks) {
     // a sculpted face waits for the basis and the body's kit, so it isn't drawn (and kept) without its shape
-    if (!look.sculpt || (faceBasisSettled() && bodyKitNow(look.build, onReady) !== null)) return null
+    if (!look.sculpt || (faceBasisSettled(V2_BODIES.has(look.build) ? 'standard' : 'legacy') && bodyKitNow(look.build, onReady) !== null)) return null
     void heroAtlas(file, look).then(onReady)
     return undefined
   }

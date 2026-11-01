@@ -16,7 +16,7 @@ import faces from './faces.json'
  * on purpose: each person's own height. A hero's size class sets its height, so the hitbox stays the truth.
  */
 
-const FACES: Record<string, { width: number; height: number; skin: string; iris?: string; points: number[] }> = faces
+const FACES: Record<string, { width: number; height: number; skin: string; iris?: string; points: number[]; depth?: number[] }> = faces
 
 interface Recipe {
   gender: Gender
@@ -59,7 +59,7 @@ const RECIPES: Record<string, Recipe> = {
     wear: { upper: item('leather_jacket', ['#1a1a1f', BLACK], { finishes: ['cotton', null] }), lower: item('jeans', ['#17171c', null]), feet: item('boots', [BLACK]) },
   },
   huang: {
-    gender: 'm', physique: { weight: 0.5, muscle: 0.33, age: 0.7 }, hair: 'hair_swept', color: '#9d9ea3', style: 'swept',
+    gender: 'm', physique: { weight: 0.5, muscle: 0.33, age: 0.7 }, hair: 'hair_swept', color: '#8a8785', style: 'swept',
     // the owner's anime Jensen (Forge goal reference): silver hair, glasses, the leather jacket with green circuit lines,
     // black cargos and combat boots
     wear: {
@@ -167,7 +167,7 @@ export function demoLook(id: string): HeroLook {
     armour: false,
     cape: false,
     colors: { skin: f.skin, hair: r.color, ...(f.iris ? { iris: f.iris } : {}) },
-    face: { url: `/kit/faces/${id}.webp`, width: f.width, height: f.height, points: [...f.points] },
+    face: { url: `/kit/faces/${id}.webp`, width: f.width, height: f.height, points: [...f.points], ...(f.depth ? { depth: [...f.depth] } : {}) },
     wear,
   }
 }

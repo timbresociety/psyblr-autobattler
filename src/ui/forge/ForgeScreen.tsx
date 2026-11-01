@@ -34,6 +34,7 @@ import { prefersReducedMotion } from '../arena/hud/format'
 import { castClip, heroHue, webglAvailable, type StageClip } from '../common/hero-look'
 import { PREP_MESSAGES } from '../common/image-prep'
 import { SkillIcon } from '../common/SkillIcon'
+import { patchLook } from '../../forge/patch'
 import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
@@ -380,6 +381,14 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     if (!build) {
       // the first message is read back before anything is built; while a reading is open, a message corrects it
       await read(reading ? prompt : text, reading ? text : undefined)
+      return
+    }
+    // a change to the look's named parts (a stronger jaw, greyer hair, a leather jacket) is patched here and now
+    const patch = patchLook(lookOf(build), text, wardrobe)
+    if (patch) {
+      changed()
+      setBuild((b) => b && setLook(b, patch.look))
+      say(`Done: ${patch.said.join(', ')}.`)
       return
     }
     setBusy(true)

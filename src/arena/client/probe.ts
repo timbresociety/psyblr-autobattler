@@ -421,6 +421,20 @@ const probe = {
   at: (x: number, y: number, name?: string) => at(pick(name), x, y),
   heroes: (name?: string) => heroFacts(pick(name)),
   outline: (name?: string, depth?: number) => outline(pick(name), depth),
+  nodes: (pattern: string, name?: string) => nodes(pick(name), new RegExp(pattern)),
+}
+
+/** Every node whose name matches, with where it is in the world: bones, sockets and gear, for checking a rig by numbers. */
+export function nodes(target: ProbeTarget, pattern: RegExp): { name: string; at: THREE.Vector3Tuple; size?: THREE.Vector3Tuple }[] {
+  const out: { name: string; at: THREE.Vector3Tuple; size?: THREE.Vector3Tuple }[] = []
+  target.scene.updateMatrixWorld(true)
+  target.scene.traverse((o) => {
+    if (!pattern.test(o.name)) return
+    const box = new THREE.Box3().setFromObject(o)
+    const size = box.isEmpty() ? undefined : (box.getSize(new THREE.Vector3()).toArray().map((v) => Math.round(v * 1000) / 1000) as THREE.Vector3Tuple)
+    out.push({ name: o.name, at: o.getWorldPosition(new THREE.Vector3()).toArray().map((v) => Math.round(v * 1000) / 1000) as THREE.Vector3Tuple, ...(size ? { size } : {}) })
+  })
+  return out
 }
 
 /** Let `window.__probe` read a scene until the returned call forgets it. */

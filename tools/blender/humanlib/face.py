@@ -52,6 +52,51 @@ CANDIDATES = [
 ]
 
 
+# target families with no landmark to answer to (ears, neck girth) or that only move the whole head: left out of the fit
+SKIP = ('measure-', 'head-trans-', 'head-age-', 'nose-trans-in', 'nose-trans-out', 'mouth-trans-in', 'mouth-trans-out', 'neck-trans-', 'neck-double', 'neck-back')
+FAMILIES = ('head', 'forehead', 'eyebrows', 'eyes', 'ears', 'nose', 'cheek', 'mouth', 'chin', 'neck')
+
+
+def full_candidates():
+    """
+    Every MakeHuman face target as a fit variable, left and right paired (the creator goal, docs/plans/2026-10-31-canon-
+    psyblr-human.md): about 140 groups against the 39 the first fit used, so a head can leave the mean.
+    """
+    from bl_ext.user_default.mpfb.services.locationservice import LocationService
+
+    root = os.path.join(LocationService.get_mpfb_data('targets'))
+    groups = []
+    seen = set()
+    for fam in FAMILIES:
+        folder = os.path.join(root, fam)
+        if not os.path.isdir(folder):
+            continue
+        for f in sorted(os.listdir(folder)):
+            if not f.endswith('.target.gz'):
+                continue
+            name = f[: -len('.target.gz')]
+            if name.startswith(SKIP):
+                continue
+            if name.startswith('l-'):
+                stem = name[2:]
+                if stem in seen:
+                    continue
+                seen.add(stem)
+                groups.append([f'l-{stem}', f'r-{stem}'])
+            elif name.startswith('r-'):
+                continue
+            else:
+                groups.append([name])
+    return [g for g in groups if all(TargetService.target_full_path(n) for n in g)]
+
+
+def use_full_candidates():
+    """Switch fit_face, group_names and the face basis to the full target set (human2.py)."""
+    global CANDIDATES
+    CANDIDATES = full_candidates()
+    return CANDIDATES
+
+
 def full_coords(human):
     """hm08-ordered vertex positions of an MPFB human with its shape keys mixed (helpers included)."""
     n = len(human.data.vertices)
@@ -163,14 +208,15 @@ def landmark_positions(coords, bind):
 
 
 def umeyama(src, dst):
-    """Scale, rotation and translation taking 2D points `src` onto `dst` (least squares)."""
+    """Scale, rotation and translation taking points `src` onto `dst` (least squares), in 2D or 3D."""
+    k = src.shape[1]
     ms, md = src.mean(0), dst.mean(0)
     s0, d0 = src - ms, dst - md
     cov = d0.T @ s0 / len(src)
     U, S, Vt = np.linalg.svd(cov)
-    D = np.eye(2)
+    D = np.eye(k)
     if np.linalg.det(U) * np.linalg.det(Vt) < 0:
-        D[1, 1] = -1
+        D[k - 1, k - 1] = -1
     R = U @ D @ Vt
     var = (s0 ** 2).sum() / len(src)
     s = np.trace(np.diag(S) @ D) / var
@@ -181,6 +227,11 @@ def umeyama(src, dst):
 def front(p3):
     """Front orthographic view: x right, image y down (so -z)."""
     return np.stack([p3[:, 0], -p3[:, 2]], axis=1)
+
+
+def front3(p3):
+    """The front view with depth: x right, image y down, and distance away from the camera (the body's +y)."""
+    return np.stack([p3[:, 0], -p3[:, 2], p3[:, 1]], axis=1)
 
 
 def solve_box(J, r, lam, iters=600):
@@ -201,14 +252,23 @@ def solve_box(J, r, lam, iters=600):
     return w
 
 
-def fit_face(human, portrait, lam=4e-4, rounds=4, log=print, full=False):
+def fit_face(human, portrait, lam=4e-4, rounds=4, log=print, full=False, depth=0.5, iters=600):
     """
-    Load the candidate face targets and set them so the head's landmarks match the portrait's (front view).
+    Load the candidate face targets and set them so the head's landmarks match the portrait's: front on, and when the
+    portrait's landmarks carry MediaPipe's depth, in depth too, weighted `depth` against the picture (0 ignores it).
     Returns the fitted weights by target name: those above 0.02, or with `full` every group's.
     """
     bind = load_bind()
-    fit_ids = [i for i in FIT if bind[i]]
-    pts = np.array(portrait['points'])[:, :2]
+    fit_ids = [i for i in (FIT if depth <= 0 else sorted(set(FIT) | set(BROWS))) if bind[i]]
+    raw = np.array(portrait['points'])
+    use3 = depth > 0 and raw.shape[1] >= 3
+    view = front3 if use3 else front
+    pts = raw[:, :3] if use3 else raw[:, :2]
+    k = 3 if use3 else 2
+    # the depth rows weigh `depth` of a picture row: MediaPipe's z is a guess, the picture is measured
+    rowweight = np.ones(len(fit_ids) * k)
+    if use3:
+        rowweight[2::3] = depth
     keys = []
     for group in CANDIDATES:
         ks = []
@@ -220,7 +280,7 @@ def fit_face(human, portrait, lam=4e-4, rounds=4, log=print, full=False):
     n = len(human.data.vertices)
     base = full_coords(human)
     L0, _ = landmark_positions(base, bind)
-    m0 = front(L0[fit_ids])
+    m0 = view(L0[fit_ids])
 
     def delta(kb):
         a = np.empty(n * 3)
@@ -233,19 +293,23 @@ def fit_face(human, portrait, lam=4e-4, rounds=4, log=print, full=False):
     for ks in keys:
         d = sum((delta(kb) for kb in ks), np.zeros((n, 3))) if ks else np.zeros((n, 3))
         Ld, _ = landmark_positions(d, bind)
-        cols.append(front(Ld[fit_ids]).reshape(-1))
+        cols.append(view(Ld[fit_ids]).reshape(-1))
     J = np.stack(cols, axis=1)
     p = pts[fit_ids]
     w = np.zeros(len(keys))
+    Jw = J * rowweight[:, None]
     for _ in range(rounds):
-        m = m0 + (J @ w).reshape(-1, 2)
+        m = m0 + (J @ w).reshape(-1, k)
         s, R, t = umeyama(p, m)
         target = (s * (R @ p.T)).T + t
-        w = solve_box(J, (target - m0).reshape(-1), lam)
-    m = m0 + (J @ w).reshape(-1, 2)
+        w = solve_box(Jw, (target - m0).reshape(-1) * rowweight, lam, iters=iters)
+    m = m0 + (J @ w).reshape(-1, k)
     s, R, t = umeyama(p, m)
-    err0 = np.abs((s * (R @ p.T)).T + t - m0).mean()
-    err = np.abs((s * (R @ p.T)).T + t - m).mean()
+    fitted_p = (s * (R @ p.T)).T + t
+    err0 = np.abs(fitted_p[:, :2] - m0[:, :2]).mean()
+    err = np.abs(fitted_p[:, :2] - m[:, :2]).mean()
+    if use3:
+        log(f'face fit depth: mean error {np.abs(fitted_p[:, 2] - m0[:, 2]).mean() * 1000:.2f} mm -> {np.abs(fitted_p[:, 2] - m[:, 2]).mean() * 1000:.2f} mm over {len(fit_ids)} landmarks, {len(keys)} groups')
     fitted = {}
     for ks, group, wk in zip(keys, CANDIDATES, w):
         for kb in ks:

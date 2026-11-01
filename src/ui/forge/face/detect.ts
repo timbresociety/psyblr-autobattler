@@ -9,6 +9,8 @@ import type { Pt } from '../../../arena/client/face/warp.js'
 export interface FoundFace {
   /** 478 landmarks (irises included) in the image's own pixels. */
   points: Pt[]
+  /** Each landmark's depth, in the same pixels, positive away from the camera. */
+  depth: number[]
   width: number
   height: number
 }
@@ -44,5 +46,5 @@ export async function detectFace(image: Image): Promise<FoundFace | undefined> {
   const found = (await load()).detect(image).faceLandmarks[0]
   if (!found || found.length < 478) return undefined
   const { width, height } = sizeOf(image)
-  return { width, height, points: found.map((p) => [p.x * width, p.y * height] as const) }
+  return { width, height, points: found.map((p) => [p.x * width, p.y * height] as const), depth: found.map((p) => ((p as { z?: number }).z ?? 0) * width) }
 }

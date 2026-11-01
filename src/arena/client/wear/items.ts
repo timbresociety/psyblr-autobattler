@@ -1,8 +1,9 @@
 import * as THREE from 'three'
 import { LOOK_SLOTS, type LookSlot, type Worn } from '../../../charter/look.js'
 import { checkMeta, surfaceItem, type ItemMeta, type SurfaceItem } from '../../../kit/wear/item.js'
+import { SURFACE_VERTICES, type RigKind } from '../../../kit/rig/names.js'
 import { bodyKit, bodyKitNow } from '../body-kit.js'
-import type { Gltf } from '../character-look.js'
+import { V2_BODIES, type BodyName, type Gltf } from '../character-look.js'
 import type { BodySockets } from '../gear.js'
 
 /**
@@ -12,8 +13,20 @@ import type { BodySockets } from '../gear.js'
  * a missing item never stops a fight.
  */
 
-/** Welded vertices on the shared body surface; an item bound to anything else is refused. */
-export const BODY_VERTICES = 2595
+/** Welded vertices on the first bodies' shared surface; an item bound to anything else is refused. */
+export const BODY_VERTICES = SURFACE_VERTICES.legacy
+
+/** The rig a body is on, so its items come bound to the right surface. */
+export const bodyRig = (body: string): RigKind => (V2_BODIES.has(body as BodyName) ? 'standard' : 'legacy')
+
+/**
+ * Where a body's copy of an item lives: the first bodies' wardrobe is public/kit/wear, the Psyblr Human's the same
+ * items refitted to its surface in public/kit/wear2 (tools/wardrobe/fit.ts --reference v2/m-medium). A player's
+ * generated item is fitted to one surface only, so it stays where it is.
+ */
+export function itemUrlFor(url: string, rig: RigKind): string {
+  return rig === 'standard' ? url.replace(/^\/kit\/wear\//, '/kit/wear2/') : url
+}
 
 /** A surface item, with its own texture when a player generated it; or a rigid piece and its metadata, if it has any. */
 export type LoadedItem = { kind: 'surface'; item: SurfaceItem; texture?: THREE.Texture } | { kind: 'rigid'; file: Gltf; meta?: ItemMeta }
@@ -24,8 +37,8 @@ const values = (attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, 
   return out
 }
 
-/** Read a loaded file as a wardrobe item. */
-export function readItem(file: Gltf): LoadedItem {
+/** Read a loaded file as a wardrobe item bound to a surface of `vertices` welded vertices. */
+export function readItem(file: Gltf, vertices = BODY_VERTICES): LoadedItem {
   let mesh: THREE.Mesh | undefined
   file.scene.traverse((o) => {
     if (!mesh && (o as THREE.Mesh).isMesh && (o as THREE.Mesh).geometry.getAttribute('_tri')) mesh = o as THREE.Mesh
@@ -38,7 +51,7 @@ export function readItem(file: Gltf): LoadedItem {
     })
     let meta: ItemMeta | undefined
     try {
-      meta = checkMeta(extras, BODY_VERTICES)
+      meta = checkMeta(extras, vertices)
     } catch {
       meta = undefined
     }
@@ -70,7 +83,7 @@ export function readItem(file: Gltf): LoadedItem {
       ...(len ? { len } : {}),
       ...(chain ? { chain } : {}),
     },
-    BODY_VERTICES,
+    vertices,
   )
   const texture = (mesh.material as THREE.MeshStandardMaterial).map
   return texture ? { kind: 'surface', item, texture } : { kind: 'surface', item }
@@ -79,18 +92,19 @@ export function readItem(file: Gltf): LoadedItem {
 const items = new Map<string, Promise<LoadedItem | undefined>>()
 const ready = new Map<string, LoadedItem | undefined>()
 
-/** An item, loaded and read once; undefined when it can't load. */
-export function loadItem(url: string, load: (url: string) => Promise<Gltf>): Promise<LoadedItem | undefined> {
-  let item = items.get(url)
+/** An item, loaded and read once per rig; undefined when it can't load. */
+export function loadItem(url: string, load: (url: string) => Promise<Gltf>, rig: RigKind = 'legacy'): Promise<LoadedItem | undefined> {
+  const key = `${rig}:${url}`
+  let item = items.get(key)
   if (!item) {
-    item = load(url)
-      .then(readItem)
+    item = load(itemUrlFor(url, rig))
+      .then((file) => readItem(file, SURFACE_VERTICES[rig]))
       .catch(() => undefined)
       .then((it) => {
-        ready.set(url, it)
+        ready.set(key, it)
         return it
       })
-    items.set(url, item)
+    items.set(key, item)
   }
   return item
 }
@@ -105,7 +119,8 @@ const wornUrls = (outfit: Partial<Record<LookSlot, Worn>>) => [...new Set(LOOK_S
 
 export async function loadWear(body: string, outfit: Partial<Record<LookSlot, Worn>>, load: (url: string) => Promise<Gltf>): Promise<LoadedWear> {
   const urls = wornUrls(outfit)
-  const [kit, ...loaded] = await Promise.all([bodyKit(body), ...urls.map((url) => loadItem(url, load))])
+  const rig = bodyRig(body)
+  const [kit, ...loaded] = await Promise.all([bodyKit(body), ...urls.map((url) => loadItem(url, load, rig))])
   return { items: new Map(urls.flatMap((url, i) => (loaded[i] ? [[url, loaded[i]!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}) }
 }
 
@@ -115,13 +130,14 @@ export async function loadWear(body: string, outfit: Partial<Record<LookSlot, Wo
  */
 export function wearNow(body: string, outfit: Partial<Record<LookSlot, Worn>>, load: (url: string) => Promise<Gltf>, changed: () => void): LoadedWear | null {
   const urls = wornUrls(outfit)
+  const rig = bodyRig(body)
   const kit = bodyKitNow(body, changed)
   let waiting = kit === null
   for (const url of urls) {
-    if (ready.has(url)) continue
+    if (ready.has(`${rig}:${url}`)) continue
     waiting = true
-    void loadItem(url, load).then(changed)
+    void loadItem(url, load, rig).then(changed)
   }
   if (waiting) return null
-  return { items: new Map(urls.flatMap((url) => (ready.get(url) ? [[url, ready.get(url)!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}) }
+  return { items: new Map(urls.flatMap((url) => (ready.get(`${rig}:${url}`) ? [[url, ready.get(`${rig}:${url}`)!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}) }
 }

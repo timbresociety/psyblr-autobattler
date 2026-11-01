@@ -149,7 +149,7 @@ describe('fitting', () => {
     expect(Array.from(back.item.binding.tri)).toEqual(Array.from(file.item.binding.tri))
   })
 
-  it("drops what lies under the item's own outer parts, tucks its edges under, and leaves what lies beside them", () => {
+  it("tucks what lies under the item's own outer parts a centimetre under them, keeps every triangle, and leaves what lies beside them", () => {
     const P = ref.shape.positions
     const chest = ref.rest.chest[1]
     const torso = (v: number) => ref.shape.skin[v] === 1 && leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5
@@ -159,8 +159,11 @@ describe('fitting', () => {
     const key = (q: ArrayLike<number>, v: number) => `${Math.round(q[v * 3] * 1e4)},${Math.round(q[v * 3 + 1] * 1e4)},${Math.round(q[v * 3 + 2] * 1e4)}`
     const all = (raw: RawItem) => Array.from({ length: raw.positions.length / 3 }, (_, v) => v)
     // a band 9 mm over the shirt, as an obi lies over a robe
-    const { raw, buried } = unburied(joined('banded', shirt, band), ref)
-    expect(buried).toBeGreaterThan(band.index.length / 3 / 4)
+    const banded = joined('banded', shirt, band)
+    const { raw, buried } = unburied(banded, ref)
+    // nothing is dropped (a dropped leg surface under a cargo pocket left the skin bare), only tucked
+    expect(buried).toBe(0)
+    expect(raw.index.length).toBe(banded.index.length)
     const left = new Set(all(raw).map((v) => key(raw.positions, v)))
     // the band stays whole, and so does the shirt clear of it
     expect(all(band).every((v) => left.has(key(band.positions, v)))).toBe(true)

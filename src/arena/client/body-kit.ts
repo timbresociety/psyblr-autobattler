@@ -1,5 +1,7 @@
+import { bodyFolder } from './character-look.js'
 import type { FaceMeta } from './face/patch.js'
 import type { BodySockets } from './gear.js'
+import type { RigKind } from './rig.js'
 
 /**
  * A body's kit sidecar (public/heroes/<body>.kit.json, written by the Blender pipeline): its face, its sockets, its
@@ -7,6 +9,8 @@ import type { BodySockets } from './gear.js'
  * reference body's (public/kit/face-basis.json) and its own face's weights on each basis group.
  */
 export interface BodyKit extends FaceMeta {
+  /** The rig the body is on; absent on the first bodies, which are on the 20-bone rig. */
+  rig?: RigKind
   sockets?: BodySockets
   morphs?: string[]
   faceScale?: number
@@ -20,7 +24,7 @@ const settled = new Map<string, BodyKit | undefined>()
 export function bodyKit(body: string): Promise<BodyKit | undefined> {
   let kit = kits.get(body)
   if (!kit) {
-    kit = fetch(`/heroes/${body}.kit.json`)
+    kit = fetch(`${bodyFolder(body as Parameters<typeof bodyFolder>[0])}/${body}.kit.json`)
       .then((r) => (r.ok ? (r.json() as Promise<BodyKit>) : undefined))
       .catch(() => undefined)
       .then((k) => {

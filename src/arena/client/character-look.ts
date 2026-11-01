@@ -26,8 +26,8 @@ export interface CharacterLook {
   physique: Physique
   /** What it wears, slot by slot. */
   outfit: Partial<Record<LookSlot, Worn>>
-  /** The body's own colours: its skin (baked into the hero's atlas under a photo face) and the whites of its eyes. */
-  colors: { skin: THREE.Color; eye: THREE.Color }
+  /** The body's own colours: its skin (baked into the hero's atlas under a photo face), the whites of its eyes, and its irises. */
+  colors: { skin: THREE.Color; eye: THREE.Color; iris: THREE.Color }
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
   face?: FacePhoto
   /** Marks painted on the face, as a form wears them (face/composite). */
@@ -54,9 +54,10 @@ export function formCharacterLook(look: CharacterLook, body: FormBody | undefine
       delete outfit.lower
     } else if (slot === 'upper' || slot === 'lower') delete outfit.full
   }
-  // the eyes take the form's colour, a little lifted so the iris still reads against it
+  // the eyes take the form's colour: the irises outright, and the whites a little, lifted so the iris still reads
   const eye = body.eyes ? new THREE.Color().setStyle(body.eyes, THREE.SRGBColorSpace).lerp(new THREE.Color(1, 1, 1), 0.25) : look.colors.eye
-  return { ...look, outfit, colors: { ...look.colors, eye }, ...(body.marks ? { marks: body.marks } : {}) }
+  const iris = body.eyes ? new THREE.Color().setStyle(body.eyes, THREE.SRGBColorSpace) : look.colors.iris
+  return { ...look, outfit, colors: { ...look.colors, eye, iris }, ...(body.marks ? { marks: body.marks } : {}) }
 }
 
 /** The body a hero wears: its size class (colossal while transformed) in its look's gender, or its role's without one. */
@@ -84,7 +85,11 @@ export function characterLook(build: Build, hue: number): CharacterLook {
     build: bodyFor(build),
     physique: { ...NEUTRAL_PHYSIQUE, ...(look.physique ?? {}) },
     outfit: outfitOf(look),
-    colors: { skin: new THREE.Color().setStyle(look.colors.skin ?? base.colors.skin, THREE.SRGBColorSpace), eye: new THREE.Color().setHSL(0, 0, 0.96, THREE.SRGBColorSpace) },
+    colors: {
+      skin: new THREE.Color().setStyle(look.colors.skin ?? base.colors.skin, THREE.SRGBColorSpace),
+      eye: new THREE.Color().setHSL(0, 0, 0.96, THREE.SRGBColorSpace),
+      iris: new THREE.Color().setStyle(look.colors.iris ?? base.colors.iris ?? '#3a2e22', THREE.SRGBColorSpace),
+    },
   }
   if (look.face) out.face = look.face
   if (look.sculpt) out.sculpt = look.sculpt
@@ -94,11 +99,23 @@ export function characterLook(build: Build, hue: number): CharacterLook {
 export type Gltf = { scene: THREE.Group; animations: THREE.AnimationClip[] }
 const files = new Map<BodyName, Promise<Gltf>>()
 
+/**
+ * The bodies rebuilt on the Psyblr Human rig (tools/blender/human2.py, public/heroes/v2/; docs/plans/2026-10-31-canon-
+ * psyblr-human.md, phase 1). A body listed here loads from v2 and moves on the standard rig's library; one left out
+ * would stay on the 20-bone rig. All twelve are rebuilt, so every hero is on the Psyblr Human.
+ */
+export const V2_BODIES: ReadonlySet<BodyName> = new Set<BodyName>(
+  (['m', 'f'] as const).flatMap((g) => (['tiny', 'small', 'medium', 'large', 'huge', 'colossal'] as const).map((s) => `${g}-${s}` as BodyName)),
+)
+
+/** Where a body's file and kit sidecar live. */
+export const bodyFolder = (build: BodyName) => (V2_BODIES.has(build) ? '/heroes/v2' : '/heroes')
+
 /** Load (once) and cache a character file; `load` is the shared GLTF loader with meshopt support. */
 export function loadBuild(build: BodyName, load: (url: string) => Promise<Gltf>): Promise<Gltf> {
   let file = files.get(build)
   if (!file) {
-    file = load(`/heroes/${build}.glb`).catch((e: unknown) => {
+    file = load(`${bodyFolder(build)}/${build}.glb`).catch((e: unknown) => {
       files.delete(build)
       throw e
     })

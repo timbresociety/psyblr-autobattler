@@ -5,6 +5,7 @@ import type { RawItem, RawSpec } from './fit.js'
 import { meshNormals } from './fit.js'
 import { TriangleBVH, type V3 } from '../wear/ray.js'
 import { leanOn, type Reference } from './reference.js'
+import { kitRigOf } from '../rig/names.js'
 import { weldPositions } from '../wear/weld.js'
 
 /**
@@ -50,19 +51,17 @@ const EASE = 0.012
 const BAND: Partial<Record<ItemSlot, number>> = { upper: 0.004, lower: 0.004, full: 0.004, feet: 0.003, head: 0.004, back: 0.01 }
 /** Knobs a generated item gets, by slot: they cut along the body, so they work on anything. */
 const KNOBS: Partial<Record<ItemSlot, Knob[]>> = { upper: ['sleeve', 'hem'], lower: ['leg'], full: ['sleeve', 'leg'] }
-/** The bones each slot may lie on (where it sits close to the skin). */
-const TORSO = ['hips', 'spine', 'chest', 'upper_chest', 'clavicle_L', 'clavicle_R', 'neck']
-const ARMS = ['upper_arm_L', 'upper_arm_R', 'forearm_L', 'forearm_R']
-const LEGS = ['thigh_L', 'thigh_R', 'shin_L', 'shin_R']
-const HANDS = ['hand_L', 'hand_R']
-const FEET = ['foot_L', 'foot_R']
-const REACH: Partial<Record<ItemSlot, string[]>> = {
-  upper: [...TORSO, ...ARMS, ...HANDS, 'thigh_L', 'thigh_R'],
-  lower: ['hips', 'spine', 'chest', ...LEGS, ...FEET],
-  full: [...TORSO, ...ARMS, ...HANDS, ...LEGS, ...FEET],
-  feet: ['foot_L', 'foot_R', 'shin_L', 'shin_R'],
-  head: ['head', 'neck'],
-  back: [...TORSO, 'upper_arm_L', 'upper_arm_R', ...LEGS],
+/** The bones each slot may lie on (where it sits close to the skin), on the reference body's rig. */
+function reach(ref: Reference): Partial<Record<ItemSlot, string[]>> {
+  const n = kitRigOf(ref.bones)
+  return {
+    upper: [...n.torso, ...n.arms, ...n.hands, n.thigh.L, n.thigh.R],
+    lower: [n.hips, n.spine, n.chest, ...n.legs, ...n.feet],
+    full: [...n.torso, ...n.arms, ...n.hands, ...n.legs, ...n.feet],
+    feet: [n.foot.L, n.foot.R, n.shin.L, n.shin.R],
+    head: [n.head, n.neck],
+    back: [...n.torso, n.upperArm.L, n.upperArm.R, ...n.legs],
+  }
 }
 const NAMES = ['main', 'second', 'third', 'fourth']
 
@@ -153,26 +152,27 @@ function marks(ref: Reference): Marks {
   const P = ref.shape.positions
   const V = ref.shape.surface.count
   const skin = (v: number) => ref.shape.skin[v] === 1
-  const trunk = (v: number) => skin(v) && leanOn(ref, v, [...ARMS, 'hand_L', 'hand_R']) < 0.2
+  const n = kitRigOf(ref.bones)
+  const trunk = (v: number) => skin(v) && leanOn(ref, v, [...n.arms, ...n.hands]) < 0.2
   const lean = (bones: string[], min: number) => (v: number) => skin(v) && leanOn(ref, v, bones) >= min
   const r = ref.rest
-  const neck = r.neck[1]
-  const chest = r.upper_chest[1] + 0.1
-  const hips = r.hips[1]
-  const head = bounds(P, (v) => v < V && lean(['head'], 0.9)(v))
+  const neck = r[n.neck][1]
+  const chest = r[n.upperChest][1] + 0.1
+  const hips = r[n.hips][1]
+  const head = bounds(P, (v) => v < V && lean([n.head], 0.9)(v))
   const level = (y: number, half: number) => {
     const s = section(P, ref.skin.triangles, y, 0, half, (v) => v < V && trunk(v))
     if (!s) throw new Error(`the reference body has no trunk at ${y.toFixed(2)} m`)
     return s
   }
-  const feet = [lean(['foot_L'], 0.5), lean(['foot_R'], 0.5)].map((f) => bounds(P, (v) => v < V && f(v)))
+  const feet = [lean([n.foot.L], 0.5), lean([n.foot.R], 0.5)].map((f) => bounds(P, (v) => v < V && f(v)))
   const m: Marks = {
     neck,
     chest,
-    waist: r.spine[1] + 0.03,
+    waist: r[n.spine][1] + 0.03,
     hips,
-    crotch: r.thigh_L[1] - 0.08,
-    shoulder: r.upper_arm_L[0],
+    crotch: r[n.thigh.L][1] - 0.08,
+    shoulder: r[n.upperArm.L][0],
     head: { top: head.hi[1], width: head.hi[0] - head.lo[0], cz: (head.lo[2] + head.hi[2]) / 2 },
     foot: { length: Math.max(...feet.map((b) => b.hi[2] - b.lo[2])), x: [(feet[0].lo[0] + feet[0].hi[0]) / 2, (feet[1].lo[0] + feet[1].hi[0]) / 2], cz: [(feet[0].lo[2] + feet[0].hi[2]) / 2, (feet[1].lo[2] + feet[1].hi[2]) / 2] },
     back: level(chest, 0.12).back,
@@ -429,10 +429,11 @@ function boneLines(ref: Reference): [V3, V3][] {
   const along = (a: V3, b: V3, k: number): V3 => [b[0] + (b[0] - a[0]) * k, b[1] + (b[1] - a[1]) * k, b[2] + (b[2] - a[2]) * k]
   const lines: [V3, V3][] = []
   const chain = (...ps: V3[]) => ps.slice(1).forEach((p, i) => lines.push([ps[i], p]))
-  chain(r.hips, r.spine, r.chest, r.upper_chest, r.neck, r.head, [r.head[0], bounds(ref.skin.positions).hi[1] - 0.03, r.head[2]])
-  for (const s of ['L', 'R']) {
-    chain(r[`clavicle_${s}`], r[`upper_arm_${s}`], r[`forearm_${s}`], r[`hand_${s}`], along(r[`forearm_${s}`], r[`hand_${s}`], 0.45))
-    chain(r.hips, r[`thigh_${s}`], r[`shin_${s}`], r[`foot_${s}`], [r[`foot_${s}`][0], 0.02, r[`foot_${s}`][2] + 0.16])
+  const n = kitRigOf(ref.bones)
+  chain(r[n.hips], r[n.spine], r[n.chest], r[n.upperChest], r[n.neck], r[n.head], [r[n.head][0], bounds(ref.skin.positions).hi[1] - 0.03, r[n.head][2]])
+  for (const s of ['L', 'R'] as const) {
+    chain(r[n.clavicle[s]], r[n.upperArm[s]], r[n.forearm[s]], r[n.hand[s]], along(r[n.forearm[s]], r[n.hand[s]], 0.45))
+    chain(r[n.hips], r[n.thigh[s]], r[n.shin[s]], r[n.foot[s]], [r[n.foot[s]][0], 0.02, r[n.foot[s]][2] + 0.16])
   }
   return lines
 }
@@ -465,7 +466,7 @@ function clip(P: Float32Array, index: Uint32Array, binding: Binding, slot: ItemS
   const { id } = weldPositions(P)
   // what the slot doesn't reach: a vertex close on the skin over a bone the slot doesn't cover (a mannequin's head or
   // hands); cloth well off the skin is cloth, whatever it hangs over (a gown's hem over the feet)
-  const allowed = new Set(REACH[slot] ?? [])
+  const allowed = new Set(reach(ref)[slot] ?? [])
   const fields = { arm: fieldAt(ref.fields.arm, binding.tri, binding.st), leg: fieldAt(ref.fields.leg, binding.tri, binding.st) }
   const outside = new Uint8Array(n)
   for (let i = 0; i < n; i++) {

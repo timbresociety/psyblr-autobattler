@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Gender } from '../../charter/look.js'
-import { animIndex, animIndexNow, setOf, type AnimIndex } from './anim-index.js'
+import { animFolder, animIndex, animIndexNow, setOf, type AnimIndex } from './anim-index.js'
+import type { RigKind } from './rig.js'
 
 /**
  * Motion-captured clips from Ready Player Me's animation library, retargeted onto the heroes' rig by
@@ -9,7 +10,7 @@ import { animIndex, animIndexNow, setOf, type AnimIndex } from './anim-index.js'
  * each bone's change from rest instead, so that body's own rest (a big body's arms held wider) stays under the motion.
  */
 
-export { ANIM_SETS, animIndex, setOf, type AnimIndex, type AnimSet } from './anim-index.js'
+export { ANIM_SETS, animFolder, animIndex, setOf, type AnimIndex, type AnimSet } from './anim-index.js'
 
 interface ClipFile {
   frames: number
@@ -20,14 +21,14 @@ interface ClipFile {
 
 const clips = new Map<string, Promise<THREE.AnimationClip | undefined>>()
 
-/** One clip, fitted to the gender's medium body, fetched once; undefined when the library hasn't got it. */
-export function animClip(gender: Gender, name: string): Promise<THREE.AnimationClip | undefined> {
-  const key = `${gender}/${name}`
+/** One clip, fitted to the gender's medium body on `rig`, fetched once; undefined when the library hasn't got it. */
+export function animClip(gender: Gender, name: string, rig: RigKind = 'legacy'): Promise<THREE.AnimationClip | undefined> {
+  const key = `${rig}/${gender}/${name}`
   let clip = clips.get(key)
   if (!clip) {
-    clip = animIndex().then(async (idx) => {
+    clip = animIndex(rig).then(async (idx) => {
       if (!idx || !setOf(idx, gender, name)) return undefined
-      const r = await fetch(`/anim/${key}.json`)
+      const r = await fetch(`${animFolder(rig)}/${gender}/${name}.json`)
       if (!r.ok) throw new Error(`${key}: ${r.status}`)
       return toClip(name, (await r.json()) as ClipFile, idx)
     })
@@ -65,7 +66,7 @@ function toClip(name: string, file: ClipFile, idx: AnimIndex): THREE.AnimationCl
     for (let f = 0; f < frames; f++) q.fromArray(rot, (f * bones.length + k) * 4).normalize().toArray(values, f * 4)
     return new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values)
   })
-  tracks.push(new THREE.VectorKeyframeTrack('hips.position', times, pos))
+  tracks.push(new THREE.VectorKeyframeTrack(`${bones[0]}.position`, times, pos))
   return new THREE.AnimationClip(name, (frames - 1) / idx.fps, tracks)
 }
 
@@ -82,7 +83,8 @@ export function restPose(model: THREE.Object3D, bones: readonly string[]): RestP
     if (!bone) return undefined
     rotations.set(name, bone.quaternion.clone())
   }
-  const hips = model.getObjectByName('hips')
+  // the index lists the hips first
+  const hips = model.getObjectByName(bones[0])
   return hips ? { rotations, hips: hips.position.clone() } : undefined
 }
 
@@ -92,8 +94,8 @@ const fitted = new WeakMap<THREE.AnimationClip, Map<string, THREE.AnimationClip>
  * A clip for one body: each bone's change from the medium body's rest put on this body's rest, and the hips' travel
  * scaled to its height. Cached per clip and `body` (its file's name); the medium body takes the clip as it is.
  */
-export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string, rest: RestPose): THREE.AnimationClip {
-  const idx = animIndexNow()
+export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string, rest: RestPose, rig: RigKind = 'legacy'): THREE.AnimationClip {
+  const idx = animIndexNow(rig)
   if (!idx || body === `${gender}-medium`) return clip
   let mine = fitted.get(clip)
   if (!mine) fitted.set(clip, (mine = new Map()))
@@ -115,7 +117,7 @@ export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string,
       for (let i = 0; i < values.length; i += 4) q.fromArray(values, i).premultiply(fix).normalize().toArray(values, i)
       return new THREE.QuaternionKeyframeTrack(track.name, track.times, values)
     }
-    if (track.name === 'hips.position') {
+    if (track.name === `${idx.bones[0]}.position`) {
       for (let i = 0; i < values.length; i += 3) {
         values[i] = rest.hips.x + (values[i] - refHips.x) * scale
         values[i + 1] = rest.hips.y + (values[i + 1] - refHips.y) * scale

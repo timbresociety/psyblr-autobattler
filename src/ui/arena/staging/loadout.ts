@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
+import { headBone } from '../../../arena/client/rig.js'
 import { bodyFor, characterLook, classicCharacterMaterial, heroHue, loadBuild, type BodyName, type CharacterLook, type Gltf } from '../../../arena/client/character-look.js'
 import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
 import { restClothOn } from '../../../arena/client/wear/cloth-model.js'
@@ -221,7 +222,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
     scene.add(model)
     // frame the head and shoulders from the head bone, so every build sits the same way in its frame
     const head = new THREE.Vector3(0, 1.62, 0)
-    model.getObjectByName('head')?.getWorldPosition(head)
+    headBone(model)?.getWorldPosition(head)
     camera.position.set(head.x + 0.42, head.y + 0.05, head.z + 1.3)
     camera.lookAt(head.x, head.y - 0.12, head.z)
     release = () =>

@@ -5,6 +5,7 @@ import { chainsOf } from './chains.js'
 import type { V3 } from '../wear/ray.js'
 import { TriangleBVH } from '../wear/ray.js'
 import { leanOn, type Reference } from './reference.js'
+import { kitRigOf } from '../rig/names.js'
 import { weldPositions } from '../wear/weld.js'
 import type { ItemFile } from './write.js'
 
@@ -59,17 +60,36 @@ export const CARD_BUDGET = 14000
 
 /** How far a cover reaches out from the skin, and how close an item must lie to hide what's under it. */
 const REACH = 0.32
-const TIGHT = 0.025
+/**
+ * How far out an item may stand and still hide the skin under it. A hanging part never hides (hang, below); a
+ * standing one does from this far. At 2.5 cm the skin under a trouser's loose front, which stood 3 cm off the
+ * thigh, stayed shown, and showed through once the trousers were pressed in under a jacket's hem.
+ */
+const TIGHT = 0.06
 /** Layers of one item within this of each other count as one (a solid shell's two sides, a collar on a shirt). */
 const RUN = 0.03
 const START = 0.003
 /** How far from the skin a vertex may bind: a gown's hem, out past the toes, lies a metre out along the normal of the skin it binds to. */
 const BIND_REACH = 1.2
 /** How far over one part of an item another may lie and still bury it: an obi over a robe, a jacket over its shirt. */
-const BURY = 0.025
+/**
+ * How far out a part may lie and still bury what's under it: layers lie within a centimetre and a half (a robe under
+ * its obi, a shirt under a jacket). Set to TIGHT, a cargo pocket standing two centimetres and more off the thigh buried
+ * the trouser leg under it, and stood too far out itself to hide the skin: the skin showed in a pocket-shaped hole.
+ */
+const BURY = 0.015
+/** Whether triangles buried whole are dropped (false: every one stays, tucked), see unburied. */
+const DROP_BURIED = false
+/** Closer than this (past the millimetre the ray starts out), what a ray meets is the part's own seam, not a layer over it. */
+const BURY_NEAR = 0.002
 /** A buried vertex a showing triangle still needs is tucked at least this far under what buries it, and no closer to the skin than TUCK_FLOOR. */
 const TUCK = 0.01
 const TUCK_FLOOR = 0.002
+/** How squarely a part must face the skin's normal to bury what's under it (the cosine): over it, not beside it. */
+const OVER = 0.5
+/** How far out an item that hides the skin is kept over it, by slot (pushOut). */
+const BAND: Partial<Record<ItemSlot, number>> = { feet: 0.003, head: 0.004 }
+const BAND_DEFAULT = 0.0025
 /** How far under the skin an item's outer surface may dip: hair, beards and helmets tuck their edges in by design. */
 const DIP: Partial<Record<ItemSlot, number>> = { hair: 0.012, beard: 0.012, head: 0.008 }
 
@@ -144,6 +164,23 @@ export function unburied(raw: RawItem, ref: Reference): { raw: RawItem; buried: 
   const frame = new Float32Array(9)
   const hangAt = (h: { triangle: number; u: number; v: number }) =>
     raw.hang ? raw.hang[index[h.triangle * 3]] * (1 - h.u - h.v) + raw.hang[index[h.triangle * 3 + 1]] * h.u + raw.hang[index[h.triangle * 3 + 2]] * h.v : 0
+  // the welded neighbours two edges out from each vertex: a surface folding over itself (a waistband's ring over the
+  // thigh, a cuff) is one part, and never buries the vertices next to it in the mesh
+  const nbrs: Set<number>[] = Array.from({ length: n }, () => new Set<number>())
+  for (let t = 0; t < index.length; t += 3)
+    for (let k = 0; k < 3; k++) {
+      const a = id[index[t + k]]
+      const c = id[index[t + ((k + 1) % 3)]]
+      nbrs[a].add(c)
+      nbrs[c].add(a)
+    }
+  const near = (v: number, w: number) => {
+    const a = id[v]
+    const b = id[w]
+    if (a === b || nbrs[a].has(b)) return true
+    for (const u of nbrs[a]) if (nbrs[u].has(b)) return true
+    return false
+  }
   // per vertex, how far out the part burying it lies (NaN: not buried)
   const buried = new Float32Array(n).fill(NaN)
   const normal = new Float32Array(n * 3)
@@ -156,8 +193,9 @@ export function unburied(raw: RawItem, ref: Reference): { raw: RawItem; buried: 
     let over = -1
     for (const h of bvh.hits([P[v * 3] + d[0] * 0.001, P[v * 3 + 1] + d[1] * 0.001, P[v * 3 + 2] + d[2] * 0.001], d, 0, BURY)) {
       const [a, b, c] = [index[h.triangle * 3], index[h.triangle * 3 + 1], index[h.triangle * 3 + 2]]
-      if (id[a] === id[v] || id[b] === id[v] || id[c] === id[v]) continue
-      if (!fromBehind(P, a, b, c, d) || hangAt(h) > 0.05) continue
+      // a part overlapping this one by under BURY_NEAR is a seam (a waistband's rows meeting the legs'), not a layer
+      if (h.t < BURY_NEAR || near(v, a) || near(v, b) || near(v, c)) continue
+      if (!fromBehind(P, a, b, c, d, OVER) || hangAt(h) > 0.05) continue
       over = h.t + 0.001
       break
     }
@@ -179,8 +217,10 @@ export function unburied(raw: RawItem, ref: Reference): { raw: RawItem; buried: 
   for (let v = 0; v < n; v++) if (buried[v] !== buried[v]) showing[id[v]] = 1
   for (let v = 0; v < n; v++) if (showing[id[v]]) buried[v] = NaN
   const under = (v: number) => buried[v] === buried[v]
+  // the buried triangles stay, tucked under what buries them: dropped, a cargo pocket's leg surface left the skin
+  // under it bare (the pocket stood too far out to hide it) and the skin showed in a pocket-shaped hole
   const kept: number[] = []
-  for (let t = 0; t < index.length; t += 3) if (!(under(index[t]) && under(index[t + 1]) && under(index[t + 2]))) kept.push(index[t], index[t + 1], index[t + 2])
+  for (let t = 0; t < index.length; t += 3) if (!DROP_BURIED || !(under(index[t]) && under(index[t + 1]) && under(index[t + 2]))) kept.push(index[t], index[t + 1], index[t + 2])
   if (!buried.some((o) => o === o)) return { raw, buried: 0 }
   // the vertices still used, in their order, the buried ones among them tucked in
   const remap = new Int32Array(n).fill(-1)
@@ -214,14 +254,65 @@ export function unburied(raw: RawItem, ref: Reference): { raw: RawItem; buried: 
 }
 
 /** Whether a ray along d leaves through the triangle's back: its winding's normal points along d. */
-function fromBehind(P: ArrayLike<number>, a: number, b: number, c: number, d: V3): boolean {
+/**
+ * Whether the triangle a, b, c faces along d (its back is toward whatever looks along d), and, with `least`, how squarely:
+ * the cosine between its normal and d must reach it. A part lies over another when it faces the same way as the skin
+ * under both; a wall crossing the ray edge-on (a cargo pocket's side next to the thigh) lies beside it, not over it.
+ */
+function fromBehind(P: ArrayLike<number>, a: number, b: number, c: number, d: V3, least = 0): boolean {
   const ux = P[b * 3] - P[a * 3]
   const uy = P[b * 3 + 1] - P[a * 3 + 1]
   const uz = P[b * 3 + 2] - P[a * 3 + 2]
   const vx = P[c * 3] - P[a * 3]
   const vy = P[c * 3 + 1] - P[a * 3 + 1]
   const vz = P[c * 3 + 2] - P[a * 3 + 2]
-  return (uy * vz - uz * vy) * d[0] + (uz * vx - ux * vz) * d[1] + (ux * vy - uy * vx) * d[2] > 0
+  const nx = uy * vz - uz * vy
+  const ny = uz * vx - ux * vz
+  const nz = ux * vy - uy * vx
+  const dot = nx * d[0] + ny * d[1] + nz * d[2]
+  if (dot <= 0) return false
+  return least <= 0 || dot >= least * Math.hypot(nx, ny, nz)
+}
+
+/**
+ * What hides the skin must lie over it. An item modelled on the first body sits under the skin of another where that is
+ * fuller (a boot's toe cap inside the Psyblr Human's longer foot, its toes out through the leather), so every inner
+ * vertex facing out from under the band is pushed out to it, the push spread over its neighbours so a dent doesn't
+ * fold. Open edges are left: they tuck under the skin by design. Returns how many vertices were pushed.
+ */
+function pushOut(binding: { lift: Float32Array }, positions: ArrayLike<number>, index: ArrayLike<number>, local: Float32Array, edge: Uint8Array, band: number): number {
+  const n = positions.length / 3
+  const { id, count } = weldPositions(positions)
+  const lift = new Float32Array(count).fill(Infinity)
+  const inner = new Uint8Array(count)
+  for (let v = 0; v < n; v++) {
+    if (edge[v] || local[v * 3 + 1] <= 0) continue
+    inner[id[v]] = 1
+    lift[id[v]] = Math.min(lift[id[v]], binding.lift[v])
+  }
+  const push = new Float32Array(count)
+  let pushed = 0
+  for (let w = 0; w < count; w++) if (inner[w] && lift[w] < band) (push[w] = band - lift[w]), pushed++
+  if (!pushed) return 0
+  const nbrs: number[][] = Array.from({ length: count }, () => [])
+  for (let t = 0; t < index.length; t += 3)
+    for (let k = 0; k < 3; k++) {
+      const a = id[index[t + k]]
+      const c = id[index[t + ((k + 1) % 3)]]
+      nbrs[a].push(c)
+      nbrs[c].push(a)
+    }
+  for (let it = 0; it < 6; it++) {
+    const next = Float32Array.from(push)
+    for (let w = 0; w < count; w++) {
+      if (!nbrs[w].length) continue
+      const mean = nbrs[w].reduce((acc, u) => acc + push[u], 0) / nbrs[w].length
+      next[w] = Math.max(push[w], mean * 0.7)
+    }
+    push.set(next)
+  }
+  for (let v = 0; v < n; v++) binding.lift[v] += push[id[v]]
+  return pushed
 }
 
 /** Area-weighted normals, joined across split vertices. */
@@ -271,9 +362,10 @@ function core(ref: Reference, slot: ItemSlot): { name: string; verts: number[]; 
   const y = (v: number) => ref.shape.positions[v * 3 + 1]
   const z = (v: number) => ref.shape.positions[v * 3 + 2]
   const pick = (test: (v: number) => boolean) => Array.from({ length: V }, (_, v) => v).filter((v) => ref.shape.skin[v] && test(v))
-  const torso = () => pick((v) => leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.6 && ref.fields.hem[v] > 0.35 && ref.fields.hem[v] < 0.85)
-  const thighs = () => pick((v) => leanOn(ref, v, ['thigh_L', 'thigh_R']) >= 0.6 && ref.fields.leg[v] < 0.4)
-  const crown = () => pick((v) => leanOn(ref, v, ['head']) >= 0.95 && y(v) > (ref.rest.head?.[1] ?? 1.6) + 0.08)
+  const n = kitRigOf(ref.bones)
+  const torso = () => pick((v) => leanOn(ref, v, [n.spine, n.chest, n.upperChest]) >= 0.6 && ref.fields.hem[v] > 0.35 && ref.fields.hem[v] < 0.85)
+  const thighs = () => pick((v) => leanOn(ref, v, [n.thigh.L, n.thigh.R]) >= 0.6 && ref.fields.leg[v] < 0.4)
+  const crown = () => pick((v) => leanOn(ref, v, [n.head]) >= 0.95 && y(v) > (ref.rest[n.head]?.[1] ?? 1.6) + 0.08)
   switch (slot) {
     case 'upper':
       return [{ name: 'torso', verts: torso(), need: 0.6 }]
@@ -286,7 +378,7 @@ function core(ref: Reference, slot: ItemSlot): { name: string; verts: number[]; 
       ]
     case 'feet':
       // a sandal is a sole and a few straps
-      return [{ name: 'feet', verts: pick((v) => leanOn(ref, v, ['foot_L', 'foot_R']) >= 0.6), need: 0.1 }]
+      return [{ name: 'feet', verts: pick((v) => leanOn(ref, v, [n.foot.L, n.foot.R]) >= 0.6), need: 0.1 }]
     case 'head':
       return [{ name: 'crown of the head', verts: crown(), need: 0.3 }]
     case 'hair':
@@ -294,7 +386,7 @@ function core(ref: Reference, slot: ItemSlot): { name: string; verts: number[]; 
       return [{ name: 'crown of the head', verts: crown(), need: 0.2 }]
     case 'back':
       // a scarf's tails cover less than a cape
-      return [{ name: 'back', verts: pick((v) => leanOn(ref, v, ['spine', 'chest', 'upper_chest']) >= 0.5 && z(v) < (ref.rest.chest?.[2] ?? 0)), need: 0.15 }]
+      return [{ name: 'back', verts: pick((v) => leanOn(ref, v, [n.spine, n.chest, n.upperChest]) >= 0.5 && z(v) < (ref.rest[n.chest]?.[2] ?? 0)), need: 0.15 }]
     default:
       return []
   }
@@ -309,7 +401,7 @@ export interface FitReport {
   buried: number
   /** Worst distance between a vertex and its binding evaluated back, metres. */
   bindError: number
-  /** Share of the item's inner vertices (not on an open edge) facing out from more than 4 mm under the skin (the slot's dip for hair, beards and helmets). */
+  /** Share of the item's inner vertices (not on an open edge) facing out from more than 4 mm under the skin as modelled (the slot's dip for hair, beards and helmets); what hides the skin is then pushed out of it (pushOut), so the rest shows nothing through. */
   underSkin: number
   covered: number
   hidden: number
@@ -329,25 +421,49 @@ export function fitItem(input: RawItem, ref: Reference): Fitted {
   const { spec } = input
   // hair keeps its buried strands: they swing apart
   const hides = spec.hides ?? !['hair', 'beard'].includes(spec.slot)
-  const { raw, buried } = hides ? unburied(input, ref) : { raw: input, buried: 0 }
+  const { raw: pruned, buried } = hides ? unburied(input, ref) : { raw: input, buried: 0 }
+  let raw = pruned
   const n = raw.positions.length / 3
-  const normals = raw.normals ?? meshNormals(raw.positions, raw.index)
+  let normals = raw.normals ?? meshNormals(raw.positions, raw.index)
   const binding = bindPoints(raw.positions, ref.skin, ref.grid, BIND_REACH)
-  const local = toLocal(binding, ref.skin, normals)
+  let local = toLocal(binding, ref.skin, normals)
+  const edge = boundaryVertices(raw.positions, raw.index)
+  // as it was modelled, before anything is pushed out of the skin: a part deep under it is mis-sized, and reported
+  const sunk = Float32Array.from(binding.lift)
+  if (hides && pushOut(binding, raw.positions, raw.index, local, edge, BAND[spec.slot] ?? BAND_DEFAULT)) {
+    raw = { ...raw, positions: evaluate(binding, ref.skin) }
+    normals = meshNormals(raw.positions, raw.index)
+    local = toLocal(binding, ref.skin, normals)
+  }
   const back = evaluate(binding, ref.skin)
   let bindError = 0
   for (let v = 0; v < n; v++) bindError = Math.max(bindError, Math.hypot(back[v * 3] - raw.positions[v * 3], back[v * 3 + 1] - raw.positions[v * 3 + 1], back[v * 3 + 2] - raw.positions[v * 3 + 2]))
   const { covers, shell, hidden } = coversOf(ref, raw.positions, raw.index, hides, raw.hang)
+  // footwear encloses the foot: every vertex of it is hidden, toes included, even where a toe cap modelled on another
+  // body falls a little short of this one's toes (the body's toes came out through a boot's front otherwise)
+  if (hides && spec.slot === 'feet') {
+    const n = kitRigOf(ref.bones)
+    const covered = new Set(covers)
+    const hid = new Set(hidden)
+    for (let v = 0; v < ref.shape.surface.count; v++) {
+      if (!ref.shape.skin[v] || leanOn(ref, v, [n.foot.L, n.foot.R, ...n.feet]) < 0.5) continue
+      if (!covered.has(v)) {
+        covers.push(v)
+        shell.push(Math.round(0.003 * 1e4), Math.round(0.006 * 1e4))
+      }
+      if (!hid.has(v)) hidden.push(v)
+    }
+  }
   const chains = raw.hang ? chainsOf(raw.positions, raw.index, raw.hang, spec.slot, ref, spec.stiff) : undefined
   // skin showing through: a vertex under the skin that faces out (a solid shell's inner side faces in, unseen)
-  const edge = boundaryVertices(raw.positions, raw.index)
   const dip = DIP[spec.slot] ?? 0.004
   let inner = 0
   let under = 0
   for (let v = 0; v < n; v++) {
     if (edge[v]) continue
     inner++
-    if (binding.lift[v] < -dip && local[v * 3 + 1] > 0) under++
+    // what pushOut moves out from the band is fine; a part twice as deep as the dip was modelled for another body
+    if (sunk[v] < -(hides ? 2 * dip : dip) && local[v * 3 + 1] > 0) under++
   }
   const coveredSet = new Set(covers)
   const coverage = core(ref, spec.slot).map(({ name, verts, need }) => ({ name, share: verts.length ? verts.filter((v) => coveredSet.has(v)).length / verts.length : 1, need }))

@@ -325,6 +325,31 @@ def paint_material(mat, face_img=None):
         col = _scale_color(nt, base, blotch)
         if mat.get('shorts') or mat.get('top'):
             col = _mix(nt, base_layer(nt, mat), col, _scale_color(nt, _rgb(nt, (0.2, 0.2, 0.22)), _range(nt, _wave(nt, 260, 'X', 0.4), 0.0, 1.0, 0.86, 1.04)))
+    elif paint == 'sclera':
+        # the white of the eye: a touch warm, with the faintest veins
+        col = _scale_color(nt, base, _range(nt, _noise(nt, 90, 3), 0.35, 0.65, 0.97, 1.0))
+    elif paint == 'iris':
+        # the iris as grey detail the game tints: radial fibres from the pupil out, a dark limbal ring, a black pupil.
+        # iris_r runs 0 at the pupil's centre to 1 at the iris's edge, iris_a round it (build: human2.iris_split)
+        r = nt.nodes.new('ShaderNodeAttribute')
+        r.attribute_type = 'GEOMETRY'
+        r.attribute_name = 'iris_r'
+        a = nt.nodes.new('ShaderNodeAttribute')
+        a.attribute_type = 'GEOMETRY'
+        a.attribute_name = 'iris_a'
+        comb = nt.nodes.new('ShaderNodeCombineXYZ')
+        nt.links.new(_math(nt, 'MULTIPLY', a.outputs['Fac'], 6.0), comb.inputs['X'])
+        nt.links.new(_math(nt, 'MULTIPLY', r.outputs['Fac'], 2.0), comb.inputs['Y'])
+        fib = nt.nodes.new('ShaderNodeTexNoise')
+        fib.inputs['Scale'].default_value = 9.0
+        fib.inputs['Detail'].default_value = 5.0
+        nt.links.new(comb.outputs['Vector'], fib.inputs['Vector'])
+        fibres = _range(nt, fib.outputs['Fac'], 0.3, 0.7, 0.55, 1.15)
+        limbal = _range(nt, r.outputs['Fac'], 0.8, 1.0, 1.0, 0.35)
+        collar = _range(nt, r.outputs['Fac'], 0.4, 0.55, 0.75, 1.0)
+        pupil = _range(nt, r.outputs['Fac'], 0.36, 0.42, 0.0, 1.0)
+        shade = _math(nt, 'MULTIPLY', _math(nt, 'MULTIPLY', fibres, limbal), _math(nt, 'MULTIPLY', collar, pupil))
+        col = _scale_color(nt, base, shade)
     elif paint in ('face', 'eye'):
         skin = _scale_color(nt, base, _range(nt, _noise(nt, 22, 5), 0.3, 0.7, 0.96, 1.02))
         if face_img is None:

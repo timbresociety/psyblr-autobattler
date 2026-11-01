@@ -1,3 +1,4 @@
+import { kitRigOf } from '../rig/names.js'
 import type { BodyShape } from '../body/shape.js'
 import { segmentDistance, TriangleBVH } from '../wear/ray.js'
 import type { DressedItem } from '../wear/dress.js'
@@ -102,20 +103,6 @@ export interface ClothInput {
   rest: (bone: string) => V3 | undefined
 }
 
-const SEGMENTS: [string, string][] = [
-  ['hips', 'spine'],
-  ['spine', 'chest'],
-  ['chest', 'upper_chest'],
-  ['upper_chest', 'neck'],
-  ['upper_arm_L', 'forearm_L'],
-  ['forearm_L', 'hand_L'],
-  ['upper_arm_R', 'forearm_R'],
-  ['forearm_R', 'hand_R'],
-  ['thigh_L', 'shin_L'],
-  ['shin_L', 'foot_L'],
-  ['thigh_R', 'shin_R'],
-  ['shin_R', 'foot_R'],
-]
 
 /** The four heaviest of a weighted set of bones, renormalised. */
 function topFour(acc: Map<number, number>): [number[], number[]] {
@@ -209,7 +196,7 @@ export function capsulesOf(body: BodyShape, bones: readonly string[], rest: (bon
     for (let k = 0; k < 4; k++) if (body.weights[v * 4 + k] > most) [best, most] = [body.joints[v * 4 + k], body.weights[v * 4 + k]]
     lead[v] = best
   }
-  for (const [from, to] of SEGMENTS) {
+  for (const [from, to] of kitRigOf(bones).segments) {
     const bone = bones.indexOf(from)
     const a = rest(from)
     const b = rest(to)

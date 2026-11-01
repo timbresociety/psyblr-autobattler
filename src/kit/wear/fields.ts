@@ -5,6 +5,8 @@
  * generated, at the same place on every body.
  */
 
+import { kitRigOf } from '../rig/names.js'
+
 type V3 = [number, number, number]
 
 export interface BodyFields {
@@ -13,9 +15,6 @@ export interface BodyFields {
   hem: Float32Array
 }
 
-/** The rig's bones the fields follow (tools/blender/humanlib's rig). */
-const ARM = { L: ['upper_arm_L', 'forearm_L', 'hand_L'], R: ['upper_arm_R', 'forearm_R', 'hand_R'] } as const
-const LEG = { L: ['thigh_L', 'shin_L', 'foot_L'], R: ['thigh_R', 'shin_R', 'foot_R'] } as const
 
 /** Where p falls along the chain a → b → c: 0 at a, 0.5 at b, 1 at c, past 1 beyond c; never below 0. */
 export function chainParam(p: V3, a: V3, b: V3, c: V3): number {
@@ -55,12 +54,13 @@ export function bodyFields(input: FieldInput): BodyFields {
     if (!r) throw new Error(`the rig has no ${name}`)
     return r
   }
+  const rig = kitRigOf(input.bones)
   const chains = (set: Record<'L' | 'R', readonly string[]>) =>
     (['L', 'R'] as const).map((side) => ({ points: set[side].map(at) as [V3, V3, V3], bones: new Set(set[side].map((b) => input.bones.indexOf(b))) }))
-  const arms = chains(ARM)
-  const legs = chains(LEG)
-  const crotch = (at('thigh_L')[1] + at('thigh_R')[1]) / 2
-  const neck = at('neck')[1]
+  const arms = chains(rig.armChain)
+  const legs = chains(rig.legChain)
+  const crotch = (at(rig.thigh.L)[1] + at(rig.thigh.R)[1]) / 2
+  const neck = at(rig.neck)[1]
   for (let v = 0; v < n; v++) {
     const p: V3 = [input.positions[v * 3], input.positions[v * 3 + 1], input.positions[v * 3 + 2]]
     const weightOn = (bones: Set<number>) => {

@@ -20,13 +20,13 @@ MOUTH_L, MOUTH_R, CHIN, NOSE_TIP, NOSE_BASE, LIP_TOP, BROW_L, BROW_R, CHEEK_L, C
 class Head:
     """Points on the hero's head in metres (character faces -y, its left is +x)."""
 
-    def __init__(self, body, obj):
+    def __init__(self, body, obj, group='head'):
         (el, rl), (er, rr) = body.eyes
         self.eye_l, self.eye_r = el, er
         self.eye_r_radius = rl
         self.eyes = (el + er) / 2
         head_w = [0.0] * len(obj.data.vertices)
-        g = obj.vertex_groups.get('head')
+        g = obj.vertex_groups.get(group)
         for v in obj.data.vertices:
             for x in v.groups:
                 if g and x.group == g.index:

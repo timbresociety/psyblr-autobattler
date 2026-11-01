@@ -92,7 +92,7 @@ export function MovesPanel({ gender, idle, playing, onIdle, onPlay, skills, onSk
           </button>
         </div>
       )}
-      <p className="muted credit">Motion capture from Ready Player Me’s animation library.</p>
+      <p className="muted credit">Motion-captured moves.</p>
     </div>
   )
 }

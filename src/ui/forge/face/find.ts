@@ -5,6 +5,8 @@ import { detectFace } from './detect.js'
 /** A face found on a reference image: its landmarks, and the skin, hair and eye colours read off the photo. */
 export interface FaceFinding {
   points: Pt[]
+  /** Each landmark's depth in the image's pixels, positive away from the camera. */
+  depth?: number[]
   width: number
   height: number
   skin: Rgb

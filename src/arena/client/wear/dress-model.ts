@@ -13,7 +13,7 @@ import { faceShape } from '../face/shape.js'
 import { hangPieces, shapedSockets, type Piece } from '../gear.js'
 import type { GearSlot } from '../../../charter/look.js'
 import { rigCloth } from './cloth-model.js'
-import { BODY_VERTICES, type LoadedWear } from './items.js'
+import type { LoadedWear } from './items.js'
 import { refineGeometry } from '../../../kit/body/refine.js'
 
 /**
@@ -148,6 +148,7 @@ export function onSharedSurface(mesh: THREE.SkinnedMesh): boolean {
   return !!mesh.geometry.getAttribute('_vid')
 }
 
+
 /** A body file's welded base, fields and morph names: worked out once per file and shared by every hero on it. */
 function bodyCache(mesh: THREE.SkinnedMesh): BodyCache {
   const g = mesh.geometry
@@ -233,7 +234,7 @@ function printPicture(url: string): THREE.Texture | undefined {
 }
 
 /** The surface items a hero wears with its colours and cuts, the covers its rigid items bring, and the generated items' textures and the prints. */
-function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear | undefined): { worn: WornItem[]; rigid: Cover[]; textured: Map<string, OwnTexture>; patterns: Map<string, Pattern> } {
+function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear | undefined, vertices: number): { worn: WornItem[]; rigid: Cover[]; textured: Map<string, OwnTexture>; patterns: Map<string, Pattern> } {
   const worn: WornItem[] = []
   const rigid: Cover[] = []
   const textured = new Map<string, OwnTexture>()
@@ -242,7 +243,7 @@ function outfitItems(outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear |
     const loaded = w ? wear?.items.get(w.url) : undefined
     if (!w || !loaded) continue
     if (loaded.kind === 'rigid') {
-      if (loaded.meta?.covers.length) rigid.push(coverOf(loaded.meta, BODY_VERTICES))
+      if (loaded.meta?.covers.length) rigid.push(coverOf(loaded.meta, vertices))
       continue
     }
     const { item, texture } = loaded
@@ -286,11 +287,14 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   // with a photo face the skin colour is baked into the hero's own atlas, so the skin stays untinted here
   const skin = look.face ? new THREE.Color(1, 1, 1) : look.colors.skin
   const eye = look.colors.eye
-  // 1 where it is skin, for the classic material's skin shading (character-look.ts), 0 on the eyes
+  const iris = look.colors.iris
+  // 1 where it is skin, for the classic material's skin shading (character-look.ts), 0 on the eyes. Region 9 is an
+  // iris (bake.REGIONS), which the Psyblr Human bodies carry as their own faces and the first bodies never did
   const isSkin = new Float32Array(n)
   for (let i = 0; i < n; i++) {
-    isSkin[i] = Math.floor(meta.getX(i)) === 0 ? 1 : 0
-    const c = isSkin[i] ? skin : eye
+    const region = Math.floor(meta.getX(i))
+    isSkin[i] = region === 0 ? 1 : 0
+    const c = isSkin[i] ? skin : region === 9 ? iris : eye
     colors[i * 3] = c.r
     colors[i * 3 + 1] = c.g
     colors[i * 3 + 2] = c.b
@@ -387,7 +391,7 @@ const SOCKET: Partial<Record<LookSlot, GearSlot>> = { head: 'head', face: 'face'
  * Hang each rigid item on its socket, its first channel tinting the piece's 'primary' material. The sockets move with
  * the hero's shape (`shape`, from the built body's `rest` positions), so glasses sit on the eyes the hero has.
  */
-function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear, rest: ArrayLike<number>, shape: BodyShape): THREE.Object3D[] {
+function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>>, wear: LoadedWear, rest: ArrayLike<number>, shaped: ArrayLike<number>): THREE.Object3D[] {
   if (!wear.sockets) return []
   const pieces: Piece[] = []
   for (const [slot, w] of Object.entries(outfit) as [LookSlot, Worn][]) {
@@ -396,7 +400,7 @@ function hangRigid(model: THREE.Object3D, outfit: Partial<Record<LookSlot, Worn>
     if (loaded?.kind !== 'rigid' || !socket) continue
     pieces.push({ name: slot, socket, file: loaded.file, ...(w.colors?.[0] ? { color: w.colors[0] } : {}) })
   }
-  return pieces.length ? hangPieces(model, pieces, shapedSockets(wear.sockets, rest, shape.positions)) : []
+  return pieces.length ? hangPieces(model, pieces, shapedSockets(wear.sockets, rest, shaped)) : []
 }
 
 /**
@@ -408,10 +412,13 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const mesh = bodyMesh(model)
   if (!mesh || !onSharedSurface(mesh)) return false
   const cache = bodyCache(mesh)
-  const face = faceShape(look.face, look.sculpt, look.build, bodyKitLoaded(look.build), cache.base.positions)
+  const kit = bodyKitLoaded(look.build)
+  const face = faceShape(look.face, look.sculpt, look.build, kit, cache.base.positions)
   const shape = shapeBody(cache.base, cache.morphs, look.physique, face)
-  const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear)
+  const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear, cache.base.surface.count)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
+  // dev probe: what the dresser kept, to check against the fit tool's report (window.__dressed)
+  if (typeof window !== 'undefined') (window as unknown as { __dressed?: unknown }).__dressed = { items: dressed.items.map((i) => ({ id: i.id, tris: i.index.length / 3 })), body: dressed.body.length, total: shape.surface.triangles.length / 3 }
   const items = withCards(dressed.items, materials.cards ?? false)
   const source = mesh.geometry
   const map = atlas ?? characterMap(mesh)
@@ -445,7 +452,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
     // whatever hangs loose swings on its own bones (settleCloth each frame)
     rigCloth(model, outfit, parts, shape, (bone) => cache.rest.get(bone))
   }
-  if (wear) hangRigid(model, look.outfit, wear, cache.base.positions, shape)
+  if (wear) hangRigid(model, look.outfit, wear, cache.base.positions, shape.positions)
   return true
 }
 
@@ -474,8 +481,10 @@ else if (vWeave > 4.5) {
   float fine = mix(0.5, strandNoise(turn * 433.0 + wave * 3.0, 433.0), 1.0 - smoothstep(0.25, 0.5, turnStep * 433.0));
   float lock = strandNoise(turn * 40.0 + wave * 0.6, 40.0);
   if (vWeave > 5.995) {
-    // under a hair's cards its fringe runs on past 6 (withCards), and its edge draws back clean under their roots
-    if (vWeave - 6.0 < ${UNDER_RECEDE}) discard;
+    // under a hair's cards its fringe runs on past 6 (withCards), and its edge draws back under their roots: cut at
+    // UNDER_RECEDE, and feathered over the half centimetre inside it (edgeA, below), so the skin shows through the
+    // strands at the hairline the way it does between the cards' roots
+    if (vWeave - 6.0 < ${UNDER_RECEDE} * 0.6) discard;
     // and its strands run with the cards' (wardrobe.py hair_cards, runs), laid by place: straight back over the top and
     // down the back, and at the sides back and a little down, along level slices tipped toward the nape. Laid round the
     // way the surface faces, as on a shell alone, they ran from the crown straight down at the sides, and on a shell
@@ -486,6 +495,10 @@ else if (vWeave > 4.5) {
     clump = mix(strandSeen(vRest.x * 160.0 + topWave, acrossStep * 160.0), strandSeen(slice * 140.0 + sideWave, sliceStep * 140.0), side);
     fine = mix(strandSeen(vRest.x * 700.0 + topWave * 3.0, acrossStep * 700.0), strandSeen(slice * 600.0 + sideWave * 3.0, sliceStep * 600.0), side);
     lock = mix(strandNoise(vRest.x * 67.0 + topWave * 0.6, 4096.0), strandNoise(slice * 56.0 + sideWave * 0.6, 4096.0), side);
+    float recede = clamp((vWeave - 6.0 - ${UNDER_RECEDE} * 0.6) / (${UNDER_RECEDE} * 0.8), 0.0, 1.0);
+    float edgeA = smoothstep(0.0, 1.0, recede * 1.3 + (0.5 - fine) * 0.5 + (0.5 - clump) * 0.4);
+    if (edgeA < 0.03) discard;
+    diffuseColor.a = edgeA;
   } else {
     float fringe = clamp((vWeave - 5.0) / 0.99, 0.0, 1.0);
     if (fine * 0.8 + clump * 0.2 > fringe * 0.9 + 0.35) discard;
@@ -519,13 +532,14 @@ float reliefY = dFdy(relief);
 if (vWeave > 3.5) normal = grainNormal(-vViewPosition, normal, reliefX, reliefY, faceDirection);`
 
 /**
- * A hair card (u past 1.5, tools/blender/wardrobe.py hair_cards): nine clumps of strands across it, each its own
+ * A hair card (u past 1.5, tools/blender/wardrobe.py hair_cards): five clumps of strands across it, each its own
  * width, shade, start and length, thinning to its tip and fewer toward the card's long edges, so neither its root nor
  * its sides show as a straight cut. The gaps between them are see-through: its alpha, which the material turns into
  * coverage across the pixel's samples, so the strands' edges stay smooth without sorting. The hair darkens toward the
  * roots, where less light gets in.
  */
 const CARD_GLSL = `
+const float CARD_CLUMPS = 5.0;
 float cardShade = 0.5;
 // how squarely a card faces the eye, and how nearly its strands run straight at it (vStrandFlow): there (over the
 // crown from the front, say) its clumps shrink to dashes while the gaps between them stay whole, so they widen until
@@ -545,7 +559,7 @@ if (vCardUv.x > 1.5) {
   float rootIn = cardLength > 0.0 ? 0.01 / cardLength : 0.25;
   float rootDark = cardLength > 0.0 ? 0.015 / cardLength : 0.35;
   float along = vCardUv.y;
-  float k = fract(vCardUv.x) * 9.0;
+  float k = fract(vCardUv.x) * CARD_CLUMPS;
   float cell = floor(k);
   float cover = 0.0;
   for (int j = -1; j <= 1; j++) {
@@ -565,10 +579,19 @@ if (vCardUv.x > 1.5) {
   }
   // and thins out toward the card's long edges, so no strand is cut along them, and fades seen edge-on, where the
   // shell under it holds the shape
-  cover *= smoothstep(0.0, 1.2, k) * smoothstep(9.0, 7.8, k) * smoothstep(0.1, 0.35, cardFacing);
+  float sides = smoothstep(0.0, 1.2, k) * smoothstep(CARD_CLUMPS, CARD_CLUMPS - 1.2, k) * smoothstep(0.1, 0.35, cardFacing);
+  cover *= sides;
+  // seen from further off, where its clumps cross a pixel in under two, the card reads as one lock of hair, with its
+  // own soft root and tip, not as a flicker of strands
+  float sheet = 0.8 * sides * smoothstep(rootFrom * 0.5, rootFrom * 0.5 + rootIn, along) * (1.0 - smoothstep(0.65, 0.95, along));
+  float far = smoothstep(0.5, 1.0, fwidth(k));
+  cover = mix(cover, sheet, far);
+  cardShade = mix(cardShade, 0.5, far);
   if (cover < 0.02) discard;
   diffuseColor.a = cover;
-  diffuseColor.rgb *= mix(0.7, 1.0, smoothstep(0.0, rootDark, along)) * mix(0.8, 1.15, cardShade);
+  // darker at its root, but only a little: every card in the layers over the shell has one, and seen together as
+  // bands across the hair they read as stripes, not as roots
+  diffuseColor.rgb *= mix(0.84, 1.0, smoothstep(0.0, rootDark, along)) * mix(0.86, 1.12, cardShade);
 }`
 
 /**

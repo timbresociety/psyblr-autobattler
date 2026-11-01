@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { HEAD_SHAPES, SCULPT_FEATURES, SCULPT_IDS, hydrateSculpt, sculptWeights, shapeId } from './sculpt'
 
-const basis = JSON.parse(readFileSync(new URL('../../../public/kit/face-basis.json', import.meta.url), 'utf8')) as { groups: { name: string }[] | string[] }
+// the full basis (the Psyblr Human bodies') carries every slider's targets; the first bodies' 39-group basis a subset
+const basis = JSON.parse(readFileSync(new URL('../../../public/kit/v2/face-basis.json', import.meta.url), 'utf8')) as { groups: { name: string }[] | string[] }
 const groups = basis.groups.map((g) => (typeof g === 'string' ? g : g.name))
 
 describe('sculpting a face', () => {
@@ -10,7 +11,7 @@ describe('sculpting a face', () => {
     const have = new Set(groups)
     for (const f of SCULPT_FEATURES) {
       expect(have.has(f.up), `${f.id} up: ${f.up}`).toBe(true)
-      expect(have.has(f.down!), `${f.id} down: ${f.down}`).toBe(true)
+      if (f.down) expect(have.has(f.down), `${f.id} down: ${f.down}`).toBe(true)
     }
     for (const s of HEAD_SHAPES) expect(have.has(`head-${s}`), s).toBe(true)
     expect(new Set(SCULPT_IDS).size).toBe(SCULPT_IDS.length)

@@ -57,6 +57,8 @@ export interface FacePhoto {
   width: number
   height: number
   points: number[]
+  /** Per landmark, MediaPipe's depth in the photo's pixels (positive away from the camera); the fit uses it when present. */
+  depth?: number[]
   /** 0 to 1: how much of the photo's shape the face takes (the picture itself is always laid on whole); all of it when absent. */
   strength?: number
 }
@@ -159,6 +161,8 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
     if (face.points.every((p) => isFiniteIn(p, limit))) {
       look.face = { url: face.url, width: face.width, height: face.height, points: face.points.map((p) => Math.round((p as number) * 10) / 10) }
       if (isFiniteIn(face.strength, 1) && face.strength < 1) look.face.strength = Math.round(face.strength * 100) / 100
+      const depth = face.depth
+      if (Array.isArray(depth) && depth.length === FACE_POINTS && depth.every((d) => typeof d === 'number' && Number.isFinite(d) && Math.abs(d) <= limit)) look.face.depth = depth.map((d) => Math.round((d as number) * 10) / 10)
     }
   }
   const physique = input.physique as Record<string, unknown> | undefined

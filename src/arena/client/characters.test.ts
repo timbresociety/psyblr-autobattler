@@ -226,7 +226,7 @@ describe('walking, jogging and running every way on the motion library (Forge go
       }),
     )
     const mixer = new THREE.AnimationMixer(body)
-    const player = gaitPlayer(mixer, { gender: 'm', clips, gaits, bones: [] }, (clip) => clip)
+    const player = gaitPlayer(mixer, { gender: 'm', rig: 'legacy', clips, gaits, bones: [] }, (clip) => clip)
     const action = (name: string) => mixer.existingAction(clips.get(name)!)!
     return { body, mixer, player, action }
   }

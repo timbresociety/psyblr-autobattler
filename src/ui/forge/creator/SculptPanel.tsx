@@ -5,11 +5,15 @@ import { HEAD_SHAPES, HEAD_SHAPE_LABEL, REGION_LABEL, SCULPT_FEATURES, SCULPT_RE
 /** The two features each region's pad moves: across, then up. */
 const PAD: Record<SculptRegion, [string, string]> = {
   head: ['head_width', 'head_length'],
+  forehead: ['forehead_temples', 'forehead_height'],
+  brows: ['brow_angle', 'brow_height'],
   eyes: ['eye_spacing', 'eye_height'],
+  ears: ['ear_size', 'ear_position'],
   nose: ['nose_width', 'nose_length'],
-  mouth: ['mouth_width', 'mouth_height'],
   cheeks: ['cheek_volume', 'cheekbones'],
+  mouth: ['mouth_width', 'mouth_height'],
   jaw: ['chin_width', 'chin_height'],
+  neck: ['neck_width', 'neck_length'],
 }
 
 const FEATURE = new Map(SCULPT_FEATURES.map((f) => [f.id, f]))

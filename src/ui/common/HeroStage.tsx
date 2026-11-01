@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
+import { headBone } from '../../arena/client/rig.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { animClip, animIndex, fitClip, restPose, setOf, type RestPose } from '../../arena/client/anim-library.js'
@@ -123,7 +124,7 @@ function headSpan(model: THREE.Object3D): HeadSpan | undefined {
   model.traverse((o) => {
     if (!mesh && (o as THREE.SkinnedMesh).isSkinnedMesh) mesh = o as THREE.SkinnedMesh
   })
-  const k = mesh ? mesh.skeleton.bones.findIndex((b) => b.name === 'head') : -1
+  const k = mesh ? mesh.skeleton.bones.findIndex((b) => b.name === 'head' || b.name === 'Head') : -1
   if (!mesh || k < 0) return undefined
   const geo = mesh.geometry
   const pos = geo.getAttribute('position')
@@ -281,7 +282,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     const aimAt = () => {
       const s = Math.max(1, state.scale)
       const framingNow = pace.current.framing
-      const bone = framingNow === 'body' || !state.head ? undefined : state.model?.getObjectByName('head')
+      const bone = framingNow === 'body' || !state.head || !state.model ? undefined : headBone(state.model)
       if (bone && state.head) {
         const f = FRAMES[framingNow as Exclude<StageFraming, 'body'>]
         // the head as it is now, chin to crown, wherever the clip has it (and however big the hero and its head)

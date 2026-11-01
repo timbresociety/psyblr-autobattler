@@ -1,0 +1,477 @@
+{
+  "version": 1,
+  "units": "metres",
+  "axes": "glTF: y up, the hero faces +z, its left is +x",
+  "rest": "A-pose: arms about 45 degrees down from level, palms facing in, feet hip-width, toes forward",
+  "sockets": [
+    "head",
+    "face",
+    "hand_r",
+    "hand_l",
+    "back"
+  ],
+  "bones": [
+    {
+      "name": "Hips",
+      "parent": null,
+      "kind": "core",
+      "legacy": "hips"
+    },
+    {
+      "name": "Spine",
+      "parent": "Hips",
+      "kind": "core",
+      "legacy": "spine"
+    },
+    {
+      "name": "Spine1",
+      "parent": "Spine",
+      "kind": "core",
+      "legacy": "chest"
+    },
+    {
+      "name": "Spine2",
+      "parent": "Spine1",
+      "kind": "core",
+      "legacy": "upper_chest"
+    },
+    {
+      "name": "Neck",
+      "parent": "Spine2",
+      "kind": "core",
+      "legacy": "neck"
+    },
+    {
+      "name": "Head",
+      "parent": "Neck",
+      "kind": "core",
+      "legacy": "head"
+    },
+    {
+      "name": "HeadTop_End",
+      "parent": "Head",
+      "kind": "end"
+    },
+    {
+      "name": "Jaw",
+      "parent": "Head",
+      "kind": "face"
+    },
+    {
+      "name": "LeftEye",
+      "parent": "Head",
+      "kind": "face"
+    },
+    {
+      "name": "RightEye",
+      "parent": "Head",
+      "kind": "face"
+    },
+    {
+      "name": "LeftShoulder",
+      "parent": "Spine2",
+      "kind": "arm",
+      "legacy": "clavicle_L"
+    },
+    {
+      "name": "LeftArm",
+      "parent": "LeftShoulder",
+      "kind": "arm",
+      "legacy": "upper_arm_L"
+    },
+    {
+      "name": "LeftArmTwist",
+      "parent": "LeftArm",
+      "kind": "twist",
+      "follows": "LeftForeArm"
+    },
+    {
+      "name": "LeftForeArm",
+      "parent": "LeftArm",
+      "kind": "arm",
+      "legacy": "forearm_L"
+    },
+    {
+      "name": "LeftForeArmTwist",
+      "parent": "LeftForeArm",
+      "kind": "twist",
+      "follows": "LeftHand"
+    },
+    {
+      "name": "LeftHand",
+      "parent": "LeftForeArm",
+      "kind": "arm",
+      "legacy": "hand_L"
+    },
+    {
+      "name": "LeftHandThumb1",
+      "parent": "LeftHand",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandThumb2",
+      "parent": "LeftHandThumb1",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandThumb3",
+      "parent": "LeftHandThumb2",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandThumb4",
+      "parent": "LeftHandThumb3",
+      "kind": "end"
+    },
+    {
+      "name": "LeftHandIndex1",
+      "parent": "LeftHand",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandIndex2",
+      "parent": "LeftHandIndex1",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandIndex3",
+      "parent": "LeftHandIndex2",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandIndex4",
+      "parent": "LeftHandIndex3",
+      "kind": "end"
+    },
+    {
+      "name": "LeftHandMiddle1",
+      "parent": "LeftHand",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandMiddle2",
+      "parent": "LeftHandMiddle1",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandMiddle3",
+      "parent": "LeftHandMiddle2",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandMiddle4",
+      "parent": "LeftHandMiddle3",
+      "kind": "end"
+    },
+    {
+      "name": "LeftHandRing1",
+      "parent": "LeftHand",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandRing2",
+      "parent": "LeftHandRing1",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandRing3",
+      "parent": "LeftHandRing2",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandRing4",
+      "parent": "LeftHandRing3",
+      "kind": "end"
+    },
+    {
+      "name": "LeftHandPinky1",
+      "parent": "LeftHand",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandPinky2",
+      "parent": "LeftHandPinky1",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandPinky3",
+      "parent": "LeftHandPinky2",
+      "kind": "finger"
+    },
+    {
+      "name": "LeftHandPinky4",
+      "parent": "LeftHandPinky3",
+      "kind": "end"
+    },
+    {
+      "name": "LeftUpLeg",
+      "parent": "Hips",
+      "kind": "leg",
+      "legacy": "thigh_L"
+    },
+    {
+      "name": "LeftUpLegTwist",
+      "parent": "LeftUpLeg",
+      "kind": "twist",
+      "follows": "LeftLeg"
+    },
+    {
+      "name": "LeftLeg",
+      "parent": "LeftUpLeg",
+      "kind": "leg",
+      "legacy": "shin_L"
+    },
+    {
+      "name": "LeftLegTwist",
+      "parent": "LeftLeg",
+      "kind": "twist",
+      "follows": "LeftFoot"
+    },
+    {
+      "name": "LeftFoot",
+      "parent": "LeftLeg",
+      "kind": "leg",
+      "legacy": "foot_L"
+    },
+    {
+      "name": "LeftToeBase",
+      "parent": "LeftFoot",
+      "kind": "leg"
+    },
+    {
+      "name": "LeftToe_End",
+      "parent": "LeftToeBase",
+      "kind": "end"
+    },
+    {
+      "name": "RightShoulder",
+      "parent": "Spine2",
+      "kind": "arm",
+      "legacy": "clavicle_R"
+    },
+    {
+      "name": "RightArm",
+      "parent": "RightShoulder",
+      "kind": "arm",
+      "legacy": "upper_arm_R"
+    },
+    {
+      "name": "RightArmTwist",
+      "parent": "RightArm",
+      "kind": "twist",
+      "follows": "RightForeArm"
+    },
+    {
+      "name": "RightForeArm",
+      "parent": "RightArm",
+      "kind": "arm",
+      "legacy": "forearm_R"
+    },
+    {
+      "name": "RightForeArmTwist",
+      "parent": "RightForeArm",
+      "kind": "twist",
+      "follows": "RightHand"
+    },
+    {
+      "name": "RightHand",
+      "parent": "RightForeArm",
+      "kind": "arm",
+      "legacy": "hand_R"
+    },
+    {
+      "name": "RightHandThumb1",
+      "parent": "RightHand",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandThumb2",
+      "parent": "RightHandThumb1",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandThumb3",
+      "parent": "RightHandThumb2",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandThumb4",
+      "parent": "RightHandThumb3",
+      "kind": "end"
+    },
+    {
+      "name": "RightHandIndex1",
+      "parent": "RightHand",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandIndex2",
+      "parent": "RightHandIndex1",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandIndex3",
+      "parent": "RightHandIndex2",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandIndex4",
+      "parent": "RightHandIndex3",
+      "kind": "end"
+    },
+    {
+      "name": "RightHandMiddle1",
+      "parent": "RightHand",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandMiddle2",
+      "parent": "RightHandMiddle1",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandMiddle3",
+      "parent": "RightHandMiddle2",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandMiddle4",
+      "parent": "RightHandMiddle3",
+      "kind": "end"
+    },
+    {
+      "name": "RightHandRing1",
+      "parent": "RightHand",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandRing2",
+      "parent": "RightHandRing1",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandRing3",
+      "parent": "RightHandRing2",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandRing4",
+      "parent": "RightHandRing3",
+      "kind": "end"
+    },
+    {
+      "name": "RightHandPinky1",
+      "parent": "RightHand",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandPinky2",
+      "parent": "RightHandPinky1",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandPinky3",
+      "parent": "RightHandPinky2",
+      "kind": "finger"
+    },
+    {
+      "name": "RightHandPinky4",
+      "parent": "RightHandPinky3",
+      "kind": "end"
+    },
+    {
+      "name": "RightUpLeg",
+      "parent": "Hips",
+      "kind": "leg",
+      "legacy": "thigh_R"
+    },
+    {
+      "name": "RightUpLegTwist",
+      "parent": "RightUpLeg",
+      "kind": "twist",
+      "follows": "RightLeg"
+    },
+    {
+      "name": "RightLeg",
+      "parent": "RightUpLeg",
+      "kind": "leg",
+      "legacy": "shin_R"
+    },
+    {
+      "name": "RightLegTwist",
+      "parent": "RightLeg",
+      "kind": "twist",
+      "follows": "RightFoot"
+    },
+    {
+      "name": "RightFoot",
+      "parent": "RightLeg",
+      "kind": "leg",
+      "legacy": "foot_R"
+    },
+    {
+      "name": "RightToeBase",
+      "parent": "RightFoot",
+      "kind": "leg"
+    },
+    {
+      "name": "RightToe_End",
+      "parent": "RightToeBase",
+      "kind": "end"
+    }
+  ],
+  "blendshapes": [
+    "browDownLeft",
+    "browDownRight",
+    "browInnerUp",
+    "browOuterUpLeft",
+    "browOuterUpRight",
+    "cheekPuff",
+    "cheekSquintLeft",
+    "cheekSquintRight",
+    "eyeBlinkLeft",
+    "eyeBlinkRight",
+    "eyeLookDownLeft",
+    "eyeLookDownRight",
+    "eyeLookInLeft",
+    "eyeLookInRight",
+    "eyeLookOutLeft",
+    "eyeLookOutRight",
+    "eyeLookUpLeft",
+    "eyeLookUpRight",
+    "eyeSquintLeft",
+    "eyeSquintRight",
+    "eyeWideLeft",
+    "eyeWideRight",
+    "jawForward",
+    "jawLeft",
+    "jawOpen",
+    "jawRight",
+    "mouthClose",
+    "mouthDimpleLeft",
+    "mouthDimpleRight",
+    "mouthFrownLeft",
+    "mouthFrownRight",
+    "mouthFunnel",
+    "mouthLeft",
+    "mouthLowerDownLeft",
+    "mouthLowerDownRight",
+    "mouthPressLeft",
+    "mouthPressRight",
+    "mouthPucker",
+    "mouthRight",
+    "mouthRollLower",
+    "mouthRollUpper",
+    "mouthShrugLower",
+    "mouthShrugUpper",
+    "mouthSmileLeft",
+    "mouthSmileRight",
+    "mouthStretchLeft",
+    "mouthStretchRight",
+    "mouthUpperUpLeft",
+    "mouthUpperUpRight",
+    "noseSneerLeft",
+    "noseSneerRight",
+    "tongueOut"
+  ]
+}

@@ -10,10 +10,11 @@ import { formSize, formSlot } from '../../forge/form.js'
 import type { FormBody } from '../../charter/skill-look.js'
 import type { Gender } from '../../charter/look.js'
 import { formLookOf, skillLookOf } from '../recipes/looks.js'
-import { formCharacterLook } from './character-look.js'
+import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
-import { libraryGait } from './library-gait.js'
+import { libraryGait, libraryMoves } from './library-gait.js'
+import type { RigKind } from './rig.js'
 import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
 
@@ -87,12 +88,15 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     const shapeLook = formCharacterLook(characterLook(shape, hue), body)
     const file = await load(shapeLook.build)
     // it moves on the motion library's gait and stands in its chosen stance, where the library loads (Forge goal, phase B)
-    const [atlas, wear, gait] = await Promise.all([
+    const rig: RigKind = V2_BODIES.has(shapeLook.build) ? 'standard' : 'legacy'
+    const gender = shapeLook.build.charAt(0) as Gender
+    const [atlas, wear, gait, moves] = await Promise.all([
       heroAtlas(file, shapeLook),
       loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
-      libraryGait(shapeLook.build.charAt(0) as Gender, build.look?.idle),
+      libraryGait(gender, build.look?.idle, rig),
+      rig === 'standard' ? libraryMoves(gender, rig) : undefined,
     ])
-    return characterView(file, shapeLook, color, build, atlas, wear, gait)
+    return characterView(file, shapeLook, color, build, atlas, wear, gait, moves)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)

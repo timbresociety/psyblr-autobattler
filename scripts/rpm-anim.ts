@@ -6,23 +6,30 @@
  * which turn as far as the performer's shoulders turned from relaxed (relaxedShoulders). The hips' travel is
  * scaled to our hips' height, and walking forward becomes walking in place (the engine moves the hero).
  *
- *   npx tsx scripts/rpm-anim.ts [library]      (default .scratch/rpm/src: its masculine/ and feminine/ folders)
+ *   npx tsx scripts/rpm-anim.ts [library] [--rig standard]      (default .scratch/rpm/src: its masculine/ and feminine/ folders)
  *
  * Writes public/anim/ for src/arena/client/anim-library.ts: index.json (the clips of each gender by set, and the medium
  * body each gender's clips were fitted to, at rest, for the other sizes) and <m|f>/<clip>.json, 24 frames a second:
  * each bone's local rotation and the hips' position.
+ *
+ * With `--rig standard` the clips go onto the Psyblr Human rig instead (src/kit/rig/standard.json, the bodies in
+ * public/heroes/v2/), fingers and eyes included since the library keys them, into public/anim/standard/.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Quaternion, Vector3 } from 'three'
 
-const LIBRARY = process.argv[2] ?? '.scratch/rpm/src'
-const OUT = 'public/anim'
+const ARGS = process.argv.slice(2)
+const RIG_NAME = ARGS[ARGS.indexOf('--rig') + 1] === 'standard' && ARGS.includes('--rig') ? 'standard' : 'legacy'
+const LIBRARY = ARGS.find((a) => !a.startsWith('--') && a !== 'standard') ?? '.scratch/rpm/src'
+const STANDARD = RIG_NAME === 'standard'
+const OUT = STANDARD ? 'public/anim/standard' : 'public/anim'
+const BODIES = STANDARD ? 'public/heroes/v2' : 'public/heroes'
 const FPS = 24
 
 /** Our rig, parents first, and the RPM bone each takes its motion from. */
-const RIG: [string, string][] = [
+const LEGACY_RIG: [string, string][] = [
   ['hips', 'Hips'],
   ['spine', 'Spine'],
   ['chest', 'Spine1'],
@@ -44,6 +51,12 @@ const RIG: [string, string][] = [
   ['shin_R', 'RightLeg'],
   ['foot_R', 'RightFoot'],
 ]
+/** The Psyblr Human's keyed bones carry the library's names, so each takes its own; the jaw has no source and is left alone. */
+const STANDARD_RIG: [string, string][] = (JSON.parse(readFileSync('src/kit/rig/standard.json', 'utf8')) as { bones: { name: string; kind: string }[] }).bones
+  .filter((b) => b.kind !== 'twist' && b.kind !== 'end' && b.name !== 'Jaw')
+  .map((b) => [b.name, b.name])
+const RIG = STANDARD ? STANDARD_RIG : LEGACY_RIG
+const HEAD = STANDARD ? 'Head' : 'head'
 
 type Gender = 'm' | 'f'
 /** A set of clips: our name for each and its file in the library (under <masculine|feminine>/glb/), per gender. */
@@ -444,7 +457,7 @@ function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<s
 
   const ourWorld: Quaternion[] = RIG.map(() => new Quaternion())
   const prev = RIG.map(() => new Quaternion())
-  const head = RIG.findIndex(([o]) => o === 'head')
+  const head = RIG.findIndex(([o]) => o === HEAD)
   const look = { up: -90, down: 90, aside: 0, lean: 0 }
   const upright = new Vector3(0, 1, 0).applyQuaternion(ours.world[ours.index[head]])
   for (let f = 0; f < frames; f++) {
@@ -591,13 +604,13 @@ const POS_SCALE = 1000
 
 rmSync(OUT, { recursive: true, force: true })
 const report: string[] = []
-const index: Record<string, unknown> = { version: 1, fps: FPS, bones: RIG.map(([o]) => o), rot: ROT_SCALE, pos: POS_SCALE, genders: {} }
+const index: Record<string, unknown> = { version: 1, rig: RIG_NAME, fps: FPS, bones: RIG.map(([o]) => o), rot: ROT_SCALE, pos: POS_SCALE, genders: {} }
 let bytes = 0
-for (const gender of ['m', 'f'] as Gender[]) {
+for (const gender of (['m', 'f'] as Gender[]).filter((g) => existsSync(`${BODIES}/${g}-medium.glb`))) {
   const folder = join(LIBRARY, gender === 'm' ? 'masculine' : 'feminine', 'glb')
   const tpose = bonesOf(readGlb(join(folder, gender === 'm' ? 'Masculine_TPose.glb' : 'Feminine_TPose.glb')))
   const relaxed = relaxedShoulders(join(folder, `${SETS.idle[gender].idle}.glb`))
-  const ours = target(`public/heroes/${gender}-medium.glb`)
+  const ours = target(`${BODIES}/${gender}-medium.glb`)
   const aligned = alignedPose(tpose, ours)
   const sourceHipsY = worldPositions(tpose)[indexOf(tpose, 'Hips')].y
   mkdirSync(join(OUT, gender), { recursive: true })
