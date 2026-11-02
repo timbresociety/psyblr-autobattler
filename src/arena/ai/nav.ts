@@ -197,8 +197,13 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
     if (!h) overhangs.set(k, (h = pieces.map((p, i) => (p.base > y + M.step ? health[i] : 0))))
     return h
   }
-  // a body moving from `p` to `q` (feet), swept at feet, waist and head height, against what hangs over `floor`
-  const body = (p: Vec3, q: Vec3, floor: number) => [0.25, 0.95, 1.65].every((h) => !coverHit(pieces, above(floor), { x: p.x, y: p.y + h, z: p.z }, { x: q.x, y: q.y + h, z: q.z }, 0.3))
+  // a body moving from `p` to `q` (feet), swept at feet, waist and head height, against what hangs over `floor`: it
+  // may run into the side of a ledge a mantle pulls it up onto, never under one
+  const body = (p: Vec3, q: Vec3, floor: number) =>
+    [0.25, 0.95, 1.65].every((h) => {
+      const hit = coverHit(pieces, above(floor), { x: p.x, y: p.y + h, z: p.z }, { x: q.x, y: q.y + h, z: q.z }, 0.3)
+      return !hit || pieces[hit.index].top <= p.y + (q.y - p.y) * hit.t + M.mantle.height
+    })
   // a jump's arc lies between straight up then across, and a straight line from the take-off to over the landing (a
   // hero running at it): the box has to be clear, and nothing may hang over the straight line or a steeper rise
   const clearArc = (a: NavNode, b: NavNode, kind: LinkKind) => {
@@ -226,8 +231,8 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
     if (jumpable(d, need, LIGHTEST, true)) return { kind: 'jump2', need, time: d / JOG + 0.6 }
     return undefined
   }
-  // for each pair of regions, the shortest valid moves, spread along the edge
-  const chosen = new Map<number, { from: NavNode[] }>()
+  // for each pair of regions, the shortest valid moves, spread along the edges: no two start and land near each other
+  const chosen = new Map<number, [NavNode, NavNode][]>()
   const pairs: { i: number; j: number; d: number }[] = []
   nodes.forEach((a, i) => {
     if (!edge(i)) return
@@ -243,12 +248,12 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
     const [a, b] = [nodes[i], nodes[j]]
     const pair = a.region * 65536 + b.region
     const kept = chosen.get(pair)
-    if (kept && kept.from.some((n) => flat(n, a) < SPREAD)) continue
+    if (kept && kept.some(([ka, kb]) => flat(ka, a) < SPREAD && flat(kb, b) < SPREAD && Math.abs(kb.y - b.y) < 1)) continue
     const move = moveFor(a, b)
     if (!move || !clearArc(a, b, move.kind)) continue
     links[i].push({ to: j, kind: move.kind, cost: move.time, need: move.need, span: flat(a, b) })
-    if (kept) kept.from.push(a)
-    else chosen.set(pair, { from: [a] })
+    if (kept) kept.push([a, b])
+    else chosen.set(pair, [[a, b]])
   }
 
   // ziplines and rails, ridden from their high end: caught by a jump from below it, let go over the far end
@@ -426,10 +431,14 @@ export function followRoute(g: NavGraph, hero: HeroState, route: Route, match: M
   if (kind !== 'walk' && kind !== 'drop' && prev >= 0) {
     const from = g.nodes[prev]
     if (kind === 'zip' && link?.line !== undefined && match.lines) {
-      // under the line, toward its far end
+      // onto the line's track and along it toward the far end, at a point a little ahead of the hero
       const l = match.lines[link.line]
       const [hi, lo] = l.a.y >= l.b.y ? [l.a, l.b] : [l.b, l.a]
-      ;[dx, dz] = [lo.x - hi.x, lo.z - hi.z]
+      const ux = lo.x - hi.x
+      const uz = lo.z - hi.z
+      const ul = Math.sqrt(ux * ux + uz * uz) || 1
+      const t = Math.max(0, ((p.x - hi.x) * ux + (p.z - hi.z) * uz) / ul) + 1.5
+      ;[dx, dz] = [hi.x + (ux / ul) * t - p.x, hi.z + (uz / ul) * t - p.z]
     }
     const len = Math.sqrt(dx * dx + dz * dz) || 1
     const off = Math.sqrt((from.x - p.x) * (from.x - p.x) + (from.z - p.z) * (from.z - p.z))

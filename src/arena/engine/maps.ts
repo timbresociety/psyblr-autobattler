@@ -15,11 +15,13 @@ export interface ArenaMap {
   lines: readonly MapLine[]
   /** Height a hero placed by x and z stands at: the highest walkable top at or below this. */
   stand: number
+  /** Built in levels: the bots path across it on the nav graph (src/arena/ai/nav.ts). */
+  levels: boolean
 }
 
 export const MAPS: Record<MapId, ArenaMap> = {
-  house: { id: 'house', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main },
-  ruins: { id: 'ruins', pieces: RUINS, lines: [], stand: 0 },
+  house: { id: 'house', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main, levels: true },
+  ruins: { id: 'ruins', pieces: RUINS, lines: [], stand: 0, levels: false },
 }
 
 /** Live matches play here. */

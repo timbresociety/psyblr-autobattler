@@ -8,6 +8,7 @@ import type { TraitMods } from '../../charter/traits.js'
 import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import type { CoverHealth, CoverPiece, MapLine } from './cover.js'
+import type { MapId } from './maps.js'
 import type { Vec3 } from './maths.js'
 import { aiSeed, rngState, type RngState } from './rng.js'
 import type { AiLevel } from '../ai/calibration.js'
@@ -203,6 +204,8 @@ export interface MatchState {
   cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
   /** The map's ziplines and rails (GAME.md §7): fast lines a hero rides, exposed. */
   lines?: readonly MapLine[]
+  /** The map played on (maps.ts), when it is one of the registered arenas rather than a test's own cover. */
+  map?: MapId
   /** Lingering areas and traps left by skills, turrets, and the walls skills raised (with when they fall). */
   fields?: FieldState[]
   turrets?: TurretState[]
@@ -266,6 +269,11 @@ export interface BrainState {
   detour: -1 | 0 | 1
   /** The spot behind cover it falls back to when retreating. */
   hide?: { x: number; z: number }
+  /**
+   * The way it is going across a map built in levels (src/arena/ai/nav.ts): the nav nodes, the one it is heading
+   * for, the node it was planned to (to keep it while the target stays put) and when.
+   */
+  route?: { path: number[]; at: number; goal: number; planned: number }
   /** This decision it charges its next basic attack into a heavy blow, and raises its guard against a swing it sees coming. */
   heavy: boolean
   guard: boolean

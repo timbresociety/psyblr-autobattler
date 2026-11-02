@@ -74,6 +74,7 @@ export function createMatch(
   const pieces = options.cover === undefined ? map!.pieces : options.cover
   if (pieces) match.cover = { pieces, health: initialCoverHealth(pieces) }
   if (map?.lines.length) match.lines = map.lines
+  if (map && options.map) match.map = map.id
   const stand = map && map.stand > 0 ? map : undefined
   const setups: HeroSetup[] = []
   const add = (team: Combatant[], side: Team) =>

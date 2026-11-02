@@ -51,6 +51,10 @@ const HARD = {
   vaultReach: 4,
   /** Furthest cover it will run to when falling back. */
   hideReach: 16,
+  /** On a map in levels: a target this close on the same floor is walked straight at; any other along a route. */
+  directRange: 10,
+  /** A route is kept this many ticks while its target stays near the node it was planned to. */
+  replanTicks: 60,
   /**
    * Moving like Deadlock (Forge goal, phase 2). A dodge dashes this often, while it has more than `staminaKeep` pips;
    * a melee hero dashes at a target between `dashGap` metres off, at most every `dashEvery` ticks; a hero falling

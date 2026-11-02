@@ -10,6 +10,9 @@ import { next } from '../engine/rng.js'
 import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
 import { aimPoint, anglesTo, trackAim } from './aim.js'
 import { AI, useLevel } from './calibration.js'
+import { findPath, followRoute, navFor, nodeAt, type NavGraph } from './nav.js'
+import { MAPS } from '../engine/maps.js'
+import { floorUnder } from '../engine/cover.js'
 
 /**
  * The demo AI (KTD7, R17, R18, R31): utility scoring over a small action set, re-decided every 150 ms, with a thin
@@ -163,7 +166,8 @@ function hidingSpot(m: MatchState, hero: HeroState, threat: HeroState): { x: num
   if (!m.cover) return undefined
   let best: { x: number; z: number; d: number } | undefined
   m.cover.pieces.forEach((piece, i) => {
-    if (m.cover!.health[i] === 0 || piece.base > 0.5 || piece.top < 1.6) return
+    const feet = hero.position.y
+    if (m.cover!.health[i] === 0 || piece.base > feet + 0.5 || piece.top < feet + 1.6) return
     const s = piece.shape
     const extent = s.kind === 'column' ? s.r : Math.max(s.hx, s.hz)
     const ax = s.x - threat.position.x
@@ -172,6 +176,8 @@ function hidingSpot(m: MatchState, hero: HeroState, threat: HeroState): { x: num
     const x = s.x + (ax / len) * (extent + bodyRadius(hero) + 0.6)
     const z = s.z + (az / len) * (extent + bodyRadius(hero) + 0.6)
     const d = Math.sqrt((x - hero.position.x) * (x - hero.position.x) + (z - hero.position.z) * (z - hero.position.z))
+    // on a map in levels the spot has to be on the hero's own floor, not down a trench beside it
+    if (m.map && Math.abs(floorUnder(m.cover!.pieces, m.cover!.health, { x, y: feet, z }, feet + ENGINE.move.step) - feet) > ENGINE.move.step) return
     if (d <= AI.hideReach && (!best || d < best.d)) best = { x, z, d }
   })
   return best && { x: best.x, z: best.z }
@@ -241,6 +247,39 @@ function swingAt(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): 
   return false
 }
 
+/** The nav graph of the map a match plays on, when it is built in levels. */
+function graphOf(m: MatchState): NavGraph | undefined {
+  const map = m.map && MAPS[m.map]
+  return map && map.levels ? navFor(map.pieces, map.lines) : undefined
+}
+
+/**
+ * Across a map in levels (GAME.md §8) a target on another floor, or far off, is reached along the nav graph: the
+ * route is planned to the node under the target and kept while the target stays near that node, re-planned at most
+ * every `AI.replanTicks` otherwise. Close by on the same floor, the hero walks straight at it as on flat ground.
+ */
+function plan(m: MatchState, hero: HeroState, brain: BrainState, target: HeroState) {
+  const g = graphOf(m)
+  if (!g || hero.airborne || hero.zip || hero.mantle) return
+  const goal = nodeAt(g, target.position)
+  const from = nodeAt(g, hero.position)
+  if (goal < 0 || from < 0) return
+  const dx = target.position.x - hero.position.x
+  const dz = target.position.z - hero.position.z
+  if (g.nodes[goal].region === g.nodes[from].region && dx * dx + dz * dz < AI.directRange * AI.directRange) {
+    brain.route = undefined
+    return
+  }
+  const r = brain.route
+  if (r && r.at < r.path.length && m.tick - r.planned < AI.replanTicks) {
+    const was = g.nodes[r.goal]
+    const now = g.nodes[goal]
+    if (was.region === now.region && (was.x - now.x) * (was.x - now.x) + (was.z - now.z) * (was.z - now.z) < 16) return
+  }
+  const path = findPath(g, from, goal, { jumpScale: ENGINE.move.jumpScale[hero.size] })
+  brain.route = path ? { path, at: 0, goal, planned: m.tick } : undefined
+}
+
 function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState, setups: readonly HeroSetup[]) {
   brain.nextDecision = m.tick + AI.decisionTicks
   const want = chooseTarget(m, hero, setup)
@@ -254,6 +293,7 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
   brain.cast = undefined
   if (!target || !target.alive) return
+  plan(m, hero, brain, target)
   let best: { slot: NonNullable<BrainState['cast']>['slot']; escape: boolean; priority: number } | undefined
   // a weaker bot often lets its skills sit ready (§2)
   const considers = AI.skillUse >= 1 || next(m.ai) < AI.skillUse
@@ -298,7 +338,7 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
       // across low cover would otherwise stand there swinging at stone, so it hops or rounds it too
       const blind = !canSee(m, chest(hero), chest(target))
       brain.action = gap > preferredDistance(setup) + 0.5 || blind ? 'approach' : 'hold'
-      if (brain.action === 'approach' && !hero.airborne) {
+      if (brain.action === 'approach' && !hero.airborne && !brain.route) {
         // a melee hero closes the last few metres with a dash; anyone with far to go slides now and then
         if (!isRanged(setup) && gap >= AI.dashGap.min && gap <= AI.dashGap.max && m.tick >= brain.nextDash && hero.stamina >= AI.staminaKeep + 1) {
           brain.press |= MOVES.dash
@@ -388,12 +428,17 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     const loose = front?.clashing && (role === 'fighter' || role === 'assassin') && prey && !crowded(m, hero, target)
     if (front && !loose && progressOf(hero) >= front.progress - lead && (hero.team === 0 ? moveZ : -moveZ) > 0) moveZ = 0
   }
+  // across a map in levels, the route: its own way round walls, up ledges and over gaps
+  const g = brain.route && m.tick >= brain.dodgeUntil && (brain.action === 'approach' || closing) ? graphOf(m) : undefined
+  const routed = g && brain.route ? followRoute(g, hero, brain.route, m, setup.sheet.moveSpeed) : undefined
+  if (brain.route && brain.route.at >= brain.route.path.length) brain.route = undefined
   // walk around walls, or hop low cover
-  const steered = steer(m, hero, brain, moveX, moveZ, gapTo(hero, target) > AI.vaultReach)
+  const steered = routed ? { ...routed, hop: false } : steer(m, hero, brain, moveX, moveZ, gapTo(hero, target) > AI.vaultReach)
   ;[moveX, moveZ] = [steered.x, steered.z]
   // movement buttons decided between ticks go now; low cover is jumped, and jumped again near the top of the jump
   let moves = brain.press
   brain.press = 0
+  if (routed?.jump) moves |= MOVES.jump
   if (steered.hop) {
     if (!hero.airborne) moves |= MOVES.jump
     else if (hero.velocity.y < 1.5 && hero.airJumps === 0 && hero.stamina >= 1 && !(hero.held & MOVES.jump)) moves |= MOVES.jump
