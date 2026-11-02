@@ -4,6 +4,7 @@ import type { HeroPackage } from '../../forge/package.js'
 import type { Preset } from '../../forge/motion/library.js'
 import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
 import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
+import { heightFactor } from '../../kit/body/physique.js'
 import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
 import { formSize, formSlot } from '../../forge/form.js'
@@ -104,7 +105,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
-  view.root.scale.setScalar(SIZE_SCALE[chosen])
+  view.root.scale.setScalar(SIZE_SCALE[chosen] * heightFactor(build.look?.physique))
   // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up), dressed in
   // the same look with the form's own changes (gold hair, a chakra cloak); if that fails, the hero grows instead
   const slot = formSlot(build)

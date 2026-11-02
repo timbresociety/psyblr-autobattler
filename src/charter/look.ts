@@ -1,7 +1,7 @@
 import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
 import { PRINT_SCALE, isPrintId, type PrintId } from '../kit/wear/prints.js'
 import type { Physique } from '../kit/body/shape.js'
-import { PROPORTION_KEYS } from '../kit/body/proportions.js'
+import { hydratePhysique } from '../kit/body/physique.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
 import { MOTION_SLOTS, STYLES, type MotionSlot, type Style } from './motions.js'
@@ -173,11 +173,9 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
       if (Array.isArray(depth) && depth.length === FACE_POINTS && depth.every((d) => typeof d === 'number' && Number.isFinite(d) && Math.abs(d) <= limit)) look.face.depth = depth.map((d) => Math.round((d as number) * 10) / 10)
     }
   }
-  const physique = input.physique as Record<string, unknown> | undefined
-  if (physique && typeof physique === 'object' && isFiniteIn(physique.weight, 1) && isFiniteIn(physique.muscle, 1) && isFiniteIn(physique.age, 1)) {
-    look.physique = { weight: physique.weight, muscle: physique.muscle, age: physique.age }
-    for (const k of PROPORTION_KEYS) if (isFiniteIn(physique[k], 1)) look.physique[k] = physique[k] as number
-  }
+  // every Structure and Volume dial (GAME.md §9.3), the six proportions among them
+  const physique = hydratePhysique(input.physique)
+  if (physique) look.physique = physique
   const sculpt = hydrateSculpt(input.sculpt)
   if (sculpt) look.sculpt = sculpt
   if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle

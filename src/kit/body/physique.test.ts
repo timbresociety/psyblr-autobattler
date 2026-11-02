@@ -173,3 +173,20 @@ describe('physique: Structure × Volume (§9.3)', () => {
     expect(moved(pos, s.positions).most).toBeGreaterThan(0)
   })
 })
+
+describe('a saved physique (hydratePhysique)', () => {
+  it('keeps every dial a preset sets, through a save and a load', async () => {
+    const { ARCHETYPES, hydratePhysique, presetDials } = await import('./physique.js')
+    for (const id of ARCHETYPES) {
+      const dials = presetDials(id)
+      expect(hydratePhysique(JSON.parse(JSON.stringify(dials))), id).toEqual(dials)
+    }
+  })
+
+  it('drops what it does not know or what is out of range, not the whole physique', async () => {
+    const { hydratePhysique } = await import('./physique.js')
+    expect(hydratePhysique({ weight: 0.5, muscle: 0.5 })).toBeUndefined()
+    const p = hydratePhysique({ weight: 0.5, muscle: 0.5, age: 0, legs: 2, height: 9, posture: 'sideways', jiggle: 'anime', regional: { pecs: 0.8, wings: 1, abs: -1 }, evil: '<script>', preset: 'nope' })
+    expect(p).toEqual({ weight: 0.5, muscle: 0.5, age: 0, jiggle: 'anime', regional: { pecs: 0.8 } })
+  })
+})

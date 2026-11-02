@@ -121,6 +121,17 @@ export function heightScale(p: Partial<PhysiqueDials>, fallback = 1): number {
   return Math.min(HEIGHT_RANGE[1], Math.max(HEIGHT_RANGE[0], p.height)) / FILE_HEIGHT
 }
 
+/**
+ * How much the Height dial scales the drawn hero on top of its size class's own scale. GAME.md is silent on how height
+ * and the size class's hitbox meet, so height moves the body at most HEIGHT_FREEDOM either way of the class, keeping
+ * what the player sees close to what can be hit; 1 when no height is set.
+ */
+export const HEIGHT_FREEDOM = 0.15
+export function heightFactor(p: Partial<PhysiqueDials> | undefined): number {
+  const s = heightScale(p ?? {}, 1)
+  return Math.min(1 + HEIGHT_FREEDOM, Math.max(1 - HEIGHT_FREEDOM, s))
+}
+
 // ------------------------------------------------------------------------------------------------ posture
 
 /**
@@ -369,4 +380,37 @@ export function presetDials(id: ArchetypeId): PhysiqueDials {
 /** The jiggle a body gets when it names none: anime heroines bounce, children's busts never do. */
 export function jiggleOf(p: Partial<PhysiqueDials>): JigglePreset {
   return p.jiggle ?? 'realistic'
+}
+
+// ------------------------------------------------------------------------------------------------ saved looks
+
+/** Every dial that runs 0 to 1 (height is metres, posture, jiggle and preset are names). */
+export const UNIT_DIALS = [
+  'head', 'legs', 'arms', 'torso', 'shoulders', 'chestDepth', 'ribcage', 'hipWidth', 'pelvisTilt', 'neck', 'neckThickness', 'hands', 'feet',
+  'definition', 'bustSize', 'bustShape', 'bustSpacing', 'bustLift', 'waist', 'hipCurve', 'glutes', 'thighs', 'belly',
+] as const satisfies readonly NumericDial[]
+
+const unit = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1
+const r3 = (v: number) => Math.round(v * 1000) / 1000
+
+/**
+ * A physique from untrusted input (a saved look), keeping only dials it knows with values in range; undefined without
+ * the three every look has (weight, muscle, age). An unknown or out-of-range dial is dropped, not the physique.
+ */
+export function hydratePhysique(raw: unknown): PhysiqueDials | undefined {
+  const p = raw as Record<string, unknown> | undefined
+  if (!p || typeof p !== 'object' || !unit(p.weight) || !unit(p.muscle) || !unit(p.age)) return undefined
+  const out: PhysiqueDials = { weight: r3(p.weight), muscle: r3(p.muscle), age: r3(p.age) }
+  for (const k of UNIT_DIALS) if (unit(p[k])) out[k] = r3(p[k] as number)
+  if (typeof p.height === 'number' && Number.isFinite(p.height) && p.height >= HEIGHT_RANGE[0] && p.height <= HEIGHT_RANGE[1]) out.height = Math.round(p.height * 100) / 100
+  if ((POSTURES as readonly unknown[]).includes(p.posture)) out.posture = p.posture as Posture
+  if ((JIGGLE_PRESETS as readonly unknown[]).includes(p.jiggle)) out.jiggle = p.jiggle as JigglePreset
+  if ((ARCHETYPES as readonly unknown[]).includes(p.preset)) out.preset = p.preset as ArchetypeId
+  if (p.child === true) out.child = true
+  const regional = p.regional as Record<string, unknown> | undefined
+  if (regional && typeof regional === 'object') {
+    const kept = Object.fromEntries(REGIONAL_DIALS.filter((r) => unit(regional[r])).map((r) => [r, r3(regional[r] as number)]))
+    if (Object.keys(kept).length) out.regional = kept
+  }
+  return out
 }

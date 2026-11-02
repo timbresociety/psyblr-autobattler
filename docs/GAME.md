@@ -790,11 +790,11 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Controls | Jump and melee keys | Swap to Space and V (§3) |
 | Forge | Moves and Kit are split | Merge (§11) |
 | App | Loose screen switching | Routes (§11) |
-| Body | No helper bones or corrective morphs | Rework (§9) |
-| Body | Arms pass through bulky torsos | Rework (§9) |
-| Body | No hand IK | Rework (§9) |
-| Body | Googly eyes: the eyes show skin colour when they move in the Forge | Rework: the head becomes a fixed object with real eyeballs (§9.1) |
-| Body | No jiggle or secondary motion; no root bone; no joint limits | Rework (§9.2, §9.4) |
+| Body | No helper bones or corrective morphs | **Fixed (M1):** muscle helpers, correctives and drivers added at load (§9.2–9.4) |
+| Body | Arms pass through bulky torsos | **Fixed (M1):** girth spread fix-up; on the bench, heavyweight run penetration fell from 9.6 to 1.6 cm (§9.6, §9.7) |
+| Body | No hand IK | **Fixed (M1):** two-hand grip IK plus aim and look IK within joint limits (§9.6). Foot locking on tagged plants waits for the §12 tags |
+| Body | Googly eyes: the eyes show skin colour when they move in the Forge | **Fixed (M1):** the head is its own object with real eyeballs and 52 face shapes (§9.1). No dedicated 2K head texture yet |
+| Body | No jiggle or secondary motion; no root bone; no joint limits | **Fixed (M1):** Root bone, jiggle (off, realistic, anime), joint limits from the clip library (§9.2, §9.4) |
 | Animation | ~120 clips, from 2 sources | Grow to 600+ from free sources (§12) |
 | Legal | The repo was public, but licensed clips can't be redistributed | **Fixed:** the repo was made private on 2026-11-02 |
 | Legal | Bandai Namco clips require credit | **Excluded** (Q8) |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-02: §13 status updated for Milestone 1 (metarig, §9.1–9.7): five Body gaps closed. No rule changed.
 - 2026-11-02: **approved by the owner.** Bandai Namco left out.
 - 2026-11-02: repo made private on GitHub. Q8: the game stays free; Bandai Namco clips only with a Licences-page credit.
 - 2026-11-02: Q7 decided: the repo goes private. Bandai Namco motion data added as prototype-only (non-commercial, Q8). Weapon-held locomotion added, and a rule that only fully animated styles can be picked.

@@ -17,6 +17,7 @@ import { isShared } from '../../arena/client/head/kit.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { Gender, HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
+import { heightFactor } from '../../kit/body/physique.js'
 import type { Build } from '../../charter/build'
 import { SIZES, type SizeClass } from '../../charter/sizes'
 import type { RoleId } from '../../charter/types'
@@ -585,15 +586,17 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
 
   // size class: scale, and the hit capsule's radius as a ring (0.4 m at medium plus the class's extra)
   const ringed = hitbox && !!size
+  // the Height dial moves the body a little either way of its size class (heightFactor)
+  const tall = heightFactor(look?.look?.physique)
   useEffect(() => {
     const state = live.current
     if (!state) return
-    state.targetScale = size ? SIZE_SCALE[size] : 1
+    state.targetScale = (size ? SIZE_SCALE[size] : 1) * tall
     state.hitbox.visible = ringed
     state.ring.visible = !ringed
     if (size && ringed) state.hitbox.scale.setScalar(Math.max(0.25, 0.4 + SIZES[size].hitRadius))
     state.dirty = true
-  }, [size, ringed])
+  }, [size, ringed, tall])
 
   // a skill's cast: one play, then a blend back to the idle (the library's, or the file's)
   useEffect(() => {

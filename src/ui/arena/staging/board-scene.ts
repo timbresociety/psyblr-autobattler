@@ -6,6 +6,7 @@ import { TEAM_COLORS, atmosphere, buildMap, lights } from '../../../arena/client
 import { createRenderer, forceWebGLFlag } from '../../../arena/client/render/renderer.js'
 import { buildRuins } from '../../../arena/client/ruins.js'
 import { SIZE_SCALE } from '../../../arena/demo/procedural-hero.js'
+import { heightFactor } from '../../../kit/body/physique.js'
 import { ENGINE } from '../../../arena/engine/calibration.js'
 import { RUINS } from '../../../arena/engine/cover.js'
 import type { Team } from '../../../arena/engine/state.js'
@@ -476,7 +477,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   function makeFigure(side: Team, key: string, hero: number): Figure {
     const entry = state.loadout[hero]
     const team = new THREE.Color(TEAM_COLORS[side])
-    const scale = SIZE_SCALE[entry?.build.sizeClass ?? 'medium'] ?? 1
+    const scale = (SIZE_SCALE[entry?.build.sizeClass ?? 'medium'] ?? 1) * heightFactor(entry?.build.look?.physique)
     const body = new THREE.Group()
     // facing the enemy, as the match starts them (engine yaw 0 for side 0, π for side 1)
     body.rotation.y = side === 0 ? 0 : Math.PI
