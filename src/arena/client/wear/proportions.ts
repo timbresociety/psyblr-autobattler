@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { weldedNormals } from '../../../kit/body/surface.js'
 import type { BodyShape } from '../../../kit/body/shape.js'
-import { PROPORTIONS, proportionFactors, type Proportions } from '../../../kit/body/proportions.js'
+import { PROPORTIONS, proportionFactors, type Proportions, type StructureBones } from '../../../kit/body/proportions.js'
 
 /**
  * A hero's proportions put on its body (src/kit/body/proportions.ts): each limb, the torso and the neck lengthened or
@@ -11,7 +11,7 @@ import { PROPORTIONS, proportionFactors, type Proportions } from '../../../kit/b
  * that grow lift the whole rig, so the feet stay on the floor while the clips keep the hips where the file had them.
  * Returns the shape with its positions and normals moved; untouched when the proportions are all neutral.
  */
-export function proportion(mesh: THREE.SkinnedMesh, shape: BodyShape, proportions: Partial<Proportions> | undefined): BodyShape {
+export function proportion(mesh: THREE.SkinnedMesh, shape: BodyShape, proportions: (Partial<Proportions> & StructureBones) | undefined): BodyShape {
   const factor = proportionFactors(proportions)
   if (!factor) return shape
   const skeleton = mesh.skeleton
@@ -38,7 +38,7 @@ export function proportion(mesh: THREE.SkinnedMesh, shape: BodyShape, proportion
     const local = p === undefined ? before[i].clone() : before[p].clone().invert().multiply(before[i])
     local.decompose(t, q, s)
     // a bone sits as far from its parent as the parent's segment is long
-    const along = p === undefined ? 1 : factor.length(bones[p].name)
+    const along = p === undefined ? 1 : factor.length(bones[p].name, bones[i].name)
     const scale = factor.scale(bones[i].name)
     t.multiplyScalar(along)
     s.multiplyScalar(scale)

@@ -1,3 +1,4 @@
+import type { NumericDial } from '../kit/body/physique.js'
 import type { HeroLook, LookColor, LookSlot, Worn } from '../charter/look.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
@@ -149,7 +150,7 @@ function physiqueChanges(text: string, physique: Physique | undefined): { physiq
   const base = { ...NEUTRAL_PHYSIQUE, ...physique }
   let next: Physique = base
   const step = MUCH.test(text) ? 0.3 : 0.15
-  const move = (key: keyof Physique, by: number, word: string) => {
+  const move = (key: NumericDial, by: number, word: string) => {
     next = { ...next, [key]: Math.round(Math.min(1, Math.max(0, (next[key] ?? 0.5) + by)) * 100) / 100 }
     said.push(word)
   }

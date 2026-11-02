@@ -1,8 +1,9 @@
+import type { NumericDial } from '../../kit/body/physique.js'
 import { GENDER_LABEL, LOOK_COLOR_LABEL, type HeroLook, type LookColor } from '../../charter/look.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 
 /** The physique sliders: where each runs from and to. Weight and muscle sit at the middle as made, age at the start. */
-const PHYSIQUE: { key: keyof Physique; label: string; from: string; to: string }[] = [
+const PHYSIQUE: { key: NumericDial; label: string; from: string; to: string }[] = [
   { key: 'weight', label: 'Weight', from: 'Slight', to: 'Heavy' },
   { key: 'muscle', label: 'Muscle', from: 'Soft', to: 'Built' },
   { key: 'age', label: 'Age', from: 'Young', to: '75' },

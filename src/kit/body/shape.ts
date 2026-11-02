@@ -1,5 +1,7 @@
+import type { Gender } from '../../charter/look.js'
 import { applyFace, type FaceBasis } from './face-basis.js'
-import type { Proportions } from './proportions.js'
+import { sculptVolume, type PhysiqueDials } from './physique.js'
+import type { Skeleton } from './regions.js'
 import { weldedNormals, weldSurface, weldValues, type BodySurface } from './surface.js'
 
 /**
@@ -9,14 +11,10 @@ import { weldedNormals, weldSurface, weldValues, type BodySurface } from './surf
  */
 
 /**
- * How a hero is built, beyond its size: each 0 to 1. Weight and muscle at 0.5, and age at 0, are the body as made; the
- * proportions (proportions.ts) at 0.5 too, or absent.
+ * How a hero is built: Structure × Volume (physique.ts, GAME.md §9.3). Weight and muscle at 0.5, and age at 0, are the
+ * body as made; every other dial at 0.5 too, or absent.
  */
-export interface Physique extends Partial<Proportions> {
-  weight: number
-  muscle: number
-  age: number
-}
+export type Physique = PhysiqueDials
 
 export const NEUTRAL_PHYSIQUE: Physique = { weight: 0.5, muscle: 0.5, age: 0 }
 
@@ -118,7 +116,11 @@ export interface BodyShape extends Omit<BodyBase, 'morphs'> {
   normals: Float32Array
 }
 
-export function shapeBody(base: BodyBase, morphNames: readonly string[], physique: Partial<Physique> = {}, face?: FaceShape): BodyShape {
+/**
+ * A hero's body from the file's: its physique's morphs, its fitted face, and, given the body's skeleton at rest, the
+ * Volume dials sculpted on (physique.ts).
+ */
+export function shapeBody(base: BodyBase, morphNames: readonly string[], physique: Partial<Physique> = {}, face?: FaceShape, body?: { skeleton: Skeleton; gender: Gender }): BodyShape {
   const positions = Float32Array.from(base.positions)
   const w = morphWeights(physique, morphNames)
   base.morphs.forEach((delta, i) => {
@@ -131,5 +133,6 @@ export function shapeBody(base: BodyBase, morphNames: readonly string[], physiqu
     const weights = Array.from(face.base, (b, i) => ((face.weights[i] ?? b) - b) * strength + (face.sculpt?.[i] ?? 0))
     applyFace(face.basis, weights, face.scale, positions)
   }
+  if (body) sculptVolume({ positions: Float32Array.from(positions), normals: weldedNormals(base.surface, positions), triangles: base.surface.triangles, joints: base.joints, weights: base.weights, skin: base.skin }, body.skeleton, physique, body.gender, positions)
   return { surface: base.surface, positions, normals: weldedNormals(base.surface, positions), joints: base.joints, weights: base.weights, skin: base.skin }
 }
