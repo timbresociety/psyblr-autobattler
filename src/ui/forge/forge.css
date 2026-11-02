@@ -351,6 +351,23 @@
 .try-it-open { align-self: flex-start; }
 /* the arena lays itself over the Forge, below the tabs */
 .try-it { position: relative; z-index: 30; }
+.saved-try { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+
+/* ── the kit reel: the moves down the left, the points of view along the top ── */
+.kit-reel .reel-hud { position: absolute; inset: 0; pointer-events: none; }
+.kit-reel .reel-hud > * { pointer-events: auto; }
+.reel-takes { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; max-height: calc(100% - 140px); overflow-y: auto; }
+.reel-takes .hud-btn { display: grid; justify-items: start; gap: 2px; text-align: left; min-width: 180px; }
+.reel-takes kbd, .reel-caption kbd { font-size: 11px; opacity: 0.8; }
+.reel-takes .hud-btn.on, .reel-povs .hud-btn.on { box-shadow: inset 0 0 0 2px var(--accent); }
+.reel-povs { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.reel-caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; font-weight: 600; }
+.reel-close { position: absolute; top: 16px; right: 16px; }
+@media (max-width: 640px) {
+  .reel-takes { top: auto; bottom: 72px; transform: none; left: 16px; right: 16px; display: flex; overflow-x: auto; }
+  .reel-takes .hud-btn { min-width: 140px; }
+  .reel-povs { top: 64px; }
+}
 
 /* ── generating a piece ────────────────────────────────────────────────────── */
 .generator, .sign-in, .credits { display: grid; gap: 10px; padding: 12px 14px; border-radius: 10px; background: rgba(var(--accent-rgb), 0.05); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), 0.35); }

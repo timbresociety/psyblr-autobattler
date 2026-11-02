@@ -7,8 +7,11 @@ import type { RigKind } from './rig.js'
  * their lengths, and what anim-library.ts needs to unpack and fit them. No three.js here, so menus can list the clips.
  */
 
-/** Stances to stand in (they hold still and look ahead), idle moments to play now and then, and the rest. */
-export const ANIM_SETS = ['idle', 'fidget', 'move', 'dance', 'talk'] as const
+/**
+ * Stances to stand in (they hold still and look ahead), idle moments to play now and then, the rest, and on the Psyblr
+ * Human the combat set: Mixamo's strikes, shots, casts, dodges, blocks and reactions (src/charter/motions.ts).
+ */
+export const ANIM_SETS = ['idle', 'fidget', 'move', 'dance', 'talk', 'combat'] as const
 export type AnimSet = (typeof ANIM_SETS)[number]
 
 export interface AnimIndex {
@@ -24,8 +27,11 @@ export interface AnimIndex {
    * Per gender: the medium body's rest rotations and hips, each set's clips with their lengths in seconds, and each
    * looping move's gait (how fast it goes, its strides, where its left foot lands), for blending moves in step.
    */
-  genders: Record<Gender, { rest: number[][]; hips: number[]; sets: Record<AnimSet, Record<string, number>>; gait?: Record<string, Gait> }>
+  genders: Record<Gender, { rest: number[][]; hips: number[]; sets: Record<AnimSet, Record<string, number>>; gait?: Record<string, Gait>; marks?: Record<string, [release: number, travelled: number]> }>
 }
+
+/** Seconds into each combat clip where its blow lands, from the index's marks as each index loads (see castTime). */
+export const MOTION_RELEASE = new Map<string, number>()
 
 const indexes = new Map<RigKind, Promise<AnimIndex | undefined>>()
 const loaded = new Map<RigKind, AnimIndex | undefined>()
@@ -42,6 +48,7 @@ export function animIndex(rig: RigKind = 'legacy'): Promise<AnimIndex | undefine
       .catch(() => undefined)
       .then((i) => {
         loaded.set(rig, i)
+        for (const g of Object.values(i?.genders ?? {})) for (const [clip, [release]] of Object.entries(g.marks ?? {})) MOTION_RELEASE.set(clip, release)
         return i
       })
     indexes.set(rig, index)

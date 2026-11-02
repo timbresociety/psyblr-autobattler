@@ -248,17 +248,20 @@ describe('walking, jogging and running every way on the motion library (Forge go
   it('changes pace by blending into the next tier over a moment, a tier at a time', () => {
     const { player, action } = rig()
     player.update(1 / 60, 1, 0, 1.5, 0)
-    // sprinting off: a jog first, the walk fading out under it, then the run
-    player.update(0.1, 1, 0, 5.6, 0)
+    // sprinting off: a jog first, the walk fading out under it, then the run (a run is the sprint's alone)
+    player.update(0.1, 1, 0, 5.6, 0, true)
     const early = weights(action)
     expect(early.walk).toBeGreaterThan(0)
     expect(early.jog).toBeGreaterThan(0)
     expect(early.run).toBeUndefined()
-    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 5.6, 0)
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 5.6, 0, true)
     expect(weights(action)).toEqual({ run: expect.closeTo(1) })
     // backing away it runs backwards
-    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 4.4, Math.PI)
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 4.4, Math.PI, true)
     expect(weights(action)).toEqual({ run_back: expect.closeTo(1) })
+    // without the sprint the same pace jogs
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 1, 0, 5.6, 0)
+    expect(weights(action)).toEqual({ jog: expect.closeTo(1) })
   })
 
   it('holds a cast’s back as the cast’s own hips would, over hips leaning into a strafe', () => {
@@ -280,7 +283,7 @@ describe('walking, jogging and running every way on the motion library (Forge go
 
   it('runs under a cast with its legs alone', () => {
     const { body, mixer, player, action } = rig()
-    for (let k = 0; k < 40; k++) player.update(1 / 60, 0, 0.7, 5.6, -Math.PI / 2)
+    for (let k = 0; k < 40; k++) player.update(1 / 60, 0, 0.7, 5.6, -Math.PI / 2, true)
     expect(weights(action)).toEqual({})
     // the run to its right moves the hips (a legs track) as far as it shows: 0.7 of the way the clip has them now
     mixer.update(0)

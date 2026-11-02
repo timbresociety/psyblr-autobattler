@@ -49,7 +49,7 @@ export function tierSpeed(gaits: Readonly<Record<string, Gait>>, tier: GaitTier,
 }
 
 /** Played no slower or quicker than this against the clip as made: beyond it the feet slide instead. */
-export const PACE_LIMITS = [0.65, 1.5] as const
+export const PACE_LIMITS = [0.65, 1.8] as const
 /** How far past the speed halfway between two tiers a hero has to go before it changes pace, so it doesn't flicker. */
 const HOLD = 0.12
 
@@ -57,10 +57,13 @@ const HOLD = 0.12
  * The tier for covering `speed` metres a second (on the clips' own body) this way: the one whose own speed is
  * nearest, in proportion, holding `last` until the speed is well past halfway (geometric) to the next.
  */
-export function pickTier(gaits: Readonly<Record<string, Gait>>, ways: readonly number[], speed: number, last: GaitTier | undefined): GaitTier {
+export function pickTier(gaits: Readonly<Record<string, Gait>>, ways: readonly number[], speed: number, last: GaitTier | undefined, top: GaitTier = 'run'): GaitTier {
   const speeds = GAIT_TIERS.map((tier) => tierSpeed(gaits, tier, ways))
   let best = 0
-  for (let k = 1; k < GAIT_TIERS.length; k++) if (Math.abs(Math.log(speed / speeds[k])) < Math.abs(Math.log(speed / speeds[best]))) best = k
+  // `top` is the fastest it may pick: a hero not sprinting jogs however fast it goes, played quicker
+  const tiers = GAIT_TIERS.indexOf(top) + 1
+  if (last && GAIT_TIERS.indexOf(last) >= tiers) last = top
+  for (let k = 1; k < tiers; k++) if (Math.abs(Math.log(speed / speeds[k])) < Math.abs(Math.log(speed / speeds[best]))) best = k
   const held = last ? GAIT_TIERS.indexOf(last) : -1
   if (held < 0 || held === best) return GAIT_TIERS[best]
   // between the held tier and the next one toward the speed: change only once well past their geometric midpoint

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { ENGINE } from '../../../arena/engine/calibration'
 import type { HudHero, HudState } from '../../../arena/client/match-view'
 import { createStore } from '../../../arena/client/store'
 import { capsule, type Team } from '../../../arena/engine/state'
@@ -104,16 +105,19 @@ export function HealthBlock({ hero, info, shield }: { hero: HudHero; info: HudHe
           ))}
         </span>
         <span className="hud-health-hint">
-          <kbd>Tab</kbd> hands back · <kbd>Space</kbd> jumps · <kbd>Shift</kbd> dashes · <kbd>C</kbd> slides
+          <kbd>Tab</kbd> hands back · <kbd>V</kbd> jumps · <kbd>Shift</kbd> dashes, held sprints · <kbd>Z</kbd> rolls · <kbd>X</kbd> guards · <kbd>C</kbd> crouches
         </span>
       </div>
     </div>
   )
 }
 
-const CLUSTER = ['basic', 'movement', 'active1', 'active2'] as const
+const CLUSTER = ['basic', 'active1', 'active2', 'movement'] as const
 
-/** Bottom right: basic, movement and both actives with their keys, then the ultimate as a ring of its own. */
+/**
+ * Bottom right: the basic attack, Skill 1, Skill 2 and the movement skill with their keys, the passive lit while it's
+ * switched on (F), then the ultimate as a ring of its own.
+ */
 export function AbilityCluster({ hero, info }: { hero: HudHero; info: HudHeroInfo }) {
   const ult = info.skills.ultimate
   const ultLeft = hero.cooldowns.ultimate?.left ?? 0
@@ -123,6 +127,10 @@ export function AbilityCluster({ hero, info }: { hero: HudHero; info: HudHeroInf
         {CLUSTER.map((s) => (
           <AbilityChip key={s} skill={info.skills[s]} left={hero.cooldowns[s]?.left ?? 0} total={hero.cooldowns[s]?.total} keyLabel={SLOT_KEY[s]} size="md" />
         ))}
+        <span className={`hud-passive${hero.passiveOn === false ? ' off' : ' on'}`} title={`${info.skills.passive.name}: ${hero.passiveOn === false ? 'off' : 'on'} (F)`}>
+          <AbilityChip skill={info.skills.passive} left={0} keyLabel={SLOT_KEY.passive} size="md" />
+          <small>{hero.passiveOn === false ? 'OFF' : 'ON'}</small>
+        </span>
       </span>
       <span className={`hud-ult${ultLeft > 0.05 ? '' : ' ready'}`}>
         <AbilityChip skill={ult} left={ultLeft} total={hero.cooldowns.ultimate?.total} keyLabel="R" size="lg" />
@@ -209,9 +217,10 @@ export function SelfStatus({ hero }: { hero: HudHero }) {
   const stamina = hero.stamina ?? max
   const showMeter = stamina < max - 0.005
   const statuses = hero.statuses ?? []
-  if (!showMeter && !statuses.length) return null
+  if (!showMeter && !statuses.length && hero.holding === undefined) return null
   return (
     <div className="hud-self" aria-live="polite">
+      {hero.holding !== undefined && <ChargeMeter held={hero.holding} />}
       {statuses.length > 0 && (
         <span className="hud-self-status">
           {statuses.map((s) => (
@@ -232,5 +241,27 @@ export function SelfStatus({ hero }: { hero: HudHero }) {
         </span>
       )}
     </div>
+  )
+}
+
+const { heavyHold, chargeFull } = ENGINE.melee
+
+/**
+ * Under the reticle while Space is held: let go in the first beat for a quick strike; past it the bar fills as the heavy
+ * blow charges, and glows once it's full. The bar runs on CSS from the moment the hold began (the HUD speaks ten times a
+ * second, too coarse to fill it), set back by however long it was already held when it first showed.
+ */
+function ChargeMeter({ held }: { held: number }) {
+  const [since] = useState(() => held)
+  const total = heavyHold + chargeFull
+  const charged = held >= total
+  const phase = held < heavyHold ? 'Tap: quick strike' : charged ? 'Release: full heavy blow' : 'Charging heavy blow'
+  return (
+    <span className={`hud-charge${held >= heavyHold ? ' heavy' : ''}${charged ? ' full' : ''}`} role="meter" aria-label="Heavy charge" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(total, held)}>
+      <b style={{ '--hold': `${total}s`, '--tap': `${(heavyHold / total) * 100}%`, animationDelay: `${-since}s` } as CSSProperties}>
+        <i style={{ animationDuration: `${total}s`, animationDelay: `${-since}s` }} />
+      </b>
+      <small>{phase}</small>
+    </span>
   )
 }

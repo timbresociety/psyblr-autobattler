@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { LookSlot, Worn } from '../../../charter/look.js'
 import { bodyBase, shapeBody, type BodyBase, type BodyShape } from '../../../kit/body/shape.js'
+import { proportion } from './proportions.js'
 import { splitValues } from '../../../kit/body/surface.js'
 import { dress, type DressedItem, type Worn as WornItem } from '../../../kit/wear/dress.js'
 import { bodyFields, type BodyFields } from '../../../kit/wear/fields.js'
@@ -302,9 +303,14 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   geo.setAttribute('_skin', new THREE.BufferAttribute(isSkin, 1))
   const index = source.getIndex()!.array
-  const kept = new Uint32Array(shown.length * 3)
-  shown.forEach((t, i) => kept.set([index[t * 3], index[t * 3 + 1], index[t * 3 + 2]], i * 3))
-  geo.setIndex(new THREE.BufferAttribute(kept, 1))
+  // the eyeballs are left out: the bodies' skin runs closed over them, lids and all, with the eyes painted on the atlas
+  // (or the photo's own), so a ball shows only where it bulges through the lid, as a blank dome over each eye
+  const kept: number[] = []
+  for (const t of shown) {
+    const v = [index[t * 3], index[t * 3 + 1], index[t * 3 + 2]]
+    if (v.every((i) => isSkin[i])) kept.push(...v)
+  }
+  geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(kept), 1))
   geo.computeBoundingSphere()
   return geo
 }
@@ -414,7 +420,8 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const cache = bodyCache(mesh)
   const kit = bodyKitLoaded(look.build)
   const face = faceShape(look.face, look.sculpt, look.build, kit, cache.base.positions)
-  const shape = shapeBody(cache.base, cache.morphs, look.physique, face)
+  // the physique's weight, muscle and age in the morphs, then its proportions on the skeleton's rest
+  const shape = proportion(mesh, shapeBody(cache.base, cache.morphs, look.physique, face), look.physique)
   const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear, cache.base.surface.count)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
   // dev probe: what the dresser kept, to check against the fit tool's report (window.__dressed)

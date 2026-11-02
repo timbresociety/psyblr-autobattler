@@ -6,6 +6,7 @@ export const MARKSMAN = [
   basic({ id: 'marksman-burst-fire', name: 'Burst Fire', roles: ['marksman'], tags: ['burst', 'smg', 'rapid-fire', 'pistol', 'bullets'], delivery: at.proj(18), effects: [phys(6, 1, 0.3)], ai: ai('always', 1) }),
   basic({ id: 'marksman-longbow', name: 'Longbow', roles: ['marksman'], tags: ['bow', 'arrow', 'archer', 'longbow', 'crossbow'], delivery: at.proj(30), effects: [phys(2, 0.9)], ai: ai('always', 1) }),
   basic({ id: 'marksman-railgun', name: 'Railgun', roles: ['marksman'], tags: ['railgun', 'rail', 'laser-rifle', 'pierce', 'line', 'beam'], delivery: at.beam(28, 0.6), effects: [phys(3, 0.9)], ai: ai('always', 1) }),
+  basic({ id: 'marksman-rifle-butt', name: 'Rifle Butt', roles: ['marksman'], tags: ['rifle-butt', 'bayonet', 'melee', 'stock', 'bash', 'gun'], delivery: at.melee(2.4), effects: [phys(8, 1)], ai: ai('always', 1) }),
   basic({ id: 'marksman-crossbow-bolt', name: 'Crossbow Bolt', roles: ['marksman'], tags: ['crossbow', 'bolt', 'quarrel', 'hunter', 'pierce'], delivery: at.proj(24), effects: [phys(3, 0.9), shred(2, 2)], ai: ai('always', 1) }),
 
   active({ id: 'marksman-piercing-shot', name: 'Piercing Shot', roles: ['marksman'], tags: ['pierce', 'railgun', 'beam', 'line', 'penetrate'], delivery: at.beam(30), effects: [phys(55, 0.9)], cooldown: 9, ai: ai('poke', 6) }),

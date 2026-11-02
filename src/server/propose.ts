@@ -16,7 +16,7 @@ import {
 } from '../charter/build.js'
 import { ROLES, ROLE_IDS, isRoleId } from '../charter/roles.js'
 import { ATTRIBUTES, SECONDARY_STATS } from '../charter/stats.js'
-import { CATALOG, poolFor } from '../charter/templates/catalog.js'
+import { CATALOG, poolFor, fitsSlot } from '../charter/templates/catalog.js'
 import { matchTemplate } from '../charter/match.js'
 import { isOwnPhotoUrl } from './photo-url.js'
 import type { BuildSlot, LimitHit, SecondaryStat, Spread } from '../charter/types.js'
@@ -122,7 +122,7 @@ const proposalSchema = (): Record<string, unknown> => ({
       additionalProperties: false,
       required: [...BUILD_SLOTS],
       properties: Object.fromEntries(
-        BUILD_SLOTS.map((slot) => [slot, { type: 'string', enum: CATALOG.filter((t) => t.slot === SLOT_KIND[slot]).map((t) => t.id) }]),
+        BUILD_SLOTS.map((slot) => [slot, { type: 'string', enum: CATALOG.filter((t) => fitsSlot(t, SLOT_KIND[slot])).map((t) => t.id) }]),
       ),
     },
     spread: {

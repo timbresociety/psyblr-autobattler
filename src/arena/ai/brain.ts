@@ -1,10 +1,10 @@
 import { geometryOf } from '../../charter/geometry.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
-import { ENGINE } from '../engine/calibration.js'
+import { ENGINE, ticks } from '../engine/calibration.js'
 import { coverHit } from '../engine/cover.js'
 import { canSee, chest, free, isRanged as rangedBasic } from '../engine/deliveries.js'
 import { alliesOf, enemiesOf, hpFraction } from '../engine/effects.js'
-import { PI, TAU, distance, dot, length, lengthSq, sub, wrapAngle } from '../engine/maths.js'
+import { PI, TAU, cos, distance, dot, length, lengthSq, sin, sub, wrapAngle } from '../engine/maths.js'
 import type { Arena } from '../engine/match.js'
 import { next } from '../engine/rng.js'
 import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
@@ -152,7 +152,7 @@ function frontOf(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): 
 }
 
 function newBrain(hero: HeroState): BrainState {
-  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0 }, press: 0, nextDash: 0, slideUntil: 0, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0 }
+  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0 }, press: 0, nextDash: 0, slideUntil: 0, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0, heavy: false, guard: false }
 }
 
 /** The far side of the nearest piece of cover from `threat`, within reach: where a hurt hero breaks line of sight. */
@@ -222,6 +222,22 @@ function incoming(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]) 
   return undefined
 }
 
+/** Whether an enemy in reach is winding up a close blow (a melee or cone attack) while facing this hero. */
+function swingAt(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): boolean {
+  for (const e of m.heroes) {
+    const a = e.action
+    if (!e.alive || e.team === hero.team || !a || a.released) continue
+    const d = setups[e.id].kit[a.slot].delivery
+    if (d.kind !== 'melee' && d.kind !== 'cone') continue
+    if (gapTo(e, hero) > d.range + ENGINE.meleeSlack) continue
+    const dx = hero.position.x - e.position.x
+    const dz = hero.position.z - e.position.z
+    const len = Math.sqrt(dx * dx + dz * dz) || 1
+    if ((dx / len) * sin(e.yaw) + (dz / len) * cos(e.yaw) > 0.5) return true
+  }
+  return false
+}
+
 function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState, setups: readonly HeroSetup[]) {
   brain.nextDecision = m.tick + AI.decisionTicks
   const want = chooseTarget(m, hero, setup)
@@ -240,9 +256,13 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     if (hero.cooldowns[slot] > 0) continue
     const t = setup.kit[slot]
     const verdict = wants(m, hero, setup, t, target)
-    if (verdict.ok && (!best || t.ai.priority > best.priority)) best = { slot, escape: !!verdict.escape, priority: t.ai.priority }
+    // a way out comes before anything else, however keen the rest are
+    const escape = !!verdict.escape
+    if (verdict.ok && (!best || (escape && !best.escape) || (escape === best.escape && t.ai.priority > best.priority))) best = { slot, escape, priority: t.ai.priority }
   }
   if (best) brain.cast = { slot: best.slot, escape: best.escape }
+  brain.heavy = next(m.ai) < AI.heavyChance
+  brain.guard = next(m.ai) < AI.guardChance[setup.build.roleId]
   const threat = incoming(m, hero, setups)
   if (threat && next(m.ai) < AI.dodgeChance) {
     const len = Math.sqrt(threat.step.x * threat.step.x + threat.step.z * threat.step.z) || 1
@@ -251,7 +271,12 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
     brain.dodgeUntil = m.tick + AI.dodgeTicks
     // sidestep across the shot's path, often with a dash while it has stamina to spare
     brain.dodge = { x: (-threat.step.z / len) * side, z: (threat.step.x / len) * side }
-    if (hero.stamina >= AI.staminaKeep + 1 && next(m.ai) < AI.dodgeDash) brain.press |= MOVES.dash
+    // or rolls through it, untouchable for the roll's first moments
+    if (hero.stamina >= AI.staminaKeep + 1) {
+      const roll = next(m.ai)
+      if (roll < AI.dodgeRoll) brain.press |= MOVES.dodge
+      else if (roll < AI.dodgeRoll + AI.dodgeDash * (1 - AI.dodgeRoll)) brain.press |= MOVES.dash
+    }
   } else if (m.tick >= brain.dodgeUntil) {
     const gap = gapTo(hero, target)
     // falls back only toward living teammates; alone, it fights to the end rather than kiting forever
@@ -369,7 +394,16 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   // a sword swing only needs the target inside its arc; a shot needs the aim to settle
   const basic = setup.kit.basic.delivery
   const basicTolerance = basic.arcDegrees ? Math.max(AI.fireTolerance, ((basic.arcDegrees / 2) * PI) / 180 * AI.arcUse) : AI.fireTolerance
-  if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight()) buttons |= slotBit('basic')
+  // a guard goes up against a swing winding up at it, and nothing is struck while it is up
+  if (brain.guard && swingAt(m, hero, setups)) return { moveX, moveZ, moves: moves | MOVES.block, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
+  // the basic attack strikes when let go (combat.ts), so the AI taps it as a player does: pressed one tick, up the next;
+  // a heavy blow is held through its charge and let go
+  const BASIC = slotBit('basic')
+  const holding = hero.buttonsHeld & BASIC && hero.basicSince >= 0
+  if (holding && brain.heavy) {
+    if (m.tick - hero.basicSince < ticks(ENGINE.melee.heavyHold + AI.heavyCharge)) buttons |= BASIC
+    else brain.heavy = false
+  } else if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight() && !(hero.buttonsHeld & BASIC)) buttons |= BASIC
   return { moveX, moveZ, moves, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
 }
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { convergedAim } from './aim.js'
 import { commandFrom, type InputState } from './input.js'
 import type { ArenaController } from './match-view.js'
 import { heroForKey } from './takeover.js'
@@ -54,7 +55,8 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
       }
       return
     }
-    if (e.code === 'Space') e.preventDefault()
+    // Space would scroll and Ctrl reach the browser's shortcuts; in a fight they're the hero's
+    if (e.code === 'Space' || (locked() && (e.code === 'ControlLeft' || e.code === 'KeyV'))) e.preventDefault()
     if (down) input.held.add(e.code)
     else input.held.delete(e.code)
   }
@@ -101,7 +103,8 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   }
   const mousedown = (e: MouseEvent) => {
     if (locked()) {
-      if (e.button === 0) input.held.add('Mouse0')
+      input.held.add(`Mouse${e.button}`)
+      c.cameras.scoping = input.held.has('Mouse2')
       return
     }
     // steering a hero needs the mouse; watching does not
@@ -109,7 +112,8 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
     drag = { button: e.button, x: e.clientX, y: e.clientY, moved: false, shift: e.shiftKey }
   }
   const mouseup = (e: MouseEvent) => {
-    if (e.button === 0) input.held.delete('Mouse0')
+    input.held.delete(`Mouse${e.button}`)
+    c.cameras.scoping = input.held.has('Mouse2')
     const pressed = drag
     drag = undefined
     if (!pressed || pressed.moved || pressed.button !== 0 || locked() || !watching()) return
@@ -157,7 +161,15 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   window.addEventListener('mouseup', mouseup)
   document.addEventListener('pointerlockchange', lockchange)
 
-  c.hooks.human = () => commandFrom(input, c.cameras.yaw, c.cameras.pitch)
+  c.hooks.human = () => {
+    // shots go where the crosshair is, not along a line a shoulder's width beside it
+    const { yaw, pitch } = c.cameras
+    const forward = { x: Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: Math.cos(yaw) * Math.cos(pitch) }
+    const eye = c.camera.position
+    const human = c.arena.match.human
+    const aim = human === undefined ? undefined : convergedAim(c.arena.match, human, { x: eye.x, y: eye.y, z: eye.z }, forward)
+    return commandFrom(input, yaw, pitch, aim)
+  }
   const offFrame = c.hooks.on('frame', (dt) => {
     // watching: WASD slides the camera, Q and E turn it; a followed hero that falls is let go
     if (watching()) {

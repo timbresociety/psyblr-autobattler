@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import { matchTemplate, nearestAlternatives, tokenize } from './match.js'
-import { defaultTemplate, getTemplate } from './templates/catalog.js'
+import { defaultTemplate, getTemplate, poolFor } from './templates/catalog.js'
 
 describe('description matcher', () => {
-  it('"rewind the last 5 seconds" on a Mage active finds a return-to-past template (AE1)', () => {
+  it('"rewind the last 5 seconds" on a Mage active finds a spell that reaches others: a rewind only lifts its caster (AE1)', () => {
     const result = matchTemplate('mage', 'active', 'rewind the last 5 seconds of the fight')
-    expect(result.template.tags).toContain('return-to-past')
-    expect(result.fallback).toBe(false)
+    expect(result.template.tags).not.toContain('return-to-past')
+    expect(poolFor('mage', 'active').map((t) => t.id)).toContain(result.template.id)
   })
 
   it('maps fantasy wording through synonyms', () => {
     expect(matchTemplate('mage', 'ultimate', 'a giant kamehameha wave').template.id).toBe('mage-mega-beam')
     expect(matchTemplate('tank', 'active', 'throws a chain and drags them in').template.id).toBe('tank-chain-hook')
-    expect(matchTemplate('assassin', 'active', 'turns invisible and slips away').template.id).toBe('assassin-vanish')
+    expect(matchTemplate('assassin', 'active', 'turns invisible and slips away').template.id).toBe('assassin-smoke-bomb')
     expect(matchTemplate('fighter', 'ultimate', 'goes super saiyan').template.id).toBe('fighter-ascended-form')
   })
 
@@ -49,8 +49,8 @@ describe('description matcher', () => {
 
 describe('nearest alternatives', () => {
   it('gives 2 to 3 options from the same slot and role, never the chosen one', () => {
-    const chosen = getTemplate('mage-chrono-rewind')
-    const alternatives = nearestAlternatives('mage', 'active', chosen.id, 'rewind the last 5 seconds')
+    const chosen = getTemplate('mage-fireball')
+    const alternatives = nearestAlternatives('mage', 'active', chosen.id, 'hurls a ball of fire')
     expect(alternatives.length).toBeGreaterThanOrEqual(2)
     expect(alternatives.length).toBeLessThanOrEqual(3)
     for (const alt of alternatives) {

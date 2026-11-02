@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { Build } from '../../charter/build.js'
+import { BUILD_SLOTS, type Build } from '../../charter/build.js'
 import type { HeroPackage } from '../../forge/package.js'
 import type { Preset } from '../../forge/motion/library.js'
 import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
@@ -14,6 +14,8 @@ import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
 import { libraryGait, libraryMoves } from './library-gait.js'
+import { animIndex } from './anim-index.js'
+import { blockMotion, meleeSet, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
 import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
@@ -54,12 +56,12 @@ export interface HeroView {
   /** The far end of what the hero holds in its right hand, as last posed: where a weapon's swing trail runs from. */
   tip?: (out: THREE.Vector3) => THREE.Vector3 | undefined
   /** Twist the chest from the hips, run backwards or not, covering the ground this fast (see CharacterView.lean); without it, the view faces its aim whole. */
-  lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number) => void
+  lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number, sprint?: boolean) => void
   /** Whether it sidesteps and backpedals on clips of its own, its hips square to its aim (see CharacterView.strafes). */
   strafes?: boolean
 }
 
-const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall' }
+const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const hue = heroHue(build.heroName)
@@ -94,7 +96,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
       heroAtlas(file, shapeLook),
       loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
       libraryGait(gender, build.look?.idle, rig),
-      rig === 'standard' ? libraryMoves(gender, rig) : undefined,
+      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { block: blockMotion(build) })) : undefined,
     ])
     return characterView(file, shapeLook, color, build, atlas, wear, gait, moves)
   }
@@ -133,7 +135,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     settle: (dt, far, still) => shown().settle(dt, far, still),
     hand: (dir, out) => shown().hand(dir, out),
     tip: (out) => shown().tip(out),
-    lean: (twist, back, speed, planted, legs, heading) => shown().lean(twist, back, speed, planted, legs, heading),
+    lean: (twist, back, speed, planted, legs, heading, sprint) => shown().lean(twist, back, speed, planted, legs, heading, sprint),
     get strafes() {
       return shown().strafes
     },

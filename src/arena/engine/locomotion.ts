@@ -39,7 +39,6 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   }
   const steering = len > 0.1
   const pressed = command.moves & ~hero.held
-  hero.held = command.moves
   const rooted = hero.cc.root > now
   const pinned = hero.cc.grounded > now
   // feet stay planted through a wind-up and slow through the recovery (phase 1); a wind-up that roots the hero holds
@@ -49,17 +48,48 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   const v = hero.velocity
   const p = hero.position
   hero.stamina = Math.min(M.stamina.max, hero.stamina + DT / M.stamina.regen)
-  const want = speed * acting
+  const released = hero.held & ~command.moves
+  hero.held = command.moves
+  // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone, either again stands; a jump stands
+  // a low hero up rather than leaving the ground
+  const across0 = Math.sqrt(v.x * v.x + v.z * v.z)
+  if (pressed & MOVES.crouch && free && !hero.airborne && hero.stance === 'stand' && across0 >= M.slide.from * speed && now >= hero.dashUntil) {
+    hero.slide = { from: now, until: now + ticks(M.slide.time), x: v.x / across0, z: v.z / across0 }
+    events?.push({ type: 'move', hero: hero.id, move: 'slide' })
+  } else if (pressed & MOVES.crouch && !hero.airborne) hero.stance = hero.stance === 'crouch' ? 'stand' : 'crouch'
+  if (pressed & MOVES.prone && !hero.airborne) hero.stance = hero.stance === 'prone' ? 'stand' : 'prone'
+  const lowered = hero.stance !== 'stand'
+  // Shift: pressed it dashes ahead at once, and held it sprints on once the dash is spent
+  if (pressed & MOVES.dash) hero.shiftSince = now
+  const dashNow = (pressed & MOVES.dash) !== 0
+  if (released & MOVES.dash) hero.shiftSince = -1
+  hero.sprinting = (command.moves & MOVES.dash) !== 0 && hero.shiftSince >= 0 && now >= hero.dashUntil && !hero.airborne && !lowered && steering
+  // a guard is up while X is held on the ground and nothing else is going on
+  hero.blocking = (command.moves & MOVES.block) !== 0 && !hero.airborne && !hero.roll && !(hero.action && now < hero.action.ends && !hero.action.released) && free
+  // Z rolls along the facing, untouchable for its first moments
+  if (pressed & MOVES.dodge && free && !hero.airborne && !hero.roll && hero.stamina >= 1) {
+    hero.roll = { from: now, until: now + ticks(M.roll.time), x: sin(hero.yaw), z: cos(hero.yaw) }
+    hero.invulnerableUntil = Math.max(hero.invulnerableUntil, now + ticks(M.roll.iframes))
+    hero.stamina -= 1
+    hero.stance = 'stand'
+    hero.slide = undefined
+    events?.push({ type: 'move', hero: hero.id, move: 'roll' })
+  }
+  if (hero.roll && now >= hero.roll.until) hero.roll = undefined
+  const pace = hero.blocking ? M.block.speed : hero.stance === 'prone' ? M.prone.speed : hero.stance === 'crouch' ? M.crouch.speed : hero.sprinting ? M.sprint.speed : 1
+  const want = speed * acting * pace
+  const jumpScale = M.jumpScale[hero.size]
 
-  if (pressed & MOVES.jump && free) {
+  if (pressed & MOVES.jump && free && lowered && !hero.airborne) hero.stance = 'stand'
+  else if (pressed & MOVES.jump && free && !hero.roll) {
     if (!hero.airborne) {
       // a slide's speed carries into the jump
-      v.y = Math.sqrt(2 * M.gravity * M.jump)
+      v.y = Math.sqrt(2 * M.gravity * M.jump * jumpScale)
       hero.airborne = true
       hero.slide = undefined
       events?.push({ type: 'move', hero: hero.id, move: 'jump' })
     } else if (hero.airJumps < 1 && hero.stamina >= 1) {
-      v.y = Math.sqrt(2 * M.gravity * M.airJump)
+      v.y = Math.sqrt(2 * M.gravity * M.airJump * jumpScale)
       hero.airJumps++
       hero.stamina -= 1
       events?.push({ type: 'move', hero: hero.id, move: 'air-jump' })
@@ -72,7 +102,7 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
       }
     }
   }
-  if (pressed & MOVES.dash && free && hero.stamina >= 1 && now >= hero.dashUntil) {
+  if (dashNow && free && hero.stamina >= 1 && now >= hero.dashUntil && !hero.roll) {
     const n = Math.sqrt(mx * mx + mz * mz)
     const [dx, dz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]
     v.x = dx * M.dash.speed
@@ -84,20 +114,16 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     hero.slide = undefined
     events?.push({ type: 'move', hero: hero.id, move: 'dash' })
   }
-  // a crouch at a run starts a slide, pressed or held as the hero lands; letting go ends it
-  const crouch = (command.moves & MOVES.crouch) !== 0
-  const across = Math.sqrt(v.x * v.x + v.z * v.z)
-  const landed = hero.landedAt === now - 1
-  if (crouch && (pressed & MOVES.crouch || landed) && free && !hero.airborne && !hero.slide && now >= hero.dashUntil && across >= M.slide.from * speed) {
-    hero.slide = { from: now, until: now + ticks(M.slide.time), x: v.x / across, z: v.z / across }
-    events?.push({ type: 'move', hero: hero.id, move: 'slide' })
-  }
-  if (hero.slide && (!crouch || now >= hero.slide.until || hero.airborne || !free)) hero.slide = undefined
+  if (hero.slide && (now >= hero.slide.until || hero.airborne || !free)) hero.slide = undefined
 
   // across the ground; a rooted wind-up plants the feet at once
   if (rooted || (acting === 0 && !hero.airborne)) {
     v.x = 0
     v.z = 0
+  } else if (hero.roll) {
+    const s = M.roll.distance / M.roll.time
+    v.x = hero.roll.x * s
+    v.z = hero.roll.z * s
   } else if (now < hero.dashUntil) {
     // the dash carries it; as it ends, it keeps no more than its running speed
     if (now + 1 === hero.dashUntil) {

@@ -11,7 +11,7 @@ import { SUPPORT } from './support.js'
 import { TANK } from './tank.js'
 
 /** Bump when template or role numbers change, so stored gate results can be re-checked. */
-export const CATALOG_VERSION = 11
+export const CATALOG_VERSION = 12
 
 export const RAW_TEMPLATES: readonly Template[] = [...TANK, ...FIGHTER, ...ASSASSIN, ...MAGE, ...MARKSMAN, ...SUPPORT, ...CONTROLLER, ...SUMMONER, ...SHARED]
 
@@ -40,6 +40,17 @@ export function hasTemplate(id: string): boolean {
 
 const POOLS = new Map<string, Template[]>()
 
+/** What only lifts: stat buffs (its own or its allies'), states (stealth among them) and forms, and heals and shields on itself alone. */
+const SELF_ONLY = new Set<Template['effects'][number]['kind']>(['buff', 'state', 'form', 'resize', 'refresh'])
+export const isSelfBuff = (t: Template) => t.effects.every((e) => SELF_ONLY.has(e.kind) || ((e.kind === 'shield' || e.kind === 'heal') && e.target === 'self'))
+
+/**
+ * Whether a template may fill a slot of `slot` kind. The kit is mutually exclusive (the canon): the basic attack is the
+ * melee, Skill 1 the ranged shot and Skill 2 a spell that reaches others, the passive the buff and the movement skill
+ * the move, so a skill that only lifts its caster belongs to the passive and is no active's.
+ */
+export const fitsSlot = (t: Template, slot: SlotKind) => t.slot === slot && !(slot === 'active' && isSelfBuff(t))
+
 /**
  * A role's options for one slot kind, the role's own templates first (those named after it), then the ones it shares
  * in catalogue order. Computed once per pair; the catalogue never changes.
@@ -48,7 +59,7 @@ export function poolFor(role: RoleId, slot: SlotKind): Template[] {
   const key = `${role}|${slot}`
   let pool = POOLS.get(key)
   if (!pool) {
-    const all = CATALOG.filter((t) => t.slot === slot && t.roles.includes(role))
+    const all = CATALOG.filter((t) => fitsSlot(t, slot) && t.roles.includes(role))
     const own = (t: Template) => t.id.startsWith(`${role}-`)
     POOLS.set(key, (pool = [...all.filter(own), ...all.filter((t) => !own(t))]))
   }
@@ -71,6 +82,9 @@ const RETIRED: Record<string, string> = {
 export function currentTemplate(id: string, role: RoleId, slot: SlotKind): string | undefined {
   const pool = poolFor(role, slot)
   if (pool.some((t) => t.id === id)) return id
+  // a self-buff that left the actives (fitsSlot) gives way to the slot's first choice
+  const held = BY_ID.get(id)
+  if (held && held.slot === slot && held.roles.includes(role)) return defaultTemplate(role, slot).id
   const next = RETIRED[id]
   if (!next) return undefined
   return pool.some((t) => t.id === next) ? next : defaultTemplate(role, slot).id

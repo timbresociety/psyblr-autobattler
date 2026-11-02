@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import type { Build } from '../../charter/build'
 import { SIZES } from '../../charter/sizes'
 import type { RoleId } from '../../charter/types'
@@ -26,6 +26,8 @@ interface Props {
   onForge: () => void
 }
 
+const TryIt = lazy(() => import('../arena/ArenaScreen').then((m) => ({ default: m.TryIt })))
+
 /**
  * The Loadout (R18): the heroes this device has made or added, and the global loadout to search and add from. Nobody
  * loads the thousands of heroes everyone has made, only the ones they chose; adding one is free.
@@ -38,6 +40,8 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
   const [popular, setPopular] = useState<HeroResult[]>([])
   const [failed, setFailed] = useState(false)
   const [acting, setActing] = useState<string>()
+  // a hero tried on a training dummy, in the real arena, over the Loadout until it's left
+  const [trying, setTrying] = useState<Build>()
   const [confirming, setConfirming] = useState<string>()
   const [notice, setNotice] = useState<string>()
 
@@ -101,6 +105,14 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
 
   const list = query.trim().length >= 2 ? results : popular
 
+  if (trying)
+    return (
+      <div className="try-it">
+        <Suspense fallback={<p className="screen-loading">Loading the Arena…</p>}>
+          <TryIt build={trying} onClose={() => setTrying(undefined)} back="Back to the Loadout" />
+        </Suspense>
+      </div>
+    )
   return (
     <main className="loadout">
       <header className="loadout-head">
@@ -157,6 +169,9 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
                       <button className="btn sm primary" onClick={() => onEdit(record)}>
                         Edit in Forge
                       </button>
+                      <button className="btn sm ghost" onClick={() => setTrying(record.build)}>
+                        Try against dummy
+                      </button>
                       <button className="btn sm ghost" onClick={() => onRemix(record.build)}>
                         Remix
                       </button>
@@ -184,6 +199,9 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
                 <small className="gate-chip starter">Starter · {FACTION_NAME[hero.faction]}</small>
               </div>
               <div className="card-actions">
+                <button className="btn sm ghost" onClick={() => setTrying(build)}>
+                  Try against dummy
+                </button>
                 <button className="btn sm ghost" onClick={() => onRemix(build)}>
                   Remix in Forge
                 </button>

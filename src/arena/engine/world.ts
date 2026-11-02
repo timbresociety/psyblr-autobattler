@@ -93,6 +93,12 @@ export function tickWorld(ctx: Ctx) {
     if (!l) continue
     const t = Math.min(1, (now - l.from) / Math.max(1, l.until - l.from))
     h.position.y = l.base + 4 * l.height * t * (1 - t)
+    // a melee launch carries the hero away from the blow too
+    if (l.push) {
+      h.position.x += l.push.x
+      h.position.z += l.push.z
+      keepOut(h, m)
+    }
     if (now >= l.until || !h.alive) {
       // back where it was launched from; from there it falls if that was in the air
       h.position.y = l.base

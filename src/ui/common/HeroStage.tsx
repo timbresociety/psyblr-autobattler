@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import * as THREE from 'three'
-import { headBone } from '../../arena/client/rig.js'
+import { headBone, type RigKind } from '../../arena/client/rig.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { animClip, animIndex, fitClip, restPose, setOf, type RestPose } from '../../arena/client/anim-library.js'
-import { characterLook, classicCharacterMaterial, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
+import { characterLook, classicCharacterMaterial, V2_BODIES, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
 import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
@@ -35,7 +35,8 @@ export interface HeroStageProps {
   look?: { heroName: string; roleId: RoleId; sizeClass?: SizeClass; look?: HeroLook }
   hue?: number
   /** Plays one clip, then back to idle. A new `at` replays the same clip. */
-  cue?: { clip: StageClip; at: number }
+  /** A clip to play once: one of the file's own, or a motion library clip by name (a skill's motion). */
+  cue?: { clip: StageClip | string; at: number }
   /** Draws the hero at a size class's scale. */
   size?: SizeClass
   /** With `size`, rings the plinth with the hit capsule's real radius (the Forge's size picker). */
@@ -103,11 +104,15 @@ const ZOOM = { min: 0.55, max: 1.7 }
  */
 async function libraryClip(gender: Gender, name: string, body: string, rest: RestPose | undefined, stance: boolean): Promise<THREE.AnimationClip | undefined> {
   if (!rest) return undefined
-  const idx = await animIndex()
+  const rig = rigFor(body)
+  const idx = await animIndex(rig)
   const pick = stance && idx && setOf(idx, gender, name) !== 'idle' ? 'idle' : name
-  const clip = (await animClip(gender, pick).catch(() => undefined)) ?? (pick === 'idle' ? undefined : await animClip(gender, 'idle').catch(() => undefined))
-  return clip && fitClip(clip, gender, body, rest)
+  const clip = (await animClip(gender, pick, rig).catch(() => undefined)) ?? (pick === 'idle' ? undefined : await animClip(gender, 'idle', rig).catch(() => undefined))
+  return clip && fitClip(clip, gender, body, rest, rig)
 }
+
+/** The Psyblr Human bodies move on the standard rig's library, the rest on the first one's. */
+const rigFor = (body: string): RigKind => (V2_BODIES.has(body as BodyName) ? 'standard' : 'legacy')
 
 interface HeadSpan {
   /** The lowest and highest the head reaches along its bone, in the bone's own units: about the chin and the crown. */
@@ -464,7 +469,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex()])
+        const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex(rigFor(painted.build))])
         if (cancelled || live.current !== state) return undefined
         const model = cloneSkinned(file.scene)
         // its rest, read before anything moves it, fits the library's clips to this body
@@ -521,7 +526,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     if (!state?.model || !state.mixer || !state.gender || !state.body || state.motion?.name === want) return
     let cancelled = false
     const { model, mixer, gender, body } = state
-    void animIndex().then(async (idx) => {
+    void animIndex(rigFor(body)).then(async (idx) => {
       // the rest is read off the file's own scene: the model on stage is mid-clip
       const file = await characterFile(body)
       const rest = idx ? restPose(file.scene, idx.bones) : undefined
@@ -571,10 +576,35 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
   useEffect(() => {
     const state = live.current
     if (!cue || !state?.mixer || !state.actions || reduced.current) return
-    const action = state.actions.get(cue.clip)
-    const idle = state.motion?.action ?? state.actions.get('idle')
-    if (!action || !idle || action === idle) return
-    const mixer = state.mixer
+    const { mixer, actions, gender, body } = state
+    let off = () => {}
+    let cancelled = false
+    // a clip the file hasn't got comes from the motion library (a skill's motion-captured move), fitted to this body
+    const own = actions.get(cue.clip)
+    const found = own
+      ? Promise.resolve(own)
+      : gender && body
+        ? animIndex(rigFor(body)).then(async (idx) => {
+            const file = await characterFile(body)
+            const clip = await libraryClip(gender, cue.clip, body, idx ? restPose(file.scene, idx.bones) : undefined, false)
+            return clip && clip.name === cue.clip ? mixer.clipAction(clip) : undefined
+          })
+        : Promise.resolve(undefined)
+    void found.then((action) => {
+      if (!cancelled && action) off = playCue(action)
+    })
+    return () => {
+      cancelled = true
+      off()
+    }
+  }, [cue?.at]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Play one clip once over the idle, then blend back; returns how to stop listening for its end. */
+  function playCue(action: THREE.AnimationAction): () => void {
+    const state = live.current!
+    const idle = state.motion?.action ?? state.actions?.get('idle')
+    if (!idle || action === idle) return () => {}
+    const mixer = state.mixer!
     action.reset()
     action.setLoop(THREE.LoopOnce, 1)
     // held on its last frame while idle fades back in: let go, the body would blend toward its bind pose meanwhile
@@ -588,8 +618,9 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       action.fadeOut(0.3)
     }
     mixer.addEventListener('finished', done)
+    state.dirty = true
     return () => mixer.removeEventListener('finished', done)
-  }, [cue?.at]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   const role = look?.roleId
   return (

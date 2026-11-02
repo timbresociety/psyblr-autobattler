@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { createMatch } from '../engine/match.js'
-import { AIM_STEPS, MOVES } from '../engine/state.js'
+import { AIM_STEPS, MOVES, slotBit } from '../engine/state.js'
 import { BLEND_SECONDS, Cameras, pullIn } from './camera.js'
 import { BINDINGS, commandFrom } from './input.js'
 import { handBack, heroForKey, releaseIfDead, take } from './takeover.js'
@@ -39,12 +39,20 @@ describe('takeover and controls (U17)', () => {
     expect(match.human).toBeUndefined()
   })
 
-  it('Space jumps, Shift dashes, C crouches, and no binding uses Ctrl or Alt', () => {
-    expect(commandFrom({ held: new Set(['Space']) }, 0, 0).moves).toBe(MOVES.jump)
-    expect(commandFrom({ held: new Set(['ShiftLeft']) }, 0, 0).moves).toBe(MOVES.dash)
-    expect(commandFrom({ held: new Set(['ShiftRight', 'KeyC']) }, 0, 0).moves).toBe(MOVES.dash | MOVES.crouch)
-    expect(commandFrom({ held: new Set(['KeyZ']) }, 0, 0).moves).toBe(0)
-    expect(Object.keys(BINDINGS).some((k) => /Control|Alt|Meta/.test(k))).toBe(false)
+  it('binds the canon: V jumps, Shift dashes or sprints, C crouches, Ctrl lies prone, Z rolls, X guards, Space strikes', () => {
+    const moves = (...keys: string[]) => commandFrom({ held: new Set(keys) }, 0, 0).moves
+    expect(moves('KeyV')).toBe(MOVES.jump)
+    expect(moves('ShiftLeft')).toBe(MOVES.dash)
+    expect(moves('ShiftRight', 'KeyC')).toBe(MOVES.dash | MOVES.crouch)
+    expect(moves('ControlLeft')).toBe(MOVES.prone)
+    expect(moves('KeyZ')).toBe(MOVES.dodge)
+    expect(moves('KeyX')).toBe(MOVES.block)
+    const buttons = (...keys: string[]) => commandFrom({ held: new Set(keys) }, 0, 0).buttons
+    expect(buttons('Space')).toBe(slotBit('basic'))
+    expect(buttons('Mouse0')).toBe(slotBit('active1'))
+    expect(buttons('KeyQ', 'KeyE', 'KeyF', 'KeyR')).toBe(slotBit('active2') | slotBit('movement') | slotBit('passive') | slotBit('ultimate'))
+    // the right button zooms the camera; the engine never hears it
+    expect(commandFrom({ held: new Set(['Mouse2']) }, 0, 0)).toMatchObject({ moves: 0, buttons: 0 })
   })
 
   it('aims exactly where the camera looks, quantized, with no assist', () => {
@@ -53,7 +61,7 @@ describe('takeover and controls (U17)', () => {
     const c = commandFrom({ held: new Set(['Mouse0', 'KeyW']) }, yaw, pitch)
     expect(c.aimYaw).toBe(Math.round((yaw / (Math.PI * 2)) * AIM_STEPS))
     expect(c.aimPitch).toBe(Math.round((pitch / (Math.PI * 2)) * AIM_STEPS) + AIM_STEPS)
-    expect(c.buttons & 1).toBe(1)
+    expect(c.buttons & slotBit('active1')).toBe(slotBit('active1'))
     expect(c.moveX).toBeCloseTo(Math.sin(yaw))
   })
 

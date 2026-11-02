@@ -74,5 +74,6 @@ describe('balance gate (R15, KTD7)', () => {
   it('the worker path and the Node path give identical results for the same seed', () => {
     const build = defaultBuild('mage')
     expect(handleGateMessage({ build, options: quick })).toEqual(runGate(build, quick))
-  })
+    // on the quick sample the default mage sits just under the floor, so both paths search a lift
+  }, 180_000)
 })

@@ -2,7 +2,7 @@
  * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
  * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 9
+export const AI_CALIBRATION_VERSION = 11
 
 export const AI = {
   /** Ticks between decisions (150 ms at 60 Hz). */
@@ -51,6 +51,15 @@ export const AI = {
    * slides this often a decision.
    */
   dodgeDash: 0.5,
+  /**
+   * The canon's melee (combat.ts), pressed as a player presses it: a dodge rolls this often while it has pips to spare;
+   * a decision charges the next basic attack into a heavy blow this often, held this many seconds past the heavy hold;
+   * and raises its guard against an enemy swing it sees winding up this often, by role.
+   */
+  dodgeRoll: 0.35,
+  heavyChance: 0.25,
+  heavyCharge: 0.5,
+  guardChance: { tank: 0.6, fighter: 0.45, assassin: 0.2, mage: 0.25, marksman: 0.25, support: 0.3, controller: 0.3, summoner: 0.25 },
   staminaKeep: 1,
   dashGap: { min: 5, max: 12 },
   dashEvery: 120,

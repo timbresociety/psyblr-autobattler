@@ -15,6 +15,7 @@ import { AIM_STEPS, createHero, emptyMatch, prepareHero, slotBit, type Command, 
 import { tick } from './tick.js'
 import { BASIC_SHARE, moveShare, timingOf, timingTicks } from './timing.js'
 import { land } from './testing.js'
+import { shotTemplate } from './combat.js'
 
 const base = { id: 'timing', name: 'Timing', roles: ['fighter' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const swing = active({ ...base, delivery: at.melee(2.5), effects: [phys(40)] })
@@ -58,11 +59,11 @@ describe('action timing (Forge goal, phase 1)', () => {
   })
 
   it('a hit lands on the release tick and never before, after a cast event that says when', () => {
-    const d = duel({ active1: swing })
-    const first = d.step(d.press(slotBit('active1')))
+    const d = duel({ active2: swing })
+    const first = d.step(d.press(slotBit('active2')))
     const cast = d.of('cast', first)[0]
-    expect(cast).toMatchObject({ hero: 0, slot: 'active1' })
-    const prep = timingTicks(swing, 'active1').prep
+    expect(cast).toMatchObject({ hero: 0, slot: 'active2' })
+    const prep = timingTicks(swing, 'active2').prep
     expect(cast.release).toBe(d.m.tick + prep)
     while (d.m.tick < cast.release - 1) d.step()
     expect(d.of('hit')).toEqual([])
@@ -76,7 +77,7 @@ describe('action timing (Forge goal, phase 1)', () => {
     const d = duel({})
     const starts: number[] = []
     const ends: number[] = []
-    for (let i = 0; i < 240; i++) for (const e of d.step(d.press(slotBit('basic')))) if (e.type === 'cast' && e.slot === 'basic') (starts.push(d.m.tick), ends.push(e.ends))
+    for (let i = 0; i < 240; i++) for (const e of d.step(d.press(i % 2 ? 0 : slotBit('basic')))) if (e.type === 'cast' && e.slot === 'basic') (starts.push(d.m.tick), ends.push(e.ends))
     expect(starts.length).toBeGreaterThan(2)
     for (let i = 1; i < starts.length; i++) expect(starts[i]).toBeGreaterThanOrEqual(ends[i - 1])
     expect(d.of('release').filter((e) => e.slot === 'basic').length).toBeGreaterThanOrEqual(starts.length - 1)
@@ -90,17 +91,32 @@ describe('action timing (Forge goal, phase 1)', () => {
   })
 
   it('a stun during the wind-up cuts it short: no hit, an interrupt, and the cooldown stays spent', () => {
-    const d = duel({ active1: swing }, 1.6)
+    const d = duel({ active2: swing }, 1.6)
     // the tank stuns the fighter first: its own bash lands at once, as a test cast
     d.setups[1] = { ...d.setups[1], kit: { ...d.setups[1].kit, active1: bash } }
-    d.step(d.press(slotBit('active1')))
+    d.step(d.press(slotBit('active2')))
     expect(d.m.heroes[0].action?.released).toBe(false)
     land(d.ctx, 1, 'active1')
-    expect(d.of('interrupt')).toEqual([{ type: 'interrupt', hero: 0, slot: 'active1' }])
+    expect(d.of('interrupt')).toEqual([{ type: 'interrupt', hero: 0, slot: 'active2' }])
     expect(d.m.heroes[0].action).toBeUndefined()
     for (let i = 0; i < 90; i++) d.step()
     expect(d.of('hit').filter((e) => e.source === 0)).toEqual([])
-    expect(d.m.heroes[0].cooldowns.active1).toBeGreaterThan(0)
+    expect(d.m.heroes[0].cooldowns.active2).toBeGreaterThan(0)
+  })
+
+  it('Skill 1 fires like a gun: held, it shoots at the fire rate, each shot a share, the rider once a cooldown', () => {
+    const gun = { ...swing, cooldown: 6, effects: [...swing.effects, { kind: 'slow' as const, pct: 30, duration: 1 }] }
+    const d = duel({ active1: gun }, 1.6)
+    const casts: MatchEvent[] = []
+    for (let i = 0; i < 120; i++) casts.push(...d.step(d.press(slotBit('active1'))).filter((e) => e.type === 'cast'))
+    // two seconds of fire is many shots, not one
+    expect(casts.length).toBeGreaterThan(4)
+    const shots = d.of('hit').filter((e) => e.source === 0)
+    expect(shots.length).toBeGreaterThan(4)
+    // only the first shot slows
+    expect(d.m.heroes[0].riderAt).toBeGreaterThan(d.m.tick)
+    const full = swing.effects.find((e) => e.kind === 'damage')!
+    expect(shotTemplate(gun, { share: 0.1, rider: false }).effects).toEqual([{ ...full, amount: full.amount * 0.1, ratio: full.ratio * 0.1 }])
   })
 
   it('silence cuts a skill’s wind-up but not a basic attack’s, and disarm the other way round', () => {
@@ -114,7 +130,9 @@ describe('action timing (Forge goal, phase 1)', () => {
 
     const swingUp = duel({})
     swingUp.setups[1] = { ...swingUp.setups[1], kit: { ...swingUp.setups[1].kit, active1: hush, active2: unarm } }
+    // the basic attack strikes as its button is let go (combat.ts)
     swingUp.step(swingUp.press(slotBit('basic')))
+    swingUp.step(swingUp.press(0))
     land(swingUp.ctx, 1, 'active1')
     expect(swingUp.m.heroes[0].action?.slot).toBe('basic')
     land(swingUp.ctx, 1, 'active2')
@@ -124,6 +142,7 @@ describe('action timing (Forge goal, phase 1)', () => {
   it('a skill pressed during a basic attack’s wind-up takes over, and the swing never lands', () => {
     const d = duel({ active1: swing })
     d.step(d.press(slotBit('basic')))
+    d.step(d.press(0))
     expect(d.m.heroes[0].action?.slot).toBe('basic')
     d.step(d.press(slotBit('active1')))
     expect(d.of('interrupt')).toEqual([{ type: 'interrupt', hero: 0, slot: 'basic' }])

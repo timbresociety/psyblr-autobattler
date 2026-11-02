@@ -81,6 +81,25 @@ const PHYSIQUE: { key: keyof Physique; label: string; from: string; to: string }
   { key: 'age', label: 'Age', from: 'Young', to: '75' },
 ]
 
+/** Proportions (src/kit/body/proportions.ts): with weight and muscle, a beanpole to a brute. */
+const PROPORTION: { key: keyof Physique; label: string; from: string; to: string }[] = [
+  { key: 'legs', label: 'Legs', from: 'Short', to: 'Long' },
+  { key: 'arms', label: 'Arms', from: 'Short', to: 'Long' },
+  { key: 'torso', label: 'Torso', from: 'Short', to: 'Long' },
+  { key: 'shoulders', label: 'Shoulders', from: 'Narrow', to: 'Broad' },
+  { key: 'neck', label: 'Neck', from: 'Short', to: 'Long' },
+  { key: 'head', label: 'Head', from: 'Small', to: 'Big' },
+]
+
+/** Whole bodies to start from: each sets every slider, and any can be moved after. */
+const SHAPES: { label: string; physique: Physique }[] = [
+  { label: 'As made', physique: { weight: 0.5, muscle: 0.5, age: 0, legs: 0.5, arms: 0.5, torso: 0.5, shoulders: 0.5, neck: 0.5, head: 0.5 } },
+  { label: 'Beanpole', physique: { weight: 0, muscle: 0.15, age: 0, legs: 1, arms: 1, torso: 0.75, shoulders: 0.2, neck: 0.85, head: 0.45 } },
+  { label: 'Athlete', physique: { weight: 0.4, muscle: 0.8, age: 0, legs: 0.6, arms: 0.55, torso: 0.5, shoulders: 0.7, neck: 0.5, head: 0.45 } },
+  { label: 'Heavyweight', physique: { weight: 0.95, muscle: 0.6, age: 0, legs: 0.35, arms: 0.45, torso: 0.6, shoulders: 0.75, neck: 0.25, head: 0.5 } },
+  { label: 'Brute', physique: { weight: 0.7, muscle: 1, age: 0, legs: 0.55, arms: 0.6, torso: 0.6, shoulders: 1, neck: 0.15, head: 0.2 } },
+]
+
 /** The body, cosmetic only: man or woman, and how it's built and how old it looks. */
 export function BuildPanel({ look, onLook }: LookProps) {
   const physique = { ...NEUTRAL_PHYSIQUE, ...look.physique }
@@ -96,8 +115,18 @@ export function BuildPanel({ look, onLook }: LookProps) {
           ))}
         </div>
       </div>
+      <div className="maker-group">
+        <span className="field-label">Start from</span>
+        <div className="chip-grid">
+          {SHAPES.map((shape) => (
+            <button key={shape.label} type="button" className="chip" onClick={() => onLook((l) => ({ ...l, physique: { ...shape.physique, age: l.physique?.age ?? 0 } }))}>
+              {shape.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="sculpt-sliders">
-        {PHYSIQUE.map(({ key, label, from, to }) => (
+        {[...PHYSIQUE, ...PROPORTION].map(({ key, label, from, to }) => (
           <label key={key} className="sculpt-slider">
             <span className="sculpt-label">{label}</span>
             <input
@@ -106,13 +135,13 @@ export function BuildPanel({ look, onLook }: LookProps) {
               max={1}
               step={0.01}
               aria-label={label}
-              value={physique[key]}
+              value={physique[key] ?? 0.5}
               onChange={(e) => {
                 const value = Number(e.target.value)
                 onLook((l) => ({ ...l, physique: { ...NEUTRAL_PHYSIQUE, ...l.physique, [key]: value } }))
               }}
             />
-            <output>{Math.round(physique[key] * 100)}</output>
+            <output>{Math.round((physique[key] ?? 0.5) * 100)}</output>
             <small aria-hidden="true">
               <span>{from}</span>
               <span>{to}</span>

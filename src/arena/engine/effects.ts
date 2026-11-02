@@ -77,7 +77,7 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   amount *= 1 + (next(match.rules) * 2 - 1) * ENGINE.variance
   const sourceSetup = ctx.setups[source.id]
   const passive = sourceSetup.kit.passive
-  const always = (passive.trigger ?? 'always') === 'always'
+  const always = source.passiveOn && (passive.trigger ?? 'always') === 'always'
   for (const e of passive.effects) if (always && e.kind === 'execute' && hpFraction(target) * 100 < e.thresholdPct) amount *= 1 + e.bonusPct / 100
   // an assassin's trait: the wounded take more
   const lowHp = sourceSetup.mods?.lowHpBonus
@@ -352,7 +352,7 @@ export const world = {
 export function firePassive(ctx: Ctx, hero: HeroState, trigger: PassiveTrigger, target: HeroState | undefined) {
   const passive = ctx.setups[hero.id].kit.passive
   // a broken passive does nothing until the break wears off
-  if (!hero.alive || passive.trigger !== trigger || controlled(hero, 'break', ctx.match.tick)) return
+  if (!hero.alive || !hero.passiveOn || passive.trigger !== trigger || controlled(hero, 'break', ctx.match.tick)) return
   // a triggered passive lands on the hero itself or the target it just hit
   const hit = target && target.alive ? target : undefined
   resolve(ctx, hero, passive, 'passive', hit ? [hit] : [])

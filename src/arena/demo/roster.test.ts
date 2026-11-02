@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { BUILD_SLOTS, hydrateBuild, remixBuild } from '../../charter/build.js'
+import type { BuildSlot } from '../../charter/types.js'
 import { GATE_CEILING, winRateVsField } from '../../sim/gate.js'
-import { DEMO_HEROES, demoRoster } from './roster.js'
+import { MOTION_SKILL, fitOf, motionOf, type MotionSlot } from '../../charter/motions.js'
+import { ROLE_IDS } from '../../charter/roles.js'
+import { getTemplate } from '../../charter/templates/catalog.js'
+import { DEMO_HEROES, demoBuild, demoRoster } from './roster.js'
 
 describe('demo roster (U1)', () => {
   it('has 10 moguls and 10 leaders with unique names', () => {
@@ -31,6 +35,22 @@ describe('demo roster (U1)', () => {
     }
     // twenty heroes, not one blue glow: their moves come in many elements
     expect(elements.size).toBeGreaterThanOrEqual(10)
+  })
+
+  it('the eight role heroes follow the canon: a melee basic, a ranged Skill 1, and every skill its own motion that fits its slot', () => {
+    const heroes = DEMO_HEROES.filter((h) => h.motions)
+    expect(heroes.map((h) => h.roleId).sort()).toEqual([...ROLE_IDS].sort())
+    for (const hero of heroes) {
+      const build = demoBuild(hero)
+      expect(getTemplate(hero.kit[0]).delivery.kind, hero.id).toBe('melee')
+      expect(['projectile', 'beam'], hero.id).toContain(getTemplate(hero.kit[1]).delivery.kind)
+      expect(new Set(hero.motions).size, hero.id).toBe(6)
+      for (const [own, slot] of Object.entries(MOTION_SKILL) as [MotionSlot, BuildSlot][]) {
+        const motion = build.look!.motions![own]!
+        // a motion that fits what the skill does (a barricade braces behind a guard), or its slot
+        expect(fitOf(getTemplate(build.slots[slot]!.templateId), slot).kinds, `${hero.id} ${slot} ${motion}`).toContain(motionOf(motion)?.kind)
+      }
+    }
   })
 
   it('every hero fights under the R15 ceiling at its own size, as any forged build must', () => {

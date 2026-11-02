@@ -156,8 +156,9 @@ describe('demo AI (U7)', () => {
       // a hero thrown up by a knock-up is not flying, it is falling
       for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && !h.launch && airborne++)
     }
-    // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall
-    expect(airborne / samples).toBeLessThan(0.1)
+    // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall. The canon's
+    // jumps are bigger (2.2 m), so each hop hangs longer than the old 1.4 m one did
+    expect(airborne / samples).toBeLessThan(0.16)
   })
 
   it('a sword across low cover from its target goes round it rather than standing there swinging at stone', () => {

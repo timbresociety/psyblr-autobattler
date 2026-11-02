@@ -24,6 +24,8 @@ import type { BuildSlot, LimitHit, RoleId, SecondaryStat, Template } from '../..
 import type { HeroLook, LookSlot } from '../../charter/look'
 import { elementLook, type SkillLook } from '../../charter/skill-look'
 import { skillLookOf } from '../../arena/recipes/looks'
+import { kitMotions, skillMotion } from '../../arena/recipes/motions'
+import { MOTION_SKILL, MOTION_SLOTS, MOTION_SLOT_KINDS, fitOf } from '../../charter/motions'
 import type { ItemSlot } from '../../kit/wear/item'
 import { slotsFor, type LibraryEntry } from '../../kit/wear/library'
 import { COLOUR_WORDS } from '../../forge/prompt'
@@ -60,6 +62,7 @@ import './forge.css'
 const HeroStage = lazy(() => import('../common/HeroStage'))
 // the arena comes in only when the player tries the hero
 const TryIt = lazy(() => import('../arena/ArenaScreen').then((m) => ({ default: m.TryIt })))
+const KitReel = lazy(() => import('../arena/ArenaScreen').then((m) => ({ default: m.KitReel })))
 
 type Subject = Pick<Build, 'heroName' | 'roleId' | 'sizeClass' | 'look'>
 
@@ -72,7 +75,7 @@ interface StageView {
 }
 
 /** The plinth: the hero in 3D where WebGL runs, its initials where it does not. */
-function Stage({ subject, cue, view = {} }: { subject?: Subject; cue?: { clip: StageClip; at: number }; view?: StageView }) {
+function Stage({ subject, cue, view = {} }: { subject?: Subject; cue?: { clip: StageClip | string; at: number }; view?: StageView }) {
   const name = subject?.heroName ?? ''
   const label = name || 'your hero'
   const backdrop = <div className={`hero-stage${subject ? ` role-${subject.roleId}` : ' is-empty'}${view.studio ? ' is-studio' : ''}`} role="img" aria-label={`3D preview of ${label}`} />
@@ -143,9 +146,9 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   // the community's wardrobe items seen so far (the most worn, search results and generated ones), and what the reading
   // asked for that the library lacks
   const [items, setItems] = useState<LibraryEntry[]>([])
-  const [trying, setTrying] = useState(false)
+  const [trying, setTrying] = useState<false | 'dummy' | 'arena' | 'reel'>(false)
   const [gaps, setGaps] = useState<WearGap[]>([])
-  const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
+  const [cue, setCue] = useState<{ clip: StageClip | string; at: number }>()
   // the Forge reads before it builds: the reading of the first prompt, and that prompt
   const [reading, setReading] = useState<Reading>()
   const [prompt, setPrompt] = useState('')
@@ -451,7 +454,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
     apply(result)
     return {}
   }
-  const preview = (slot: BuildSlot) => build && setCue({ clip: castClip(getTemplate(build.slots[slot].templateId), slot, skillLookOf(build, slot)), at: performance.now() })
+  const preview = (slot: BuildSlot) => build && setCue({ clip: skillMotion(build, slot) ?? castClip(getTemplate(build.slots[slot].templateId), slot, skillLookOf(build, slot)), at: performance.now() })
   /** From the kit row: the hero performs the skill and its card comes into view. */
   const showSkill = (slot: BuildSlot) => {
     preview(slot)
@@ -567,7 +570,10 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   const current = sectionOf(section)
   const framing = framed ?? current.framing
   const lastWord = [...messages].reverse().find((m) => m.from === 'engine')
-  const skills = BUILD_SLOTS.map((slot) => ({ slot, name: build.slots[slot].name.trim() || getTemplate(build.slots[slot].templateId).name }))
+  const skills = BUILD_SLOTS.map((slot) => {
+    const template = getTemplate(build.slots[slot].templateId)
+    return { slot, name: build.slots[slot].name.trim() || template.name, fit: fitOf(template, slot) }
+  })
 
   const panel = (() => {
     switch (section) {
@@ -612,7 +618,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
                   Use suggested split
                 </button>
               )}
-              <button className="btn ghost try-it-open" onClick={() => setTrying(true)}>
+              <button className="btn ghost try-it-open" onClick={() => setTrying('dummy')}>
                 Try it on a training dummy
               </button>
             </div>
@@ -640,13 +646,23 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
             playing={playing}
             onIdle={(clip) => onLook((l) => ({ ...l, idle: clip }))}
             onPlay={setPlaying}
-            skills={skills}
-            onSkill={(slot) => preview(slot as BuildSlot)}
+            fits={Object.fromEntries(MOTION_SLOTS.map((own) => {
+              const slot = MOTION_SKILL[own]
+              const skill = slot && skills.find((k) => k.slot === slot)
+              return [own, skill ? { name: skill.name, ...skill.fit, kinds: own === 'combo1' ? MOTION_SLOT_KINDS.combo1 : skill.fit.kinds } : { clips: [], kinds: MOTION_SLOT_KINDS[own] }]
+            }))}
+            onOnce={(clip) => setCue({ clip, at: performance.now() })}
+            motions={kitMotions(build)}
+            onMotion={(slot, clip) => onLook((l) => ({ ...l, motions: { ...l.motions, [slot]: clip } }))}
+            onReel={() => setTrying('reel')}
           />
         )
       case 'kit':
         return (
           <section className="kit" aria-label="Kit">
+            <button className="btn ghost try-it-open" onClick={() => setTrying('reel')}>
+              Watch the kit on a dummy
+            </button>
             <ul className="kit-glance" aria-label="Kit at a glance">
               {BUILD_SLOTS.map((slot) => {
                 const spec = build.slots[slot]
@@ -745,7 +761,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
       {trying && (
         <div className="try-it">
           <Suspense fallback={null}>
-            <TryIt build={build} onClose={() => setTrying(false)} />
+            {trying === 'reel' ? <KitReel build={build} onClose={() => setTrying(false)} /> : <TryIt build={build} against={trying} onClose={() => setTrying(false)} />}
           </Suspense>
         </div>
       )}
@@ -754,6 +770,17 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
           <button className="btn primary big save" onClick={save} disabled={saving || uploading} title={uploading ? 'Waiting for your images to finish uploading' : undefined}>
             {buildId ? 'Save changes' : 'Save to loadout'}
           </button>
+        )}
+        {buildId && build.gate.state === 'ready' && (
+          // once the hero is in the loadout, try it as saved: on a dummy, or in a 3v3 in the arena
+          <span className="saved-try">
+            <button className="btn ghost" onClick={() => setTrying('dummy')}>
+              Try against dummy
+            </button>
+            <button className="btn ghost" onClick={() => setTrying('arena')}>
+              Try in arena
+            </button>
+          </span>
         )}
       </GateStatus>
     </main>

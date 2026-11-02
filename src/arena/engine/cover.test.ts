@@ -84,7 +84,8 @@ describe('the ruins in a match (R25)', () => {
     for (let t = 0; t < 60 * 60 && a.match.cover!.health[index] > 0; t++) {
       shooter.position = { x: 0, y: 0, z: -12 }
       target.hp = target.maxHp
-      events.push(...tick(a.match, a.setups, [{ ...IDLE, buttons: slotBit('basic') }, IDLE], COMBAT_RULES))
+      // tapped: the basic attack strikes as it's let go
+      events.push(...tick(a.match, a.setups, [{ ...IDLE, buttons: t % 2 ? 0 : slotBit('basic') }, IDLE], COMBAT_RULES))
     }
     expect(a.match.cover!.health[index]).toBe(0)
     expect(events.some((e) => e.type === 'cover-broken' && e.index === index)).toBe(true)

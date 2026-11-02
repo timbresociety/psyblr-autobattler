@@ -70,7 +70,7 @@ const death = (hero: number): MatchEvent => ({ type: 'death', hero })
 afterEach(() => (cleanup(), vi.useRealTimers()))
 
 describe('enemy roster (R38)', () => {
-  it('shows every enemy: name, health and Q/E/R with seconds, the fallen greyed, no keys to take them', () => {
+  it('shows every enemy: name, health and LMB/Q/R with seconds, the fallen greyed, no keys to take them', () => {
     render(<EnemyRoster heroes={[hudHero(2, { hp: 640, cooldowns: slots({ active1: 3.2 }) }), hudHero(3, { alive: false, hp: 0 })]} info={info} team={1} />)
     const list = screen.getByRole('list', { name: 'Enemy heroes' })
     const rows = within(list).getAllByRole('listitem')
@@ -79,12 +79,12 @@ describe('enemy roster (R38)', () => {
     expect(rows[1].textContent).toContain('Zuckerberg')
     expect(rows[1].className).toContain('dead')
     expect(within(rows[0]).getByRole('meter', { name: 'Health' }).getAttribute('aria-valuenow')).toBe('640')
-    expect(within(rows[0]).getByRole('img', { name: /^Q .+: 4 s$/ }).className).toContain('is-cd')
+    expect(within(rows[0]).getByRole('img', { name: /^LMB .+: 4 s$/ }).className).toContain('is-cd')
     const ult = within(rows[0]).getByRole('img', { name: /^R .+: ready$/ })
     expect(ult.className).toContain('is-ult')
     expect(ult.className).toContain('is-ready')
     // the ability letters are there; the 1-0 keys that take a hero are not
-    expect([...list.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['Q', 'E', 'R', 'Q', 'E', 'R'])
+    expect([...list.querySelectorAll('kbd')].map((k) => k.textContent)).toEqual(['LMB', 'Q', 'R', 'LMB', 'Q', 'R'])
     expect(list.querySelector('.hud-card-key')).toBeNull()
   })
 })
@@ -223,7 +223,7 @@ describe('while steering a hero (R14, R42)', () => {
 
     const group = screen.getByRole('group', { name: 'Controlled hero' })
     expect(within(group).getByRole('meter', { name: 'Health' }).getAttribute('aria-valuenow')).toBe('800')
-    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['LMB', 'F', 'Q', 'E', 'R'])
+    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['SPC', 'LMB', 'Q', 'E', 'F', 'R'])
 
     const crosshair = container.querySelector('.hud-crosshair')!
     act(() => (m.events([hit(0, 2)]), m.frame()))

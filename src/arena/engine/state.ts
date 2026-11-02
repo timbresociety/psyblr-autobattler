@@ -23,19 +23,22 @@ export interface Command {
   /** Desired horizontal direction in world space; the engine clamps its length to 1. */
   moveX: number
   moveZ: number
-  /** The movement buttons (`MOVES`): jump and dash count when first pressed, crouch while held. */
+  /**
+   * The movement buttons held (`MOVES`). Jump, crouch, prone and dodge act when first pressed; dash dashes when let go
+   * quickly and sprints while held; block guards while held.
+   */
   moves: number
   /** Aim in steps of a full turn (`AIM_STEPS` per turn). */
   aimYaw: number
   aimPitch: number
-  /** Bit per slot in `BUILD_SLOTS` order: pressed this tick. */
+  /** Bit per slot in `BUILD_SLOTS` order, held this tick: the basic attack strikes when let go and charges when held. */
   buttons: number
 }
 
 export const AIM_STEPS = 4096
 export const IDLE: Command = { moveX: 0, moveZ: 0, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
 /** Bits of `Command.moves` (Forge goal, phase 2). */
-export const MOVES = { jump: 1, dash: 2, crouch: 4 } as const
+export const MOVES = { jump: 1, dash: 2, crouch: 4, dodge: 8, prone: 16, block: 32 } as const
 export const slotBit = (slot: BuildSlot) => 1 << BUILD_SLOTS.indexOf(slot)
 
 export type Stat = BuffStat
@@ -85,8 +88,32 @@ export interface HeroState {
   slide?: { from: number; until: number; x: number; z: number }
   /** The tick it last landed. */
   landedAt: number
-  /** A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. */
-  launch?: { from: number; until: number; height: number; base: number }
+  /**
+   * A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. A melee launch (`regain`) carries
+   * the hero `push` metres a tick across the ground, and any input takes control back (combat.ts).
+   */
+  launch?: { from: number; until: number; height: number; base: number; regain?: boolean; push?: { x: number; z: number } }
+  /** Standing, crouched or prone (C and Ctrl toggle them). */
+  stance: 'stand' | 'crouch' | 'prone'
+  /** Sprinting while Shift stays held; `shiftSince` is the tick Shift went down (-1 when up). */
+  sprinting: boolean
+  shiftSince: number
+  /** A dodge roll in progress along `x`, `z`. */
+  roll?: { from: number; until: number; x: number; z: number }
+  /** Guarding this tick (X held, on the ground, not acting). */
+  blocking: boolean
+  /** The melee chain: the step the next strike takes (0, 1, then 2 the finisher), while a strike follows by `until`. */
+  combo: { step: number; until: number }
+  /** The tick the basic attack button went down (-1 when up); past the heavy hold it charges. */
+  basicSince: number
+  /** From this tick Skill 1's next shot carries the skill's rider (combat.ts, shotTemplate). */
+  riderAt: number
+  /** A strike tapped too early, waiting until this tick for the hero to be ready (combat.ts). */
+  queued?: { until: number }
+  /** Whether the passive is on (F toggles it). */
+  passiveOn: boolean
+  /** The slot buttons held last tick, so a press or a release counts once. */
+  buttonsHeld: number
   /** `source` is the template that granted it; the same template refreshes its buff instead of stacking. */
   buffs: { stat: Stat; pct: number; until: number; source: string }[]
   dots: { perSecond: number; type: DamageType; until: number; source: number }[]
@@ -98,7 +125,7 @@ export interface HeroState {
    * The action in progress (Forge goal, phase 1): pressed at `started`, it lands at `release` and frees the hero at
    * `ends`. Control that lands first cuts it short, and what hasn't been released never lands.
    */
-  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean }
+  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number }; shot?: { share: number; rider: boolean } }
   chosenSize: SizeClass
   /** The current class, which a transformation can change until `formUntil` (KTD14). */
   size: SizeClass
@@ -123,6 +150,8 @@ export interface ProjectileState {
   /** Metres per tick. */
   step: Vec3
   ticksLeft: number
+  /** Skill 1's share and rider when it fires as a gun (combat.ts, shotTemplate). */
+  shot?: { share: number; rider: boolean }
 }
 
 export interface MatchState {
@@ -206,6 +235,9 @@ export interface BrainState {
   detour: -1 | 0 | 1
   /** The spot behind cover it falls back to when retreating. */
   hide?: { x: number; z: number }
+  /** This decision it charges its next basic attack into a heavy blow, and raises its guard against a swing it sees coming. */
+  heavy: boolean
+  guard: boolean
 }
 
 export interface HeroSetup {
@@ -248,6 +280,7 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, formUntil: 0,
     cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], landedAt: 0,
     velocity: { x: 0, y: 0, z: 0 }, stamina: ENGINE.move.stamina.max, airJumps: 0, held: 0, dashUntil: 0,
+    stance: 'stand', sprinting: false, shiftSince: -1, blocking: false, combo: { step: 0, until: 0 }, basicSince: -1, riderAt: 0, passiveOn: true, buttonsHeld: 0,
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }
@@ -266,5 +299,6 @@ export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, ca
  */
 export function capsule(hero: HeroState): { radius: number; height: number } {
   const scale = SIZES[hero.size].scale
-  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale * (hero.slide ? ENGINE.move.slide.height : 1) }
+  const low = hero.slide ? ENGINE.move.slide.height : hero.stance === 'prone' ? ENGINE.move.prone.height : hero.stance === 'crouch' ? ENGINE.move.crouch.height : 1
+  return { radius: ENGINE.capsule.radius * scale, height: ENGINE.capsule.height * scale * low }
 }

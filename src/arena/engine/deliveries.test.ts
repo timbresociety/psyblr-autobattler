@@ -18,12 +18,12 @@ import { initHero } from './effects.js'
 const base = { id: 't', name: 'T', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const skill = (delivery: Template['delivery'], effects: Template['effects'] = [phys(100)]) => active({ ...base, delivery, effects })
 
-/** Caster at the origin facing +z with `template` in active1; enemies at the given spots and sizes. */
+/** Caster at the origin facing +z with `template` in active2; enemies at the given spots and sizes. */
 function arena(template: Template, enemies: { x?: number; y?: number; z: number; size?: SizeClass }[]) {
   const m: MatchState = emptyMatch(1)
   const setups: HeroSetup[] = []
   const casterSetup = prepareHero(defaultBuild('mage'))
-  setups.push({ ...casterSetup, kit: { ...casterSetup.kit, active1: template } })
+  setups.push({ ...casterSetup, kit: { ...casterSetup.kit, active2: template } })
   m.heroes.push(createHero(setups[0], 0, 0, { x: 0, y: 0, z: 0 }))
   enemies.forEach((e, i) => {
     const setup = prepareHero({ ...defaultBuild('tank'), ...(e.size && e.size !== 'colossal' ? { sizeClass: e.size } : {}) })
@@ -41,7 +41,7 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number;
   const events: MatchEvent[] = []
   const ctx = { match: m, setups, events }
   // these tests are about where a cast lands, so it lands on the tick it's pressed; timing.test.ts covers the wind-up
-  const fire = (slot: BuildSlot = 'active1') => land(ctx, 0, slot)
+  const fire = (slot: BuildSlot = 'active2') => land(ctx, 0, slot)
   const run = (n: number) => {
     for (let i = 0; i < n; i++) events.push(...tick(m, setups, [], COMBAT_RULES))
   }
@@ -108,7 +108,7 @@ describe('3D deliveries (U4)', () => {
     a.m.heroes[0].yaw = 0
     const from = chest(a.m.heroes[0])
     a.m.heroes[0].pitch = atan2(-from.y + capsule(a.m.heroes[1]).height * ENGINE.chest, 10)
-    const { at: centre } = landing(a.ctx, a.m.heroes[0], a.setups[0].kit.active1)
+    const { at: centre } = landing(a.ctx, a.m.heroes[0], a.setups[0].kit.active2)
     a.m.heroes[1].position.y = a.m.heroes[2].position.y = centre.y - capsule(a.m.heroes[1]).height * ENGINE.chest
     a.m.heroes[1].position.z = a.m.heroes[2].position.z = centre.z
     a.fire()
@@ -116,8 +116,8 @@ describe('3D deliveries (U4)', () => {
   })
 
   it('an airborne hero is hit by an upward shot and missed by a ground-disc zone', () => {
-    const shot = arena(skill(at.proj(30)), [{ z: 8, y: 6 }])
-    shot.aimAt(0, 6 + 1, 8)
+    const shot = arena(skill(at.proj(30)), [{ z: 5, y: 6 }])
+    shot.aimAt(0, 6 + 1, 5)
     shot.fire()
     shot.run(30)
     expect(shot.hits()).toEqual([1])
@@ -128,7 +128,7 @@ describe('3D deliveries (U4)', () => {
 
   it('covers AE6: a resize to colossal swaps the capsule and reach for the duration, then restores', () => {
     const a = arena(ultimate({ ...base, id: 'u', delivery: at.self(), effects: [resize('colossal', 2), phys(1)] }), [{ z: 30 }])
-    a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, ultimate: a.setups[0].kit.active1 } }
+    a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, ultimate: a.setups[0].kit.active2 } }
     const before = capsule(a.m.heroes[0]).radius
     a.fire('ultimate')
     expect(capsule(a.m.heroes[0]).radius).toBeCloseTo(ENGINE.capsule.radius + SIZES.colossal.hitRadius)
@@ -141,7 +141,7 @@ describe('3D deliveries (U4)', () => {
 
   it("a same-size form begins and ends at the hero's own class, and never touches its capsule", () => {
     const a = arena(ultimate({ ...base, id: 'u', delivery: at.self(), effects: [form(2), phys(1)] }), [{ z: 30 }])
-    a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, ultimate: a.setups[0].kit.active1 } }
+    a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, ultimate: a.setups[0].kit.active2 } }
     const before = capsule(a.m.heroes[0])
     a.fire('ultimate')
     expect(a.m.heroes[0].formUntil).toBeGreaterThan(0)
@@ -158,7 +158,7 @@ describe('3D deliveries (U4)', () => {
     const target = a.m.heroes[1]
     // cast inside a tick, as play does: the knockback starts in act and steps in the same tick's after()
     let at0 = { ...target.position }
-    a.events.push(...tick(a.m, a.setups, [{ ...IDLE, buttons: slotBit('active1') }], COMBAT_RULES))
+    a.events.push(...tick(a.m, a.setups, [{ ...IDLE, buttons: slotBit('active2') }], COMBAT_RULES))
     let path = 0
     let steps = 0
     for (let i = 0; i < 30; i++) {
@@ -196,7 +196,7 @@ describe('3D deliveries (U4)', () => {
 
   it('every catalogue template can be cast headless without errors', () => {
     for (const template of CATALOG) {
-      const slot: BuildSlot = template.slot === 'active' ? 'active1' : template.slot
+      const slot: BuildSlot = template.slot === 'active' ? 'active2' : template.slot
       const a = arena(template, [{ z: 3 }, { x: 2, z: 6 }])
       a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, [slot]: template } }
       initHero(a.m.heroes[0], a.setups[0])

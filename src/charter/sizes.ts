@@ -43,17 +43,18 @@ export const SIZES: Record<SizeClass, SizeProfile> = {
 /**
  * What each class costs each role in health, tuned so every size of a role does as well in 3v3 skirmishes as the same
  * role at medium. Reach decides blade fights and a small body slips shots, so the same class is worth very different
- * amounts to a tank and a marksman: a tiny tank needs twice the health to keep up, a huge one gives a third of it back.
+ * amounts to a tank and a marksman: a tiny tank needs twice the health to keep up, and since the canon's melee
+ * (2026-11-01) a big body that fights from range is a target that needs up to two and a half times its health.
  */
 export const SIZE_HEALTH: Partial<Record<RoleId, Partial<Record<SizeClass, number>>>> = {
-  tank: { tiny: 1.858, small: 0.973, large: 0.717, huge: 0.779 },
-  fighter: { tiny: 0.978, small: 1.062, large: 1.041, huge: 0.973 },
-  assassin: { tiny: 1.015, small: 0.983, large: 0.945, huge: 1.048 },
-  mage: { tiny: 1.023, small: 1.057, large: 1.121, huge: 1.494 },
-  marksman: { tiny: 1.083, small: 1.043, large: 0.973, huge: 1.05 },
-  support: { tiny: 1.513, small: 0.855, large: 0.919, huge: 1.041 },
-  controller: { tiny: 0.934, small: 0.974, large: 0.91, huge: 0.953 },
-  summoner: { tiny: 0.928, small: 0.944, large: 0.958, huge: 0.987 },
+  tank: { tiny: 1.858, small: 0.973, large: 0.878, huge: 1.241 },
+  fighter: { tiny: 0.978, small: 1.062, large: 1.041, huge: 1.046 },
+  assassin: { tiny: 1.015, small: 0.983, large: 1.087, huge: 1.127 },
+  mage: { tiny: 1.023, small: 1.057, large: 1.785, huge: 2.088 },
+  marksman: { tiny: 1.083, small: 1.043, large: 1.891, huge: 2.653 },
+  support: { tiny: 1.513, small: 0.855, large: 1.284, huge: 1.041 },
+  controller: { tiny: 0.934, small: 0.974, large: 1.115, huge: 1.239 },
+  summoner: { tiny: 0.928, small: 0.944, large: 1.03, huge: 1.135 },
 }
 
 /** The health multiplier `role` pays for `size`. */

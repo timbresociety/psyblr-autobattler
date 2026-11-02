@@ -67,28 +67,30 @@ const RECIPES: Record<string, Recipe> = {
       lower: item('cargo', ['#141416']),
       feet: item('combat_boots', ['#0b0b0c', null]),
       face: piece('square_glasses', '#8c8d93'),
+      hand_r: piece('rifle'),
     },
   },
   bezos: {
     gender: 'm', physique: { weight: 0.33, muscle: 0.4, age: 0.7 }, color: '#3b291b', style: 'none',
-    wear: { upper: item('shirt', ['#9ebde0'], { knobs: { sleeve: 0.8 } }), lower: item('trousers', ['#171c33']), feet: item('dress_shoes', ['#4c2e1a']) },
+    // the tank's sword and round shield (the canon's eight role heroes, 2026-11-01)
+    wear: { upper: item('shirt', ['#9ebde0'], { knobs: { sleeve: 0.8 } }), lower: item('trousers', ['#171c33']), feet: item('dress_shoes', ['#4c2e1a']), hand_r: piece('sword'), hand_l: piece('shield', '#ff9900') },
   },
   zuckerberg: {
     gender: 'm', physique: { weight: 0.53, muscle: 0.5, age: 0.28 }, hair: 'hair_curly', color: '#563720', style: 'curly',
-    wear: { upper: item('tee', ['#757880']), lower: item('jeans', ['#2b3d61', null]), feet: item('sneakers', ['#bfbfc2', null]) },
+    wear: { upper: item('tee', ['#757880']), lower: item('jeans', ['#2b3d61', null]), feet: item('sneakers', ['#bfbfc2', null]), hand_r: piece('dagger'), hand_l: piece('dagger') },
   },
   nadella: {
     gender: 'm', physique: { weight: 0.5, muscle: 0.27, age: 0.64 }, hair: 'hair_thin', color: '#636160', style: 'short',
     // an open-necked shirt under the jacket: the blazer over a top, in cotton
-    wear: { upper: item('blazer_silk', ['#171c33', '#9ebde0'], { finishes: [null, 'cotton'] }), lower: item('trousers', ['#29292e']), feet: DRESS_SHOES, face: piece('square_glasses', '#8c8d93') },
+    wear: { upper: item('blazer_silk', ['#171c33', '#9ebde0'], { finishes: [null, 'cotton'] }), lower: item('trousers', ['#29292e']), feet: DRESS_SHOES, face: piece('square_glasses', '#8c8d93'), hand_r: piece('staff') },
   },
   altman: {
     gender: 'm', physique: { weight: 0.48, muscle: 0.33, age: 0.26 }, hair: 'hair_short', color: '#3b291b', style: 'short',
-    wear: { upper: item('sweater', ['#5c616b']), lower: item('jeans', ['#2b3d61', null]), feet: item('sneakers', ['#d1d1cc', null]) },
+    wear: { upper: item('sweater', ['#5c616b']), lower: item('jeans', ['#2b3d61', null]), feet: item('sneakers', ['#d1d1cc', null]), hand_r: piece('katana') },
   },
   buffett: {
     gender: 'm', physique: { weight: 0.58, muscle: 0.25, age: 1 }, hair: 'hair_fringe_white', color: '#cfcfcb', style: 'short',
-    wear: { upper: item('suit_jacket', ['#54575e', WHITE, '#801a1f']), lower: item('trousers', ['#4c4f57']), feet: DRESS_SHOES, face: piece('glasses', '#141416') },
+    wear: { upper: item('suit_jacket', ['#54575e', WHITE, '#801a1f']), lower: item('trousers', ['#4c4f57']), feet: DRESS_SHOES, face: piece('glasses', '#141416'), hand_r: piece('hammer') },
   },
   winfrey: {
     gender: 'f', physique: { weight: 0.66, muscle: 0.27, age: 0.91 }, hair: 'hair_volume', color: '#291810', style: 'volume',

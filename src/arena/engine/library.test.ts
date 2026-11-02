@@ -18,12 +18,12 @@ import { tick } from './tick.js'
 const base = { id: 'lib', name: 'Lib', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const skill = (delivery: Template['delivery'], effects: Template['effects']) => active({ ...base, delivery, effects })
 
-/** Caster (blue) at the origin facing +z with `template` in active1; enemies (red tanks) at the given spots. */
+/** Caster (blue) at the origin facing +z with `template` in active2; enemies (red tanks) at the given spots. */
 function arena(template: Template, enemies: { x?: number; y?: number; z: number }[]) {
   const m: MatchState = emptyMatch(1)
   const setups: HeroSetup[] = []
   const casterSetup = prepareHero(defaultBuild('mage'))
-  setups.push({ ...casterSetup, kit: { ...casterSetup.kit, active1: template } })
+  setups.push({ ...casterSetup, kit: { ...casterSetup.kit, active2: template } })
   m.heroes.push(createHero(setups[0], 0, 0, { x: 0, y: 0, z: 0 }))
   enemies.forEach((e, i) => {
     const setup = prepareHero(defaultBuild('tank'))
@@ -38,7 +38,7 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number 
   const events: MatchEvent[] = []
   const ctx = { match: m, setups, events }
   // these tests are about what a skill does, so it lands on the tick it's pressed; timing.test.ts covers the wind-up
-  const fire = (slot: BuildSlot = 'active1', who = 0) => land(ctx, who, slot)
+  const fire = (slot: BuildSlot = 'active2', who = 0) => land(ctx, who, slot)
   const run = (n: number, commands: (Command | undefined)[] = []) => {
     for (let i = 0; i < n; i++) events.push(...tick(m, setups, commands, COMBAT_RULES))
   }
@@ -54,7 +54,8 @@ describe('skill library: crowd control', () => {
     const a = arena(skill(zone(4), [root(2)]), [{ z: 2 }])
     a.fire()
     const before = { ...a.m.heroes[1].position }
-    a.run(30, [undefined, walk(1, 0, slotBit('basic'))])
+    // tapped: the basic attack strikes as it's let go
+    for (let i = 0; i < 15; i++) (a.run(1, [undefined, walk(1, 0, slotBit('basic'))]), a.run(1, [undefined, walk(1, 0)]))
     expect(a.m.heroes[1].position.x).toBeCloseTo(before.x, 6)
     expect(a.of('cast').some((e) => e.hero === 1)).toBe(true)
   })
@@ -62,12 +63,12 @@ describe('skill library: crowd control', () => {
   it('silence stops skills but not basic attacks; disarm stops basic attacks but not skills', () => {
     const s = arena(skill(zone(4), [silence(2)]), [{ z: 2 }])
     s.fire()
-    expect(s.fire('active1', 1)).toBe(false)
+    expect(s.fire('active2', 1)).toBe(false)
     expect(s.fire('basic', 1)).toBe(true)
     const d = arena(skill(zone(4), [disarm(2)]), [{ z: 2 }])
     d.fire()
     expect(d.fire('basic', 1)).toBe(false)
-    expect(d.fire('active1', 1)).toBe(true)
+    expect(d.fire('active2', 1)).toBe(true)
   })
 
   it('sleep stops everything until the sleeper is hurt', () => {
@@ -107,7 +108,7 @@ describe('skill library: crowd control', () => {
   it('fear sends a hero running from the caster and stops it acting; taunt walks it at the caster and makes it attack', () => {
     const f = arena(skill(zone(4), [fear(1.5)]), [{ z: 2 }])
     f.fire()
-    f.run(30, [undefined, walk(0, -1, slotBit('active1'))])
+    f.run(30, [undefined, walk(0, -1, slotBit('active2'))])
     expect(f.m.heroes[1].position.z).toBeGreaterThan(2.5)
     expect(f.of('cast').some((e) => e.hero === 1)).toBe(false)
     const t = arena(skill(zone(8), [taunt(3)]), [{ z: 5 }])
@@ -196,12 +197,12 @@ describe('skill library: debuffs, states and refresh', () => {
 
   it('refresh takes time off the caster’s other cooldowns', () => {
     const a = arena(skill(at.self(), [refresh(4)]), [])
-    a.m.heroes[0].cooldowns.active2 = ticks(6)
+    a.m.heroes[0].cooldowns.active1 = ticks(6)
     a.m.heroes[0].cooldowns.movement = ticks(3)
     a.fire()
-    expect(a.m.heroes[0].cooldowns.active2).toBe(ticks(6) - ticks(4))
+    expect(a.m.heroes[0].cooldowns.active1).toBe(ticks(6) - ticks(4))
     expect(a.m.heroes[0].cooldowns.movement).toBe(0)
-    expect(a.m.heroes[0].cooldowns.active1).toBeGreaterThan(0)
+    expect(a.m.heroes[0].cooldowns.active2).toBeGreaterThan(0)
   })
 
   it('unstoppable as a skill frees the caster from control it is already under', () => {

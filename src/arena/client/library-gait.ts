@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { Gender } from '../../charter/look.js'
+import { ENGINE } from '../engine/calibration.js'
 import { animClip, animIndex, setOf } from './anim-library.js'
 import { GAIT_CLIPS, type Gait } from './gait.js'
 import type { RigKind } from './rig.js'
@@ -21,31 +22,83 @@ const loads = new Map<string, Promise<LibraryGait | undefined>>()
 
 /**
  * The library clip behind each one-shot the engine plays, for a body whose file carries no clips of its own (the
- * Psyblr Human bodies, docs/plans/2026-10-31-canon-psyblr-human.md). The jumps and the fall are motion capture
- * already in the library; the combat moves arrive with the Mixamo clips, and until then a missing name plays the
- * stance (characters.ts falls back to idle).
+ * Psyblr Human bodies, docs/plans/2026-10-31-canon-psyblr-human.md): Ready Player Me's jumps and fall, and Mixamo's
+ * combat set for the rest (src/charter/motions.ts). A name the library hasn't got plays the stance (characters.ts).
+ * A skill plays its own motion (recipes/motions.ts); slash, shoot, cast and ultimate are for a skill without one.
  */
 export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   jump: 'run_jump',
-  air_jump: 'jog_jump',
+  air_jump: 'backflip',
   air: 'falling',
-  land: 'land',
-  dash: 'dash',
-  dash_back: 'dash_back',
-  slide: 'slide',
-  slash: 'slash',
-  shoot: 'shoot',
-  cast: 'cast',
-  ultimate: 'ultimate',
-  hurt: 'hurt',
-  stunned: 'stunned',
-  fall: 'fall',
+  dash: 'standing_dodge_forward',
+  dash_back: 'standing_dodge_backward',
+  slide: 'running_slide_pose',
+  slash: 'jab_cross',
+  shoot: 'shooting_gun',
+  cast: 'spell_cast',
+  ultimate: 'jump_attack',
+  hurt: 'hit_to_body',
+  stunned: 'big_hit_to_head',
+  fall: 'falling_back_death',
+  roll: 'sprinting_forward_roll',
+  block: 'standing_block_idle',
+  crouch: 'crouch_idle',
+  crouch_move: 'crouch_walk_forward',
+  prone: 'prone_idle',
+  prone_move: 'prone_forward',
+  launched: 'fall_a_loop',
+  charge: 'standing_block_start',
+  toggle: 'spell_cast',
+}
+
+/**
+ * One-shots the engine times itself: only the stretch of the clip that does the move plays, sped up to last as long as
+ * the engine's move does. Seconds into the clip, from and to, and how long it plays. A Mixamo roll stands, steps and
+ * crouches for half a second before it rolls; the engine's roll starts at once.
+ */
+const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number]>> = {
+  roll: [0.45, 1.2, ENGINE.move.roll.time],
+  dash: [0.12, 0.75, 0.3],
+  dash_back: [0.1, 0.9, 0.34],
+  toggle: [0.15, 1.0, 0.6],
+}
+
+/** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`. */
+function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number): THREE.AnimationClip {
+  const k = seconds / (to - from)
+  const tracks = clip.tracks.map((track) => {
+    const width = track.getValueSize()
+    const keep: number[] = []
+    track.times.forEach((t, i) => t >= from - 1e-6 && t <= to + 1e-6 && keep.push(i))
+    const times = Float32Array.from(keep, (i) => (track.times[i] - from) * k)
+    const values = new Float32Array(keep.length * width)
+    keep.forEach((i, n) => values.set(track.values.subarray(i * width, (i + 1) * width), n * width))
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, times, values)
+  })
+  return new THREE.AnimationClip(clip.name, seconds, tracks)
 }
 
 const moveLoads = new Map<string, Promise<Map<string, THREE.AnimationClip>>>()
 
-/** The one-shots a gender's library has (LIBRARY_MOVES), by the engine's names, fetched once. */
-export function libraryMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.AnimationClip>> {
+/**
+ * The one-shots a gender's library has (LIBRARY_MOVES) by the engine's names, and `motions` (a hero's skills' clips) by
+ * their own, fetched once each. `instead` puts a hero's own clip under an engine name (its guard as the `block`).
+ */
+export async function libraryMoves(gender: Gender, rig: RigKind, motions: readonly string[] = [], instead: Readonly<Record<string, string>> = {}): Promise<Map<string, THREE.AnimationClip>> {
+  const base = await baseMoves(gender, rig)
+  const names = [...new Set([...motions, ...Object.values(instead)])]
+  const own = await Promise.all(names.map((name) => animClip(gender, name, rig).catch(() => undefined)))
+  const out = new Map(base)
+  own.forEach((clip, k) => clip && out.set(names[k], clip))
+  for (const [ours, name] of Object.entries(instead)) {
+    const clip = out.get(name)
+    if (clip) out.set(ours, new THREE.AnimationClip(ours, clip.duration, clip.tracks))
+  }
+  return out
+}
+
+function baseMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.AnimationClip>> {
   const key = `${rig}/${gender}`
   let load = moveLoads.get(key)
   if (!load) {
@@ -55,7 +108,8 @@ export function libraryMoves(gender: Gender, rig: RigKind): Promise<Map<string, 
       const out = new Map<string, THREE.AnimationClip>()
       names.forEach(([ours], k) => {
         const clip = clips[k]
-        if (clip) out.set(ours, new THREE.AnimationClip(ours, clip.duration, clip.tracks))
+        const cuts = MOVE_CUTS[ours]
+        if (clip) out.set(ours, cuts ? Object.assign(cut(clip, ...cuts), { name: ours }) : new THREE.AnimationClip(ours, clip.duration, clip.tracks))
       })
       return out
     })()

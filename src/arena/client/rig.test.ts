@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { KEYED_BONES, STANDARD_BONES } from '../../kit/rig/standard.js'
+import { MOTIONS } from '../../charter/motions.js'
 import { headBone, RIGS, rigOf } from './rig.js'
 import { splitClip } from './characters.js'
 
@@ -49,7 +50,7 @@ describe('the rigs the arena animates', () => {
     expect(splitClip(standard, RIGS.standard).top.tracks.map((t) => t.name)).toEqual(['Spine.quaternion', 'RightHandIndex1.quaternion'])
   })
 
-  it('ships the standard rig library with the contract\'s keyed bones, hips first, and the same sets as the first', () => {
+  it('ships the standard rig library with the contract\'s keyed bones, hips first, the first\'s sets, and Mixamo\'s combat set', () => {
     const standard = read('../../../public/anim/standard/index.json')
     const legacy = read('../../../public/anim/index.json')
     expect(standard.rig).toBe('standard')
@@ -60,8 +61,10 @@ describe('the rigs the arena animates', () => {
     expect(standard.bones).toContain('LeftHandThumb1')
     expect(standard.bones).toContain('RightEye')
     const m = standard.genders.m
-    expect(Object.keys(m.sets)).toEqual(Object.keys(legacy.genders.m.sets))
-    for (const set of Object.keys(m.sets)) expect(Object.keys(m.sets[set]).sort()).toEqual(Object.keys(legacy.genders.m.sets[set]).sort())
+    expect(Object.keys(m.sets)).toEqual([...Object.keys(legacy.genders.m.sets), 'combat'])
+    // every clip the combat catalogue names is in the library
+    for (const motion of MOTIONS) expect(m.sets.combat[motion.id], motion.id).toBeDefined()
+    for (const set of Object.keys(legacy.genders.m.sets)) expect(Object.keys(m.sets[set]).sort()).toEqual(Object.keys(legacy.genders.m.sets[set]).sort())
     expect(m.gait.run).toBeDefined()
   })
 })

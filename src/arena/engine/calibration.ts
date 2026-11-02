@@ -2,7 +2,7 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 10
+export const ENGINE_CALIBRATION_VERSION = 13
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
@@ -55,15 +55,42 @@ export const ENGINE = {
   move: {
     accel: 60,
     airAccel: 12,
-    gravity: 24,
-    fall: 30,
-    jump: 1.4,
-    airJump: 1.1,
+    // heavier than earth's so a big jump still takes about a second up and down
+    gravity: 34,
+    fall: 45,
+    // the canon (2026-10-31): jumps big and dynamic like anime fights, a medium hero's first 4.2 m and its second 3.4
+    // m (2026-11-02, up from 2.2 and 1.8), scaled by size (`jumpScale`): tiny heroes jump highest, colossal ones lowest
+    jump: 4.2,
+    airJump: 3.4,
+    jumpScale: { tiny: 1.25, small: 1.12, medium: 1, large: 0.88, huge: 0.76, colossal: 0.66 },
     dash: { speed: 18, time: 0.2 },
+    /** Shift pressed dashes ahead at once; held on, it sprints at `speed` times run speed once the dash is spent. */
+    sprint: { speed: 1.45 },
+    /** Crouched and prone heroes move at these shares of run speed, their bodies these shares of their height. */
+    crouch: { speed: 0.55, height: 0.7 },
+    prone: { speed: 0.22, height: 0.35 },
+    /** Z rolls `distance` metres along the facing in `time` seconds for a stamina pip, untouchable for its first `iframes`. */
+    roll: { distance: 5, time: 0.55, iframes: 0.3 },
+    /** X holds a guard: melee from in front lands on it, at `speed` times run speed. */
+    block: { speed: 0.35, arcDegrees: 140 },
     slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
     stamina: { max: 3, regen: 3.5 },
     step: 0.4,
   },
+  /**
+   * Melee (the canon, 2026-10-31). Space tapped strikes; held past `heavyHold` it charges and lands a heavy blow on
+   * release, worth `heavy` times a strike charged for nothing to `heavyFull` charged for `chargeFull` seconds, launching
+   * the target as high as a jump. Strikes that land chain while each follows the last within `chain` seconds: the
+   * third is the finisher, worth `finisher` times, launching as high as a double jump. A guarded strike breaks the
+   * striker's chain and staggers it for `blockStagger` seconds. A launched hero is out of control and untouchable until
+   * any input after `regainAfter` seconds takes control back, and it falls from there.
+   */
+  /**
+   * Skill 1 is a gun (the canon, 2026-11-02): held, it fires `rate` times the sheet's fire rate a second, never faster
+   * than one shot every `fastest` seconds (combat.ts, shotTemplate).
+   */
+  primary: { rate: 2.2, fastest: 0.16 },
+  melee: { heavyHold: 0.28, chargeFull: 1, heavy: 1.25, heavyFull: 1.8, chain: 0.7, buffer: 0.45, finisher: 1.4, blockStagger: 0.4, regainAfter: 0.2, launchPush: 4 },
   /** Shreds can't push a resist below this. */
   resistFloor: -20,
   /** No armor or spirit resist takes more than this percentage off a hit. */

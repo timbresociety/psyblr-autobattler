@@ -686,6 +686,31 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
               yaw: () => arena.match.heroes[id].yaw,
             })
           }
+        } else if (e.type === 'melee') {
+          // the canon's melee beats, loud enough to read from the broadcast camera: a launch bursts and kicks the camera,
+          // a heavy blow's charge glows at the hands, a guard throws sparks
+          const hero = arena.match.heroes[e.hero]
+          const at = v3(chest(hero))
+          if (e.what === 'launch') {
+            const c = new THREE.Color(1, 0.86, 0.5)
+            sparkle({ at, count: 40, kind: 'glow', life: 0.6, size: [0.2, 0.04], color: c, speed: 9, gravity: 8 })
+            show('shock', c, 0.45, (m) => m.position.set(hero.position.x, hero.position.y + 0.06, hero.position.z), (p, m) => (m.scale.setScalar(1 + 5 * p), setOpacity(m, 0.9 * (1 - p))))
+            puff({ at: { x: hero.position.x, y: hero.position.y + 0.05, z: hero.position.z }, count: 10, kind: 'smoke', life: 0.9, size: [0.4, 1.4], color: DUST, speed: 3, spread: 0.4, drag: 3, up: 0.3, alpha: 0.35, spin: 0.6 })
+            shake = Math.max(shake, 0.35)
+          } else if (e.what === 'charge') {
+            const c = TEAM_GLOW[hero.team]
+            sparkle({ at, count: 18, kind: 'glow', life: 0.5, size: [0.16, 0.03], color: hot(c, 0.2), spread: 0.4, velocity: { x: 0, y: 1.5, z: 0 }, speed: 0.6 })
+          } else if (e.what === 'blocked') sparkle({ at, count: 16, kind: 'glow', life: 0.35, size: [0.1, 0.02], color: new THREE.Color(1, 0.95, 0.75), speed: 6, gravity: 10 })
+        } else if (e.type === 'passive') {
+          // F: switched on, a ring in the passive's colours rises up the body; switched off, it drains to the floor
+          const hero = arena.match.heroes[e.hero]
+          const c = vivid(recipe(e.hero, 'passive'), 0)
+          const feet = { x: hero.position.x, y: hero.position.y + 0.05, z: hero.position.z }
+          const tall = capsule(hero).height
+          if (e.on) {
+            show('shock', hot(c, 0.2), 0.45, (m) => m.position.set(feet.x, feet.y, feet.z), (p, m) => (m.position.y = feet.y + tall * p, m.scale.setScalar(0.8 + 0.6 * p), setOpacity(m, 0.9 * (1 - p))))
+            sparkle({ at: { ...feet, y: feet.y + tall * 0.5 }, count: 24, kind: 'glow', life: 0.8, size: [0.14, 0.03], color: hot(c, 0.3), spread: 0.5, velocity: { x: 0, y: 2.5, z: 0 }, speed: 0.8 })
+          } else show('shock', c.clone().multiplyScalar(0.5), 0.35, (m) => m.position.set(feet.x, feet.y + tall, feet.z), (p, m) => (m.position.y = feet.y + tall * (1 - p), m.scale.setScalar(1.2 - 0.6 * p), setOpacity(m, 0.6 * (1 - p))))
         } else if (e.type === 'cover-hit') {
           // stone chips and a puff of dust where a shot meets cover
           const at = v3(e.at)

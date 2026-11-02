@@ -7,7 +7,9 @@ import { CAST_POSES, POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
-import { STANCE, type AnimState } from './animation.js'
+import { meleeClip, skillMotion } from '../recipes/motions.js'
+import { MOTION_RELEASE } from './anim-index.js'
+import { HELD_KINDS, STANCE, type AnimState } from './animation.js'
 import { fitClip, restPose } from './anim-library.js'
 import { hipYaw, legReach, planter, turn } from './feet.js'
 import { GAIT_CLIPS, GAIT_TIERS, GAIT_WAYS, PACE_LIMITS, pickTier, strideSeconds, strideTime, tierSpeed, wayWeights, type GaitTier } from './gait.js'
@@ -84,7 +86,7 @@ function finished(m: MeshStandardNodeMaterial, color: Node<'vec3'>, team: THREE.
   return m
 }
 
-const LOCOMOTION = new Set(['idle', 'run', 'air', 'stunned'])
+const LOCOMOTION = new Set(['idle', 'run', 'air', 'stunned', ...HELD_KINDS])
 /** Clips that play once and hold their last pose, but give way the moment the hero runs, jumps or stands again. */
 const YIELDING = new Set(['fall', 'slide', 'land'])
 /** Seconds each movement blends in over: a jump or a dash snaps, a slide drops in. */
@@ -180,7 +182,7 @@ for (const pose of CAST_POSES) if (POSE_RELEASE[pose] > 0) CLIP_RELEASE[poseClip
 
 /** Where a cast's clip is when the wind-up is `prep` done and the recovery `recover` done: the release frame at prep 1. */
 export function castTime(clip: string, duration: number, prep: number, recover: number): number {
-  const release = Math.min(CLIP_RELEASE[clip] ?? duration / 2, duration)
+  const release = Math.min(CLIP_RELEASE[clip] ?? MOTION_RELEASE.get(clip) ?? duration / 2, duration)
   return prep < 1 ? prep * release : release + recover * (duration - release)
 }
 
@@ -195,7 +197,10 @@ export interface CastClip {
  * ranged ones. The engine casts at once, so a pose starts just before its hands let go and the thrust lands with
  * the effect.
  */
-export function castClip(build: Build, slot: string): CastClip {
+export function castClip(build: Build, slot: string, has?: (clip: string) => boolean): CastClip {
+  // the skill's own motion-captured clip, where the body has it (the Psyblr Human's combat set)
+  const motion = BUILD_SLOTS.includes(slot as BuildSlot) ? skillMotion(build, slot as BuildSlot) : undefined
+  if (motion && has?.(motion)) return { clip: motion, from: 0 }
   const pose = BUILD_SLOTS.includes(slot as BuildSlot) ? skillLookOf(build, slot as BuildSlot)?.pose : undefined
   if (pose) return { clip: poseClip(pose), from: Math.max(0, POSE_RELEASE[pose] - 0.08) }
   if (slot === 'ultimate') return { clip: 'ultimate', from: 0 }
@@ -235,9 +240,11 @@ export function gaitPlayer(mixer: THREE.AnimationMixer, gait: LibraryGait, fit: 
      * Carry the stride on at `speed` (metres a second on the clips' own body), going `heading` from the hips (see
      * Stance), and weight every clip: `shown` is how much of the body the gait has, `striding` how much of a cast's legs.
      */
-    update(dt: number, shown: number, striding: number, speed: number, heading: number) {
+    update(dt: number, shown: number, striding: number, speed: number, heading: number, sprint = false) {
       const ways = wayWeights(heading)
-      if (shown + striding > 0) tier = pickTier(gait.gaits, ways, speed, tier)
+      // a sprint runs, a tier at a time: up through the jog until it shows, then the run; anything else tops out at a jog
+      const jogging = tiers[GAIT_TIERS.indexOf('jog')] >= 0.5
+      if (shown + striding > 0) tier = sprint ? (tier === 'run' || jogging ? 'run' : 'jog') : pickTier(gait.gaits, ways, speed, tier, 'jog')
       let sum = 0
       GAIT_TIERS.forEach((t, k) => {
         const want = t === tier ? 1 : 0
@@ -297,7 +304,7 @@ export interface CharacterView {
    * joint, so a strafing hero runs on a diagonal under hips that face nearer its aim. `heading`, which way it moves
    * from its hips (see Stance), picks the gait's ways for a view that `strafes`.
    */
-  lean: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number) => void
+  lean: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number, sprint?: boolean) => void
   /**
    * Whether it walks, jogs and runs on the motion library's clips every way (Forge goal, phase B): its hips square to
    * its aim, sidestepping and backpedalling (see `stance`). Otherwise it runs on its body's own run, its legs swung.
@@ -442,7 +449,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     currentName = name
   }
   // each skill's clip, worked out once: reading a look from its words is too slow to do every frame
-  const casts = new Map(BUILD_SLOTS.map((slot) => [slot as string, castClip(build, slot)]))
+  const casts = new Map(BUILD_SLOTS.map((slot) => [slot as string, castClip(build, slot, (clip) => actions.has(clip))]))
   const hands = [rig.hand.L, rig.hand.R].flatMap((name) => scene.getObjectByName(name) ?? [])
   const back = Object.keys(rig.twistShare).flatMap((name) => scene.getObjectByName(name) ?? [])
   let twist = 0
@@ -450,6 +457,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   let heading = 0
   // metres a second the hero covers, as last told (see `lean`); undefined, the run plays as it was made
   let ground: number | undefined
+  // a sprint runs; anything slower jogs or walks (the canon's move and sprint, 2026-11-02)
+  let sprinting = false
   const keyed = runSpeed(file)
   // a cast on the engine's clock plays in halves (see splitClip): the cast above the hips, and below them its own stance
   // or, on the move, the run, so the feet keep up with the ground while the arms cast (Forge goal, phase 2). `layer` is
@@ -676,7 +685,9 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       untwist()
       unstand()
       ungrip()
-      const cast = state.kind === 'cast' ? (casts.get(state.slot) ?? castClip(build, state.slot)) : undefined
+      // a basic attack's blow plays its own step of the chain, or the charged heavy blow
+      const blow = state.kind === 'cast' && state.melee ? meleeClip(build, state.melee) : undefined
+      const cast = state.kind !== 'cast' ? undefined : blow && actions.has(blow) ? { clip: blow, from: 0 } : (casts.get(state.slot) ?? castClip(build, state.slot, (clip) => actions.has(clip)))
       // a dash away from the aim hops backwards, where the model has the clip
       const named = state.kind === 'dash' && backwards && actions.has('dash_back') ? 'dash_back' : state.kind
       const wanted = cast ? cast.clip : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : named
@@ -744,7 +755,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       }
       // the library's gait plays under the stand-in run, as much as its fades and a cast leave it, and under a cast's legs
       const gaitShare = strides ? actions.get('run')!.getEffectiveWeight() : 0
-      strides?.update(dt, gaitShare, layer * striding, ground !== undefined ? ground / root.scale.x : 0, heading)
+      strides?.update(dt, gaitShare, layer * striding, ground !== undefined ? ground / root.scale.x : 0, heading, sprinting)
       mixer.update(dt)
       standOnCast(shown?.legs, layer * striding)
       // running, the chest comes SQUARE of the way back round to the aim; casting on the move, all of it, so the cast aims true
@@ -763,7 +774,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       return false
     },
     hand: (dir, out) => leadHand(hands, dir, out),
-    lean: (t, b, speed, onGround = false, angle = 0, way = 0) => {
+    lean: (t, b, speed, onGround = false, angle = 0, way = 0, sprint = false) => {
+      sprinting = sprint
       twist = t
       backwards = b
       ground = speed

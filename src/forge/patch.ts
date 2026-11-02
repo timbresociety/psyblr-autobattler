@@ -150,7 +150,7 @@ function physiqueChanges(text: string, physique: Physique | undefined): { physiq
   let next: Physique = base
   const step = MUCH.test(text) ? 0.3 : 0.15
   const move = (key: keyof Physique, by: number, word: string) => {
-    next = { ...next, [key]: Math.round(Math.min(1, Math.max(0, next[key] + by)) * 100) / 100 }
+    next = { ...next, [key]: Math.round(Math.min(1, Math.max(0, (next[key] ?? 0.5) + by)) * 100) / 100 }
     said.push(word)
   }
   if (OLDER.test(text)) move('age', step, 'older')

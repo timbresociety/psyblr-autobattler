@@ -4,6 +4,7 @@ import type { BuildSlot, Effect, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
 import { tickWorld } from './world.js'
+import { afterBlow, blowTemplate, guarded, meleeButtons, regain, shotSeconds, shotTemplate, SKILL_SLOTS, type MeleeBlow, type Shot } from './combat.js'
 import { coverHit, coverInDisc, floorUnder } from './cover.js'
 import { keepOut, standOn } from './locomotion.js'
 import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths.js'
@@ -16,7 +17,6 @@ import { timingTicks } from './timing.js'
  * sized from its own template numbers, which the effect renderer reads too, so what you see is what can hit you.
  */
 
-const CAST_ORDER: BuildSlot[] = ['movement', 'ultimate', 'active1', 'active2', 'basic']
 
 /** A leap sails over cover lower than this, metres; taller ruins stop it like a dash. */
 const LEAP_CLEARS = 3.3
@@ -187,34 +187,46 @@ function forbidden(match: MatchState, h: HeroState, slot: BuildSlot): boolean {
 }
 
 /**
- * Whether a hero is free to start `slot` (phase 1): nothing in progress, or a skill cutting short a basic attack's
- * wind-up or any action's recovery. A basic attack waits for whatever came before it.
+ * Whether a hero is free to start `slot` (phase 1): nothing in progress, or a skill cutting short a basic attack's or a
+ * Skill 1 shot's wind-up, or any action's recovery. A basic attack waits for whatever came before it.
  */
 export function free(h: HeroState, slot: BuildSlot, now: number): boolean {
   const a = h.action
   if (!a || now >= a.ends) return true
-  return slot !== 'basic' && (a.released || a.slot === 'basic')
+  // Skill 1's shots are as light as a basic attack: any other skill cuts in on one
+  return slot !== 'basic' && (a.released || a.slot === 'basic' || (a.slot === 'active1' && slot !== 'active1'))
 }
 
 /**
  * Cast a slot if it is ready (U4): pay for it now and start its wind-up. It lands on its release tick (`carryOn`), so
  * every hit follows a release and the client can show the wind-up first. Returns whether it started.
  */
-export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
+export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow): boolean {
   const { match, setups } = ctx
   const caster = match.heroes[index]
   const setup = setups[index]
   const template = setup.kit[slot]
-  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick)) return false
+  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick) || caster.roll) return false
   let interval = Infinity
+  let shot: Shot | undefined
+  // a cripple slows basic attacks and shots the way a slow slows feet: the strongest one counts
+  const crippled = () => caster.slows.reduce((m, sl) => (sl.stat === 'attack' && sl.pct / 100 > m ? sl.pct / 100 : m), 0)
   if (slot === 'basic') {
     if (match.tick < caster.nextAttackAt) return false
     const tempo = isRanged(setup) ? setup.sheet.fireRate : setup.sheet.attackSpeed
-    // a cripple slows basic attacks the way a slow slows feet: the strongest one counts
-    const crippled = caster.slows.reduce((m, sl) => (sl.stat === 'attack' && sl.pct / 100 > m ? sl.pct / 100 : m), 0)
-    const between = ticks(1 / Math.max(0.2, tempo * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled)))
+    const between = ticks(1 / Math.max(0.2, tempo * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled())))
     caster.nextAttackAt = match.tick + between
     interval = between / ENGINE.tickHz
+  } else if (slot === 'active1') {
+    // Skill 1 is a gun: held, it fires at the hero's fire rate, each shot a share of the skill (combat.ts)
+    if (caster.cooldowns.active1 > 0) return false
+    const cooldown = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
+    const between = Math.max(1, ticks(shotSeconds(setup.sheet.fireRate, (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled()))))
+    caster.cooldowns.active1 = between
+    interval = between / ENGINE.tickHz
+    const rider = match.tick >= caster.riderAt
+    if (rider) caster.riderAt = match.tick + cooldown
+    shot = { share: Math.min(1, between / Math.max(1, cooldown)), rider }
   } else {
     if (slot === 'passive' || caster.cooldowns[slot] > 0) return false
     caster.cooldowns[slot] = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
@@ -224,8 +236,9 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot): boolean {
   if (before && !before.released && match.tick < before.ends) ctx.events.push({ type: 'interrupt', hero: caster.id, slot: before.slot })
   const { prep, recover } = timingTicks(template, slot, interval)
   const release = match.tick + prep
-  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false }
-  ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id, release, ends: release + recover })
+  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}) }
+  caster.blocking = false
+  ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id, release, ends: release + recover, ...(blow ? { melee: blow } : {}) })
   return true
 }
 
@@ -236,16 +249,16 @@ export function carryOn(ctx: Ctx, index: number) {
   if (!a) return
   if (!a.released && ctx.match.tick >= a.release) {
     a.released = true
-    release(ctx, index, a.slot)
+    release(ctx, index, a.slot, a.melee, a.ends - a.release, a.shot)
   }
   if (ctx.match.tick >= a.ends && hero.action === a) hero.action = undefined
 }
 
 /** A cast lands: mobility first, then the delivery, then its effects. */
-function release(ctx: Ctx, index: number, slot: BuildSlot) {
+function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot) {
   const { match, setups } = ctx
   const caster = match.heroes[index]
-  const template = setups[index].kit[slot]
+  const template = slot === 'basic' ? blowTemplate(setups[index].kit[slot], blow) : shotTemplate(setups[index].kit[slot], shot)
   ctx.events.push({ type: 'release', hero: caster.id, slot })
   for (const e of template.effects) {
     if (e.kind !== 'mobility') continue
@@ -275,15 +288,21 @@ function release(ctx: Ctx, index: number, slot: BuildSlot) {
     const d = template.delivery
     const { speed, projectileRadius } = geometryOf(d)
     const from = chest(caster)
-    match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: scale(aimOf(match, caster), speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(d.range / speed)) })
+    match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: scale(aimOf(match, caster), speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(d.range / speed)), ...(shot ? { shot } : {}) })
     ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: projectileRadius, speed })
     return
   }
-  const { hit, at, cover } = landing(ctx, caster, template)
+  const landed = landing(ctx, caster, template)
+  const { at, cover } = landed
+  // a guard facing a close blow catches it (combat.ts)
+  const hit = guarded(ctx, caster, template, landed.hit)
   if (template.delivery.kind !== 'self') impact(ctx, caster, slot, template, at)
   strikeCover(ctx, caster, template, cover)
   resolve(ctx, caster, template, slot, hit, at)
-  if (slot === 'basic') afterBasic(ctx, caster, hit[0])
+  if (slot === 'basic') {
+    afterBasic(ctx, caster, hit[0])
+    afterBlow(ctx, caster, blow, hit, recovery)
+  }
 }
 
 function afterBasic(ctx: Ctx, hero: HeroState, target: HeroState | undefined) {
@@ -298,7 +317,7 @@ function flyProjectiles(ctx: Ctx) {
   const left: MatchState['projectiles'] = []
   for (const p of match.projectiles) {
     const owner = match.heroes[p.owner]
-    const template = setups[p.owner].kit[p.slot]
+    const template = shotTemplate(setups[p.owner].kit[p.slot], p.shot)
     const size = geometryOf(template.delivery).projectileRadius
     const end = add(p.position, p.step)
     const struck = enemiesOf(match, owner).filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
@@ -364,8 +383,10 @@ export const COMBAT_RULES: TickRules = {
   act: (match, setups, hero, command: Command, events) => {
     const ctx = { match, setups, events }
     carryOn(ctx, hero)
+    // the basic attack strikes on release and charges while held, the passive toggles (combat.ts); skills cast as pressed
+    meleeButtons(ctx, hero, command, (blow) => cast(ctx, hero, 'basic', blow))
     if (!command.buttons) return
-    for (const slot of CAST_ORDER) if (command.buttons & slotBit(slot) && cast(ctx, hero, slot)) return
+    for (const slot of SKILL_SLOTS) if (command.buttons & slotBit(slot) && cast(ctx, hero, slot)) return
   },
   after: (match, setups, events) => {
     const ctx = { match, setups, events }

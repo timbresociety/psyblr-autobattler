@@ -5,7 +5,7 @@ import type { Vec3 } from './maths.js'
 /** What happened in a tick, for the client to draw and sound (KTD3, KTD9). The engine never reads its own events. */
 export type MatchEvent =
   /** A cast began its wind-up: it lands on tick `release` and the hero is free again on tick `ends` (phase 1). */
-  | { type: 'cast'; hero: number; slot: BuildSlot; templateId: string; release: number; ends: number }
+  | { type: 'cast'; hero: number; slot: BuildSlot; templateId: string; release: number; ends: number; melee?: { step: number; heavy?: number } }
   /** The cast landed: the hit, the shot leaving the hand or the dash starting, all on this tick. */
   | { type: 'release'; hero: number; slot: BuildSlot }
   /** Control, a knockback or another cast cut a wind-up short, so it never lands. */
@@ -15,7 +15,11 @@ export type MatchEvent =
   | { type: 'hit'; source: number; target: number; slot: BuildSlot; amount: number; heavy: boolean }
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
   /** A jump, a second jump in the air, a dash or a slide began, or the hero landed, falling at `speed` m/s (phase 2). */
-  | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land'; speed?: number }
+  /** F switched the passive on or off. */
+  | { type: 'passive'; hero: number; on: boolean }
+  | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land' | 'roll'; speed?: number }
+  /** Melee (the canon): a heavy charge began, a guard caught a strike, a launched hero took control back. */
+  | { type: 'melee'; hero: number; what: 'charge' | 'blocked' | 'regain' | 'launch'; by?: number }
   /** A transformation began or ended; `size` is the class the hero has now (a form may keep its own). */
   | { type: 'form'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }

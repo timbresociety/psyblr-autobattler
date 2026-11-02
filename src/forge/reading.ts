@@ -24,7 +24,7 @@ import {
   type TransformationLook,
 } from '../charter/skill-look.js'
 import { SIZE_CLASSES, SIZES, type SizeClass } from '../charter/sizes.js'
-import { CATALOG, poolFor } from '../charter/templates/catalog.js'
+import { CATALOG, poolFor, fitsSlot } from '../charter/templates/catalog.js'
 import type { BuildSlot, Effect, RoleId, Template } from '../charter/types.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
 import { SCULPT_IDS, hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
@@ -163,7 +163,7 @@ export function readingSchema(): Record<string, unknown> {
   const list = (items: unknown) => ({ type: 'array', items })
   const object = (properties: Record<string, unknown>) => ({ type: 'object', additionalProperties: false, required: Object.keys(properties), properties })
   const look = object({ element: choice(ELEMENTS), form: choice(ALL_FORMS), palette: list(str), pose: choice(CAST_POSES), charge: choice(CHARGES), impact: choice(IMPACTS), trail: choice(TRAILS), motif: choice(MOTIFS), callout: bool })
-  const skill = (slot: BuildSlot) => object({ name: str, does: str, template: choice(CATALOG.filter((t) => t.slot === SLOT_KIND[slot]).map((t) => t.id), false), look })
+  const skill = (slot: BuildSlot) => object({ name: str, does: str, template: choice(CATALOG.filter((t) => fitsSlot(t, SLOT_KIND[slot])).map((t) => t.id), false), look })
   return object({
     heroName: str,
     summary: str,
@@ -375,7 +375,7 @@ function readQuestions(raw: unknown): ReadingQuestion[] {
 /** A physique held to 0 to 1 each; none when it's the body as made. */
 function readPhysique(raw: unknown): Physique | undefined {
   const p = record(raw)
-  const value = (k: keyof Physique) => (typeof p[k] === 'number' && Number.isFinite(p[k]) ? Math.round(Math.min(1, Math.max(0, p[k] as number)) * 100) / 100 : NEUTRAL_PHYSIQUE[k])
+  const value = (k: 'weight' | 'muscle' | 'age'): number => (typeof p[k] === 'number' && Number.isFinite(p[k]) ? Math.round(Math.min(1, Math.max(0, p[k] as number)) * 100) / 100 : NEUTRAL_PHYSIQUE[k])
   const out = { weight: value('weight'), muscle: value('muscle'), age: value('age') }
   return out.weight === NEUTRAL_PHYSIQUE.weight && out.muscle === NEUTRAL_PHYSIQUE.muscle && out.age === NEUTRAL_PHYSIQUE.age ? undefined : out
 }

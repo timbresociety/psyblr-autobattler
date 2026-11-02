@@ -1,9 +1,13 @@
 import { FINISHES, KNOBS, type Finish, type Knob } from '../kit/wear/item.js'
 import { PRINT_SCALE, isPrintId, type PrintId } from '../kit/wear/prints.js'
 import type { Physique } from '../kit/body/shape.js'
+import { PROPORTION_KEYS } from '../kit/body/proportions.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
+import { MOTION_SLOTS, STYLES, type MotionSlot, type Style } from './motions.js'
 import type { BuildSlot } from './types.js'
+
+const BUILD_SLOTS: readonly BuildSlot[] = ['basic', 'active1', 'active2', 'movement', 'passive', 'ultimate']
 
 /**
  * A hero's look (cosmetic only: no number in the game reads it). The body comes from the hero's size and this look's
@@ -84,6 +88,10 @@ export interface HeroLook {
   gear?: Partial<Record<GearSlot, GearPiece>>
   /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
   skills?: Partial<Record<BuildSlot, SkillLook>>
+  /** How the hero fights (motions.ts): what its melee and skills are picked from; its role's style when absent. */
+  style?: Style
+  /** The hero's own motions by clip (MOTION_SLOTS, motions.ts); the catalogue's pick for each in its style when absent. */
+  motions?: Partial<Record<MotionSlot, string>>
 }
 
 export const FACE_POINTS = 478
@@ -132,7 +140,7 @@ export const pieceUrl = (id: string) => `/kit/pieces/${id}.glb`
 const HEX = /^#[0-9a-f]{6}$/
 const PIECE_ID = /^[a-z0-9][a-z0-9_-]{0,63}$/
 // a clip in the motion library; one it doesn't have plays its gender's first idle
-const CLIP_ID = /^[a-z][a-z0-9_]{0,31}$/
+const CLIP_ID = /^[a-z][a-z0-9_]{0,63}$/
 // a built-in piece, one the dev server stored, or one in a Blob store; the server checks which (src/server/gear.ts)
 const PIECE_URL = /^(\/kit\/pieces\/[a-z0-9_-]+\.glb|\/dev-store\/pieces\/[0-9a-f-]{36}\.glb|https:\/\/[a-z0-9.-]+\/pieces\/[0-9a-f-]{36}\.glb)$/
 // a wardrobe item: built in, a built-in piece, or one a player generated (the dev server's or a Blob store's)
@@ -168,10 +176,22 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
   const physique = input.physique as Record<string, unknown> | undefined
   if (physique && typeof physique === 'object' && isFiniteIn(physique.weight, 1) && isFiniteIn(physique.muscle, 1) && isFiniteIn(physique.age, 1)) {
     look.physique = { weight: physique.weight, muscle: physique.muscle, age: physique.age }
+    for (const k of PROPORTION_KEYS) if (isFiniteIn(physique[k], 1)) look.physique[k] = physique[k] as number
   }
   const sculpt = hydrateSculpt(input.sculpt)
   if (sculpt) look.sculpt = sculpt
   if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle
+  if (typeof input.style === 'string' && (STYLES as readonly string[]).includes(input.style)) look.style = input.style as Style
+  if (input.motions && typeof input.motions === 'object') {
+    // a look saved before the kit's motions were split keeps its basic attack's as the combo's opener, and drops the
+    // passive's and the movement skill's, which every hero now shares
+    const motions = Object.fromEntries(
+      Object.entries(input.motions as Record<string, unknown>)
+        .map(([slot, clip]) => [slot === 'basic' ? 'combo1' : slot, clip])
+        .filter(([slot, clip]) => (MOTION_SLOTS as readonly string[]).includes(slot as string) && typeof clip === 'string' && CLIP_ID.test(clip)),
+    )
+    if (Object.keys(motions).length) look.motions = motions as Partial<Record<MotionSlot, string>>
+  }
   const wear = hydrateWear(input.wear)
   if (wear) look.wear = wear
   const gearIn = input.gear as Record<string, Record<string, unknown> | undefined> | undefined

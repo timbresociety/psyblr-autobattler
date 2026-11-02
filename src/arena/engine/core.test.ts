@@ -105,7 +105,7 @@ describe('engine core (U3)', () => {
     expect(h.airborne).toBe(true)
     // holding the button doesn't jump again; the top of the jump is its height
     let top = 0
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       step(go(0, 0, MOVES.jump))
       top = Math.max(top, h.position.y)
     }
@@ -118,7 +118,7 @@ describe('engine core (U3)', () => {
     step(go(0, 0, MOVES.jump))
     expect(h.airJumps).toBe(1)
     expect(h.stamina).toBeCloseTo(M.stamina.max - 1, 1)
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 40; i++) {
       step(go(0, 0))
       top = Math.max(top, h.position.y)
     }
@@ -134,7 +134,9 @@ describe('engine core (U3)', () => {
   it('a dash bursts along the way it steers for a pip, and pips refill one at a time (phase 2)', () => {
     const { h, step } = solo(6)
     const M = ENGINE.move
-    step(go(1, 0, MOVES.dash))
+    // Shift tapped: dashes as it's pressed (held on, it sprints)
+    const dash = () => (step(go(1, 0, MOVES.dash)), step(go(1, 0)))
+    dash()
     expect(h.stamina).toBeCloseTo(M.stamina.max - 1, 1)
     step(go(1, 0), 30)
     // the dash covers its reach, and the run after it the rest of the half second
@@ -142,21 +144,22 @@ describe('engine core (U3)', () => {
     expect(h.velocity.x).toBeCloseTo(6)
     // two more dashes empty the pips; a fourth press does nothing
     for (const _ of [1, 2]) {
-      step(go(1, 0, MOVES.dash))
+      dash()
       step(go(1, 0), 15)
     }
     expect(h.stamina).toBeLessThan(1)
     const x = h.position.x
-    step(go(1, 0, MOVES.dash))
-    step(go(1, 0), 3)
-    expect(h.position.x - x).toBeLessThan(6 * 4.1 / 60)
+    dash()
+    step(go(1, 0), 2)
+    // no pip, no dash: no faster than a sprint
+    expect(h.position.x - x).toBeLessThan((6 * M.sprint.speed * 3.1) / 60)
     // each pip takes its own refill time
     const before = h.stamina
     step(undefined, Math.round(M.stamina.regen * 60))
     expect(h.stamina).toBeCloseTo(before + 1, 1)
   })
 
-  it('crouching at a run slides: fast at first, then slower, low to the ground, until let go (phase 2)', () => {
+  it('crouching at a run slides: fast at first, then slower, low to the ground, for its length; standing, C crouches (phase 2, canon)', () => {
     const { h, step } = solo(6)
     const M = ENGINE.move
     const standing = capsule(h).height
@@ -165,16 +168,21 @@ describe('engine core (U3)', () => {
     expect(h.slide).toBeDefined()
     expect(h.velocity.z).toBeCloseTo(6 * M.slide.boost, 1)
     expect(capsule(h).height).toBeCloseTo(standing * M.slide.height)
-    step(go(0, 1, MOVES.crouch), 30)
+    step(go(0, 1), 30)
     expect(h.velocity.z).toBeLessThan(6 * M.slide.boost)
     expect(h.velocity.z).toBeGreaterThan(6 * M.slide.end)
-    step(go(0, 1))
+    step(go(0, 1), Math.ceil(M.slide.time * 60))
     expect(h.slide).toBeUndefined()
     expect(capsule(h).height).toBeCloseTo(standing)
-    // standing still, a crouch is only a crouch
+    // standing still, C crouches, and again stands
     step(go(0, 0), 30)
     step(go(0, 0, MOVES.crouch))
     expect(h.slide).toBeUndefined()
+    expect(h.stance).toBe('crouch')
+    expect(capsule(h).height).toBeCloseTo(standing * M.crouch.height)
+    step(go(0, 0))
+    step(go(0, 0, MOVES.crouch))
+    expect(h.stance).toBe('stand')
   })
 
   it('lands on top of cover, and walks off its edge to fall to the ground (phase 2)', () => {

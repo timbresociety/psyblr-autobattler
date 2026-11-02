@@ -15,7 +15,7 @@ const input = {
 
 const valid = {
   roleId: 'mage',
-  templates: { basic: 'mage-arcane-bolt', active1: 'mage-chrono-rewind', active2: 'mage-fireball', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
+  templates: { basic: 'mage-arcane-bolt', active1: 'mage-arcane-orb', active2: 'mage-fireball', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
   spread: { strength: 6, agility: 6, intellect: 18 },
 }
 
@@ -25,7 +25,7 @@ describe('proposeHero', () => {
     const result = await proposeHero(input, { callModel: call })
     expect(result.offline).toBe(false)
     expect(result.build.roleId).toBe('mage')
-    expect(result.build.slots.active1.templateId).toBe('mage-chrono-rewind')
+    expect(result.build.slots.active1.templateId).toBe('mage-arcane-orb')
     expect(result.build.slots.active1.name).toBe('Rewind')
     expect(result.build.gate.state).toBe('draft')
   })
@@ -63,7 +63,8 @@ describe('proposeHero', () => {
     }
     const result = await proposeHero(input, { callModel: call })
     expect(result.offline).toBe(true)
-    expect(getTemplate(result.build.slots.active1.templateId).tags).toContain('return-to-past')
+    // a rewind only lifts its caster, so the actives hold none (fitsSlot): the matcher's pick is a spell of the pool
+    expect(getTemplate(result.build.slots.active1.templateId).tags).not.toContain('return-to-past')
   })
 
   it('injected power numbers in the model answer never reach the build (R4)', async () => {

@@ -8,7 +8,11 @@ import type { Vec3 } from '../engine/maths.js'
  * half a second, and walls pull the camera in rather than letting it clip inside scenery.
  */
 
-export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2 }
+export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2, eyes: 1.62, ahead: 0.12 }
+/** How fast the camera goes to first person and back, in whole zooms a second. */
+const SCOPE_SPEED = 6
+/** Past this much of the zoom, the hero's own body hides so the camera sees out of its eyes. */
+export const FIRST_PERSON = 0.6
 /** The watching camera's limits: how low, high and far it goes, how steep it tilts, and the edge of the map. */
 export const WATCH = { minHeight: 1.5, maxHeight: 70, minDistance: 5, maxDistance: 95, levelDistance: 20, minPitch: -1.4, maxPitch: 0.15, bounds: 72 }
 export const BLEND_SECONDS = 0.5
@@ -36,6 +40,12 @@ export class Cameras {
   mode: 'free' | 'hero' = 'free'
   /** The hero the watching camera follows (a click on a hero or its portrait); panning ends it. */
   follow: number | undefined
+  /**
+   * First person (the canon: the right button held zooms in): `scoping` while it's held, and `scope` how far the
+   * camera has gone from over the shoulder to the hero's eyes, 0 to 1. The hero's own body hides past FIRST_PERSON.
+   */
+  scoping = false
+  scope = 0
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {
     camera.position.copy(this.free)
@@ -125,10 +135,13 @@ export class Cameras {
     }
     const target = new THREE.Vector3()
     const forward = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
+    const toward = this.mode === 'hero' && this.scoping ? 1 : 0
+    this.scope += Math.sign(toward - this.scope) * Math.min(Math.abs(toward - this.scope), dt * SCOPE_SPEED)
     if (this.mode === 'hero' && hero) {
-      const pivot = new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up, hero.z)
+      const s = this.scope * this.scope * (3 - 2 * this.scope)
+      const pivot = new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up + (HERO_CAMERA.eyes - HERO_CAMERA.up) * s, hero.z)
       const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
-      const desired = pivot.clone().addScaledVector(forward, -HERO_CAMERA.back).addScaledVector(right, HERO_CAMERA.right)
+      const desired = pivot.clone().addScaledVector(forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s).addScaledVector(right, HERO_CAMERA.right * (1 - s))
       target.copy(pullIn(pivot, desired, proxies))
     } else target.copy(this.free)
     const look = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(target, target.clone().add(forward), new THREE.Vector3(0, 1, 0)))

@@ -1,6 +1,7 @@
 import { BUILD_SLOTS } from '../../charter/build.js'
 import type { MatchEvent } from './events.js'
 import { move } from './locomotion.js'
+import { regain } from './combat.js'
 import { TAU } from './maths.js'
 import { next } from './rng.js'
 import { AIM_STEPS, IDLE, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
@@ -33,6 +34,8 @@ export function tick(match: MatchState, setups: readonly HeroSetup[], commands: 
     const hero = match.heroes[i]
     if (!hero.alive) continue
     for (const slot of BUILD_SLOTS) if (hero.cooldowns[slot] > 0) hero.cooldowns[slot]--
+    // a hero launched by a melee blow takes control back with any input (combat.ts)
+    if (hero.launch?.regain) regain({ match, setups, events }, hero, commands[i])
     // stunned, launched or asleep: nothing this tick but slowing to a stop and falling
     if (hero.stunnedUntil > match.tick || hero.cc.sleep > match.tick) {
       if (!hero.knockback) move(hero, setups[i], IDLE, match, events)
@@ -60,7 +63,8 @@ function compelled(match: MatchState, hero: HeroState, command: Command): Comman
     const dx = (other.position.x - hero.position.x) * sign
     const dz = (other.position.z - hero.position.z) * sign
     const len = Math.sqrt(dx * dx + dz * dz) || 1
-    return { ...command, moveX: dx / len, moveZ: dz / len, moves: 0, buttons: sign > 0 ? slotBit('basic') : 0 }
+    // a taunted hero taps its basic attack, which strikes as it's let go
+    return { ...command, moveX: dx / len, moveZ: dz / len, moves: 0, buttons: sign > 0 && !(hero.buttonsHeld & slotBit('basic')) ? slotBit('basic') : 0 }
   }
   if (flee?.alive) return toward(flee, -1)
   if (chase?.alive) return toward(chase, 1)

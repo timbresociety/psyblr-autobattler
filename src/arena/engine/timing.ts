@@ -54,6 +54,11 @@ export function timingOf(template: Template, slot: BuildSlot, interval = Infinit
     return { prep: t.prep * fit, recover: t.recover * fit }
   }
   const t = SKILL[kind]
+  // Skill 1's shots fit between one another the way a basic attack's swings do
+  if (slot === 'active1' && interval < Infinity) {
+    const fit = Math.min(1, (interval * BASIC_SHARE) / (t.prep + t.recover))
+    return { prep: t.prep * fit, recover: t.recover * fit }
+  }
   // a dodge answers at once: an escape that winds up is an escape that gets caught (balance gate, 2026-10-30)
   if (slot === 'movement') return { prep: 0, recover: t.recover }
   return slot === 'ultimate' ? { prep: t.prep * ULTIMATE.prep, recover: t.recover * ULTIMATE.recover } : t

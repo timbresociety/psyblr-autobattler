@@ -1,4 +1,5 @@
 import { applyFace, type FaceBasis } from './face-basis.js'
+import type { Proportions } from './proportions.js'
 import { weldedNormals, weldSurface, weldValues, type BodySurface } from './surface.js'
 
 /**
@@ -7,8 +8,11 @@ import { weldedNormals, weldSurface, weldValues, type BodySurface } from './surf
  * tests and tools from src/kit/body/node.ts.
  */
 
-/** How a hero is built, beyond its size: each 0 to 1. Weight and muscle at 0.5, and age at 0, are the body as made. */
-export interface Physique {
+/**
+ * How a hero is built, beyond its size: each 0 to 1. Weight and muscle at 0.5, and age at 0, are the body as made; the
+ * proportions (proportions.ts) at 0.5 too, or absent.
+ */
+export interface Physique extends Partial<Proportions> {
   weight: number
   muscle: number
   age: number
@@ -25,7 +29,8 @@ export function morphWeights(physique: Partial<Physique>, names: readonly string
   const clamp = (v: number) => Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0))
   const below = (v: number) => clamp((0.5 - clamp(v)) * 2)
   const above = (v: number) => clamp((clamp(v) - 0.5) * 2)
-  const by: Record<string, number> = { 'weight-': below(p.weight), 'weight+': above(p.weight), 'muscle-': below(p.muscle), 'muscle+': above(p.muscle), age: clamp(p.age) }
+  // the heavy and built ends run past MakeHuman's own targets, for a brute; past the thin ends clothes crumple (2026-11-02)
+  const by: Record<string, number> = { 'weight-': below(p.weight), 'weight+': above(p.weight) * 1.35, 'muscle-': below(p.muscle), 'muscle+': above(p.muscle) * 1.5, age: clamp(p.age) }
   return names.map((n) => by[n] ?? 0)
 }
 

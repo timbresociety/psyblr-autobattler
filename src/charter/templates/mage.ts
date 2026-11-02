@@ -8,6 +8,7 @@ export const MAGE = [
   basic({ id: 'mage-frost-shard', name: 'Frost Shard', roles: ['mage'], tags: ['ice', 'frost', 'shard', 'icicle', 'cold', 'freeze'], delivery: at.proj(18), effects: [spirit(6, 0.7), slow(15, 0.8)], ai: ai('always', 1) }),
   basic({ id: 'mage-void-orb', name: 'Void Orb', roles: ['mage'], tags: ['void', 'orb', 'dark-matter', 'splash', 'gravity', 'sphere'], delivery: at.proj(16, 1.5, 20), effects: [spirit(6, 0.6)], ai: ai('always', 1) }),
   basic({ id: 'mage-hex-bolt', name: 'Hex Bolt', roles: ['mage'], tags: ['hex', 'curse', 'witch', 'bolt', 'shred', 'jinx'], delivery: at.proj(18), effects: [spirit(6, 0.6), spiritShred(2, 2)], ai: ai('always', 1) }),
+  basic({ id: 'mage-spell-kick', name: 'Spell Kick', roles: ['mage'], tags: ['kick', 'martial', 'melee', 'spellblade', 'strike', 'foot'], delivery: at.melee(2.8), effects: [spirit(9, 0.8)], ai: ai('always', 1) }),
   basic({ id: 'mage-magic-missile', name: 'Magic Missile', roles: ['mage'], tags: ['missile', 'magic', 'wand', 'dart', 'fast', 'spark'], delivery: at.proj(14, undefined, 42, 0.2), effects: [spirit(7, 0.7)], ai: ai('always', 1) }),
 
   active({ id: 'mage-fireball', name: 'Fireball', roles: ['mage'], tags: ['fire', 'fireball', 'explosion', 'burn', 'flame', 'blast'], delivery: at.proj(22, 2.5), effects: [spirit(50, 0.7), spirit(20, 0.2, 3)], cooldown: 8, ai: ai('poke', 6) }),

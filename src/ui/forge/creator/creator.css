@@ -135,3 +135,7 @@
   .shape-tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .stage-tools { width: calc(100% - 24px); }
 }
+.skill-motions { display: grid; gap: 8px; }
+.skill-motion { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; align-items: center; }
+.skill-motion .chip { text-align: left; }
+.skill-motion select { min-width: 0; }

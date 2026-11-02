@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { FACE_POINTS, hydrateLook, pieceUrl, wearUrl } from '../../charter/look.js'
+import { FACE_POINTS, hydrateLook, pieceUrl, wearUrl, type GearSlot } from '../../charter/look.js'
+import { fits } from '../../kit/pieces.js'
 import { BUILT_IN_PIECES } from '../../kit/pieces.gen.js'
 import { BUILT_IN_ITEMS } from '../../kit/wear/library.gen.js'
 import { DEMO_IDS, demoLook } from './looks.js'
@@ -39,7 +40,8 @@ describe('the demo looks', () => {
           for (const knob of Object.keys(w!.knobs ?? {})) expect(item.knobs, `${id} ${slot}`).toContain(knob)
         } else {
           expect(piece, `${id} wears ${w!.id}, which is in neither the wardrobe nor the pieces`).toBeDefined()
-          expect(piece!.kind, `${id} ${slot}`).toBe(slot)
+          // a piece hangs where its kind fits: a weapon in either hand, a shield in the left
+          expect(fits(piece!.kind, slot as GearSlot), `${id} ${slot}`).toBe(true)
           expect(w!.url).toBe(pieceUrl(piece!.id))
           expect(w!.colors?.length ?? 0).toBeLessThanOrEqual(1)
         }

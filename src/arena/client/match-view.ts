@@ -4,13 +4,14 @@ import type { BuildSlot } from '../../charter/types.js'
 import type { HeroPackage } from '../../forge/package.js'
 import { aiCommands } from '../ai/brain.js'
 import { ENGINE } from '../engine/calibration.js'
+import { shotSeconds } from '../engine/combat.js'
 import type { MatchEvent } from '../engine/events.js'
 import type { Vec3 } from '../engine/maths.js'
 import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
 import { capsule, type Command, type Team } from '../engine/state.js'
 import { tick } from '../engine/tick.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
-import { Cameras } from './camera.js'
+import { Cameras, FIRST_PERSON } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, releaseIfDead, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
@@ -58,6 +59,10 @@ export interface HudHero {
   staminaMax?: number
   /** What is on the hero, worst first (status.ts). */
   statuses?: HeroStatus[]
+  /** Whether the passive is switched on (F toggles it). */
+  passiveOn?: boolean
+  /** Seconds the basic attack button has been held, while it is: past ENGINE.melee.heavyHold it charges a heavy blow. */
+  holding?: number
   fallback: boolean
 }
 
@@ -169,8 +174,11 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
       stamina: h.stamina,
       staminaMax: ENGINE.move.stamina.max,
       statuses: statusesOf(h, match.tick).slice(0, 3),
+      passiveOn: h.passiveOn,
+      ...(h.basicSince >= 0 ? { holding: (match.tick - h.basicSince) / ENGINE.tickHz } : {}),
       fallback: views[h.id]?.fallback ?? false,
-      cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
+      // Skill 1 is a gun: its wait is the time between shots
+      cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: s === 'active1' ? shotSeconds(setups[h.id].sheet.fireRate) : setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
     })),
   }
 }
@@ -444,17 +452,18 @@ function drawHeroes(
     const moving = moved > 0.01
     // the hips turn partway toward the way the hero moves, the legs run the rest at an angle and the chest twists to
     // its aim, casting on the move too, since its legs keep running under the cast, and dashing, on the ground or off
-    // it; a slide faces along its line; standing, the feet stay put until the aim is far round; in the air, the whole
+    // it; a slide or a roll faces along its line; standing, the feet stay put until the aim is far round; in the air, the whole
     // body faces the aim. A view that can't twist faces its aim whole. The run keeps pace with the ground covered
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
-    const mode = pose.kind === 'slide' ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
+    // a roll, like a slide, faces along its line: the body tumbles the way it goes
+    const mode = pose.kind === 'slide' || pose.kind === 'roll' ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
     stances[i] = s
     // standing on the ground, the feet stay where they land
-    if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading)
+    if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading, h.sprinting)
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
@@ -636,6 +645,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
+    // in first person the camera looks out of the hero's eyes, so its own body isn't drawn
+    if (arena.match.human !== undefined) views[arena.match.human].root.visible = cameras.scope < FIRST_PERSON
     range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt * speed, alpha)
     stage.draw()

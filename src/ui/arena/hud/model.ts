@@ -42,7 +42,8 @@ export interface HeroSetupLike {
 
 /** The ability keys of a roster card, in the order they read. */
 export const CARD_SLOTS = ['active1', 'active2', 'ultimate'] as const
-export const SLOT_KEY: Record<BuildSlot, string> = { basic: 'LMB', active1: 'Q', active2: 'E', passive: '', ultimate: 'R', movement: 'F' }
+/** Each slot's key as the canon binds it (src/arena/client/input.ts). */
+export const SLOT_KEY: Record<BuildSlot, string> = { basic: 'SPC', active1: 'LMB', active2: 'Q', movement: 'E', passive: 'F', ultimate: 'R' }
 
 export function heroInfo(id: number, team: Team, setup: HeroSetupLike, portrait?: string): HudHeroInfo {
   const skills = {} as Record<BuildSlot, HudSkill>

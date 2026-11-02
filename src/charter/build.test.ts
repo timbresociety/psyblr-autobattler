@@ -169,7 +169,7 @@ describe('swapTemplate (R7)', () => {
   it('accepts any template of the role for the slot, deep in the library too', () => {
     const build = mage()
     const options = swapOptions(build, 'active1')
-    expect(options.length).toBeGreaterThanOrEqual(12)
+    expect(options.length).toBeGreaterThanOrEqual(11)
     const last = options[options.length - 1]
     expect(swapTemplate(build, 'active1', last.id).ok).toBe(true)
   })

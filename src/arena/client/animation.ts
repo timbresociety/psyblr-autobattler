@@ -1,5 +1,7 @@
 import type { BuildSlot } from '../../charter/types.js'
+import type { MeleeBlow } from '../engine/combat.js'
 import type { MatchEvent } from '../engine/events.js'
+import { ENGINE } from '../engine/calibration.js'
 import type { HeroState } from '../engine/state.js'
 
 /**
@@ -13,18 +15,25 @@ import type { HeroState } from '../engine/state.js'
  * as it was made.
  */
 export type AnimState =
-  | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' }
+  | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' | HeldKind }
   | { kind: MoveKind; seq: number }
-  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean }
+  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean; melee?: MeleeBlow }
 
 /** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
-export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land'
+export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle'
+
+/**
+ * The canon's held states, each looping its own clip while it lasts: a guard, crouched or prone (still or moving), a
+ * melee launch out of control, and a heavy blow's charge.
+ */
+export type HeldKind = 'block' | 'crouch' | 'crouch_move' | 'prone' | 'prone_move' | 'launched' | 'charge'
+export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move', 'prone', 'prone_move', 'launched', 'charge']
 
 /**
  * Seconds each movement holds the body before running, hanging in the air or standing takes over: about its clip's
  * length, less the blend out. A landing gives way at once to a hero that moves on, and lasts longer the harder it was.
  */
-export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16 }
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5 }
 const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
@@ -32,7 +41,7 @@ export interface Animator {
   /** Seconds the current flinch keeps playing. */
   hold: number
   /** The cast in progress, in engine ticks: pressed at `started`, released at `release`, over at `ends`. */
-  cast?: { slot: BuildSlot; started: number; release: number; ends: number }
+  cast?: { slot: BuildSlot; started: number; release: number; ends: number; melee?: MeleeBlow }
   /** Casts so far. */
   casts: number
   /** Movements so far. */
@@ -53,15 +62,19 @@ export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[
       return
     }
     if (e.type === 'cast' && e.hero === hero) {
-      a.cast = { slot: e.slot, started: tick, release: e.release, ends: e.ends }
+      a.cast = { slot: e.slot, started: tick, release: e.release, ends: e.ends, melee: e.melee }
       a.casts++
-      a.state = { kind: 'cast', slot: e.slot, seq: a.casts, prep: 0, recover: 0 }
+      a.state = { kind: 'cast', slot: e.slot, seq: a.casts, prep: 0, recover: 0, melee: e.melee }
       a.hold = 0
     } else if (e.type === 'interrupt' && e.hero === hero && a.cast?.slot === e.slot) {
       a.cast = undefined
     } else if (e.type === 'hit' && e.target === hero && e.heavy && !a.cast) {
       a.state = { kind: 'hit' }
       a.hold = HIT_SECONDS
+    } else if (e.type === 'passive' && e.hero === hero && !a.cast) {
+      // the passive's toggle, on or off, is one flourish every hero shares (COMMON_MOTIONS); its effects say which
+      a.state = { kind: 'toggle', seq: ++a.moves }
+      a.hold = MOVE_SECONDS.toggle
     } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide') {
       const kind = e.move === 'air-jump' ? 'air_jump' : e.move
       a.state = { kind, seq: ++a.moves }
@@ -80,22 +93,41 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
   if (c && now < c.ends) {
     const prep = Math.min(1, Math.max(0, (now - c.started) / Math.max(1, c.release - c.started)))
     const recover = now <= c.release ? 0 : Math.min(1, (now - c.release) / Math.max(1, c.ends - c.release))
-    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne }
+    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne, melee: c.melee }
     return a.state
   }
   a.cast = undefined
-  // a landing holds only a hero that stands there; one running on lands in its stride
-  if (a.state.kind === 'land' && moved > 0.01) a.hold = 0
+  // a landing or a toggle holds only a hero that stands there; one running on keeps its stride
+  if ((a.state.kind === 'land' || a.state.kind === 'toggle') && moved > 0.01) a.hold = 0
   if (a.hold > 0) {
     a.hold -= dt
     if (a.hold > 0) return a.state
   }
-  const kind = hero.stunnedUntil > now ? 'stunned' : hero.airborne ? 'air' : hero.slide ? 'slide' : moved > 0.01 ? 'run' : 'idle'
+  const moving = moved > 0.01
+  const kind: AnimState['kind'] = hero.launch?.regain
+    ? 'launched'
+    : hero.stunnedUntil > now
+      ? 'stunned'
+      : hero.basicSince >= 0 && hero.action === undefined && now - hero.basicSince >= CHARGE_TICKS
+        ? 'charge'
+        : hero.airborne
+          ? 'air'
+          : hero.slide
+            ? 'slide'
+            : hero.blocking
+              ? 'block'
+              : hero.stance === 'prone'
+                ? moving ? 'prone_move' : 'prone'
+                : hero.stance === 'crouch'
+                  ? moving ? 'crouch_move' : 'crouch'
+                  : moving ? 'run' : 'idle'
   if (a.state.kind !== kind) a.state = { kind }
   return a.state
 }
 
 const DEG = Math.PI / 180
+/** Ticks the basic attack is held before the hero shows its charge (ENGINE.melee.heavyHold). */
+const CHARGE_TICKS = Math.ceil(ENGINE.melee.heavyHold * ENGINE.tickHz)
 
 /**
  * How fast hips turn (radians a second) and how far the chest twists from them. Running, the hips turn at most `warp`

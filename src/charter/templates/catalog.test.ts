@@ -24,10 +24,10 @@ describe('template catalogue', () => {
     }
   })
 
-  it('every role has room to choose in every slot: 7 options or more, and 14 actives for the two active slots', () => {
+  it('every role has room to choose in every slot: 7 options or more, and 11 actives for the two active slots (self-buffs belong to the passive)', () => {
     for (const role of ROLE_IDS) {
       for (const slot of SLOT_KINDS) {
-        expect(poolFor(role, slot).length, `${role} ${slot}`).toBeGreaterThanOrEqual(slot === 'active' ? 14 : 7)
+        expect(poolFor(role, slot).length, `${role} ${slot}`).toBeGreaterThanOrEqual(slot === 'active' ? 11 : 7)
       }
     }
   })
@@ -107,7 +107,9 @@ describe('the skill library (docs/charter/skill-library.html)', () => {
 
   it('a stored build holding a retired template gets its successor, in the same slot and role pool', () => {
     expect(currentTemplate('fighter-gap-rush', 'fighter', 'active')).toBe('fighter-haymaker')
-    expect(currentTemplate('mage-recall-step', 'support', 'active')).toBe('mage-chrono-rewind')
+    // its successor lifted only its caster, so it left the actives too (fitsSlot): the slot's first choice instead
+    expect(currentTemplate('mage-recall-step', 'support', 'active')).toBe(defaultTemplate('support', 'active').id)
+    expect(currentTemplate('fighter-berserk', 'fighter', 'active')).toBe(defaultTemplate('fighter', 'active').id)
     expect(currentTemplate('assassin-shadow-step', 'assassin', 'active')).toBe('assassin-expose-weakness')
     expect(currentTemplate('assassin-shadow-step', 'assassin', 'movement')).toBe('assassin-shadow-step')
     expect(currentTemplate('made-up', 'tank', 'active')).toBeUndefined()

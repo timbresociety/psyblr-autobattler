@@ -258,6 +258,12 @@
 .hud-cluster { position: absolute; right: var(--edge); bottom: var(--edge); isolation: isolate; display: flex; align-items: flex-end; gap: 14px; padding: 10px 14px 10px 22px; animation: hud-rise 0.22s ease-out; }
 .hud-cluster::before { content: ''; position: absolute; inset: 22px 0 0; z-index: -1; transform: skewX(-12deg); border-radius: 4px; background: linear-gradient(270deg, rgba(var(--team-rgb), 0.22), rgba(var(--surface-rgb), 0.66) 55%, rgba(var(--surface-rgb), 0.3)); box-shadow: inset -3px 0 0 var(--team); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .hud-cluster-row { display: flex; gap: 8px; padding-bottom: 6px; }
+.hud-passive { position: relative; display: grid; justify-items: center; gap: 3px; transition: opacity 0.15s, filter 0.15s; }
+.hud-passive small { font: 800 italic 10px/1 var(--hud-display); letter-spacing: 0.1em; }
+.hud-passive.on .hud-ab { box-shadow: inset 0 0 0 2px var(--accent), 0 0 10px rgba(var(--accent-rgb), 0.7); }
+.hud-passive.on small { color: var(--accent); text-shadow: 0 0 8px rgba(var(--accent-rgb), 0.8); }
+.hud-passive.off { opacity: 0.55; filter: grayscale(1); }
+.hud-passive.off small { color: var(--ink-dim); }
 .hud-ult { display: grid; justify-items: center; gap: 4px; }
 .hud-ult-name { max-width: 130px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 700 italic 13px/1 var(--hud-display); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); }
 .hud-ult.ready .hud-ult-name { color: var(--accent); text-shadow: 0 0 10px rgba(var(--accent-rgb), 0.8); }
@@ -280,6 +286,15 @@
 .hud-self { position: absolute; left: 50%; top: calc(50% + 46px); transform: translateX(-50%); display: grid; justify-items: center; gap: 6px; pointer-events: none; z-index: 2; }
 .hud-self-status { display: flex; gap: 4px; }
 .hud-self-status .hud-oh-chip { font-size: 11px; padding: 2px 6px 3px; }
+/* the heavy charge (Space held): a tap zone, then the charge filling, glowing once full */
+.hud-charge { display: grid; justify-items: center; gap: 4px; }
+.hud-charge b { position: relative; display: block; width: 160px; height: 8px; border-radius: 4px; overflow: hidden; background: linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0 var(--tap), rgba(var(--surface-lo-rgb), 0.75) var(--tap) 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35); }
+.hud-charge b::after { content: ''; position: absolute; top: 0; bottom: 0; left: var(--tap); width: 2px; background: #fff; }
+.hud-charge i { position: absolute; inset: 0; transform-origin: 0 50%; background: linear-gradient(90deg, #fff 0 var(--tap), var(--accent) var(--tap) 100%); animation: hud-charge-fill linear forwards; }
+.hud-charge small { font: 800 italic 11px/1 var(--hud-display); letter-spacing: 0.08em; text-transform: uppercase; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.hud-charge.full b { box-shadow: inset 0 0 0 1px var(--accent), 0 0 12px 2px rgba(var(--accent-rgb), 0.85); animation: hud-ult 0.6s ease-in-out infinite; }
+.hud-charge.full small { color: var(--accent-hot); }
+@keyframes hud-charge-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .hud-stamina { position: relative; display: flex; gap: 4px; width: 120px; height: 5px; }
 .hud-stamina b { position: relative; flex: 1; border-radius: 3px; overflow: hidden; background: rgba(var(--surface-lo-rgb), 0.7); box-shadow: 0 0 0 1px rgba(var(--shade-rgb), calc(0.6 * var(--shade-a))); }
 .hud-stamina b i { position: absolute; inset: 0; transform-origin: 0 50%; background: rgba(232, 251, 255, 0.55); transition: transform 0.1s linear; }
