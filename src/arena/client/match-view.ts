@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { BUILD_SLOTS } from '../../charter/build.js'
+import type { Style } from '../../charter/motions.js'
 import type { BuildSlot } from '../../charter/types.js'
 import type { HeroPackage } from '../../forge/package.js'
 import { aiCommands } from '../ai/brain.js'
@@ -532,7 +533,9 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
-  const builds = arena.setups.map((s) => s.build)
+  // dev only: ?style=rifle hands every hero that fighting style, to watch a style's clips in a live match
+  const devStyle = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('style') : null
+  const builds = arena.setups.map((s) => (devStyle && s.build.look ? { ...s.build, look: { ...s.build.look, style: devStyle as Style } } : s.build))
   let loaded = 0
   // Rapier loads with the heroes, so Start waits for both (R40)
   const total = builds.length + 1

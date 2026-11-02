@@ -1,4 +1,5 @@
 import type { Gender } from '../../charter/look.js'
+import type { ClipTags } from '../../kit/anim/bake.js'
 import type { Gait } from './gait.js'
 import type { RigKind } from './rig.js'
 
@@ -27,8 +28,26 @@ export interface AnimIndex {
    * Per gender: the medium body's rest rotations and hips, each set's clips with their lengths in seconds, and each
    * looping move's gait (how fast it goes, its strides, where its left foot lands), for blending moves in step.
    */
-  genders: Record<Gender, { rest: number[][]; hips: number[]; sets: Record<AnimSet, Record<string, number>>; gait?: Record<string, Gait>; marks?: Record<string, [release: number, travelled: number]> }>
+  genders: Record<
+    Gender,
+    {
+      rest: number[][]
+      hips: number[]
+      sets: Record<AnimSet, Record<string, number>>
+      gait?: Record<string, Gait>
+      marks?: Record<string, [release: number, travelled: number]>
+      /** Each clip's tags on this gender's body (GAME.md §12): plants, contact and release, root travel, loop. */
+      tags?: Record<string, ClipTags>
+    }
+  >
+  /** Each clip's source, a key of `licences`; a mirror takes its original's. */
+  sources?: Record<string, string>
+  /** The terms each source's clips are used on, with the credit a source asks for. */
+  licences?: Record<string, { title: string; licence: string; url: string; credit?: string }>
 }
+
+/** A clip's tags on a gender's body, if the library has them. */
+export const clipTags = (index: AnimIndex | undefined, gender: Gender, clip: string): ClipTags | undefined => index?.genders[gender]?.tags?.[clip]
 
 /** Seconds into each combat clip where its blow lands, from the index's marks as each index loads (see castTime). */
 export const MOTION_RELEASE = new Map<string, number>()

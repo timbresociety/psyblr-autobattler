@@ -1,16 +1,19 @@
 /**
  * How far each keyed joint turns across the clip library (public/anim/standard), as swing-twist from each gender's
  * rest (src/kit/rig/swing-twist.ts). The joint-limit table (src/kit/rig/limits.ts) is checked against this: no clean
- * motion-capture clip may break a limit.
+ * motion-capture clip may break a limit. A gated source's clips (CMU) are held to the table instead of measured into it.
  *
  *   npx tsx scripts/joint-ranges.ts [--clips]     (--clips: the clips that reach each extreme)
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { Quaternion } from 'three'
 import { swingTwist } from '../src/kit/rig/swing-twist.js'
+import { SOURCES } from '../src/kit/anim/sources.js'
 
 const DIR = 'public/anim/standard'
-const index = JSON.parse(readFileSync(`${DIR}/index.json`, 'utf8')) as { bones: string[]; rot: number; genders: Record<string, { rest: number[][] }> }
+const index = JSON.parse(readFileSync(`${DIR}/index.json`, 'utf8')) as { bones: string[]; rot: number; genders: Record<string, { rest: number[][] }>; sources?: Record<string, string> }
+// a gated source's clips are held to the limits (src/kit/anim/sources.ts), so they don't set them
+const gated = new Set(Object.entries(SOURCES).filter(([, s]) => s.gate !== undefined).map(([id]) => id))
 const bones = index.bones
 type Range = { min: number; max: number; minClip: string; maxClip: string; values: number[] }
 const ranges = new Map<string, Record<'twist' | 'x' | 'z', Range>>()
@@ -19,6 +22,7 @@ const fresh = (): Range => ({ min: Infinity, max: -Infinity, minClip: '', maxCli
 for (const g of Object.keys(index.genders)) {
   const rest = index.genders[g].rest.map((r) => new Quaternion().fromArray(r).invert())
   for (const file of readdirSync(`${DIR}/${g}`)) {
+    if (gated.has(index.sources?.[file.replace(/\.json$/, '')] ?? '')) continue
     const clip = JSON.parse(readFileSync(`${DIR}/${g}/${file}`, 'utf8')) as { frames: number; rot: number[] }
     const n = clip.frames
     const tracks = clip.rot.length / (n * 4)

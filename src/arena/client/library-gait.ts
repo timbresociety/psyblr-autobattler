@@ -3,6 +3,7 @@ import type { Gender } from '../../charter/look.js'
 import { ENGINE } from '../engine/calibration.js'
 import { animClip, animIndex, setOf } from './anim-library.js'
 import { GAIT_CLIPS, type Gait } from './gait.js'
+import { WEAPON_GAIT, type Weapon } from '../../kit/anim/weapon-gait.js'
 import type { RigKind } from './rig.js'
 
 /** What a hero moves and stands in from the motion library, not yet fitted to its body (characters.ts fits it). */
@@ -120,20 +121,28 @@ function baseMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.Anim
 
 /**
  * A gender's walks, jogs and runs every way, and a stance, fetched once each; undefined when the library can't load
- * or lacks any of them, and the hero then moves on its body's own clips.
+ * or lacks any of them, and the hero then moves on its body's own clips. A hero carrying a pistol or a rifle moves on
+ * that weapon's own set and stands in its stance (GAME.md §12), where the library has the whole set; the clips go by
+ * the gait's names, so the gait plays them as it plays the unarmed ones.
  */
-export function libraryGait(gender: Gender, stance = 'idle', rig: RigKind = 'legacy'): Promise<LibraryGait | undefined> {
-  const key = `${rig}/${gender}/${stance}`
+export function libraryGait(gender: Gender, stance = 'idle', rig: RigKind = 'legacy', weapon?: Weapon): Promise<LibraryGait | undefined> {
+  const key = `${rig}/${gender}/${stance}/${weapon ?? ''}`
   let load = loads.get(key)
   if (!load) {
     load = (async () => {
       const idx = await animIndex(rig)
-      const gaits = idx?.genders[gender]?.gait
-      if (!idx || !gaits) return undefined
-      const still = setOf(idx, gender, stance) === 'idle' ? stance : 'idle'
-      const [clips, standing] = await Promise.all([Promise.all(GAIT_CLIPS.map((name) => animClip(gender, name, rig))), animClip(gender, still, rig)])
-      if (clips.some((clip) => !clip || !gaits[clip.name])) return undefined
-      return { gender, rig, clips: new Map(GAIT_CLIPS.map((name, k) => [name, clips[k]!])), gaits, bones: idx.bones, ...(standing ? { stance: standing } : {}) }
+      const measured = idx?.genders[gender]?.gait
+      if (!idx || !measured) return undefined
+      const set = weapon && WEAPON_GAIT[weapon]
+      const armed = set && GAIT_CLIPS.every((name) => measured[set.clips[name]]) ? set : undefined
+      if (weapon && !armed) return libraryGait(gender, stance, rig)
+      const source = (name: string) => armed?.clips[name] ?? name
+      const still = armed && setOf(idx, gender, armed.stance) ? armed.stance : setOf(idx, gender, stance) === 'idle' ? stance : 'idle'
+      const [clips, standing] = await Promise.all([Promise.all(GAIT_CLIPS.map((name) => animClip(gender, source(name), rig))), animClip(gender, still, rig)])
+      if (clips.some((clip) => !clip || !measured[clip.name])) return undefined
+      const gaits = armed ? { ...measured, ...Object.fromEntries(GAIT_CLIPS.map((name) => [name, measured[source(name)]])) } : measured
+      const named = GAIT_CLIPS.map((name, k) => (armed ? new THREE.AnimationClip(name, clips[k]!.duration, clips[k]!.tracks) : clips[k]!))
+      return { gender, rig, clips: new Map(GAIT_CLIPS.map((name, k) => [name, named[k]])), gaits, bones: idx.bones, ...(standing ? { stance: standing } : {}) }
     })().catch(() => undefined)
     loads.set(key, load)
   }

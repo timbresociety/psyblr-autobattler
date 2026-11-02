@@ -19,8 +19,12 @@ export interface Planter {
    * Where each foot goes this frame, given where the pose puts it (`wants`, world space) and which way the hips face
    * (`yaw`): pinned where it landed, partway through a step, or easing back to the pose once `on` goes false. Writes
    * `out` and returns true; false once the pose is left as it is.
+   *
+   * `down`, when the clip playing is tagged (GAME.md §12), says which feet its performer had on the floor this moment:
+   * a foot that is down stays pinned where it came down, one that is up follows the clip (a kick's foot, a lunge's
+   * step) and plants afresh where it lands, and no foot takes a step of its own.
    */
-  place: (wants: readonly THREE.Vector3[], yaw: number, dt: number, on: boolean, out: THREE.Vector3[]) => boolean
+  place: (wants: readonly THREE.Vector3[], yaw: number, dt: number, on: boolean, out: THREE.Vector3[], down?: readonly boolean[]) => boolean
 }
 
 export function planter(count = 2): Planter {
@@ -29,10 +33,12 @@ export function planter(count = 2): Planter {
   const yaws: number[] = new Array(count).fill(0)
   // seconds into each foot's step, or -1 while it's pinned
   const steps: number[] = new Array(count).fill(-1)
+  // a foot the clip lifted, to plant afresh where it next comes down
+  const lifted: boolean[] = new Array(count).fill(false)
   let weight = 0
   let pinned = false
   return {
-    place: (wants, yaw, dt, on, out) => {
+    place: (wants, yaw, dt, on, out, down) => {
       weight = on ? Math.min(1, weight + dt / PLANT.blend) : Math.max(0, weight - dt / PLANT.blend)
       if (!weight) {
         pinned = false
@@ -46,8 +52,20 @@ export function planter(count = 2): Planter {
         steps.fill(-1)
         pinned = true
       }
+      if (down) {
+        wants.forEach((want, i) => {
+          if (!down[i]) {
+            lifted[i] = true
+            steps[i] = -1
+          } else if (lifted[i]) {
+            anchors[i].copy(want)
+            yaws[i] = yaw
+            lifted[i] = false
+          }
+        })
+      } else lifted.fill(false)
       // the foot pulled furthest from where the pose wants it steps first, one at a time
-      if (on && steps.every((s) => s < 0)) {
+      if (on && !down && steps.every((s) => s < 0)) {
         let worst = -1
         let most = 0
         anchors.forEach((anchor, i) => {
@@ -76,7 +94,8 @@ export function planter(count = 2): Planter {
             yaws[i] = yaw
             steps[i] = -1
           }
-        } else out[i].set(anchors[i].x, want.y, anchors[i].z)
+        } else if (lifted[i]) out[i].copy(want)
+        else out[i].set(anchors[i].x, want.y, anchors[i].z)
         if (weight < 1) out[i].lerp(want, 1 - weight)
       })
       return true

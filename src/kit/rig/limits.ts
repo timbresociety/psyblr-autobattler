@@ -38,8 +38,11 @@ export function limitExcess(bone: string, delta: Quaternion): number {
   return worst
 }
 
-/** `delta` (rest⁻¹ · pose) brought inside the bone's limit, axis by axis; returns whether it had to move. */
-export function clampToLimits(bone: string, delta: Quaternion): boolean {
+/**
+ * `delta` (rest⁻¹ · pose) brought inside the bone's limit, axis by axis; returns whether it had to move. `inset`
+ * (degrees) lands a moved axis that far inside its edge, for a pose that is stored rounded (the clip baker's).
+ */
+export function clampToLimits(bone: string, delta: Quaternion, inset = 0): boolean {
   const limit = JOINT_LIMITS[bone]
   if (!limit) return false
   swingTwist(delta, st)
@@ -47,7 +50,7 @@ export function clampToLimits(bone: string, delta: Quaternion): boolean {
   for (const axis of ['twist', 'x', 'z'] as const) {
     const [lo, hi] = limit[axis]
     // a turn clamped to the edge reads back a hair past it, so the edge itself counts as inside
-    if (st[axis] < lo - EDGE || st[axis] > hi + EDGE) (st[axis] = Math.min(hi, Math.max(lo, st[axis]))), (moved = true)
+    if (st[axis] < lo - EDGE || st[axis] > hi + EDGE) (st[axis] = Math.min(hi - inset, Math.max(lo + inset, st[axis]))), (moved = true)
   }
   if (moved) fromSwingTwist(st, delta)
   return moved

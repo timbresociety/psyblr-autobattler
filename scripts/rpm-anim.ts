@@ -19,6 +19,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { gzipSync } from 'node:zlib'
 import { join } from 'node:path'
 import { Quaternion, Vector3 } from 'three'
+import { WEAPON_LOOPS } from '../src/kit/anim/weapon-gait.js'
+import { clampClip, levelPlantedFeet, limitWorst, mirrorClip, mirrorName, mirrorTags, tagClip, type ClipTags, type Skel } from '../src/kit/anim/bake.js'
+import { SOURCES as MAPS } from '../src/kit/anim/sources.js'
 
 const ARGS = process.argv.slice(2)
 const RIG_NAME = ARGS[ARGS.indexOf('--rig') + 1] === 'standard' && ARGS.includes('--rig') ? 'standard' : 'legacy'
@@ -269,6 +272,23 @@ function target(path: string): Target {
  */
 function alignedPose(source: Bone[], ours: Target): Map<string, Quaternion> {
   const ourBone = new Map(RIG.map(([o, s], k) => [s, ours.index[k]]))
+  // a bone points (UP) at its leading child, the one our bone points at; a motion-capture rig's joint with several
+  // children points at none of them (CMU's hips point forward, 87° off the spine), so it's aligned by that child instead
+  const rest = worldRotations(source)
+  const sourceAt = worldPositions(source)
+  const oursAt = worldPositions(ours.bones)
+  const oursUp = worldRotations(ours.bones)
+  const leading = (mine: number): string | undefined => {
+    const up = UP.clone().applyQuaternion(oursUp[mine])
+    let best: string | undefined
+    let most = -Infinity
+    ours.bones.forEach((c, i) => {
+      if (c.parent !== mine) return
+      const along = oursAt[i].clone().sub(oursAt[mine]).normalize().dot(up)
+      if (along > most) (most = along), (best = c.name)
+    })
+    return best
+  }
   const out: Quaternion[] = []
   const at = (i: number): Quaternion => {
     if (out[i]) return out[i]
@@ -276,7 +296,14 @@ function alignedPose(source: Bone[], ours: Target): Map<string, Quaternion> {
     const q = (b.parent < 0 ? new Quaternion() : at(b.parent).clone()).multiply(b.r)
     const mine = ourBone.get(b.name)
     if (mine !== undefined) {
-      const from = UP.clone().applyQuaternion(q)
+      let from = UP.clone().applyQuaternion(q)
+      const child = leading(mine)
+      const c = child === undefined ? -1 : source.findIndex((s) => s.name === child && s.parent === i)
+      if (c >= 0) {
+        // the child's way at rest, carried by the turns its ancestors took already
+        const toChild = sourceAt[c].clone().sub(sourceAt[i]).normalize().applyQuaternion(q.clone().multiply(rest[i].clone().invert()))
+        if (toChild.angleTo(from) > Math.PI / 6) from = toChild
+      }
       const to = UP.clone().applyQuaternion(ours.world[mine])
       q.premultiply(new Quaternion().setFromUnitVectors(from, to))
     }
@@ -306,7 +333,8 @@ function relaxedShoulders(idle: string): Map<string, Quaternion> {
   if (!anim) throw new Error(`${idle}: no animation`)
   const out = new Map<string, Quaternion>()
   for (const name of SHOULDERS) {
-    const node = indexOf(bones, name)
+    const node = bones.findIndex((b) => b.name === name)
+    if (node < 0) continue
     const ch = anim.channels.find((c) => c.target.node === node && c.target.path === 'rotation')
     if (!ch) {
       out.set(name, bones[node].r.clone())
@@ -314,12 +342,13 @@ function relaxedShoulders(idle: string): Map<string, Quaternion> {
     }
     const s = anim.samplers[ch.sampler]
     const track = { times: readAccessor(glb, s.input), values: readAccessor(glb, s.output), width: 4 }
-    const duration = track.times[track.times.length - 1]
+    const start = track.times[0]
+    const duration = track.times[track.times.length - 1] - start
     const sum = new Quaternion(0, 0, 0, 0)
     const q = new Quaternion()
     const tmp: number[] = []
     for (let f = 0; f <= Math.round(duration * FPS); f++) {
-      q.fromArray(sample(track, Math.min(duration, f / FPS), tmp))
+      q.fromArray(sample(track, start + Math.min(duration, f / FPS), tmp))
       // each frame on the first's side of the sphere, so they average the short way
       const sign = f && q.dot(sum) < 0 ? -1 : 1
       sum.set(sum.x + q.x * sign, sum.y + q.y * sign, sum.z + q.z * sign, sum.w + q.w * sign)
@@ -368,6 +397,8 @@ interface Retargeted {
   /** Seconds in, where a one-shot lands (its fastest hand or foot), and metres its hips travelled before being held in place. */
   release: number
   travelled: number
+  /** The travel taken out to play it in place, metres on our body, turned with the clip: x to the left, z ahead. */
+  drift: { x: number; z: number }
 }
 
 /**
@@ -390,14 +421,18 @@ function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<s
   let hipsTrack: Track | undefined
   const hips = indexOf(bones, 'Hips')
   const chest = indexOf(bones, 'Spine2')
-  let duration = 0
+  // a clip cut from a long take (tools/blender/mixamo.py --skip) keeps its take's times: it plays from its first key
+  let start = Infinity
+  let end = 0
   for (const ch of anim.channels) {
     const s = anim.samplers[ch.sampler]
     const track = { times: readAccessor(glb, s.input), values: readAccessor(glb, s.output), width: ch.target.path === 'rotation' ? 4 : 3 }
-    duration = Math.max(duration, track.times[track.times.length - 1])
+    start = Math.min(start, track.times[0])
+    end = Math.max(end, track.times[track.times.length - 1])
     if (ch.target.path === 'rotation') rotations.set(ch.target.node, track)
     else if (ch.target.path === 'translation' && ch.target.node === hips) hipsTrack = track
   }
+  const duration = end - start
   let frames = Math.max(2, Math.round(duration * FPS) + 1)
   // a bone the source hasn't got (Mixamo's rig has no eyes) holds our rest
   const sourceIndex = RIG.map(([, s]) => bones.findIndex((b) => b.name === s))
@@ -408,6 +443,7 @@ function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<s
     RIG.flatMap(([o, src], k) => {
       if (!SHOULDERS.includes(src)) return []
       const node = sourceIndex[k]
+      if (node < 0) return []
       const parent = bones[node].parent
       const intoOurs = ours.world[ours.parentOf[k]].clone().invert().multiply(aligned.get(bones[parent].name)!)
       const rest = ours.world[ours.parentOf[k]].clone().invert().multiply(ours.world[ours.index[k]])
@@ -424,7 +460,7 @@ function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<s
   const feet: Vector3[] = []
   const hipsAt: Vector3[] = []
   for (let f = 0; f < frames; f++) {
-    const t = Math.min(duration, f / FPS)
+    const t = start + Math.min(duration, f / FPS)
     const local = (b: Bone, i: number) => {
       const track = rotations.get(i)
       return track ? new Quaternion().fromArray(sample(track, t, tmp)) : b.r
@@ -549,7 +585,8 @@ function retarget(path: string, aligned: Map<string, Quaternion>, relaxed: Map<s
       if (speed > fastest) (fastest = speed), (release = f / FPS)
     }
   const travelled = Math.round(Math.hypot(last.x - first.x, last.z - first.z) * scale * 100) / 100
-  return { frames, rot, pos, seam, release, travelled, yaw: (yaw * 180) / Math.PI, chest: (Math.atan2(Math.sin(chestYaw - yaw), Math.cos(chestYaw - yaw)) * 180) / Math.PI, spread, look, gait: gaitOf(feet, hipsAt, scale) }
+  const drift = new Vector3(last.x - first.x, 0, last.z - first.z).applyQuaternion(turn).multiplyScalar(scale)
+  return { frames, rot, pos, seam, release, travelled, drift: { x: drift.x, z: drift.z }, yaw: (yaw * 180) / Math.PI, chest: (Math.atan2(Math.sin(chestYaw - yaw), Math.cos(chestYaw - yaw)) * 180) / Math.PI, spread, look, gait: gaitOf(feet, hipsAt, scale) }
 }
 
 /** Past this (seamOf), a loop ends a frame short of where it began; below it, on its first frame again. */
@@ -604,17 +641,46 @@ const LOOPS = /^(?:walk|jog|run|crouch)(?:_back|_left|_right)?$/
 /** Which way each looping move goes from the hips, the way yaw turns: a quarter turn is the performer's left. */
 const WAYS: Record<string, number> = { '': 0, _left: Math.PI / 2, _back: Math.PI, _right: -Math.PI / 2 }
 
+// ------------------------------------------------------------------------------------------------ sources
+
+/**
+ * Where each clip comes from and on what terms (GAME.md §12: every clip's licence is recorded). Ready Player Me's
+ * library is the base set (SETS); the others are folders of GLBs with Mixamo's bone names, which
+ * tools/blender/mixamo.py writes from each source's own files and name map (src/kit/anim/sources.ts). Their clips go
+ * by their file names, after the source's prefix so no two sources clash.
+ */
+const LICENCES: Record<string, { title: string; licence: string; url: string; credit?: string }> = {
+  rpm: { title: 'Ready Player Me animation library', licence: "Used under the owner's agreement with Ready Player Me", url: 'https://github.com/readyplayerme/animation-library' },
+  mixamo: { title: 'Mixamo', licence: 'Mixamo terms: free to use in games; the raw files are not redistributed', url: 'https://www.mixamo.com' },
+  quaternius: { title: 'Universal Animation Library (Quaternius)', licence: 'CC0 1.0', url: 'https://quaternius.com' },
+  '100style': {
+    title: '100STYLE dataset',
+    licence: 'CC BY 4.0',
+    url: 'https://www.ianxmason.com/100style/',
+    credit: 'Ian Mason, Sebastian Starke, Taku Komura: Real-Time Style Modelling of Human Locomotion via Feature-Wise Transformations and Local Motion Phases (2022)',
+  },
+  cmu: { title: 'CMU Graphics Lab Motion Capture Database', licence: 'Free for any use', url: 'http://mocap.cs.cmu.edu', credit: 'The data used in this project was obtained from mocap.cs.cmu.edu.' },
+}
+
+/** The folder sources: the Mixamo set, then the others, each with the clip whose stance relaxes its shoulders. */
+const SOURCES: { id: keyof typeof LICENCES; dir: string; prefix: string; idle: string }[] = [
+  { id: 'mixamo', dir: MIXAMO, prefix: '', idle: 'magic_standing_idle' },
+  { id: 'quaternius', dir: '.scratch/anim-src/quaternius/glb', prefix: 'ual_', idle: 'ual_idle_loop' },
+  { id: '100style', dir: '.scratch/anim-src/100style/glb', prefix: 'style_', idle: '' },
+  { id: 'cmu', dir: '.scratch/anim-src/cmu/glb', prefix: 'cmu_', idle: '' },
+]
+
 // ------------------------------------------------------------------------------------------------ writing
 
-/** Every GLB under the Mixamo folder and the clip name it goes by, in a stable order. */
-function mixamoFiles(dir: string): { name: string; path: string }[] {
+/** Every GLB under a source's folder and the clip name it goes by, in a stable order. */
+function mixamoFiles(dir: string, prefix = ''): { name: string; path: string }[] {
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')
   const out: { name: string; path: string }[] = []
   const walk = (at: string, pack?: string) => {
     for (const entry of readdirSync(at, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const path = join(at, entry.name)
       if (entry.isDirectory()) walk(path, PACKS[entry.name] ?? slug(entry.name))
-      else if (entry.name.endsWith('.glb')) out.push({ name: (pack ? `${pack}_` : '') + slug(entry.name.slice(0, -4)), path })
+      else if (entry.name.endsWith('.glb')) out.push({ name: prefix + (pack ? `${pack}_` : '') + slug(entry.name.slice(0, -4)), path })
     }
   }
   walk(dir)
@@ -647,7 +713,13 @@ const POS_SCALE = 1000
 rmSync(OUT, { recursive: true, force: true })
 const report: string[] = []
 const index: Record<string, unknown> = { version: 1, rig: RIG_NAME, fps: FPS, bones: RIG.map(([o]) => o), rot: ROT_SCALE, pos: POS_SCALE, genders: {} }
+/** Each clip's source (LICENCES), the same for both genders; a mirror is its original's. */
+const sourceOf: Record<string, string> = {}
 let bytes = 0
+let levelled = 0
+let mirrors = 0
+let clamped = 0
+const rejected: string[] = []
 for (const gender of (['m', 'f'] as Gender[]).filter((g) => existsSync(`${BODIES}/${g}-medium.glb`))) {
   const folder = join(LIBRARY, gender === 'm' ? 'masculine' : 'feminine', 'glb')
   const tpose = bonesOf(readGlb(join(folder, gender === 'm' ? 'Masculine_TPose.glb' : 'Feminine_TPose.glb')))
@@ -655,47 +727,100 @@ for (const gender of (['m', 'f'] as Gender[]).filter((g) => existsSync(`${BODIES
   const ours = target(`${BODIES}/${gender}-medium.glb`)
   const aligned = alignedPose(tpose, ours)
   const sourceHipsY = worldPositions(tpose)[indexOf(tpose, 'Hips')].y
+  // our medium body for the finishing passes (src/kit/anim/bake.ts): the feet stood flat, the tags, the mirrors
+  const skel: Skel = { names: ours.bones.map((b) => b.name), parent: ours.bones.map((b) => b.parent), t: ours.bones.map((b) => b.t), r: ours.bones.map((b) => b.r) }
+  const keyed = ours.index
   mkdirSync(join(OUT, gender), { recursive: true })
   const sets: Record<string, Record<string, number>> = Object.fromEntries(OUT_SETS.map((s) => [s, {}]))
   const gait: Record<string, Gait> = {}
+  const marks: Record<string, [number, number]> = {}
+  const tags: Record<string, ClipTags> = {}
+  const folders = STANDARD ? SOURCES.filter((src) => existsSync(src.dir)).map((src) => ({ ...src, files: mixamoFiles(src.dir, src.prefix) })) : []
+  const names = new Set(Object.values(SETS).flatMap((p) => Object.keys(p[gender])))
+  // no two clips share a name: a source's clip would silently replace another's (a rifle pack's walk_left over the walk)
+  for (const f of folders.flatMap((src) => src.files)) {
+    if (names.has(f.name)) throw new Error(`two clips named ${f.name}: rename ${f.path}`)
+    names.add(f.name)
+  }
+  const write = (name: string, from: string, r: Retargeted, into: string, source: string) => {
+    if (STANDARD) {
+      const turned = levelPlantedFeet(skel, keyed, r)
+      if (turned > 1) levelled++
+      // every clip held to the joint limits (GAME.md §9.2), measured over the clean library: a no-op on the clips that
+      // set them, and it catches a new clip's outlier frame or a planted foot stood flatter than its ankle goes
+      if (clampClip(skel, keyed, r)) clamped++
+    }
+    const tag = STANDARD ? tagClip(skel, keyed, r, FPS, r.drift) : undefined
+    const save = (clipName: string, clip: { frames: number; rot: Float32Array; pos: Float32Array }, t?: ClipTags) => {
+      const out = join(OUT, gender, `${clipName}.json`)
+      writeFileSync(out, JSON.stringify({ frames: clip.frames, from, rot: deltas(clip.rot, clip.frames, 4, ROT_SCALE), pos: deltas(clip.pos, clip.frames, 3, POS_SCALE) }))
+      bytes += gzipSync(readFileSync(out)).length
+      sets[into][clipName] = Math.round(((clip.frames - 1) / FPS) * 100) / 100
+      if (t) tags[clipName] = t
+      sourceOf[clipName] = source
+    }
+    save(name, r, tag)
+    // a clip that names a side and has no clip for the other: its mirror image (GAME.md §12)
+    const other = STANDARD ? mirrorName(name) : undefined
+    if (other && !names.has(other) && tag) {
+      save(other, mirrorClip(skel, keyed, r), mirrorTags(tag))
+      names.add(other)
+      if (into === 'combat') marks[other] = marks[name] ?? [tag.contact, Math.hypot(tag.root.x, tag.root.z)]
+      mirrors++
+    }
+  }
   for (const [set, picks] of Object.entries(SETS)) {
     for (const [name, file] of Object.entries(picks[gender])) {
       const r = retarget(join(folder, `${file}.glb`), aligned, relaxed, sourceHipsY, ours, LOOPS.test(name) ? WAYS[name.match(/_(?:back|left|right)$/)?.[0] ?? ''] : undefined)
-      const out = join(OUT, gender, `${name}.json`)
-      writeFileSync(out, JSON.stringify({ frames: r.frames, from: file.split('/').pop(), rot: deltas(r.rot, r.frames, 4, ROT_SCALE), pos: deltas(r.pos, r.frames, 3, POS_SCALE) }))
-      const size = gzipSync(readFileSync(out)).length
-      bytes += size
       const into = set === 'idle' && !isStance(r) ? 'fidget' : set
       if (LOOPS.test(name)) gait[name] = r.gait
-      sets[into][name] = Math.round(((r.frames - 1) / FPS) * 100) / 100
+      write(name, file.split('/').pop()!, r, into, 'rpm')
       const looks = `head ${r.look.down.toFixed(0)}..${r.look.up.toFixed(0)}° ±${r.look.aside.toFixed(0)}° lean ${r.look.lean.toFixed(0)}°`
       const strides = LOOPS.test(name) ? `  ${r.gait.speed} m/s, ${r.gait.strides} stride${r.gait.strides > 1 ? 's' : ''}, lands ${r.gait.strike}s, seam ${r.seam.toFixed(2)}${r.seam >= OPEN_SEAM ? ' (+1 frame)' : ''}` : ''
-      report.push(`${gender} ${into.padEnd(6)} ${name.padEnd(12)} ${String(r.frames).padStart(4)} frames  ${(size / 1024).toFixed(1).padStart(5)} KB gzipped  turned ${r.yaw.toFixed(1).padStart(6)}°, chest ${r.chest.toFixed(0).padStart(4)}° ±${(r.spread / 2).toFixed(0)}°  ${looks}${strides}`)
+      report.push(`${gender} ${into.padEnd(6)} ${name.padEnd(12)} ${String(r.frames).padStart(4)} frames  turned ${r.yaw.toFixed(1).padStart(6)}°, chest ${r.chest.toFixed(0).padStart(4)}° ±${(r.spread / 2).toFixed(0)}°  ${looks}${strides}`)
     }
   }
-  // Mixamo's clips, every one in the folder, by a name made from its file (a pack's clips after the pack's short name):
-  // their rig's rest is its T-pose, and its shoulders relax as in the magic pack's standing idle
-  const marks: Record<string, [number, number]> = {}
-  const mixamo = STANDARD && existsSync(MIXAMO) ? mixamoFiles(MIXAMO) : []
-  if (mixamo.length) {
-    const tposeM = bonesOf(readGlb(mixamo[0].path))
-    const idleM = mixamo.find((m) => m.name === 'magic_standing_idle') ?? mixamo[0]
-    const alignedM = alignedPose(tposeM, ours)
-    const relaxedM = relaxedShoulders(idleM.path)
-    const hipsM = worldPositions(tposeM)[indexOf(tposeM, 'Hips')].y
-    for (const { name, path } of mixamo) {
-      const r = retarget(path, alignedM, relaxedM, hipsM, ours)
-      const out = join(OUT, gender, `${name}.json`)
-      writeFileSync(out, JSON.stringify({ frames: r.frames, from: path.split('/').slice(-2).join('/'), rot: deltas(r.rot, r.frames, 4, ROT_SCALE), pos: deltas(r.pos, r.frames, 3, POS_SCALE) }))
-      bytes += gzipSync(readFileSync(out)).length
-      sets.combat[name] = Math.round(((r.frames - 1) / FPS) * 100) / 100
+  // the folder sources' clips, every one, by a name made from its file: each source's rig rests in its own pose (its
+  // first file's nodes), and its shoulders relax as in its stance idle
+  for (const src of folders) {
+    if (!src.files.length) continue
+    const tposeS = bonesOf(readGlb(src.files[0].path))
+    const idleS = src.files.find((m) => m.name === src.idle) ?? src.files[0]
+    const alignedS = alignedPose(tposeS, ours)
+    const relaxedS = relaxedShoulders(idleS.path)
+    const hipsS = worldPositions(tposeS)[indexOf(tposeS, 'Hips')].y
+    let failed = 0
+    for (const { name, path } of src.files) {
+      let r: Retargeted
+      try {
+        r = retarget(path, alignedS, relaxedS, hipsS, ours, WEAPON_LOOPS.get(name))
+      } catch (e) {
+        failed++
+        report.push(`${gender} skipped ${name}: ${(e as Error).message}`)
+        continue
+      }
+      // a noisy source's clip far past a joint limit is left out: that is a conversion error, not a pose
+      const gate = MAPS[src.id]?.gate
+      if (gate !== undefined) {
+        const worst = limitWorst(skel, keyed, r)
+        if (worst > gate) {
+          failed++
+          rejected.push(`${gender} ${name} ${worst.toFixed(0)}°`)
+          continue
+        }
+      }
       marks[name] = [Math.round(r.release * 1000) / 1000, r.travelled]
+      // a weapon's walks, jogs and runs are measured for the gait like the unarmed loops (src/kit/anim/weapon-gait.ts)
+      if (WEAPON_LOOPS.has(name)) gait[name] = r.gait
+      write(name, path.split('/').slice(-2).join('/'), r, 'combat', src.id)
     }
-    report.push(`${gender} combat ${mixamo.length} Mixamo clips`)
+    report.push(`${gender} combat ${src.files.length - failed} ${src.id} clips`)
   }
   // the body it was fitted to at rest, so a body of another size can take each bone's change from rest (anim-library.ts)
   const rest = ours.index.map((i) => ours.bones[i].r.toArray().map((v) => Math.round(v * 1e6) / 1e6))
-  ;(index.genders as Record<string, unknown>)[gender] = { rest, hips: ours.hips.toArray().map((v) => Math.round(v * 1e5) / 1e5), sets, gait, ...(mixamo.length ? { marks } : {}) }
+  ;(index.genders as Record<string, unknown>)[gender] = { rest, hips: ours.hips.toArray().map((v) => Math.round(v * 1e5) / 1e5), sets, gait, ...(Object.keys(marks).length ? { marks } : {}), ...(STANDARD ? { tags } : {}) }
 }
+index.sources = sourceOf
+index.licences = Object.fromEntries(Object.entries(LICENCES).filter(([id]) => Object.values(sourceOf).includes(id)))
 writeFileSync(join(OUT, 'index.json'), JSON.stringify(index))
-console.log(`${report.join('\n')}\n${(bytes / 1024).toFixed(0)} KB gzipped in all`)
+console.log(`${report.join('\n')}\n${levelled} clips had a foot stood flat, ${mirrors} mirrors, ${clamped} held to the joint limits\n${rejected.length ? `left out past a joint limit: ${rejected.join(', ')}\n` : ''}${(bytes / 1024).toFixed(0)} KB gzipped in all`)

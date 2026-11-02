@@ -10,6 +10,7 @@ import { skillLookOf } from '../recipes/looks.js'
 import { meleeClip, skillMotion } from '../recipes/motions.js'
 import { MOTION_RELEASE } from './anim-index.js'
 import { HELD_KINDS, STANCE, type AnimState } from './animation.js'
+import { animIndexNow, clipTags } from './anim-index.js'
 import { fitClip, restPose } from './anim-library.js'
 import { hipYaw, legReach, planter, turn } from './feet.js'
 import { GAIT_CLIPS, GAIT_TIERS, GAIT_WAYS, PACE_LIMITS, pickTier, strideSeconds, strideTime, tierSpeed, wayWeights, type GaitTier } from './gait.js'
@@ -636,6 +637,18 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     standOn(spine.quaternion, hipsBone.quaternion, castHip.fromArray(hipsAt.evaluate(legs.time) as Float32Array), share, spine.quaternion)
     stood = true
   }
+  // a tagged one-shot (GAME.md §12) says which of its performer's feet are on the floor; moving, the gait plants its own
+  const downs = [false, false]
+  const tagged = (): boolean[] | undefined => {
+    if (!gait) return undefined
+    const action = layer > 0 && shown ? (striding + hanging < 0.5 ? shown.legs : undefined) : current && !LOCOMOTION.has(currentName) ? current : undefined
+    const tags = action && clipTags(animIndexNow(gait.rig), gait.gender, action.getClip().name.replace(/:legs$/, ''))
+    if (!tags) return undefined
+    const t = action!.time
+    downs[0] = tags.plants.left.some(([a, b]) => t >= a && t <= b)
+    downs[1] = tags.plants.right.some(([a, b]) => t >= a && t <= b)
+    return downs
+  }
   const plantFeet = () => {
     if (!plants || posed === undefined) return
     const dt = posed
@@ -646,7 +659,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       wants[k].setFromMatrixPosition(foot.matrixWorld)
     })
     const yaw = hipYaw(targets[0].setFromMatrixPosition(legs[0][0].matrixWorld), targets[1].setFromMatrixPosition(legs[1][0].matrixWorld))
-    if (!plants.place(wants, yaw, dt, planted, targets)) return
+    if (!plants.place(wants, yaw, dt, planted, targets, planted ? tagged() : undefined)) return
     forward.set(Math.sin(yaw), 0, Math.cos(yaw))
     legs.forEach(([thigh, shin, foot], k) => {
       unbent[k][0].copy(thigh.quaternion)
@@ -725,7 +738,9 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   // dev probe: each hero's spread and the fix-ups' last leftovers (window.__fix)
   if (import.meta.env.DEV && fix && typeof window !== 'undefined') {
     const probe = window as unknown as { __fix?: unknown[] }
-    ;(probe.__fix ??= []).push({ hero: build.heroName, spread: metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, gaze, state: fix.state })
+    // `playing`: the clips sounding now and their weights, to read which set (unarmed or a weapon's) the hero moves on
+    const playing = () => (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions.filter((a) => a.enabled && a.getEffectiveWeight() > 0.05).map((a) => `${a.getClip().name}(${a.getClip().duration.toFixed(2)}s):${a.getEffectiveWeight().toFixed(2)}`)
+    ;(probe.__fix ??= []).push({ hero: build.heroName, spread: metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, gaze, state: fix.state, playing })
   }
   const runMeta = (dt: number, far: boolean) => {
     face?.update(dt, { detail: far ? 'mid' : 'near' })

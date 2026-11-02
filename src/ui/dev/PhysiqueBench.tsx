@@ -81,7 +81,8 @@ function BodyBench({ params }: { params: URLSearchParams }) {
   const [arch, setArch] = useState<ArchetypeId>((params.get('arch') as ArchetypeId | null) ?? 'athletic')
   const [key, setKey] = useState(params.get('clip') ?? 'run')
   const p = PRESETS.find((a) => a.id === arch)!
-  const clip = BENCH_CLIPS[key]
+  // a key clip by its bench key, or any library clip by its own name (?clip=cmu_wave_hello)
+  const clip = key in BENCH_CLIPS ? BENCH_CLIPS[key] : key
   const look = { ...defaultLook('fighter', p.label, heroHue(p.label)), gender: p.gender, physique: presetDials(arch) }
   const scores = SCORES.find((s) => s.archetype === arch)
   return (

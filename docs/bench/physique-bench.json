@@ -46,8 +46,8 @@
        "frames": 0
       }
      },
-     "footSlide": 9.95,
-     "ground": -5.74
+     "footSlide": 8.62,
+     "ground": -0.09
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -72,8 +72,8 @@
        "frames": 0
       }
      },
-     "footSlide": 39.74,
-     "ground": -7.14
+     "footSlide": 43.74,
+     "ground": -1.8
     },
     "block": {
      "clip": "standing_block_idle",
@@ -98,8 +98,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.17,
-     "ground": -8.29
+     "footSlide": 1.14,
+     "ground": -2.89
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -124,8 +124,8 @@
        "frames": 0
       }
      },
-     "footSlide": 10.89,
-     "ground": -6.41
+     "footSlide": 13.54,
+     "ground": -1.73
     },
     "jog": {
      "clip": "jog",
@@ -150,7 +150,7 @@
        "frames": 0
       }
      },
-     "footSlide": 69.89
+     "footSlide": 92.36
     },
     "run": {
      "clip": "run",
@@ -175,7 +175,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 85.3
+     "footSlide": 114.84
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -200,7 +200,7 @@
        "frames": 0
       }
      },
-     "footSlide": 196.51
+     "footSlide": 248.16
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -251,7 +251,7 @@
        "frames": 0.111
       }
      },
-     "footSlide": 44.33
+     "footSlide": 57.12
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -276,8 +276,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.91,
-     "ground": -5.95
+     "footSlide": 9.89,
+     "ground": -0.24
     },
     "getUp": {
      "clip": "getting_up",
@@ -302,7 +302,7 @@
        "frames": 0.015
       }
      },
-     "footSlide": 10.65
+     "footSlide": 10.48
     },
     "jump": {
      "clip": "jump",
@@ -327,7 +327,7 @@
        "frames": 0
       }
      },
-     "footSlide": 75.82
+     "footSlide": 91.13
     }
    }
   },
@@ -362,8 +362,8 @@
        "frames": 0
       }
      },
-     "footSlide": 3.13,
-     "ground": -5.32
+     "footSlide": 3.28,
+     "ground": 0.65
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -390,8 +390,8 @@
       },
       "grip": 26.95
      },
-     "footSlide": 25.95,
-     "ground": -5.91
+     "footSlide": 18.46,
+     "ground": -0.13
     },
     "block": {
      "clip": "standing_block_idle",
@@ -417,7 +417,7 @@
       }
      },
      "footSlide": 1.27,
-     "ground": -5.33
+     "ground": 0.3
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -442,8 +442,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.98,
-     "ground": -5.36
+     "footSlide": 8.16,
+     "ground": -0.51
     },
     "jog": {
      "clip": "jog",
@@ -468,7 +468,7 @@
        "frames": 0
       }
      },
-     "footSlide": 53.5
+     "footSlide": 35.22
     },
     "run": {
      "clip": "run",
@@ -493,7 +493,7 @@
        "frames": 0
       }
      },
-     "footSlide": 38.69
+     "footSlide": 36.67
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -518,7 +518,7 @@
        "frames": 0
       }
      },
-     "footSlide": 172.29
+     "footSlide": 87.09
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -569,7 +569,7 @@
        "frames": 0
       }
      },
-     "footSlide": 42.17
+     "footSlide": 55.35
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -594,8 +594,8 @@
        "frames": 0
       }
      },
-     "footSlide": 3.98,
-     "ground": -5.46
+     "footSlide": 5.62,
+     "ground": 0.29
     },
     "getUp": {
      "clip": "getting_up",
@@ -620,7 +620,7 @@
        "frames": 0
       }
      },
-     "footSlide": 11.56
+     "footSlide": 11.87
     },
     "jump": {
      "clip": "jump",
@@ -645,7 +645,7 @@
        "frames": 0
       }
      },
-     "footSlide": 46.44
+     "footSlide": 31.9
     }
    }
   },
@@ -680,8 +680,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.48,
-     "ground": -5.61
+     "footSlide": 5.8,
+     "ground": 0.25
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -706,8 +706,8 @@
        "frames": 0
       }
      },
-     "footSlide": 34.28,
-     "ground": -6.5
+     "footSlide": 33.15,
+     "ground": -0.96
     },
     "block": {
      "clip": "standing_block_idle",
@@ -732,8 +732,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.2,
-     "ground": -6.73
+     "footSlide": 1.18,
+     "ground": -1.21
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -758,8 +758,8 @@
        "frames": 0
       }
      },
-     "footSlide": 7.46,
-     "ground": -5.82
+     "footSlide": 10.01,
+     "ground": -0.62
     },
     "jog": {
      "clip": "jog",
@@ -784,7 +784,7 @@
        "frames": 0
       }
      },
-     "footSlide": 79.73
+     "footSlide": 41.14
     },
     "run": {
      "clip": "run",
@@ -809,7 +809,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 37.88
+     "footSlide": 13.45
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -834,7 +834,7 @@
        "frames": 0
       }
      },
-     "footSlide": 136.57
+     "footSlide": 168.11
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -885,7 +885,7 @@
        "frames": 0
       }
      },
-     "footSlide": 43.68
+     "footSlide": 55.8
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -910,8 +910,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.83,
-     "ground": -5.75
+     "footSlide": 7.38,
+     "ground": 0.17
     },
     "getUp": {
      "clip": "getting_up",
@@ -936,7 +936,7 @@
        "frames": 0
       }
      },
-     "footSlide": 11.1
+     "footSlide": 10.92
     },
     "jump": {
      "clip": "jump",
@@ -961,7 +961,7 @@
        "frames": 0
       }
      },
-     "footSlide": 66.44
+     "footSlide": 76.57
     }
    }
   },
@@ -996,8 +996,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.18,
-     "ground": -5.23
+     "footSlide": 4.29,
+     "ground": 0.56
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -1022,8 +1022,8 @@
        "frames": 0
       }
      },
-     "footSlide": 23.99,
-     "ground": -5.74
+     "footSlide": 26.83,
+     "ground": -0.14
     },
     "block": {
      "clip": "standing_block_idle",
@@ -1049,7 +1049,7 @@
       }
      },
      "footSlide": 1.13,
-     "ground": -5.33
+     "ground": 0.06
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -1074,8 +1074,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.45,
-     "ground": -5.2
+     "footSlide": 8.01,
+     "ground": -1.31
     },
     "jog": {
      "clip": "jog",
@@ -1100,7 +1100,7 @@
        "frames": 0
       }
      },
-     "footSlide": 76.69
+     "footSlide": 30.76
     },
     "run": {
      "clip": "run",
@@ -1125,7 +1125,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 29.3
+     "footSlide": 28.38
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -1150,7 +1150,7 @@
        "frames": 0
       }
      },
-     "footSlide": 138.96
+     "footSlide": 154.92
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -1201,7 +1201,7 @@
        "frames": 0
       }
      },
-     "footSlide": 40.97
+     "footSlide": 51.95
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -1226,8 +1226,324 @@
        "frames": 0
       }
      },
-     "footSlide": 3.05,
-     "ground": -5.44
+     "footSlide": 5.86,
+     "ground": 0.03
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 9.94
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.13,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.13,
+       "frames": 0
+      }
+     },
+     "footSlide": 53.34
+    }
+   }
+  },
+  {
+   "archetype": "heroine",
+   "body": "f-medium",
+   "spread": {
+    "arm": 0.14,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 2.6,
+     "ground": 0.15
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 12.2,
+     "ground": 0
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.41,
+     "ground": -0.33
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.45,
+     "ground": -0.33
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 18,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 21.06
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 69.17
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 93.47
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.87,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.87,
+       "frames": 0
+      }
+     },
+     "footSlide": 41.28
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.55,
+     "ground": 0.05
     },
     "getUp": {
      "clip": "getting_up",
@@ -1263,41 +1579,6 @@
        "worst": 0
       },
       "penetration": {
-       "worst": 0.13,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0.13,
-       "frames": 0
-      }
-     },
-     "footSlide": 59.71
-    }
-   }
-  },
-  {
-   "archetype": "heroine",
-   "body": "f-medium",
-   "spread": {
-    "arm": 0.14,
-    "leg": 0
-   },
-   "clips": {
-    "combo": {
-     "clip": "punch_combo",
-     "frames": 55,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
        "worst": 0,
        "frames": 0
       }
@@ -1312,288 +1593,7 @@
        "frames": 0
       }
      },
-     "footSlide": 3.26,
-     "ground": -4.41
-    },
-    "heavy": {
-     "clip": "two_hand_sword_combo",
-     "frames": 80,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 16.56,
-     "ground": -4.66
-    },
-    "block": {
-     "clip": "standing_block_idle",
-     "frames": 46,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 1.42,
-     "ground": -4.58
-    },
-    "cast": {
-     "clip": "magic_standing_2h_cast_spell_01",
-     "frames": 54,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 4.99,
-     "ground": -4.35
-    },
-    "jog": {
-     "clip": "jog",
-     "frames": 18,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 163.37
-    },
-    "run": {
-     "clip": "run",
-     "frames": 15,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 181.46
-    },
-    "sprint": {
-     "clip": "sprint_forward",
-     "frames": 14,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 158.49
-    },
-    "slide": {
-     "clip": "running_slide_pose",
-     "frames": 3,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 0
-    },
-    "mantle": "missing",
-    "landRoll": {
-     "clip": "falling_to_roll",
-     "frames": 45,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0.87,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0.87,
-       "frames": 0
-      }
-     },
-     "footSlide": 36
-    },
-    "hitReact": {
-     "clip": "hit_to_body",
-     "frames": 34,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 3.08,
-     "ground": -4.53
-    },
-    "getUp": {
-     "clip": "getting_up",
-     "frames": 202,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 10.35
-    },
-    "jump": {
-     "clip": "jump",
-     "frames": 68,
-     "raw": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "fixed": {
-      "limits": {
-       "violations": 0,
-       "worst": 0
-      },
-      "penetration": {
-       "worst": 0,
-       "frames": 0
-      }
-     },
-     "footSlide": 36.27
+     "footSlide": 29.02
     }
    }
   },
@@ -1628,8 +1628,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.38,
-     "ground": -4.51
+     "footSlide": 4.79,
+     "ground": 0.26
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -1654,8 +1654,8 @@
        "frames": 0
       }
      },
-     "footSlide": 19.41,
-     "ground": -4.97
+     "footSlide": 18.91,
+     "ground": -0.25
     },
     "block": {
      "clip": "standing_block_idle",
@@ -1680,8 +1680,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.3,
-     "ground": -5.65
+     "footSlide": 1.29,
+     "ground": -1.25
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -1706,8 +1706,8 @@
        "frames": 0
       }
      },
-     "footSlide": 7.09,
-     "ground": -4.85
+     "footSlide": 9.63,
+     "ground": -0.69
     },
     "jog": {
      "clip": "jog",
@@ -1732,7 +1732,7 @@
        "frames": 0
       }
      },
-     "footSlide": 145
+     "footSlide": 33.5
     },
     "run": {
      "clip": "run",
@@ -1757,7 +1757,7 @@
        "frames": 0
       }
      },
-     "footSlide": 208.71
+     "footSlide": 233.33
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -1782,7 +1782,7 @@
        "frames": 0
       }
      },
-     "footSlide": 142.81
+     "footSlide": 160.75
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -1833,7 +1833,7 @@
        "frames": 0.022
       }
      },
-     "footSlide": 40.42
+     "footSlide": 53.82
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -1858,8 +1858,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.1,
-     "ground": -4.76
+     "footSlide": 6.71,
+     "ground": 0.1
     },
     "getUp": {
      "clip": "getting_up",
@@ -1884,7 +1884,7 @@
        "frames": 0
       }
      },
-     "footSlide": 13.28
+     "footSlide": 13
     },
     "jump": {
      "clip": "jump",
@@ -1909,7 +1909,7 @@
        "frames": 0
       }
      },
-     "footSlide": 51.16
+     "footSlide": 65.13
     }
    }
   },
@@ -1944,8 +1944,8 @@
        "frames": 0
       }
      },
-     "footSlide": 3.49,
-     "ground": -5.23
+     "footSlide": 3.47,
+     "ground": 0.51
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -1970,8 +1970,8 @@
        "frames": 0
       }
      },
-     "footSlide": 25.94,
-     "ground": -5.61
+     "footSlide": 21.91,
+     "ground": -0.14
     },
     "block": {
      "clip": "standing_block_idle",
@@ -1996,8 +1996,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.15,
-     "ground": -5.14
+     "footSlide": 1.18,
+     "ground": 0.03
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -2022,8 +2022,8 @@
        "frames": 0
       }
      },
-     "footSlide": 7.66,
-     "ground": -5.07
+     "footSlide": 9.56,
+     "ground": -2.11
     },
     "jog": {
      "clip": "jog",
@@ -2048,7 +2048,7 @@
        "frames": 0.158
       }
      },
-     "footSlide": 72.26
+     "footSlide": 29.99
     },
     "run": {
      "clip": "run",
@@ -2073,7 +2073,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 19.57
+     "footSlide": 28.85
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -2098,7 +2098,7 @@
        "frames": 0
       }
      },
-     "footSlide": 147.28
+     "footSlide": 160.67
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -2149,7 +2149,7 @@
        "frames": 0.022
       }
      },
-     "footSlide": 42.45
+     "footSlide": 51.1
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -2174,8 +2174,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.27,
-     "ground": -5.3
+     "footSlide": 5.63,
+     "ground": 0.17
     },
     "getUp": {
      "clip": "getting_up",
@@ -2200,7 +2200,7 @@
        "frames": 0
       }
      },
-     "footSlide": 13.53
+     "footSlide": 14.55
     },
     "jump": {
      "clip": "jump",
@@ -2225,7 +2225,7 @@
        "frames": 0.044
       }
      },
-     "footSlide": 41.76
+     "footSlide": 35.05
     }
    }
   },
@@ -2260,8 +2260,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.92,
-     "ground": -5.47
+     "footSlide": 5.61,
+     "ground": 0.21
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -2286,8 +2286,8 @@
        "frames": 0
       }
      },
-     "footSlide": 22.31,
-     "ground": -5.6
+     "footSlide": 21.6,
+     "ground": -0.24
     },
     "block": {
      "clip": "standing_block_idle",
@@ -2312,8 +2312,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.28,
-     "ground": -5.29
+     "footSlide": 1.35,
+     "ground": -0.12
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -2338,8 +2338,8 @@
        "frames": 0
       }
      },
-     "footSlide": 11.25,
-     "ground": -4.9
+     "footSlide": 12.48,
+     "ground": -2.03
     },
     "jog": {
      "clip": "jog",
@@ -2364,7 +2364,7 @@
        "frames": 0.158
       }
      },
-     "footSlide": 44.7
+     "footSlide": 36.42
     },
     "run": {
      "clip": "run",
@@ -2389,7 +2389,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 24.61
+     "footSlide": 34.27
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -2414,7 +2414,7 @@
        "frames": 0
       }
      },
-     "footSlide": 168.65
+     "footSlide": 84.05
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -2465,7 +2465,7 @@
        "frames": 0.089
       }
      },
-     "footSlide": 42.39
+     "footSlide": 50.98
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -2490,8 +2490,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.67,
-     "ground": -5.44
+     "footSlide": 7.23,
+     "ground": 0.25
     },
     "getUp": {
      "clip": "getting_up",
@@ -2516,7 +2516,7 @@
        "frames": 0
       }
      },
-     "footSlide": 14.48
+     "footSlide": 15.31
     },
     "jump": {
      "clip": "jump",
@@ -2541,7 +2541,7 @@
        "frames": 0.324
       }
      },
-     "footSlide": 41.21
+     "footSlide": 33.49
     }
    }
   },
@@ -2576,8 +2576,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.71,
-     "ground": -5.71
+     "footSlide": 5.4,
+     "ground": -0.04
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -2602,8 +2602,8 @@
        "frames": 0.013
       }
      },
-     "footSlide": 30.66,
-     "ground": -5.68
+     "footSlide": 28.78,
+     "ground": -0.24
     },
     "block": {
      "clip": "standing_block_idle",
@@ -2628,8 +2628,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.21,
-     "ground": -5.55
+     "footSlide": 1.25,
+     "ground": -0.4
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -2654,8 +2654,8 @@
        "frames": 0
       }
      },
-     "footSlide": 10.36,
-     "ground": -5.19
+     "footSlide": 12.03,
+     "ground": -2.61
     },
     "jog": {
      "clip": "jog",
@@ -2680,7 +2680,7 @@
        "frames": 0.105
       }
      },
-     "footSlide": 72.16
+     "footSlide": 37.6
     },
     "run": {
      "clip": "run",
@@ -2705,7 +2705,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 23.97
+     "footSlide": 34.8
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -2730,7 +2730,7 @@
        "frames": 0
       }
      },
-     "footSlide": 144.78
+     "footSlide": 159.51
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -2781,7 +2781,7 @@
        "frames": 0.089
       }
      },
-     "footSlide": 43.38
+     "footSlide": 52.34
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -2806,8 +2806,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.26,
-     "ground": -5.66
+     "footSlide": 6.91,
+     "ground": 0.03
     },
     "getUp": {
      "clip": "getting_up",
@@ -2832,7 +2832,7 @@
        "frames": 0
       }
      },
-     "footSlide": 13.42
+     "footSlide": 14.23
     },
     "jump": {
      "clip": "jump",
@@ -2857,7 +2857,7 @@
        "frames": 0.426
       }
      },
-     "footSlide": 48.63
+     "footSlide": 43.13
     }
    }
   },
@@ -2892,8 +2892,8 @@
        "frames": 0
       }
      },
-     "footSlide": 7.55,
-     "ground": -6.41
+     "footSlide": 7.5,
+     "ground": -0.15
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -2918,8 +2918,8 @@
        "frames": 0
       }
      },
-     "footSlide": 43.34,
-     "ground": -7.2
+     "footSlide": 45.92,
+     "ground": -1.31
     },
     "block": {
      "clip": "standing_block_idle",
@@ -2945,7 +2945,7 @@
       }
      },
      "footSlide": 1.01,
-     "ground": -7.47
+     "ground": -1.57
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -2970,8 +2970,8 @@
        "frames": 0
       }
      },
-     "footSlide": 7.06,
-     "ground": -6.58
+     "footSlide": 10.32,
+     "ground": -4.18
     },
     "jog": {
      "clip": "jog",
@@ -2996,7 +2996,7 @@
        "frames": 0
       }
      },
-     "footSlide": 99.68
+     "footSlide": 114.01
     },
     "run": {
      "clip": "run",
@@ -3021,7 +3021,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 64.99
+     "footSlide": 80.12
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -3046,7 +3046,7 @@
        "frames": 0
       }
      },
-     "footSlide": 193.05
+     "footSlide": 226.91
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -3097,7 +3097,7 @@
        "frames": 0
       }
      },
-     "footSlide": 40.5
+     "footSlide": 52.49
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -3122,8 +3122,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.07,
-     "ground": -6.57
+     "footSlide": 6.61,
+     "ground": -0.52
     },
     "getUp": {
      "clip": "getting_up",
@@ -3148,7 +3148,7 @@
        "frames": 0
       }
      },
-     "footSlide": 9.71
+     "footSlide": 9.56
     },
     "jump": {
      "clip": "jump",
@@ -3173,7 +3173,7 @@
        "frames": 0.059
       }
      },
-     "footSlide": 73.91
+     "footSlide": 80.81
     }
    }
   },
@@ -3208,8 +3208,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.01,
-     "ground": -6.33
+     "footSlide": 5.66,
+     "ground": -0.22
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -3234,8 +3234,8 @@
        "frames": 0
       }
      },
-     "footSlide": 32.53,
-     "ground": -6.42
+     "footSlide": 30.65,
+     "ground": -0.62
     },
     "block": {
      "clip": "standing_block_idle",
@@ -3260,8 +3260,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.28,
-     "ground": -6.1
+     "footSlide": 1.32,
+     "ground": -0.52
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -3286,8 +3286,8 @@
        "frames": 0
       }
      },
-     "footSlide": 11.21,
-     "ground": -5.9
+     "footSlide": 13.14,
+     "ground": -3.25
     },
     "jog": {
      "clip": "jog",
@@ -3312,7 +3312,7 @@
        "frames": 0.158
       }
      },
-     "footSlide": 77.06
+     "footSlide": 89.31
     },
     "run": {
      "clip": "run",
@@ -3337,7 +3337,7 @@
        "frames": 0.133
       }
      },
-     "footSlide": 24.97
+     "footSlide": 37.26
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -3362,7 +3362,7 @@
        "frames": 0
       }
      },
-     "footSlide": 155.03
+     "footSlide": 171.44
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -3413,7 +3413,7 @@
        "frames": 0.044
       }
      },
-     "footSlide": 44.24
+     "footSlide": 53.98
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -3438,8 +3438,8 @@
        "frames": 0
       }
      },
-     "footSlide": 6.82,
-     "ground": -6.27
+     "footSlide": 7.72,
+     "ground": -0.14
     },
     "getUp": {
      "clip": "getting_up",
@@ -3464,7 +3464,7 @@
        "frames": 0
       }
      },
-     "footSlide": 14.45
+     "footSlide": 15.29
     },
     "jump": {
      "clip": "jump",
@@ -3489,7 +3489,7 @@
        "frames": 0.147
       }
      },
-     "footSlide": 52.11
+     "footSlide": 46.33
     }
    }
   },
@@ -3524,8 +3524,8 @@
        "frames": 0
       }
      },
-     "footSlide": 4.65,
-     "ground": -5.36
+     "footSlide": 4.74,
+     "ground": 0.37
     },
     "heavy": {
      "clip": "two_hand_sword_combo",
@@ -3550,8 +3550,8 @@
        "frames": 0
       }
      },
-     "footSlide": 28.75,
-     "ground": -5.85
+     "footSlide": 28.46,
+     "ground": -0.22
     },
     "block": {
      "clip": "standing_block_idle",
@@ -3576,8 +3576,8 @@
        "frames": 0
       }
      },
-     "footSlide": 1.07,
-     "ground": -5.48
+     "footSlide": 1.08,
+     "ground": -0.13
     },
     "cast": {
      "clip": "magic_standing_2h_cast_spell_01",
@@ -3602,8 +3602,8 @@
        "frames": 0
       }
      },
-     "footSlide": 5.36,
-     "ground": -5.35
+     "footSlide": 7.94,
+     "ground": -2
     },
     "jog": {
      "clip": "jog",
@@ -3628,7 +3628,7 @@
        "frames": 0
       }
      },
-     "footSlide": 71.35
+     "footSlide": 34.79
     },
     "run": {
      "clip": "run",
@@ -3653,7 +3653,7 @@
        "frames": 0
       }
      },
-     "footSlide": 24.38
+     "footSlide": 27.83
     },
     "sprint": {
      "clip": "sprint_forward",
@@ -3678,7 +3678,7 @@
        "frames": 0.071
       }
      },
-     "footSlide": 130.54
+     "footSlide": 148.43
     },
     "slide": {
      "clip": "running_slide_pose",
@@ -3729,7 +3729,7 @@
        "frames": 0
       }
      },
-     "footSlide": 39.65
+     "footSlide": 50.25
     },
     "hitReact": {
      "clip": "hit_to_body",
@@ -3754,8 +3754,8 @@
        "frames": 0
       }
      },
-     "footSlide": 2.8,
-     "ground": -5.58
+     "footSlide": 5.5,
+     "ground": -0.13
     },
     "getUp": {
      "clip": "getting_up",
@@ -3780,7 +3780,7 @@
        "frames": 0
       }
      },
-     "footSlide": 10.1
+     "footSlide": 9.93
     },
     "jump": {
      "clip": "jump",
@@ -3805,7 +3805,7 @@
        "frames": 0
       }
      },
-     "footSlide": 57.39
+     "footSlide": 57.48
     }
    }
   }

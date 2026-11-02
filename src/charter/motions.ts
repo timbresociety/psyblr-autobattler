@@ -79,8 +79,8 @@ export const MOTIONS: readonly Motion[] = [
   }),
   ...m('heavy', 'blade', { one_hand_sword_combo: 'Sword combo', dual_weapon_combo: 'Twin blade combo' }),
   ...m('heavy', 'greatsword', { two_hand_sword_combo: 'Two-hand combo' }),
-  ...m('light', 'club', { one_hand_club_combo: 'Club combo' }),
-  ...m('heavy', 'club', { two_hand_club_combo: 'Two-hand club combo' }),
+  ...m('light', 'club', { one_hand_club_combo: 'Club combo', club_swing_single: 'Club swing', club_swing_double: 'Double swing', club_swing_strike: 'Club strike', club_knee_jab: 'Swing and knees' }),
+  ...m('heavy', 'club', { two_hand_club_combo: 'Two-hand club combo', club_swing_homerun: 'Home run' }),
   // melee, the weapon packs (the axe pack's moves stand in for a staff)
   ...m('light', 'greatsword', {
     gs_great_sword_slash: 'Great sword slash',

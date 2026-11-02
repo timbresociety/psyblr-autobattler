@@ -40,7 +40,7 @@ export function animClip(gender: Gender, name: string, rig: RigKind = 'legacy'):
 }
 
 /** Track-major frame-to-frame changes back to frame-major values. */
-function undelta(deltas: number[], frames: number, width: number, scale: number): Float32Array {
+export function undelta(deltas: number[], frames: number, width: number, scale: number): Float32Array {
   const tracks = deltas.length / (frames * width)
   const out = new Float32Array(deltas.length)
   let at = 0

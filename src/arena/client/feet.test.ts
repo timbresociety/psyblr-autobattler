@@ -75,6 +75,27 @@ describe('feet that stay where they land (Forge goal, phase 2)', () => {
     expect(frames).toBeLessThanOrEqual(Math.ceil(PLANT.blend / frame) + 1)
   })
 
+  it("follows a tagged clip's plants: a lifted foot goes with the clip and plants where it comes down (GAME.md §12)", () => {
+    const feet = planter()
+    const wants = [new THREE.Vector3(0.1, 0.07, 0), new THREE.Vector3(-0.1, 0.07, 0)]
+    run(PLANT.blend, (out) => feet.place(wants, 0, frame, true, out, [true, true]))
+    // a kick: the right foot leaves the floor and swings 60 cm ahead, far past a step's reach, and goes where the clip puts it
+    wants[1].set(-0.1, 0.6, 0.6)
+    let out = run(0.2, (o) => feet.place(wants, 0, frame, true, o, [true, false]))
+    expect(out[1].z).toBeCloseTo(0.6)
+    expect(out[1].y).toBeCloseTo(0.6)
+    // the left foot, still down, held where it stood though the pose drifts it
+    wants[0].set(0.1, 0.07, 0.15)
+    out = run(0.1, (o) => feet.place(wants, 0, frame, true, o, [true, false]))
+    expect(out[0].z).toBeCloseTo(0)
+    // the kick comes down 40 cm ahead and stays there as the pose pulls the leg back
+    wants[1].set(-0.1, 0.07, 0.4)
+    run(frame, (o) => feet.place(wants, 0, frame, true, o, [true, true]))
+    wants[1].set(-0.1, 0.07, 0.2)
+    out = run(0.3, (o) => feet.place(wants, 0, frame, true, o, [true, true]))
+    expect(out[1].z).toBeCloseTo(0.4)
+  })
+
   it('steps a foot pulled out of reach, lifting it on the way, and one foot at a time', () => {
     const feet = planter()
     const wants = [new THREE.Vector3(0.1, 0.07, 0), new THREE.Vector3(-0.1, 0.07, 0)]

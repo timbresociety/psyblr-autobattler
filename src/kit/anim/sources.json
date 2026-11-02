@@ -1,0 +1,230 @@
+{
+  "about": "Bone-name maps from each motion source onto Mixamo's names, which the baker reads (GAME.md \u00a712). tools/blender/mixamo.py renames a source's bones by its map; bones a map leaves out stay in the armature and still carry their turn into the bones below them. A map with variants takes the first whose `when` bone the file has.",
+  "sources": {
+    "mixamo": {
+      "format": "fbx",
+      "licence": "mixamo",
+      "variants": [
+        {
+          "map": {}
+        }
+      ]
+    },
+    "quaternius": {
+      "format": "glb",
+      "licence": "quaternius",
+      "variants": [
+        {
+          "when": "spine_05",
+          "map": {
+            "pelvis": "Hips",
+            "spine_01": "Spine",
+            "spine_03": "Spine1",
+            "spine_05": "Spine2",
+            "neck_01": "Neck",
+            "head": "Head",
+            "clavicle_l": "LeftShoulder",
+            "upperarm_l": "LeftArm",
+            "lowerarm_l": "LeftForeArm",
+            "hand_l": "LeftHand",
+            "thumb_01_l": "LeftHandThumb1",
+            "thumb_02_l": "LeftHandThumb2",
+            "thumb_03_l": "LeftHandThumb3",
+            "index_01_l": "LeftHandIndex1",
+            "index_02_l": "LeftHandIndex2",
+            "index_03_l": "LeftHandIndex3",
+            "middle_01_l": "LeftHandMiddle1",
+            "middle_02_l": "LeftHandMiddle2",
+            "middle_03_l": "LeftHandMiddle3",
+            "ring_01_l": "LeftHandRing1",
+            "ring_02_l": "LeftHandRing2",
+            "ring_03_l": "LeftHandRing3",
+            "pinky_01_l": "LeftHandPinky1",
+            "pinky_02_l": "LeftHandPinky2",
+            "pinky_03_l": "LeftHandPinky3",
+            "clavicle_r": "RightShoulder",
+            "upperarm_r": "RightArm",
+            "lowerarm_r": "RightForeArm",
+            "hand_r": "RightHand",
+            "thumb_01_r": "RightHandThumb1",
+            "thumb_02_r": "RightHandThumb2",
+            "thumb_03_r": "RightHandThumb3",
+            "index_01_r": "RightHandIndex1",
+            "index_02_r": "RightHandIndex2",
+            "index_03_r": "RightHandIndex3",
+            "middle_01_r": "RightHandMiddle1",
+            "middle_02_r": "RightHandMiddle2",
+            "middle_03_r": "RightHandMiddle3",
+            "ring_01_r": "RightHandRing1",
+            "ring_02_r": "RightHandRing2",
+            "ring_03_r": "RightHandRing3",
+            "pinky_01_r": "RightHandPinky1",
+            "pinky_02_r": "RightHandPinky2",
+            "pinky_03_r": "RightHandPinky3",
+            "thigh_l": "LeftUpLeg",
+            "calf_l": "LeftLeg",
+            "foot_l": "LeftFoot",
+            "ball_l": "LeftToeBase",
+            "thigh_r": "RightUpLeg",
+            "calf_r": "RightLeg",
+            "foot_r": "RightFoot",
+            "ball_r": "RightToeBase"
+          }
+        },
+        {
+          "when": "spine_03",
+          "map": {
+            "pelvis": "Hips",
+            "spine_01": "Spine",
+            "spine_02": "Spine1",
+            "spine_03": "Spine2",
+            "neck_01": "Neck",
+            "head": "Head",
+            "clavicle_l": "LeftShoulder",
+            "upperarm_l": "LeftArm",
+            "lowerarm_l": "LeftForeArm",
+            "hand_l": "LeftHand",
+            "thumb_01_l": "LeftHandThumb1",
+            "thumb_02_l": "LeftHandThumb2",
+            "thumb_03_l": "LeftHandThumb3",
+            "index_01_l": "LeftHandIndex1",
+            "index_02_l": "LeftHandIndex2",
+            "index_03_l": "LeftHandIndex3",
+            "middle_01_l": "LeftHandMiddle1",
+            "middle_02_l": "LeftHandMiddle2",
+            "middle_03_l": "LeftHandMiddle3",
+            "ring_01_l": "LeftHandRing1",
+            "ring_02_l": "LeftHandRing2",
+            "ring_03_l": "LeftHandRing3",
+            "pinky_01_l": "LeftHandPinky1",
+            "pinky_02_l": "LeftHandPinky2",
+            "pinky_03_l": "LeftHandPinky3",
+            "clavicle_r": "RightShoulder",
+            "upperarm_r": "RightArm",
+            "lowerarm_r": "RightForeArm",
+            "hand_r": "RightHand",
+            "thumb_01_r": "RightHandThumb1",
+            "thumb_02_r": "RightHandThumb2",
+            "thumb_03_r": "RightHandThumb3",
+            "index_01_r": "RightHandIndex1",
+            "index_02_r": "RightHandIndex2",
+            "index_03_r": "RightHandIndex3",
+            "middle_01_r": "RightHandMiddle1",
+            "middle_02_r": "RightHandMiddle2",
+            "middle_03_r": "RightHandMiddle3",
+            "ring_01_r": "RightHandRing1",
+            "ring_02_r": "RightHandRing2",
+            "ring_03_r": "RightHandRing3",
+            "pinky_01_r": "RightHandPinky1",
+            "pinky_02_r": "RightHandPinky2",
+            "pinky_03_r": "RightHandPinky3",
+            "thigh_l": "LeftUpLeg",
+            "calf_l": "LeftLeg",
+            "foot_l": "LeftFoot",
+            "ball_l": "LeftToeBase",
+            "thigh_r": "RightUpLeg",
+            "calf_r": "RightLeg",
+            "foot_r": "RightFoot",
+            "ball_r": "RightToeBase"
+          }
+        }
+      ]
+    },
+    "cmu": {
+      "format": "bvh",
+      "licence": "cmu",
+      "variants": [
+        {
+          "when": "LowerBack",
+          "map": {
+            "Hips": "Hips",
+            "LowerBack": "Spine",
+            "Spine": "Spine1",
+            "Spine1": "Spine2",
+            "Neck": "Neck",
+            "Head": "Head",
+            "LeftShoulder": "LeftShoulder",
+            "LeftArm": "LeftArm",
+            "LeftForeArm": "LeftForeArm",
+            "LeftHand": "LeftHand",
+            "RightShoulder": "RightShoulder",
+            "RightArm": "RightArm",
+            "RightForeArm": "RightForeArm",
+            "RightHand": "RightHand",
+            "LeftUpLeg": "LeftUpLeg",
+            "LeftLeg": "LeftLeg",
+            "LeftFoot": "LeftFoot",
+            "LeftToeBase": "LeftToeBase",
+            "RightUpLeg": "RightUpLeg",
+            "RightLeg": "RightLeg",
+            "RightFoot": "RightFoot",
+            "RightToeBase": "RightToeBase"
+          }
+        },
+        {
+          "when": "abdomen",
+          "lacks": [
+            "Spine1",
+            "LeftToeBase",
+            "RightToeBase"
+          ],
+          "map": {
+            "hip": "Hips",
+            "abdomen": "Spine",
+            "chest": "Spine2",
+            "neck": "Neck",
+            "head": "Head",
+            "lCollar": "LeftShoulder",
+            "lShldr": "LeftArm",
+            "lForeArm": "LeftForeArm",
+            "lHand": "LeftHand",
+            "lThigh": "LeftUpLeg",
+            "lShin": "LeftLeg",
+            "lFoot": "LeftFoot",
+            "rCollar": "RightShoulder",
+            "rShldr": "RightArm",
+            "rForeArm": "RightForeArm",
+            "rHand": "RightHand",
+            "rThigh": "RightUpLeg",
+            "rShin": "RightLeg",
+            "rFoot": "RightFoot"
+          }
+        }
+      ],
+      "gate": 15
+    },
+    "100style": {
+      "format": "bvh",
+      "licence": "100style",
+      "variants": [
+        {
+          "when": "Chest4",
+          "map": {
+            "Hips": "Hips",
+            "Chest": "Spine",
+            "Chest3": "Spine1",
+            "Chest4": "Spine2",
+            "Neck": "Neck",
+            "Head": "Head",
+            "LeftCollar": "LeftShoulder",
+            "LeftShoulder": "LeftArm",
+            "LeftElbow": "LeftForeArm",
+            "LeftWrist": "LeftHand",
+            "RightCollar": "RightShoulder",
+            "RightShoulder": "RightArm",
+            "RightElbow": "RightForeArm",
+            "RightWrist": "RightHand",
+            "LeftHip": "LeftUpLeg",
+            "LeftKnee": "LeftLeg",
+            "LeftAnkle": "LeftFoot",
+            "LeftToe": "LeftToeBase",
+            "RightHip": "RightUpLeg",
+            "RightKnee": "RightLeg",
+            "RightAnkle": "RightFoot",
+            "RightToe": "RightToeBase"
+          }
+        }
+      ]
+    }
+  }
+}

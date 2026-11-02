@@ -4,6 +4,7 @@ import type { Physique } from '../kit/body/shape.js'
 import { hydratePhysique } from '../kit/body/physique.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
+import { coverageOf } from '../kit/anim/coverage.js'
 import { MOTION_SLOTS, STYLES, type MotionSlot, type Style } from './motions.js'
 import type { BuildSlot } from './types.js'
 
@@ -179,7 +180,8 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
   const sculpt = hydrateSculpt(input.sculpt)
   if (sculpt) look.sculpt = sculpt
   if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle
-  if (typeof input.style === 'string' && (STYLES as readonly string[]).includes(input.style)) look.style = input.style as Style
+  // only a style the library animates in full (GAME.md §12; coverage.test.ts holds the library to it)
+  if (typeof input.style === 'string' && (STYLES as readonly string[]).includes(input.style) && coverageOf(input.style)?.offered !== false) look.style = input.style as Style
   if (input.motions && typeof input.motions === 'object') {
     // a look saved before the kit's motions were split keeps its basic attack's as the combo's opener, and drops the
     // passive's and the movement skill's, which every hero now shares

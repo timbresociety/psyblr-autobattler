@@ -15,6 +15,7 @@ import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
 import { libraryGait, libraryMoves } from './library-gait.js'
+import { WEAPON_MOVES, weaponOf } from '../../kit/anim/weapon-gait.js'
 import { animIndex } from './anim-index.js'
 import { blockMotion, meleeSet, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
@@ -25,6 +26,12 @@ import { TEAM_COLORS } from './map.js'
  * Hero views (U13, KTD9): the arena GLB when the package has one (2K for heroes in focus, 1K for the rest), then the
  * rigged model, then a procedural body. A hero that fails to load still fights, as the procedural body, with a notice.
  */
+
+/** A pistol or rifle hero's crouch, jump and air moves from its weapon's set (GAME.md §12). */
+const weaponMoves = (build: Build): Record<string, string> => {
+  const weapon = weaponOf(build.look?.style)
+  return weapon ? { ...WEAPON_MOVES[weapon] } : {}
+}
 
 export type HeroSource = { kind: 'glb'; url: string; motions: string[] } | { kind: 'procedural' }
 
@@ -98,8 +105,8 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     const [atlas, wear, gait, moves] = await Promise.all([
       heroAtlas(file, shapeLook),
       loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
-      libraryGait(gender, build.look?.idle, rig),
-      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { block: blockMotion(build) })) : undefined,
+      libraryGait(gender, build.look?.idle, rig, weaponOf(build.look?.style)),
+      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) })) : undefined,
     ])
     return characterView(file, shapeLook, color, build, atlas, wear, gait, moves)
   }
