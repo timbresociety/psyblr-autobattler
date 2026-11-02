@@ -1,10 +1,12 @@
 import type { Build } from '../charter/build.js'
 import { aiCommands } from '../arena/ai/brain.js'
 import { GATE_PROFILE, GATE_TEAM_PROFILE, createMatch, play, type Combatant } from '../arena/engine/match.js'
+import { LIVE_MAP } from '../arena/engine/maps.js'
 
 /**
  * The balance model's entry points (KTD1, KTD6), now thin wrappers over the 3D arena engine: a headless match under
- * the gate profile with the demo AI on both sides. What the gate measures is what people play.
+ * the gate profile with the demo AI on both sides, on the map live matches play. What the gate measures is what people
+ * play.
  */
 
 export type { Combatant }
@@ -17,7 +19,7 @@ export interface BattleResult {
 
 export function simulate(teamA: Combatant[], teamB: Combatant[], seed: number): BattleResult {
   const profile = teamA.length + teamB.length > 2 ? GATE_TEAM_PROFILE : GATE_PROFILE
-  const r = play(createMatch(teamA, teamB, seed, { profile }), aiCommands)
+  const r = play(createMatch(teamA, teamB, seed, { profile, map: LIVE_MAP }), aiCommands)
   return { winner: r.winner, time: r.seconds, units: r.heroes.map(({ name, team, alive, hpFraction, damageDealt }) => ({ name, team, alive, hpFraction, damageDealt })) }
 }
 

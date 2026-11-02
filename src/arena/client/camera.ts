@@ -46,6 +46,8 @@ export class Cameras {
    */
   scoping = false
   scope = 0
+  /** Height of the floor the watching camera turns around and zooms toward: the map's main floor. */
+  floor = 0
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {
     camera.position.copy(this.free)
@@ -81,7 +83,7 @@ export class Cameras {
    */
   pivot(): THREE.Vector3 {
     const f = this.forward()
-    const t = f.y < -0.08 ? Math.min(WATCH.maxDistance, -this.free.y / f.y) : WATCH.levelDistance
+    const t = f.y < -0.08 ? Math.min(WATCH.maxDistance, (this.floor - this.free.y) / f.y) : WATCH.levelDistance
     return this.free.clone().addScaledVector(f, t)
   }
 

@@ -782,8 +782,8 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Kit | Ki Blast sits in melee; Chain Hook in ranged; Skill 1 is forced into projectiles; strike skills in Q | **Fixed (M3):** six typed rows enforced on save; melee is a weapon style, LMB the ranged library (magazine, reload, bloom, muzzle), Q the 10 spell families, F passives on an energy meter (§4, §5) |
 | Effects | Casts flash at the torso | Rework (§6) |
 | Effects | No proper blasts, craters or breakable props | Rework (§6b) |
-| Map | The arena is a flat 2D floor | Rework into the vertical House of Instinct (§7–8) |
-| Engine | No 3D collision, mantle or navmesh | Rework (§8) |
+| Map | The arena is a flat 2D floor | **Fixed (M4):** the House of Instinct's first deliverable in grey boxes, cut down for 10 v 10 (Roulette Court, Chip Stacks, Card Ramp, VIP Crescent, balcony loop, Chart Climb, Chandelier Spine, trenches, service tunnel, vault): four bands, mirrored halves, §8 starting dimensions, arcade yellow on traversal; live matches and the balance gate play it. Art and the other zones come later |
+| Engine | No 3D collision, mantle or navmesh | **Fixed (M4):** walkable tops, ramps, ledges and ceilings; mantle, drop and landing roll, ziplines and rails (§7); a nav graph built from the map with walk, jump, double-jump, drop and zipline links, which the bots path on. Occlusion by zone and level waits for §10 |
 | Engine | No LOD or crowd path for 100 heroes | Rework (§10) |
 | Engine | No netcode | Later phase; this rework is AI-only in the browser (§2) |
 | AI | Bots are too strong | **Fixed (M3):** Easy, Normal (default) and Hard (today's bots, used by the gate), picked per side in staging (§2) |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-03: §13 status updated for Milestone 4 (traversal and the grey-box map, §7–§8): Map and Engine rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 3 (kit engine, §2–§5): Roster, Kit, AI and Controls rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 2 (animation library, §12): three Animation/Kit gaps closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 1 (metarig, §9.1–9.7): five Body gaps closed. No rule changed.

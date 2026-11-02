@@ -1,5 +1,6 @@
 import { ENGINE } from '../../../arena/engine/calibration.js'
-import { RUINS, initialCoverHealth, pushOut } from '../../../arena/engine/cover.js'
+import { initialCoverHealth, pushOut } from '../../../arena/engine/cover.js'
+import { LIVE_MAP, MAPS, standingHeight } from '../../../arena/engine/maps.js'
 import type { Team } from '../../../arena/engine/state.js'
 
 /**
@@ -30,10 +31,12 @@ export function onOwnHalf(side: Team, x: number, z: number): boolean {
   return side === 0 ? z <= -1 : z >= 1
 }
 
-const ruinsHealth = initialCoverHealth(RUINS)
-/** True when a hero standing at (x, z) would be inside a piece of the ruins (R25). */
+/** The arena heroes are staged on: the live match's map. */
+export const STAGE = MAPS[LIVE_MAP]
+const stageHealth = initialCoverHealth(STAGE.pieces)
+/** True when a hero standing at (x, z), on the floor there, would be inside a piece of the arena (R25). */
 // checked at the largest body any hero collides with, so the engine never has to move a staged hero
-export const inRuins = (x: number, z: number) => pushOut(RUINS, ruinsHealth, { x, y: 0, z }, ENGINE.bodyRadiusCap, ENGINE.capsule.height * 2)
+export const inRuins = (x: number, z: number) => pushOut(STAGE.pieces, stageHealth, { x, y: standingHeight(STAGE, x, z), z }, ENGINE.bodyRadiusCap, ENGINE.capsule.height * 2, ENGINE.move.step)
 
 const crowded = (list: Placement[], x: number, z: number, ignore?: number) => list.some((p, i) => i !== ignore && (p.x - x) ** 2 + (p.z - z) ** 2 < SPACING ** 2)
 
@@ -62,8 +65,8 @@ function withSide(f: Formation, side: Team, list: Placement[]): Formation {
 }
 
 /**
- * Replace a side with these heroes (loadout indices, in order) in loose ranks of five across its half: the first rank
- * nearest the middle. At most 10.
+ * Replace a side with these heroes (loadout indices, in order) in loose ranks of five across its half, from the
+ * stage's muster line back: the first rank nearest the middle. At most 10.
  */
 export function deployHeroes(f: Formation, side: Team, heroes: readonly number[]): Formation {
   let next = withSide(f, side, [])
@@ -74,7 +77,7 @@ export function deployHeroes(f: Formation, side: Team, heroes: readonly number[]
     const inRank = Math.min(perRank, n - rank * perRank)
     const slot = i % perRank
     const x = (slot - (inRank - 1) / 2) * 4
-    const z = (side === 0 ? -1 : 1) * (10 + rank * 4)
+    const z = (side === 0 ? -1 : 1) * (STAGE.muster + rank * 4)
     // a spot on the ruins slides along the rank until it is clear
     for (const shift of [0, 1.5, -1.5, 3, -3]) {
       const r = place(next, side, heroes[i], x + shift, z)

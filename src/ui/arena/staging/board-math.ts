@@ -310,7 +310,7 @@ export function reasonText(reason: Reason, side: Team, yours: Team): string {
     case 'wrong-half':
       return side === yours ? 'Not here: the enemy half' : 'Not here: your half'
     case 'in-ruins':
-      return 'Not here: inside the ruins'
+      return 'Not here: something stands there'
     case 'crowded':
       return 'Not here: too close to another hero'
     case 'edge':

@@ -11,17 +11,21 @@ export type MapId = 'house' | 'ruins'
 
 export interface ArenaMap {
   id: MapId
+  /** What the loading screen calls it. */
+  name: string
   pieces: readonly CoverPiece[]
   lines: readonly MapLine[]
   /** Height a hero placed by x and z stands at: the highest walkable top at or below this. */
   stand: number
   /** Built in levels: the bots path across it on the nav graph (src/arena/ai/nav.ts). */
   levels: boolean
+  /** How far from the middle a side's first rank musters when it deploys in one go, metres. */
+  muster: number
 }
 
 export const MAPS: Record<MapId, ArenaMap> = {
-  house: { id: 'house', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main, levels: true },
-  ruins: { id: 'ruins', pieces: RUINS, lines: [], stand: 0, levels: false },
+  house: { id: 'house', name: 'House of Instinct', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main, levels: true, muster: 34 },
+  ruins: { id: 'ruins', name: 'Roman ruins', pieces: RUINS, lines: [], stand: 0, levels: false, muster: 10 },
 }
 
 /** Live matches play here. */

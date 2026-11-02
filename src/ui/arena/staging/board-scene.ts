@@ -8,7 +8,9 @@ import { buildRuins } from '../../../arena/client/ruins.js'
 import { SIZE_SCALE } from '../../../arena/client/procedural-hero.js'
 import { heightFactor } from '../../../kit/body/physique.js'
 import { ENGINE } from '../../../arena/engine/calibration.js'
-import { RUINS } from '../../../arena/engine/cover.js'
+import { STAGE, inRuins } from './formation.js'
+import { standingHeight } from '../../../arena/engine/maps.js'
+import { buildGreybox } from '../../../arena/client/greybox.js'
 import type { Team } from '../../../arena/engine/state.js'
 import { shortName } from '../hud/format.js'
 import {
@@ -87,6 +89,13 @@ export interface BoardScene {
 }
 
 const { halfWidth: W, halfLength: L } = ENGINE.arena
+/**
+ * The board's floor is the stage's main floor: the arena is drawn sunk by its height, so placing, picking and the
+ * overlays all work on y = 0, and a hero placed over a lower route stands down in it.
+ */
+const FLOOR = STAGE.stand
+const groundOf = (x: number, z: number) => standingHeight(STAGE, x, z) - FLOOR
+const sunk = (o: THREE.Object3D) => ((o.position.y -= FLOOR), o)
 const TEAM_RGB = TEAM_COLORS.map((c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255] as const)
 /** Pixels per metre in the floor overlays. */
 const PPM = 16
@@ -259,25 +268,17 @@ function keepOutTexture(side: Team): THREE.CanvasTexture {
   g.beginPath()
   g.rect(left, top, width, height)
   g.clip()
-  const pad = ENGINE.bodyRadiusCap
+  // every half metre a hero can't be placed (formation.inRuins: inside a piece, on whatever floor is there)
   const X = (x: number) => (x + W) * PPM
+  const CELL = 0.5
   g.beginPath()
-  for (const p of RUINS) {
-    // a lintel high overhead does not stop anyone standing under it (formation.inRuins)
-    if (p.base >= ENGINE.capsule.height * 2) continue
-    const s = p.shape
-    if (s.kind === 'column') {
-      g.moveTo(X(s.x) + (s.r + pad) * PPM, Z(s.z))
-      g.arc(X(s.x), Z(s.z), (s.r + pad) * PPM, 0, Math.PI * 2)
-    } else g.roundRect(X(s.x - s.hx - pad), Z(s.z - s.hz - pad), (2 * s.hx + 2 * pad) * PPM, (2 * s.hz + 2 * pad) * PPM, pad * PPM)
-  }
+  const z0 = side === 0 ? -L : 0
+  for (let x = -W; x < W; x += CELL)
+    for (let z = z0; z < z0 + L; z += CELL) if (inRuins(x + CELL / 2, z + CELL / 2)) g.rect(X(x), Z(z), CELL * PPM + 0.5, CELL * PPM + 0.5)
   g.fillStyle = 'rgba(255, 70, 50, 0.16)'
   g.fill()
   g.fillStyle = g.createPattern(hatch, 'repeat')!
   g.fill()
-  g.strokeStyle = 'rgba(255, 120, 90, 0.75)'
-  g.lineWidth = 0.12 * PPM
-  g.stroke()
   g.restore()
   return canvasTexture(canvas)
 }
@@ -357,9 +358,9 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     fog.near = 420
     fog.far = 1500
   }
-  scene.add(buildMap().group)
+  scene.add(sunk(buildMap().group))
   lights(scene)
-  scene.add(buildRuins(RUINS).group)
+  scene.add(sunk((STAGE.levels ? buildGreybox(STAGE.pieces, STAGE.lines) : buildRuins(STAGE.pieces)).group))
   const pipeline = await bloomPipeline(renderer, scene, camera)
   await fontsReady()
 
@@ -964,7 +965,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       if (t >= 1) f.dropAt = 0
       busy = true
     }
-    f.body.position.set(f.at.x, f.lift + drop, f.at.z)
+    f.body.position.set(f.at.x, groundOf(f.at.x, f.at.z) + f.lift + drop, f.at.z)
     f.body.scale.setScalar(f.grow)
     f.mark.position.set(f.held ? f.x : f.at.x, 0.05, f.held ? f.z : f.at.z)
     f.mark.scale.setScalar(Math.max(1, f.scale) * RING_RADIUS * pop * (hovered === f ? 1.12 : 1))
@@ -982,8 +983,9 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     for (const list of placed)
       for (const f of list) {
         const height = ENGINE.capsule.height * f.scale * f.grow + 0.3
-        toScreen(camera, f.at.x, 0, f.at.z, w, h, f.standee.foot)
-        toScreen(camera, f.at.x, f.lift + height, f.at.z, w, h, f.standee.top)
+        const ground = groundOf(f.at.x, f.at.z)
+        toScreen(camera, f.at.x, ground, f.at.z, w, h, f.standee.foot)
+        toScreen(camera, f.at.x, ground + f.lift + height, f.at.z, w, h, f.standee.top)
         const show = f.body.visible && f.standee.top.visible
         if (f.badge.hidden === show) f.badge.hidden = !show
         if (!show) continue

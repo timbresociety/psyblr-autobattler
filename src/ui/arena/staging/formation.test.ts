@@ -3,18 +3,18 @@ import { MAX_PER_SIDE, SPACING, autoDeploy, emptyFormation, move, place, remove 
 
 describe('staging formation (U16)', () => {
   it('refuses a hero dropped on the other half', () => {
-    expect(place(emptyFormation(), 0, 0, 0, 5)).toEqual({ ok: false, reason: 'wrong-half' })
-    expect(place(emptyFormation(), 1, 0, 0, 5).ok).toBe(true)
+    expect(place(emptyFormation(), 0, 0, 0, 36)).toEqual({ ok: false, reason: 'wrong-half' })
+    expect(place(emptyFormation(), 1, 0, 0, 36).ok).toBe(true)
   })
 
   it('refuses an 11th hero on one side', () => {
     let f = emptyFormation()
     for (let i = 0; i < MAX_PER_SIDE; i++) {
-      const r = place(f, 0, 0, (i % 5) * 3 - 6, -11 - Math.floor(i / 5) * 3)
+      const r = place(f, 0, 0, (i % 5) * 3 - 6, -35 - Math.floor(i / 5) * 3)
       if (!r.ok) throw new Error(r.reason)
       f = r.formation
     }
-    expect(place(f, 0, 0, 0, -25)).toEqual({ ok: false, reason: 'full' })
+    expect(place(f, 0, 0, 0, -30)).toEqual({ ok: false, reason: 'full' })
   })
 
   it('lets the same hero be placed three times', () => {

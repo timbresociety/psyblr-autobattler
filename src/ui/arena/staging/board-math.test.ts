@@ -169,7 +169,7 @@ describe('the ghost judges a spot with the formation rules', () => {
   it('captions each reason from the point of view of the side being set up', () => {
     expect(reasonText('wrong-half', 0, 0)).toBe('Not here: the enemy half')
     expect(reasonText('wrong-half', 1, 0)).toBe('Not here: your half')
-    expect(reasonText('in-ruins', 0, 0)).toBe('Not here: inside the ruins')
+    expect(reasonText('in-ruins', 0, 0)).toBe('Not here: something stands there')
     expect(reasonText('full', 1, 0)).toBe(`The enemy side is full (${MAX_PER_SIDE} of ${MAX_PER_SIDE})`)
   })
 })

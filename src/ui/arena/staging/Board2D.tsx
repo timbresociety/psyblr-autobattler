@@ -1,8 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { ENGINE } from '../../../arena/engine/calibration'
-import { RUINS } from '../../../arena/engine/cover'
 import type { Team } from '../../../arena/engine/state'
-import { MAX_PER_SIDE, SPACING, inRuins, onOwnHalf, type Formation } from './formation'
+import { MAX_PER_SIDE, SPACING, STAGE, inRuins, onOwnHalf, type Formation } from './formation'
 import { bust, type LoadoutEntry } from './loadout'
 
 /**
@@ -174,9 +173,10 @@ export function Board2D({ formation, loadout, side, editing, selected, brush, on
         {side === 0 ? 'Your side' : 'Enemy side'}
       </text>
       <line className="midline" x1={-W} x2={W} y1={0} y2={0} />
-      {/* the ruins, seen from above: grey stone is cover that never breaks, striped timber is a barricade that does */}
+      {/* the arena seen from above: grey is cover that never breaks (on a map in levels, lighter the higher it stands, the
+          main floor itself faint), striped timber is a barricade that does */}
       <g aria-hidden="true" className="ruins">
-        {RUINS.filter((p) => p.base <= 0).map((p, i) =>
+        {[...STAGE.pieces].filter((p) => p.base <= STAGE.stand + 0.5 && !(STAGE.levels && p.base <= 0 && p.top === STAGE.stand)).sort((a, b) => a.top - b.top).map((p, i) =>
           p.shape.kind === 'column' ? (
             <g key={i}>
               <circle cx={p.shape.x + 0.3} cy={-p.shape.z + 0.4} r={p.shape.r} className="ruin-shadow" />

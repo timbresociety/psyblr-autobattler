@@ -43,7 +43,7 @@ const GROUP_RANK: Record<Group, number> = { 'Your heroes': 0, Forged: 1, Vanguar
 const NOTICE: Record<Reason, string> = {
   'wrong-half': 'That spot is on the other half.',
   full: `A side holds at most ${MAX_PER_SIDE} heroes.`,
-  'in-ruins': 'That spot is inside the ruins.',
+  'in-ruins': 'Something already stands on that spot.',
   crowded: 'Too close to another hero.',
   edge: 'That spot is too close to the wall.',
   'off-arena': 'That spot is off the arena.',
@@ -235,7 +235,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
           {([0, 1] as const).map((s) => (
             <button key={s} className={`side-card team-${s}`} aria-label={s === 0 ? 'Blue side' : 'Red side'} onClick={() => (setSide(s), setEditing(s))}>
               <span className="side-card-name">{TEAM[s]} side</span>
-              <span className="side-card-where">{s === 0 ? 'The near half of the ruins' : 'The far half of the ruins'}</span>
+              <span className="side-card-where">{s === 0 ? 'The near half of the arena' : 'The far half of the arena'}</span>
               {squads && <span className="side-card-army">Fields the {SQUAD_NAME.vanguard.toLowerCase()} by default</span>}
             </button>
           ))}

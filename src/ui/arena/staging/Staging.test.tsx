@@ -42,16 +42,16 @@ describe('staging (U16)', () => {
   it('refuses a hero dropped on the other half, and places it on its own', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    await placeAt(MAGE, 0, 10)
+    await placeAt(MAGE, 0, 24)
     expect(screen.getByText('That spot is on the other half.')).toBeTruthy()
-    await placeAt(MAGE, 0, -10)
+    await placeAt(MAGE, 0, -20)
     expect(screen.getByTestId('token-0-0')).toBeTruthy()
   })
 
   it('places the same hero three times, removes one with Delete, and drags one off the field', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    for (const x of [-6, 0, 6]) await placeAt(MARKSMAN, x, -10)
+    for (const x of [-6, 0, 6]) await placeAt(MARKSMAN, x, -20)
     expect(screen.getByTestId('token-0-2')).toBeTruthy()
     fireEvent.pointerDown(screen.getByTestId('token-0-2'), { pointerId: 1 })
     fireEvent.keyDown(window, { key: 'Delete' })
@@ -66,17 +66,17 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     const synergies = () => within(screen.getByRole('region', { name: 'Synergies' }))
     const bulwark = () => synergies().getByText('Bulwark').closest('li')!
-    await placeAt(TANK, -12, -10)
+    await placeAt(TANK, -12, -20)
     // one tank: the trait shows, unlit, with what lights it
     expect(bulwark().className).toContain('tier--1')
     expect(within(bulwark()).getByText(/1 more to light it/)).toBeTruthy()
-    await placeAt(TANK, -6, -10)
+    await placeAt(TANK, -6, -20)
     expect(bulwark().className).toContain('tier-0')
-    for (const x of [0, 6]) await placeAt(TANK, x, -10)
+    for (const x of [0, 6]) await placeAt(TANK, x, -20)
     // a fourth tank lights the second tier, which reaches the rest of the side
     expect(bulwark().className).toContain('tier-1')
     expect(within(bulwark()).getByText(/everyone else \+10%/)).toBeTruthy()
-    await placeAt(MAGE, -12, -14)
+    await placeAt(MAGE, -12, -28)
     // the lit trait sorts above the unlit one
     expect(synergies().getAllByRole('listitem')[0]).toBe(bulwark())
   })
@@ -86,7 +86,7 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Red side' }))
     const start = () => screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement
     expect(start().disabled).toBe(true)
-    await placeAt(FIGHTER, 0, 10)
+    await placeAt(FIGHTER, 0, 24)
     expect(start().disabled).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /Enemy side/ }))
     fireEvent.click(screen.getByRole('button', { name: /Auto-deploy enemy side/ }))
@@ -114,7 +114,7 @@ describe('staging (U16)', () => {
   it('shows a unit card like TFT: the trait it counts toward, its health, a stats grid and the attribute split', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    await placeAt(TANK, -12, -10)
+    await placeAt(TANK, -12, -20)
     fireEvent.click(bustOf(TANK))
     const card = () => screen.getByRole('region', { name: 'Hero details' })
     const value = (stat: string) => Number(card().querySelector(`.stat-${stat} .stat-value`)!.firstChild!.textContent)
@@ -127,7 +127,7 @@ describe('staging (U16)', () => {
     const armor = value('armor')
     // a second tank lights Bulwark, and the card shows the armor it fights with
     fireEvent.click(bustOf(TANK))
-    await placeAt(TANK, -6, -10)
+    await placeAt(TANK, -6, -20)
     fireEvent.click(bustOf(TANK))
     expect(within(card()).getByText('2/4')).toBeTruthy()
     expect(value('armor') / armor).toBeCloseTo(1.2, 1)

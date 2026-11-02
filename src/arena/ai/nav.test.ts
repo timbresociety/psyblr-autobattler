@@ -127,21 +127,25 @@ describe('the nav graph of the House of Instinct (§8)', () => {
 })
 
 describe('bots on the House of Instinct', () => {
-  it('a 5 v 5 between AI squads fights it out across the levels to a wipe', () => {
+  it('a 5 v 5 between AI squads fights it out across the levels, with no stall', () => {
     const squad = (name: 'vanguard' | 'outlaws') => STARTERS.filter((s) => s.squad === name).slice(0, 5).map((s) => ({ build: starterBuild(s) }))
     const moves = new Set<string>()
     for (const seed of [1, 2]) {
       const arena = createMatch(squad('vanguard'), squad('outlaws'), seed, { profile: LIVE_PROFILE, map: 'house' })
       const rules = matchRules(arena)
       let hits = 0
+      let t = 0
+      let lastHit = 0
       while (arena.match.winner === undefined) {
         for (const e of tick(arena.match, arena.setups, aiCommands(arena), rules)) {
           if (e.type === 'move') moves.add(e.move)
-          if (e.type === 'hit') hits++
+          if (e.type === 'hit') (hits++, (lastHit = t))
         }
+        t++
       }
-      expect(arena.match.endReason).toBe('wipe')
+      // a wipe, or the clock with the last two still trading blows (the closing house edge of §8 comes in M7)
       expect(hits).toBeGreaterThan(50)
+      expect(t - lastHit, `seed ${seed}: ${arena.match.endReason}`).toBeLessThan(5 * ENGINE.tickHz)
     }
     // the bots take the map's moves, not just the floor
     for (const m of ['jump', 'mantle', 'land'] as const) expect(moves).toContain(m)

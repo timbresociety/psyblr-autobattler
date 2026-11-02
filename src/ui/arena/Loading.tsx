@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { TRAITS, TRAIT_TIERS } from '../../charter/traits'
+import { LIVE_MAP, MAPS } from '../../arena/engine/maps'
 
 /** One line each, read in the second it takes a hero to load. Every one is true of the game as built. */
 export const LOADING_TIPS = [
@@ -8,7 +9,8 @@ export const LOADING_TIPS = [
   `Every role is a synergy: ${TRAIT_TIERS.join(', ')} heroes of one role light its tiers.`,
   `${TRAITS.tank.name}: ${TRAIT_TIERS[1]} tanks harden the whole side, not only themselves.`,
   `${TRAITS.assassin.name}: ${TRAIT_TIERS[1]} assassins start the fight unseen.`,
-  'Timber barricades break under fire. The stone of the ruins never does.',
+  'Red barricades break under fire. The rest of the arena never does.',
+  'Run into a ledge to climb it. Jump under a yellow cable to ride it.',
   'A glowing ring around R means that hero’s ultimate is ready.',
   'Fly the free camera with W A S D, Space to rise and Z to sink.',
   'If the hero you steer falls, the camera goes back to watching.',
@@ -28,7 +30,7 @@ export function Loading({ done, total, label = 'Loading heroes' }: { done: numbe
         Entering the arena
       </p>
       <p className="hud-loading-title" aria-hidden="true">
-        Roman ruins
+        {MAPS[LIVE_MAP].name}
       </p>
       <div className="arena-progress" aria-hidden="true">
         <div style={{ width: `${pct}%` }} />

@@ -21,6 +21,8 @@ import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { VIEW_FAR } from './sky.js'
 import { buildRuins } from './ruins.js'
+import { buildGreybox } from './greybox.js'
+import { LIVE_MAP, MAPS } from '../engine/maps.js'
 import { CosmeticPhysics, PHYSICS } from './physics.js'
 import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
@@ -535,7 +537,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
-  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
+  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations, map: LIVE_MAP })
   if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
   // dev only: ?style=rifle hands every hero that fighting style, to watch a style's clips in a live match
   const devStyle = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('style') : null
@@ -557,8 +559,10 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     }),
   )
   views.forEach((v) => scene.add(v.root))
-  // the ruins come from the engine's own cover, so what is drawn is exactly what blocks (R25)
-  const ruins = arena.match.cover ? buildRuins(arena.match.cover.pieces) : undefined
+  // the arena comes from the engine's own cover, so what is drawn is exactly what blocks (R25): the House of
+  // Instinct in grey boxes (GAME.md §8), or the ruins
+  const cover = arena.match.cover
+  const ruins = cover ? (arena.match.map === 'house' ? buildGreybox(cover.pieces, arena.match.lines) : buildRuins(cover.pieces)) : undefined
   if (ruins) {
     scene.add(ruins.group)
     map.proxies.push(...ruins.proxies)
@@ -585,9 +589,16 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const store = createStore<HudState>(hud(arena, views, false, stage.backend, 'full'))
   const hooks = createHooks()
   const cameras = new Cameras(camera)
-  // the free camera starts behind the streamer's half, looking across the arena
+  // the free camera starts behind the streamer's half, looking across the arena; over the House of Instinct it
+  // starts high behind the muster, above the balconies, looking down on the court
+  const house = arena.match.map === 'house'
+  if (house) {
+    cameras.floor = MAPS.house.stand
+    cameras.free.set(0, 26, -38)
+    cameras.pitch = -0.52
+  }
   if (setup.side === 1) {
-    cameras.free.set(0, 13, 27)
+    cameras.free.set(0, house ? 26 : 13, house ? 38 : 27)
     cameras.yaw = Math.PI
   }
   stage.resize()
