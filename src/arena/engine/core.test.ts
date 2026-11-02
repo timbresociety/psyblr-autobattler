@@ -151,8 +151,8 @@ describe('engine core (U3)', () => {
     const x = h.position.x
     dash()
     step(go(1, 0), 2)
-    // no pip, no dash: no faster than a sprint
-    expect(h.position.x - x).toBeLessThan((6 * M.sprint.speed * 3.1) / 60)
+    // no pip, no dash: no faster than a sprint over the four ticks
+    expect(h.position.x - x).toBeLessThan((6 * M.sprint.speed * 4.1) / 60)
     // each pip takes its own refill time
     const before = h.stamina
     step(undefined, Math.round(M.stamina.regen * 60))
@@ -195,17 +195,25 @@ describe('engine core (U3)', () => {
     step(go(1, 0), 60)
     expect(h.position.x).toBeGreaterThan(2)
     expect(h.position.y).toBe(0)
-    // and from the ground it's a wall: walking back into it stops at its side
+    // and from the ground it's a ledge low enough to pull up onto (GAME.md §7 mantle)
+    for (let i = 0; i < 120 && !h.mantle; i++) step(go(-1, 0))
+    step(go(0, 0), 40)
+    expect(h.position.y).toBeCloseTo(1.3)
+    // a wall past the mantle's reach stops it at its side
+    const wall: CoverPiece = { ...block, top: ENGINE.move.mantle.height + 0.4 }
+    m.cover = { pieces: [wall], health: initialCoverHealth([wall]) }
+    h.position = { x: 4, y: 0, z: 0 }
+    h.airborne = false
     step(go(-1, 0), 120)
     expect(h.position.x).toBeGreaterThan(2)
     expect(h.position.y).toBe(0)
   })
 
-  it('walks up a step and a second one, and is stopped by anything higher (phase 2)', () => {
+  it('walks up a step and a second one, and is stopped by anything too high to mantle (phase 2)', () => {
     const { m, h, step } = solo(6)
     const low: CoverPiece = { shape: { kind: 'block', x: 0, z: 3, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step, look: 'step' }
     const next: CoverPiece = { shape: { kind: 'block', x: 0, z: 5, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step * 2, look: 'step' }
-    const high: CoverPiece = { shape: { kind: 'block', x: 0, z: -3, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.step + 0.2, look: 'plinth' }
+    const high: CoverPiece = { shape: { kind: 'block', x: 0, z: -3, hx: 2, hz: 1 }, base: 0, top: ENGINE.move.mantle.height + 0.2, look: 'plinth' }
     m.cover = { pieces: [low, next, high], health: initialCoverHealth([low, next, high]) }
     step(go(0, 1), 45)
     expect(h.position.z).toBeGreaterThan(4)

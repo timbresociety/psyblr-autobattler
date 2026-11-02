@@ -7,7 +7,7 @@ import { getTemplate } from '../../charter/templates/catalog.js'
 import type { TraitMods } from '../../charter/traits.js'
 import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
-import type { CoverHealth, CoverPiece } from './cover.js'
+import type { CoverHealth, CoverPiece, MapLine } from './cover.js'
 import type { Vec3 } from './maths.js'
 import { aiSeed, rngState, type RngState } from './rng.js'
 import type { AiLevel } from '../ai/calibration.js'
@@ -101,6 +101,12 @@ export interface HeroState {
   shiftSince: number
   /** A dodge roll in progress along `x`, `z`. */
   roll?: { from: number; until: number; x: number; z: number }
+  /** Pulling up onto a ledge (GAME.md §7 mantle): from the start spot to the top over [from, until], out of control. */
+  mantle?: { from: number; until: number; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }
+  /** Riding map line `line` (a zipline or a rail, §7) at `t` along it (0 at its start), toward `dir`. */
+  zip?: { line: number; t: number; dir: 1 | -1; hang: boolean }
+  /** No line catches it again before this tick (it just let go of one). */
+  zipAfter?: number
   /** Guarding this tick (X held, on the ground, not acting). */
   blocking: boolean
   /** The melee chain: the step the next strike takes (0, 1, then 2 the finisher), while a strike follows by `until`. */
@@ -195,6 +201,8 @@ export interface MatchState {
   aiLevels?: readonly [AiLevel, AiLevel]
   /** The ruins on this map and each piece's health; absent on an open test floor. Walls raised by skills join it. */
   cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
+  /** The map's ziplines and rails (GAME.md §7): fast lines a hero rides, exposed. */
+  lines?: readonly MapLine[]
   /** Lingering areas and traps left by skills, turrets, and the walls skills raised (with when they fall). */
   fields?: FieldState[]
   turrets?: TurretState[]

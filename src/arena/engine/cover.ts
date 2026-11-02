@@ -18,8 +18,35 @@ export interface CoverPiece {
   top: number
   /** Health of a breakable barrier; absent means it cannot be broken. */
   health?: number
+  /**
+   * A ramp (a block only): its top slopes from `low` at one end up to `top` at the `rise` end, so a hero walks up it
+   * from the low end, and its sides are as high as the slope where they stand (GAME.md §8 card ramps, stairs).
+   */
+  slope?: { rise: 'x+' | 'x-' | 'z+' | 'z-'; low: number }
   /** What the renderer builds here; the engine ignores it. */
-  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step'
+  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step' | 'grey' | 'ramp' | 'chip' | 'rail'
+}
+
+/**
+ * A zipline or a rail (GAME.md §7): a straight line from `a` to `b` a hero rides fast either way. A zipline is hung
+ * from (the hero's hands grip it, its feet dangle below); a rail is stood on.
+ */
+export interface MapLine {
+  kind: 'zip' | 'rail'
+  a: Vec3
+  b: Vec3
+}
+
+/** The height of a piece's top above (x, z): its top, or a ramp's slope there (clamped to its ends). */
+export function surfaceAt(piece: CoverPiece, x: number, z: number): number {
+  const sl = piece.slope
+  if (!sl || piece.shape.kind !== 'block') return piece.top
+  const s = piece.shape
+  const alongX = sl.rise[0] === 'x'
+  const half = alongX ? s.hx : s.hz
+  const c = alongX ? x - s.x : z - s.z
+  const u = Math.max(0, Math.min(1, ((sl.rise[1] === '+' ? c : -c) + half) / (2 * half)))
+  return sl.low + (piece.top - sl.low) * u
 }
 
 /** One piece's state in a match: its health, or -1 for unbreakable; 0 means broken and gone. */
@@ -152,6 +179,25 @@ function entry(p: CoverPiece, a: Vec3, dx: number, dy: number, dz: number, radiu
   if (s.kind === 'block') {
     if (!clip(a.x, dx, s.x - s.hx - radius, s.x + s.hx + radius, w)) return undefined
     if (!clip(a.z, dz, s.z - s.hz - radius, s.z + s.hz + radius, w)) return undefined
+    const sl = p.slope
+    if (sl) {
+      // under the slope: y <= low + k·(c − c_low) along the rise, a half-space the segment must also be in
+      const alongX = sl.rise[0] === 'x'
+      const sign = sl.rise[1] === '+' ? 1 : -1
+      const half = alongX ? s.hx : s.hz
+      const k = ((p.top - sl.low) / (2 * half)) * sign
+      const lowEdge = (alongX ? s.x : s.z) - sign * half
+      const g0 = a.y - sl.low - k * ((alongX ? a.x : a.z) - lowEdge) - radius
+      const gd = dy - k * (alongX ? dx : dz)
+      if (gd === 0) {
+        if (g0 > 0) return undefined
+      } else {
+        const t = -g0 / gd
+        if (gd > 0) w[1] = Math.min(w[1], t)
+        else w[0] = Math.max(w[0], t)
+        if (w[0] > w[1]) return undefined
+      }
+    }
   } else {
     // a circle in the ground plane: solve |a + t·d − c| = r for the entry and exit fractions
     const r = s.r + radius
@@ -237,6 +283,8 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
     if (s.kind === 'block') {
       const cx = Math.max(s.x - s.hx, Math.min(p.x, s.x + s.hx))
       const cz = Math.max(s.z - s.hz, Math.min(p.z, s.z + s.hz))
+      // a ramp only pushes where its slope is too high to step onto
+      if (piece.slope && p.y + clearance >= surfaceAt(piece, cx, cz)) continue
       const ox = p.x - cx
       const oz = p.z - cz
       const d2 = ox * ox + oz * oz
@@ -281,11 +329,13 @@ export function floorUnder(pieces: readonly CoverPiece[], health: readonly Cover
   let floor = 0
   for (let i = 0; i < pieces.length; i++) {
     const piece = pieces[i]
-    if (health[i] === 0 || piece.top <= floor || piece.top > reach) continue
+    if (health[i] === 0 || piece.top <= floor || (piece.slope ? piece.slope.low > reach : piece.top > reach)) continue
     if (p.x < bounds.minX[i] || p.x > bounds.maxX[i] || p.z < bounds.minZ[i] || p.z > bounds.maxZ[i]) continue
     const s = piece.shape
     const over = s.kind === 'block' ? Math.abs(p.x - s.x) <= s.hx && Math.abs(p.z - s.z) <= s.hz : (p.x - s.x) * (p.x - s.x) + (p.z - s.z) * (p.z - s.z) <= s.r * s.r
-    if (over) floor = piece.top
+    if (!over) continue
+    const top = piece.slope ? surfaceAt(piece, p.x, p.z) : piece.top
+    if (top > floor && top <= reach) floor = top
   }
   return floor
 }

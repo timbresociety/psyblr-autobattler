@@ -1,7 +1,7 @@
 import { SIZES } from '../../charter/sizes.js'
 import { DT, ENGINE, ticks } from './calibration.js'
 import { atan2, clamp, cos, sin } from './maths.js'
-import { floorUnder, pushOut } from './cover.js'
+import { floorUnder, pushOut, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
 import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import { moveShare } from './timing.js'
@@ -50,6 +50,9 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   hero.stamina = Math.min(M.stamina.max, hero.stamina + DT / M.stamina.regen)
   const released = hero.held & ~command.moves
   hero.held = command.moves
+  // a mantle and a ride carry the hero on their own (GAME.md §7)
+  if (hero.mantle) return mantling(hero, now, events)
+  if (hero.zip && match?.lines) return riding(hero, match.lines, (pressed & MOVES.jump) !== 0, now, events)
   // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone, either again stands; a jump stands
   // a low hero up rather than leaving the ground
   const across0 = Math.sqrt(v.x * v.x + v.z * v.z)
@@ -173,10 +176,21 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     // a falling hero lands on any top it passed this tick before walls can push it off sideways
     const falling = -v.y
     standOn(hero, match, Math.max(from, p.y))
-    keepOut(hero, match)
-    if (hero.airborne) return
+    const pressing = keepOut(hero, match)
+    if (hero.airborne) {
+      // pressed against a ledge it can reach, it pulls itself up; near a line, it catches it
+      if (pressing && steering && free && !hero.launch) startMantle(hero, match, mx, mz, now, events)
+      else if (match?.lines && free && !hero.launch && now >= (hero.zipAfter ?? 0)) catchLine(hero, match.lines, mx, mz, steering, events)
+      return
+    }
     standOn(hero, match)
-    events?.push({ type: 'move', hero: hero.id, move: 'land', speed: falling })
+    // a big fall rolls on when the hero steers, keeping its speed, and lands heavily when it doesn't (§7)
+    const big = falling >= M.landing.big
+    if (big && !(steering && free)) {
+      v.x = 0
+      v.z = 0
+    }
+    events?.push({ type: 'move', hero: hero.id, move: big ? (steering && free ? 'land-roll' : 'land-heavy') : 'land', speed: falling })
     return
   }
   // a standing one steps up onto anything low enough before walls push the body out, and falls once nothing is under
@@ -184,8 +198,123 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   const floor = match?.cover ? floorUnder(match.cover.pieces, match.cover.health, p, p.y + M.step) : 0
   if (floor > p.y) p.y = floor
   const [x, z] = [p.x, p.z]
-  keepOut(hero, match)
+  const pressing = keepOut(hero, match)
   standOn(hero, match, p.y, p.x === x && p.z === z ? floor : undefined)
+  if (pressing && steering && free && !hero.airborne && !hero.roll && now >= hero.dashUntil) startMantle(hero, match, mx, mz, now, events)
+}
+
+/** The top of a ledge just ahead along (dx, dz) that the hero can mantle onto, with room to stand there. */
+export function ledgeAhead(hero: HeroState, match: MatchState, dx: number, dz: number): { x: number; y: number; z: number } | undefined {
+  if (!match.cover) return undefined
+  const { pieces, health } = match.cover
+  const p = hero.position
+  const n = Math.sqrt(dx * dx + dz * dz) || 1
+  const ahead = bodyRadius(hero) + M.mantle.reach
+  const spot = { x: p.x + (dx / n) * ahead, y: 0, z: p.z + (dz / n) * ahead }
+  const top = floorUnder(pieces, health, spot, p.y + M.mantle.height)
+  if (top <= p.y + M.step) return undefined
+  spot.y = top
+  // room to stand: a body there touches nothing it can't step onto
+  if (pushOut(pieces, health, { ...spot }, bodyRadius(hero) * 0.8, capsule(hero).height, M.step)) return undefined
+  return spot
+}
+
+function startMantle(hero: HeroState, match: MatchState | undefined, dx: number, dz: number, now: number, events?: MatchEvent[]) {
+  if (!match) return
+  const to = ledgeAhead(hero, match, dx, dz)
+  if (!to) return
+  const p = hero.position
+  hero.mantle = { from: now, until: now + Math.max(1, ticks(M.mantle.time)), x0: p.x, y0: p.y, z0: p.z, x1: to.x, y1: to.y, z1: to.z }
+  hero.velocity = { x: 0, y: 0, z: 0 }
+  hero.airborne = false
+  hero.slide = undefined
+  events?.push({ type: 'move', hero: hero.id, move: 'mantle' })
+}
+
+/** One tick of a mantle: up first, then over the edge, standing on the top at the end. */
+function mantling(hero: HeroState, now: number, _events?: MatchEvent[]) {
+  const m = hero.mantle!
+  const t = Math.min(1, (now + 1 - m.from) / Math.max(1, m.until - m.from))
+  const up = Math.min(1, t / 0.6)
+  const over = Math.max(0, (t - 0.4) / 0.6)
+  const p = hero.position
+  p.x = m.x0 + (m.x1 - m.x0) * over
+  p.y = m.y0 + (m.y1 - m.y0) * up
+  p.z = m.z0 + (m.z1 - m.z0) * over
+  hero.velocity = { x: 0, y: 0, z: 0 }
+  if (t >= 1) {
+    hero.mantle = undefined
+    hero.airborne = false
+    hero.airJumps = 0
+    hero.landedAt = now
+  }
+}
+
+/** Where on line `l` a hero's grip is: its hands for a zipline, its feet for a rail. */
+const gripOf = (hero: HeroState, l: MapLine) => (l.kind === 'zip' ? capsule(hero).height + M.zip.hang : 0)
+
+/** Catch the nearest line the grip passes within reach of, riding it the way the hero moves or steers. */
+function catchLine(hero: HeroState, lines: readonly MapLine[], mx: number, mz: number, steering: boolean, events?: MatchEvent[]) {
+  const p = hero.position
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i]
+    const ex = l.b.x - l.a.x
+    const ey = l.b.y - l.a.y
+    const ez = l.b.z - l.a.z
+    const len2 = ex * ex + ey * ey + ez * ez
+    if (len2 < 1e-9) continue
+    const gy = p.y + gripOf(hero, l)
+    const t = ((p.x - l.a.x) * ex + (gy - l.a.y) * ey + (p.z - l.a.z) * ez) / len2
+    if (t <= 0 || t >= 1) continue
+    const dx = l.a.x + ex * t - p.x
+    const dy = l.a.y + ey * t - gy
+    const dz = l.a.z + ez * t - p.z
+    if (dx * dx + dy * dy + dz * dz > M.zip.grab * M.zip.grab) continue
+    // a rail is landed on, never caught from below
+    if (l.kind === 'rail' && hero.velocity.y > 0) continue
+    const [wx, wz] = steering ? [mx, mz] : [hero.velocity.x, hero.velocity.z]
+    const way = wx * ex + wz * ez
+    hero.zip = { line: i, t, dir: way < 0 ? -1 : 1, hang: l.kind === 'zip' }
+    hero.airJumps = 0
+    hero.slide = undefined
+    events?.push({ type: 'move', hero: hero.id, move: 'zip-on' })
+    return
+  }
+}
+
+/**
+ * One tick on a line: along it at zip speed; a jump lets go with a jump, the end lets go carrying the speed, and
+ * anything that takes control away drops the hero, which falls from there next tick.
+ */
+function riding(hero: HeroState, lines: readonly MapLine[], jump: boolean, now: number, events?: MatchEvent[]) {
+  const z = hero.zip!
+  const l = lines[z.line]
+  const ex = l.b.x - l.a.x
+  const ey = l.b.y - l.a.y
+  const ez = l.b.z - l.a.z
+  const len = Math.sqrt(ex * ex + ey * ey + ez * ez)
+  const v = hero.velocity
+  v.x = (ex / len) * M.zip.speed * z.dir
+  v.y = (ey / len) * M.zip.speed * z.dir
+  v.z = (ez / len) * M.zip.speed * z.dir
+  const controlled = hero.cc.root <= now && hero.cc.grounded <= now && !hero.launch && hero.stunnedUntil <= now
+  const t = z.t + (z.dir * M.zip.speed * DT) / len
+  const off = jump || !controlled || t <= 0 || t >= 1
+  const at = Math.max(0, Math.min(1, t))
+  const grip = gripOf(hero, l)
+  hero.position = { x: l.a.x + ex * at, y: l.a.y + ey * at - grip, z: l.a.z + ez * at }
+  hero.airborne = true
+  if (!off) {
+    z.t = t
+    return
+  }
+  hero.zip = undefined
+  hero.zipAfter = now + ticks(M.zip.again)
+  if (jump && controlled) {
+    v.y = Math.sqrt(2 * M.gravity * M.jump * M.jumpScale[hero.size])
+    events?.push({ type: 'move', hero: hero.id, move: 'jump' })
+  } else v.y = Math.min(v.y, 0)
+  events?.push({ type: 'move', hero: hero.id, move: 'zip-off' })
 }
 
 /**
@@ -205,10 +334,10 @@ export function standOn(hero: HeroState, match: MatchState | undefined, reach = 
       hero.airJumps = 0
       hero.landedAt = match?.tick ?? 0
     }
-  } else if (p.y > floor + 1e-6) {
+  } else if (p.y > floor + M.step) {
     hero.airborne = true
     hero.velocity.y = 0
-  } else p.y = floor
+  } else p.y = floor // down a ramp or a stair the feet follow the ground; off a ledge they fall
 }
 
 /**

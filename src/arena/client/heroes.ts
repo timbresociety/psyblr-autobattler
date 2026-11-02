@@ -71,7 +71,7 @@ export interface HeroView {
   strafes?: boolean
 }
 
-const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle' }
+const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle', mantle: 'jump', land_roll: 'dive', land_heavy: 'idle', zip: 'dive', rail: 'idle' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const hue = heroHue(build.heroName)

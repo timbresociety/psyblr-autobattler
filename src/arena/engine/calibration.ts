@@ -58,14 +58,18 @@ export const ENGINE = {
     // heavier than earth's so a big jump still takes about a second up and down
     gravity: 34,
     fall: 45,
-    // the canon (2026-10-31): jumps big and dynamic like anime fights, a medium hero's first 4.2 m and its second 3.4
-    // m (2026-11-02, up from 2.2 and 1.8), scaled by size (`jumpScale`): tiny heroes jump highest, colossal ones lowest
+    // GAME.md §5: jumps big and dynamic like anime fights, a medium hero's first 4.2 m and its second 3.4 m, scaled by
+    // size (`jumpScale`): tiny heroes jump highest, colossal ones lowest. §7's ~1.5 m was a target until measured;
+    // the House of Instinct's spacing is built on these measured heights instead (traversal.test.ts)
     jump: 4.2,
     airJump: 3.4,
     jumpScale: { tiny: 1.25, small: 1.12, medium: 1, large: 0.88, huge: 0.76, colossal: 0.66 },
     dash: { speed: 18, time: 0.2 },
-    /** Shift pressed dashes ahead at once; held on, it sprints at `speed` times run speed once the dash is spent. */
-    sprint: { speed: 1.45 },
+    /**
+     * Shift pressed dashes ahead at once; held on, it sprints at `speed` times run speed once the dash is spent: a
+     * 6.5 m/s jog sprints at 8 (GAME.md §7).
+     */
+    sprint: { speed: 1.23 },
     /** Crouched and prone heroes move at these shares of run speed, their bodies these shares of their height. */
     crouch: { speed: 0.55, height: 0.7 },
     prone: { speed: 0.22, height: 0.35 },
@@ -76,6 +80,22 @@ export const ENGINE = {
     slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
     stamina: { max: 3, regen: 3.5 },
     step: 0.4,
+    /**
+     * Traversal (GAME.md §7). Pressing into a ledge up to `height` above the feet, on the ground or in the air, with
+     * room to stand on top, pulls the hero up over `time` seconds, out of control; `reach` is how far ahead of the
+     * body it looks for the top.
+     */
+    mantle: { height: 1.4, time: 0.5, reach: 0.45 },
+    /**
+     * Landing at `big` m/s or more (a fall well past a jump's own height) rolls when the hero steers, keeping its
+     * speed, and lands heavily, stopping, when it doesn't. Never any fall damage.
+     */
+    landing: { big: 20 },
+    /**
+     * Ziplines and rails (§7): a hero in the air whose hands (a zipline) or feet (a rail) come within `grab` metres of
+     * one rides it at `speed` m/s the way it was moving; a jump lets go with a jump, the end lets go with the speed.
+     */
+    zip: { speed: 15, grab: 0.8, hang: 0.25, again: 0.5 },
   },
   /**
    * Melee (the canon, 2026-10-31). V tapped strikes; held past `heavyHold` it charges and lands a heavy blow on

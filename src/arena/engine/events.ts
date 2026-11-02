@@ -21,7 +21,7 @@ export type MatchEvent =
   | { type: 'reload'; hero: number; phase: 'start' | 'end'; until: number }
   /** A shot turned back by a reflect. */
   | { type: 'reflect'; hero: number; projectile: number }
-  | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land' | 'roll'; speed?: number }
+  | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land' | 'roll' | 'mantle' | 'land-roll' | 'land-heavy' | 'zip-on' | 'zip-off'; speed?: number }
   /** Melee (the canon): a heavy charge began, a guard caught a strike, a launched hero took control back. */
   | { type: 'melee'; hero: number; what: 'charge' | 'blocked' | 'guard-broken' | 'regain' | 'launch'; by?: number }
   /** A transformation began or ended; `size` is the class the hero has now (a form may keep its own). */

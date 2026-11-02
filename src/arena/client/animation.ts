@@ -20,20 +20,23 @@ export type AnimState =
   | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean; melee?: MeleeBlow }
 
 /** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
-export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle'
+export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy'
 
 /**
  * The canon's held states, each looping its own clip while it lasts: a guard, crouched or prone (still or moving), a
  * melee launch out of control, and a heavy blow's charge.
  */
-export type HeldKind = 'block' | 'crouch' | 'crouch_move' | 'prone' | 'prone_move' | 'launched' | 'charge'
-export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move', 'prone', 'prone_move', 'launched', 'charge']
+export type HeldKind = 'block' | 'crouch' | 'crouch_move' | 'prone' | 'prone_move' | 'launched' | 'charge' | 'zip' | 'rail'
+export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move', 'prone', 'prone_move', 'launched', 'charge', 'zip', 'rail']
 
 /**
  * Seconds each movement holds the body before running, hanging in the air or standing takes over: about its clip's
  * length, less the blend out. A landing gives way at once to a hero that moves on, and lasts longer the harder it was.
  */
-export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5 }
+/** The engine's move names that the animator spells differently. */
+const MOVE_KIND: Partial<Record<string, MoveKind>> = { 'air-jump': 'air_jump', 'land-roll': 'land_roll', 'land-heavy': 'land_heavy' }
+
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45 }
 const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
@@ -75,8 +78,9 @@ export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[
       // the passive's toggle, on or off, is one flourish every hero shares (COMMON_MOTIONS); its effects say which
       a.state = { kind: 'toggle', seq: ++a.moves }
       a.hold = MOVE_SECONDS.toggle
-    } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide') {
-      const kind = e.move === 'air-jump' ? 'air_jump' : e.move
+    } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide' && e.move !== 'zip-on' && e.move !== 'zip-off') {
+      // a ride shows while it lasts (settle reads it off the hero), so catching and letting go play nothing of their own
+      const kind = MOVE_KIND[e.move] ?? (e.move as MoveKind)
       a.state = { kind, seq: ++a.moves }
       a.hold = kind === 'land' && (e.speed ?? 0) >= HARD_LANDING.speed ? HARD_LANDING.seconds : MOVE_SECONDS[kind]
     }
@@ -99,6 +103,8 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
   a.cast = undefined
   // a landing or a toggle holds only a hero that stands there; one running on keeps its stride
   if ((a.state.kind === 'land' || a.state.kind === 'toggle') && moved > 0.01) a.hold = 0
+  // a ride shows at once, whatever one-shot was playing
+  if (hero.zip) a.hold = 0
   if (a.hold > 0) {
     a.hold -= dt
     if (a.hold > 0) return a.state
@@ -110,8 +116,10 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
       ? 'stunned'
       : hero.basicSince >= 0 && hero.action === undefined && now - hero.basicSince >= CHARGE_TICKS
         ? 'charge'
-        : hero.airborne
-          ? 'air'
+        : hero.zip
+          ? hero.zip.hang ? 'zip' : 'rail'
+          : hero.airborne
+            ? 'air'
           : hero.slide
             ? 'slide'
             : hero.blocking

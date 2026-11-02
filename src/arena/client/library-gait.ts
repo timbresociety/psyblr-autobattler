@@ -50,6 +50,11 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   launched: 'fall_a_loop',
   charge: 'standing_block_start',
   toggle: 'spell_cast',
+  mantle: 'pulling_up_to_a_ledge',
+  land_roll: 'falling_to_roll',
+  land_heavy: 'mid_air_falling_to_a_hard_landing',
+  zip: 'hanging',
+  rail: 'crouch_idle',
 }
 
 /**
@@ -62,6 +67,10 @@ const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: num
   dash: [0.12, 0.75, 0.3],
   dash_back: [0.1, 0.9, 0.34],
   toggle: [0.15, 1.0, 0.6],
+  // the pull-up itself, from the hands taking the weight to the feet on top
+  mantle: [0.6, 2.2, ENGINE.move.mantle.time],
+  land_roll: [0.05, 1.3, 0.55],
+  land_heavy: [0.55, 1.6, 0.45],
 }
 
 /** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`. */
