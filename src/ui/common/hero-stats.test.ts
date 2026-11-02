@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_HEROES, demoBuild } from '../../arena/demo/roster.js'
+import { STARTERS, starterBuild } from '../../arena/starters.js'
 import { ENGINE } from '../../arena/engine/calibration.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { heroStats } from './hero-stats.js'
@@ -31,6 +31,6 @@ describe("a hero card's numbers", () => {
   })
 
   it('every starter hero has a card', () => {
-    for (const h of DEMO_HEROES) expect(heroStats(demoBuild(h)).health).toBeGreaterThan(0)
+    for (const h of STARTERS) expect(heroStats(starterBuild(h)).health).toBeGreaterThan(0)
   })
 })

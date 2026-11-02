@@ -1,6 +1,6 @@
 import { proposeBuild, type Build } from '../../../charter/build'
-import { DEMO_HEROES, demoBuild } from '../../../arena/demo/roster'
-import { roleSymbol } from './loadout'
+import { STARTERS } from '../../../arena/starters'
+import { roleSymbol, starterEntry } from './loadout'
 import type { StagingResult } from './Staging'
 
 /** What the training dummy is: a plain tank in nothing but its base layer, the colour of a wooden mannequin. */
@@ -25,12 +25,10 @@ export const tryItStaging = (build: Build): StagingResult => ({
  * line, a damage dealer and a back line where the hero leaves room (its role takes the place of the one it shares).
  */
 export const arenaStaging = (build: Build): StagingResult => {
-  const starter = (id: string) => {
-    const hero = DEMO_HEROES.find((h) => h.id === id)!
-    return { key: `demo:${hero.id}`, build: demoBuild(hero), symbol: roleSymbol(hero.roleId), faction: hero.faction, hue: hero.hue }
-  }
-  const allies = ['bezos', 'nadella', 'huang'].map(starter).filter((e) => e.build.roleId !== build.roleId).slice(0, 2)
-  const enemies = ['zelenskyy', 'obama', 'ardern'].map(starter)
+  // the first of each squad's starters in the role
+  const starter = (squad: 'vanguard' | 'outlaws', role: string) => starterEntry(STARTERS.find((s) => s.squad === squad && s.roleId === role)!)
+  const allies = ['tank', 'support', 'marksman'].map((role) => starter('vanguard', role)).filter((e) => e.build.roleId !== build.roleId).slice(0, 2)
+  const enemies = ['tank', 'marksman', 'support'].map((role) => starter('outlaws', role))
   return {
     side: 0,
     formation: [

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ai, at, basic, phys } from '../../charter/templates/dsl.js'
+import { ai, at, melee, phys } from '../../charter/templates/dsl.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE } from './calibration.js'
 import { COMBAT_RULES } from './deliveries.js'
@@ -7,7 +7,7 @@ import type { MatchEvent } from './events.js'
 import { AIM_STEPS, createHero, emptyMatch, MOVES, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
 import { tick } from './tick.js'
 
-const fist = basic({ id: 'fist', name: 'Fist', roles: ['fighter'], tags: ['t'], cooldown: 0, ai: ai('poke', 1), delivery: at.melee(2.5), effects: [phys(30)] })
+const fist = melee({ style: 'unarmed', id: 'fist', name: 'Fist', roles: ['fighter'], tags: ['t'], cooldown: 0, ai: ai('poke', 1), delivery: at.melee(2.5), effects: [phys(30)] })
 const BASIC = slotBit('basic')
 
 /** Hero 0 at the origin facing +z with a melee basic attack; hero 1 (a tank) right in front of it, facing back. */

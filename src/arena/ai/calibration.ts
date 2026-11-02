@@ -1,10 +1,17 @@
 /**
- * Every constant of the demo AI (KTD7), tuned by hand in playtests. The balance gate fights with this AI, so bump
- * the version on any change: stored builds stamped with an older version are re-checked (KTD6).
+ * Every constant of the AI (KTD7), tuned by hand in playtests, at three levels (GAME.md §2): Hard is the bots as they
+ * were, too strong for most players; Normal reacts slower, aims worse, combos, blocks and dodges less and picks targets
+ * worse; Easy is slower again and rarely uses its skills. A level is only these numbers, never health or damage. The
+ * balance gate fights at Hard, so bump the version on any change: stored builds with an older one are re-checked (KTD6).
  */
-export const AI_CALIBRATION_VERSION = 11
+export const AI_CALIBRATION_VERSION = 12
 
-export const AI = {
+export type AiLevel = 'easy' | 'normal' | 'hard'
+export const AI_LEVELS_ORDER: readonly AiLevel[] = ['easy', 'normal', 'hard']
+/** What a player gets unless they pick (§2). */
+export const DEFAULT_AI_LEVEL: AiLevel = 'normal'
+
+const HARD = {
   /** Ticks between decisions (150 ms at 60 Hz). */
   decisionTicks: 9,
   /** Reaction delay before a new target is taken, ticks (150-250 ms). */
@@ -82,4 +89,65 @@ export const AI = {
   crowdRadius: 6,
   /** Ranged heroes hold this fraction of their range. */
   rangedHold: 0.8,
-} as const
+  /**
+   * The levels' own dials (§2): the chance a decision considers its skills at all, the chance it keeps a melee chain
+   * going, the chance it picks the smart target (weakest in reach) rather than the nearest, and the chance it switches
+   * its passive on when a fight starts.
+   */
+  skillUse: 1,
+  comboChance: 1,
+  targetSmart: 1,
+  passiveUse: 0.9,
+}
+
+export type AiTuning = Omit<typeof HARD, 'guardChance' | 'reaction'> & { guardChance: Record<keyof typeof HARD.guardChance, number>; reaction: { min: number; max: number } }
+
+const scaleGuard = (f: number) => Object.fromEntries(Object.entries(HARD.guardChance).map(([r, v]) => [r, v * f])) as AiTuning['guardChance']
+
+export const AI_LEVELS: Record<AiLevel, AiTuning> = {
+  hard: HARD,
+  normal: {
+    ...HARD,
+    decisionTicks: 12,
+    reaction: { min: 16, max: 26 },
+    aimTrack: 0.2,
+    overshoot: 0.24,
+    aimJitter: 0.018,
+    lead: 0.7,
+    dodgeChance: 0.18,
+    dodgeRoll: 0.25,
+    heavyChance: 0.15,
+    guardChance: scaleGuard(0.5),
+    skillUse: 0.7,
+    comboChance: 0.6,
+    targetSmart: 0.5,
+    passiveUse: 0.6,
+  },
+  easy: {
+    ...HARD,
+    decisionTicks: 15,
+    reaction: { min: 24, max: 40 },
+    aimTrack: 0.13,
+    overshoot: 0.3,
+    aimJitter: 0.03,
+    lead: 0.4,
+    dodgeChance: 0.06,
+    dodgeRoll: 0.15,
+    heavyChance: 0.08,
+    guardChance: scaleGuard(0.2),
+    skillUse: 0.25,
+    comboChance: 0.35,
+    targetSmart: 0.15,
+    passiveUse: 0.3,
+  },
+}
+
+/**
+ * The tuning in force: the brain sets it to each AI hero's level before that hero thinks (useLevel), so every reader
+ * of `AI` sees that hero's numbers. Hard when nothing says otherwise, the gate's level.
+ */
+export let AI: AiTuning = HARD
+
+export function useLevel(level: AiLevel | undefined) {
+  AI = AI_LEVELS[level ?? 'hard']
+}

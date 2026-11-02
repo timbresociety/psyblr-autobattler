@@ -104,7 +104,7 @@ You never invent numbers or power. You only pick from the fixed catalogue below,
 Pick one role:
 ${ROLES.map((r) => `- ${r.id}: ${r.description}`).join('\n')}
 
-Then pick one template ID per slot from that role's options (slot kinds: basic, active, passive, ultimate, movement; active1 and active2 are two different active templates). Choose the template whose mechanic best matches the player's description of that skill; when a slot has no description, pick what suits the hero.
+Then pick one template ID per slot from that role's options. Each slot holds one row of the catalogue: basic is the melee weapon style (V, slot kind melee), active1 the ranged weapon fired on repeat from the hand or a gun (LMB, ranged), active2 a spell (Q, spell: control, displacement, zones, constructs, summons, ally support, curses, burst spells, vision or tricks), passive the toggle on its energy meter, which holds every self-buff, state and transformation (F, passive), ultimate the big move on a long cooldown (R), movement a dash, blink, leap or grapple (E). A template only fits its own row. Choose the template whose mechanic best matches the player's description of that skill; when a slot has no description, pick what suits the hero.
 Then split exactly 30 points across strength, agility and intellect to suit the hero.
 Finally, name each slot the player left unnamed: two or three evocative words that fit the hero (at most 40 characters). Never put numbers in a name.
 
@@ -197,15 +197,9 @@ export async function proposeHero(input: HeroRequest, deps: ProposeDeps = {}): P
   for (const slot of BUILD_SLOTS) {
     const id = answer.templates[slot]
     const inPool = id && poolFor(base.roleId, SLOT_KIND[slot]).some((t) => t.id === id)
-    const clash = slot === 'active2' && id === slots.active1.templateId
-    if (inPool && !clash) slots[slot] = { ...slots[slot], templateId: id }
+    if (inPool) slots[slot] = { ...slots[slot], templateId: id }
     // the model names only what the player left unnamed
     if (!slots[slot].name.trim() && answer.names[slot]) slots[slot] = { ...slots[slot], name: answer.names[slot]! }
-  }
-  // the model may give active1 the template the matcher put in active2; the two actives must differ (R1)
-  if (slots.active1.templateId === slots.active2.templateId) {
-    const text = `${slots.active2.name} ${slots.active2.flavour}`.trim() || input.description || ''
-    slots.active2 = { ...slots.active2, templateId: matchTemplate(base.roleId, 'active', text, [slots.active1.templateId]).template.id }
   }
   const build: Build = { ...base, slots }
   if (answer.spread) {

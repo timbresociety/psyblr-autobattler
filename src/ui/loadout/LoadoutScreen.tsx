@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react'
 import type { Build } from '../../charter/build'
 import { SIZES } from '../../charter/sizes'
 import type { RoleId } from '../../charter/types'
-import { DEMO_HEROES, FACTION_NAME, demoBuild } from '../../arena/demo/roster'
+import { SQUAD_NAME, STARTERS as SQUADS, starterBuild } from '../../arena/starters'
 import { liveDeps, type BuildRecord, type HeroResult, type LoadoutDeps } from '../api'
 import { heroHue } from '../common/hero-look'
 import { HeroPortrait } from '../common/portrait'
@@ -13,8 +13,8 @@ export const SEARCH_DEBOUNCE_MS = 250
 
 const GATE_LABEL: Record<Build['gate']['state'], string> = { draft: 'Needs a balance check', checking: 'Checking', ready: 'Ready', blocked: 'Blocked' }
 
-/** The 20 heroes every loadout starts with, the same ones staging's row shows (src/arena/demo/roster.ts). */
-const STARTERS = DEMO_HEROES.map((hero) => ({ hero, build: demoBuild(hero) }))
+/** The 20 heroes every loadout starts with, the same ones staging's row shows (src/arena/starters.ts). */
+const STARTERS = SQUADS.map((hero) => ({ hero, build: starterBuild(hero) }))
 
 interface Props {
   deps?: LoadoutDeps
@@ -189,14 +189,14 @@ export function LoadoutScreen({ deps = liveDeps, onEdit, onRemix, onForge }: Pro
         <ul className="cards starters" aria-label="Starter heroes">
           {STARTERS.map(({ hero, build }) => (
             <li key={hero.heroName} className={`card role-${build.roleId}`}>
-              <HeroPortrait hero={{ key: `demo:${hero.heroName}`, heroName: build.heroName, roleId: build.roleId, hue: hero.hue, build }} />
+              <HeroPortrait hero={{ key: `starter:${hero.id}`, heroName: build.heroName, roleId: build.roleId, hue: hero.hue, build }} />
               <div className="card-who">
                 <strong>{build.heroName}</strong>
                 <span className="card-meta">
                   <RoleBadge role={build.roleId} />
                   <small>{SIZES[build.sizeClass ?? 'medium'].label}</small>
                 </span>
-                <small className="gate-chip starter">Starter · {FACTION_NAME[hero.faction]}</small>
+                <small className="gate-chip starter">Starter · {SQUAD_NAME[hero.squad]}</small>
               </div>
               <div className="card-actions">
                 <button className="btn sm ghost" onClick={() => setTrying(build)}>

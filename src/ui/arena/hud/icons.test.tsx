@@ -8,7 +8,7 @@ import { AbilityIcon, ICON_KEYS, iconFor, toneFor } from './icons'
 
 afterEach(cleanup)
 
-const kit = (delivery: Delivery, effects: Effect[], slot: Template['slot'] = 'active') => ({ slot, delivery, effects })
+const kit = (delivery: Delivery, effects: Effect[], slot: Template['slot'] = 'spell') => ({ slot, delivery, effects })
 const byName = (name: string) => CATALOG.find((t) => t.name === name)!
 
 describe('ability icons from the kit (R38)', () => {
@@ -58,7 +58,7 @@ describe('ability icons from the kit (R38)', () => {
     // a form that keeps the hero's size is still a transformation
     for (const name of ['Ascended Form', 'Shrink Form', 'Avatar Form']) expect(iconFor(byName(name)), name).toBe('resize')
     expect(toneFor(byName('Fireball'))).toBe('spirit')
-    expect(toneFor(byName('Heavy Strike'))).toBe('phys')
+    expect(toneFor(byName('Blade'))).toBe('phys')
     expect(toneFor(byName('Healing Burst'))).toBe('heal')
   })
 

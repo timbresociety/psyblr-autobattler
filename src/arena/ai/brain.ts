@@ -9,7 +9,7 @@ import type { Arena } from '../engine/match.js'
 import { next } from '../engine/rng.js'
 import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
 import { aimPoint, anglesTo, trackAim } from './aim.js'
-import { AI } from './calibration.js'
+import { AI, useLevel } from './calibration.js'
 
 /**
  * The demo AI (KTD7, R17, R18, R31): utility scoring over a small action set, re-decided every 150 ms, with a thin
@@ -17,20 +17,20 @@ import { AI } from './calibration.js'
  * every hero nobody controls, on both sides, and its memory lives in the match state.
  */
 
-const CAST_SLOTS: NonNullable<BrainState['cast']>['slot'][] = ['movement', 'ultimate', 'active1', 'active2']
+/** The skills it decides to cast; the ranged weapon (LMB) is fired like the melee, by reach, and F is a toggle. */
+const CAST_SLOTS: NonNullable<BrainState['cast']>['slot'][] = ['movement', 'ultimate', 'active2']
 
 /**
- * Whether the AI fights this hero from range: a ranged basic attack, except on an assassin, which dives whatever it
- * throws (a ninja with shadow bolts once held at 10 m all fight and never used its backstab).
+ * Whether the AI fights this hero from range: a role that keeps its distance (every hero has a weapon of each kind,
+ * GAME.md §4). An assassin dives whatever it throws.
  */
-const isRanged = (setup: HeroSetup) => rangedBasic(setup) && setup.build.roleId !== 'assassin'
+const isRanged = (setup: HeroSetup) => rangedBasic(setup)
 
 const gapTo = (from: HeroState, to: HeroState) => Math.max(0, distance(from.position, to.position) - capsule(from).radius - capsule(to).radius)
 const nearestGap = (m: MatchState, h: HeroState) => enemiesOf(m, h).reduce((d, e) => Math.min(d, gapTo(h, e)), Infinity)
 
 export function preferredDistance(setup: HeroSetup): number {
-  const range = setup.kit.basic.delivery.range
-  return isRanged(setup) ? range * AI.rangedHold : range * 0.9
+  return isRanged(setup) ? setup.kit.active1.delivery.range * AI.rangedHold : setup.kit.basic.delivery.range * 0.9
 }
 
 function reach(setup: HeroSetup, t: Template): number {
@@ -125,6 +125,9 @@ function chooseTarget(m: MatchState, hero: HeroState, setup: HeroSetup): HeroSta
     const prey = enemies.filter((e) => gapTo(hero, e) <= AI.huntReach)
     if (prey.length) return prey.reduce((a, b) => (hpFraction(b) < hpFraction(a) - 1e-9 ? b : a))
   }
+  const nearestOne = () => enemies.reduce((a, b) => (gapTo(hero, b) < gapTo(hero, a) - 1e-9 ? b : a))
+  // a weaker player's bot just goes for whoever is nearest, some of the time (§2: worse target choice)
+  if (AI.targetSmart < 1 && next(m.ai) > AI.targetSmart) return nearestOne()
   const scan = preferredDistance(setup) + AI.focusReach
   const inReach = enemies.filter((e) => gapTo(hero, e) <= scan)
   // a target it can actually shoot beats one hiding behind the ruins (R25)
@@ -152,7 +155,7 @@ function frontOf(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): 
 }
 
 function newBrain(hero: HeroState): BrainState {
-  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0 }, press: 0, nextDash: 0, slideUntil: 0, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0, heavy: false, guard: false }
+  return { nextDecision: 0, target: -1, action: 'approach', strafe: hero.id % 2 ? 1 : -1, dodgeUntil: 0, dodge: { x: 0, z: 0 }, press: 0, nextDash: 0, slideUntil: 0, yaw: hero.yaw, pitch: 0, overshoot: 0, detour: 0, heavy: false, guard: false, chain: true, toggle: false }
 }
 
 /** The far side of the nearest piece of cover from `threat`, within reach: where a hurt hero breaks line of sight. */
@@ -252,7 +255,9 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   brain.cast = undefined
   if (!target || !target.alive) return
   let best: { slot: NonNullable<BrainState['cast']>['slot']; escape: boolean; priority: number } | undefined
-  for (const slot of CAST_SLOTS) {
+  // a weaker bot often lets its skills sit ready (§2)
+  const considers = AI.skillUse >= 1 || next(m.ai) < AI.skillUse
+  for (const slot of considers ? CAST_SLOTS : []) {
     if (hero.cooldowns[slot] > 0) continue
     const t = setup.kit[slot]
     const verdict = wants(m, hero, setup, t, target)
@@ -263,6 +268,8 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   if (best) brain.cast = { slot: best.slot, escape: best.escape }
   brain.heavy = next(m.ai) < AI.heavyChance
   brain.guard = next(m.ai) < AI.guardChance[setup.build.roleId]
+  brain.chain = AI.comboChance >= 1 || next(m.ai) < AI.comboChance
+  brain.toggle = passiveWanted(m, hero, setup, target)
   const threat = incoming(m, hero, setups)
   if (threat && next(m.ai) < AI.dodgeChance) {
     const len = Math.sqrt(threat.step.x * threat.step.x + threat.step.z * threat.step.z) || 1
@@ -303,6 +310,18 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   }
 }
 
+/**
+ * Whether to press F now (§4 F): on as a fight starts while the meter has most of its energy (a power that lands
+ * something as it switches on waits until it's needed), off again once no enemy is near, to save the meter.
+ */
+function passiveWanted(m: MatchState, hero: HeroState, setup: HeroSetup, target: HeroState): boolean {
+  const passive = setup.kit.passive
+  if (hero.passiveOn) return nearestGap(m, hero) > 25
+  if (hero.energy < 0.6 || gapTo(hero, target) > preferredDistance(setup) + 6) return false
+  if (passive.energy?.onSwitch && hpFraction(hero) > 0.65 && passive.effects.some((e) => e.kind === 'heal' || e.kind === 'shield')) return false
+  return AI.passiveUse >= 1 || next(m.ai) < AI.passiveUse
+}
+
 const steps = (angle: number) => {
   const a = wrapAngle(angle)
   return Math.round(((a < 0 ? a + TAU : a) / TAU) * AIM_STEPS) % AIM_STEPS
@@ -317,7 +336,11 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   if (!target || !target.alive || hidden(m, hero, target)) return { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
-  const shotSpeed = (castTemplate ?? setup.kit.basic).delivery.kind === 'projectile' ? geometryOf((castTemplate ?? setup.kit.basic).delivery).speed : undefined
+  // out of melee reach it shoots its ranged weapon, so it leads the target by that weapon's shot speed
+  const meleeReach = setup.kit.basic.delivery.range + ENGINE.meleeSlack
+  const shooting = gapTo(hero, target) > meleeReach + 0.5
+  const aimed = castTemplate ?? (shooting ? setup.kit.active1 : setup.kit.basic)
+  const shotSpeed = aimed.delivery.kind === 'projectile' || aimed.delivery.kind === 'cone' ? geometryOf(aimed.delivery.kind === 'cone' ? { kind: 'projectile', range: aimed.delivery.range } : aimed.delivery).speed : undefined
   let wanted = anglesTo(from, aimPoint(m, brain, from, target, shotSpeed))
   if (brain.cast?.escape) wanted = { yaw: wanted.yaw + PI, pitch: 0.15 }
   const swung = brain.seen?.target !== target.id
@@ -391,6 +414,13 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     buttons |= slotBit(brain.cast.slot as BuildSlot)
     brain.cast = undefined
   }
+  if (brain.toggle && !(hero.buttonsHeld & slotBit('passive'))) {
+    buttons |= slotBit('passive')
+    brain.toggle = false
+  }
+  // the ranged weapon, held while the target is out of melee reach and in its range, the aim settled and the line clear
+  const weapon = setup.kit.active1.delivery
+  if (shooting && !brain.cast && hero.reloadUntil === 0 && gapTo(hero, target) <= weapon.range && off <= AI.fireTolerance * (weapon.kind === 'cone' ? 2 : 1) && sight()) buttons |= slotBit('active1')
   // a sword swing only needs the target inside its arc; a shot needs the aim to settle
   const basic = setup.kit.basic.delivery
   const basicTolerance = basic.arcDegrees ? Math.max(AI.fireTolerance, ((basic.arcDegrees / 2) * PI) / 180 * AI.arcUse) : AI.fireTolerance
@@ -403,7 +433,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   if (holding && brain.heavy) {
     if (m.tick - hero.basicSince < ticks(ENGINE.melee.heavyHold + AI.heavyCharge)) buttons |= BASIC
     else brain.heavy = false
-  } else if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight() && !(hero.buttonsHeld & BASIC)) buttons |= BASIC
+  } else if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight() && !(hero.buttonsHeld & BASIC) && (brain.chain || hero.combo.step === 0 || hero.combo.until < m.tick)) buttons |= BASIC
   return { moveX, moveZ, moves, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
 }
 
@@ -414,6 +444,7 @@ export function aiCommands(arena: Arena): (Command | undefined)[] {
   return m.heroes.map((hero, i) => {
     if (!hero.alive || m.human === i) return undefined
     const brain = m.brains![i]
+    useLevel(m.aiLevels?.[hero.team])
     if (m.tick >= brain.nextDecision) decide(m, hero, arena.setups[i], brain, arena.setups)
     return command(m, hero, arena.setups[i], brain, arena.setups)
   })

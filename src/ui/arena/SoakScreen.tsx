@@ -6,7 +6,7 @@ import { TAU } from '../../arena/engine/maths'
 import { Live, matchSetup } from './ArenaScreen'
 import { Unsupported } from './Loading'
 import { emptyFormation } from './staging/formation'
-import { demoLoadout } from './staging/loadout'
+import { starterLoadout } from './staging/loadout'
 import { matchup } from './staging/presets'
 import type { StagingResult } from './staging/Staging'
 
@@ -19,7 +19,7 @@ function seeded(seed: number): () => number {
 }
 
 /**
- * `?soak` runs the soak test (src/arena/client/soak.ts): moguls against world leaders, ten a side, match after match,
+ * `?soak` runs the soak test (src/arena/client/soak.ts): the Vanguard against the Outlaws, ten a side, match after match,
  * with waves of ultimates and one hero steered from the third-person camera. `&minutes=10`, `&ults=15` seconds between
  * waves, `&wave=6` ultimates a wave, `&match=150` seconds before a long match is cut off, `&seed=1`. The report is
  * on screen and on `window.__soak`.
@@ -84,8 +84,8 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
     let cancelled = false
     let controller: ArenaController | undefined
     let timer = 0
-    const loadout = demoLoadout()
-    const staged: StagingResult = { side: 0, formation: matchup('factions', loadout, 0, emptyFormation(), seeded(options.seed + index)), loadout }
+    const loadout = starterLoadout()
+    const staged: StagingResult = { side: 0, formation: matchup('squads', loadout, 0, emptyFormation(), seeded(options.seed + index)), loadout }
     const setup = { ...matchSetup(staged), seed: options.seed + index }
     recorder.context({ match: index, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0 })
     startArena(host.current, setup)

@@ -6,12 +6,11 @@ import { libraryItem } from '../../kit/wear/library.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 import type { Sculpt } from '../../kit/body/sculpt.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
-import { DEMO_HEROES } from '../demo/roster.js'
 
 /**
  * What a hero looks like in the arena's own characters (R24), without any renderer: which body it wears (its size and
  * gender), how that body is built, its skin and photo face, and its outfit from the wardrobe (wear/dress-model.ts
- * dresses the body with it). Every hero is made this way, the demo roster too (demo/looks.ts). The bodies come from
+ * dresses the body with it). Every hero is made this way, the starters too (starters.ts). The bodies come from
  * tools/blender/human.py. The arena, the staging busts and the 3D previews all read this, so a hero looks the same in
  * its portrait as on the field, on either side.
  */
@@ -66,12 +65,10 @@ export function bodyFor(build: Pick<Build, 'roleId' | 'sizeClass' | 'look'>, siz
 }
 
 /**
- * A hero's signature colour: a demo hero's own, else a stable one from its name. The arena, the portraits and the 3D
+ * A hero's signature colour: a stable one from its name. The arena, the portraits and the 3D
  * previews all read this, so a hero keeps it everywhere and while it is edited.
  */
 export function heroHue(name: string): number {
-  const demo = DEMO_HEROES.find((h) => h.heroName === name)
-  if (demo) return demo.hue
   let h = 2166136261
   for (let i = 0; i < name.length; i++) h = Math.imul(h ^ name.charCodeAt(i), 16777619)
   return ((h >>> 0) % 1000) / 1000

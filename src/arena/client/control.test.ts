@@ -39,16 +39,16 @@ describe('takeover and controls (U17)', () => {
     expect(match.human).toBeUndefined()
   })
 
-  it('binds the canon: V jumps, Shift dashes or sprints, C crouches, Ctrl lies prone, Z rolls, X guards, Space strikes', () => {
+  it('binds GAME.md §3: Space jumps, Shift dashes or sprints, C crouches, Ctrl lies prone, Z rolls, X guards, V strikes', () => {
     const moves = (...keys: string[]) => commandFrom({ held: new Set(keys) }, 0, 0).moves
-    expect(moves('KeyV')).toBe(MOVES.jump)
+    expect(moves('Space')).toBe(MOVES.jump)
     expect(moves('ShiftLeft')).toBe(MOVES.dash)
     expect(moves('ShiftRight', 'KeyC')).toBe(MOVES.dash | MOVES.crouch)
     expect(moves('ControlLeft')).toBe(MOVES.prone)
     expect(moves('KeyZ')).toBe(MOVES.dodge)
     expect(moves('KeyX')).toBe(MOVES.block)
     const buttons = (...keys: string[]) => commandFrom({ held: new Set(keys) }, 0, 0).buttons
-    expect(buttons('Space')).toBe(slotBit('basic'))
+    expect(buttons('KeyV')).toBe(slotBit('basic'))
     expect(buttons('Mouse0')).toBe(slotBit('active1'))
     expect(buttons('KeyQ', 'KeyE', 'KeyF', 'KeyR')).toBe(slotBit('active2') | slotBit('movement') | slotBit('passive') | slotBit('ultimate'))
     // the right button zooms the camera; the engine never hears it

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CATALOG } from '../../charter/templates/catalog.js'
-import { active, ai, at, disarm, phys, silence, stun, ultimate } from '../../charter/templates/dsl.js'
+import { CATALOG, getTemplate } from '../../charter/templates/catalog.js'
+import STYLE_TIMING from './style-timing.json'
+import { spell, ai, at, disarm, phys, ranged, silence, slow, stun, ultimate } from '../../charter/templates/dsl.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
@@ -18,11 +19,11 @@ import { land } from './testing.js'
 import { shotTemplate } from './combat.js'
 
 const base = { id: 'timing', name: 'Timing', roles: ['fighter' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
-const swing = active({ ...base, delivery: at.melee(2.5), effects: [phys(40)] })
+const swing = spell({ ...base, family: 'burst', delivery: at.melee(2.5), effects: [phys(40)] })
 const big = ultimate({ ...base, id: 'big', cooldown: 60, delivery: at.melee(2.5), effects: [phys(40)] })
-const bash = active({ ...base, id: 'bash', delivery: at.melee(2.5), effects: [stun(1)] })
-const hush = active({ ...base, id: 'hush', delivery: at.melee(2.5), effects: [silence(1)] })
-const unarm = active({ ...base, id: 'unarm', delivery: at.melee(2.5), effects: [disarm(1)] })
+const bash = spell({ ...base, family: 'burst', id: 'bash', delivery: at.melee(2.5), effects: [stun(1)] })
+const hush = spell({ ...base, family: 'burst', id: 'hush', delivery: at.melee(2.5), effects: [silence(1)] })
+const unarm = spell({ ...base, family: 'burst', id: 'unarm', delivery: at.melee(2.5), effects: [disarm(1)] })
 
 /** Hero 0 (blue) at the origin facing +z with `skills` slotted; hero 1 (a red tank) right in front of it. */
 function duel(skills: Partial<Record<BuildSlot, Template>>, gap = 1.6) {
@@ -50,12 +51,12 @@ describe('action timing (Forge goal, phase 1)', () => {
   it('every template winds up for at least a tick, and an ultimate winds up longer than the same skill', () => {
     for (const t of CATALOG) {
       if (t.slot === 'passive') continue
-      const slot: BuildSlot = t.slot === 'basic' ? 'basic' : t.slot === 'ultimate' ? 'ultimate' : t.slot === 'movement' ? 'movement' : 'active1'
+      const slot: BuildSlot = t.slot === 'melee' ? 'basic' : t.slot === 'ranged' ? 'active1' : t.slot === 'ultimate' ? 'ultimate' : t.slot === 'movement' ? 'movement' : 'active2'
       const { prep, recover } = timingTicks(t, slot, 1)
       expect(prep, t.id).toBeGreaterThanOrEqual(1)
       expect(recover, t.id).toBeGreaterThanOrEqual(0)
     }
-    expect(timingOf(big, 'ultimate').prep).toBeGreaterThan(timingOf(swing, 'active1').prep)
+    expect(timingOf(big, 'ultimate').prep).toBeGreaterThan(timingOf(swing, 'active2').prep)
   })
 
   it('a hit lands on the release tick and never before, after a cast event that says when', () => {
@@ -83,6 +84,21 @@ describe('action timing (Forge goal, phase 1)', () => {
     expect(d.of('release').filter((e) => e.slot === 'basic').length).toBeGreaterThanOrEqual(starts.length - 1)
   })
 
+  it('each melee style swings to its own clips’ beat, read off their contact frames (§5)', () => {
+    const base = timingOf(swing, 'basic')
+    const prep = (style: string) => timingOf(getTemplate(`melee-${style}`), 'basic').prep
+    for (const style of ['unarmed', 'kicks', 'blade', 'greatsword', 'shield', 'staff', 'club']) {
+      const t = STYLE_TIMING[style as keyof typeof STYLE_TIMING]
+      // every style is measured from clips, and none strays far from the engine's basic beat
+      expect(t.clips, style).toBeGreaterThan(0)
+      expect(prep(style) / base.prep, style).toBeCloseTo(t.prep, 6)
+      expect(t.prep).toBeGreaterThanOrEqual(0.75)
+      expect(t.prep).toBeLessThanOrEqual(1.4)
+    }
+    // the club's blows land later in its clips than the greatsword's quick cuts
+    expect(prep('club')).toBeGreaterThan(prep('greatsword'))
+  })
+
   it('a fast attacker’s swing shrinks to fit between its attacks', () => {
     const quick = timingOf(swing, 'basic', 0.3)
     expect(quick.prep + quick.recover).toBeLessThanOrEqual(0.3 * BASIC_SHARE + 1e-9)
@@ -93,10 +109,10 @@ describe('action timing (Forge goal, phase 1)', () => {
   it('a stun during the wind-up cuts it short: no hit, an interrupt, and the cooldown stays spent', () => {
     const d = duel({ active2: swing }, 1.6)
     // the tank stuns the fighter first: its own bash lands at once, as a test cast
-    d.setups[1] = { ...d.setups[1], kit: { ...d.setups[1].kit, active1: bash } }
+    d.setups[1] = { ...d.setups[1], kit: { ...d.setups[1].kit, active2: bash } }
     d.step(d.press(slotBit('active2')))
     expect(d.m.heroes[0].action?.released).toBe(false)
-    land(d.ctx, 1, 'active1')
+    land(d.ctx, 1, 'active2')
     expect(d.of('interrupt')).toEqual([{ type: 'interrupt', hero: 0, slot: 'active2' }])
     expect(d.m.heroes[0].action).toBeUndefined()
     for (let i = 0; i < 90; i++) d.step()
@@ -104,51 +120,57 @@ describe('action timing (Forge goal, phase 1)', () => {
     expect(d.m.heroes[0].cooldowns.active2).toBeGreaterThan(0)
   })
 
-  it('Skill 1 fires like a gun: held, it shoots at the fire rate, each shot a share, the rider once a cooldown', () => {
-    const gun = { ...swing, cooldown: 6, effects: [...swing.effects, { kind: 'slow' as const, pct: 30, duration: 1 }] }
-    const d = duel({ active1: gun }, 1.6)
+  it('the ranged weapon fires on repeat while held, at its rate, until the magazine runs dry and it reloads (§4 LMB)', () => {
+    const gun = ranged({ ...base, id: 'gun', cooldown: 0, ranged: { style: 'pistol', mode: 'single', rate: 4, magazine: 6, reload: 1 }, delivery: at.proj(20), effects: [phys(40), slow(30, 1)] })
+    const d = duel({ active1: gun }, 6)
+    const magazine = d.m.heroes[0].ammo
+    expect(magazine).toBeGreaterThan(1)
     const casts: MatchEvent[] = []
     for (let i = 0; i < 120; i++) casts.push(...d.step(d.press(slotBit('active1'))).filter((e) => e.type === 'cast'))
     // two seconds of fire is many shots, not one
     expect(casts.length).toBeGreaterThan(4)
-    const shots = d.of('hit').filter((e) => e.source === 0)
-    expect(shots.length).toBeGreaterThan(4)
-    // only the first shot slows
-    expect(d.m.heroes[0].riderAt).toBeGreaterThan(d.m.tick)
-    const full = swing.effects.find((e) => e.kind === 'damage')!
+    expect(d.of('hit').filter((e) => e.source === 0).length).toBeGreaterThan(4)
+    // the magazine ran dry and the weapon reloaded rather than firing on
+    expect(d.of('reload').some((e) => e.phase === 'start')).toBe(true)
+    // a weapon's rider is part of every shot
+    expect(d.m.heroes[1].slows.length).toBeGreaterThan(0)
+    const full = gun.effects.find((e) => e.kind === 'damage')!
     expect(shotTemplate(gun, { share: 0.1, rider: false }).effects).toEqual([{ ...full, amount: full.amount * 0.1, ratio: full.ratio * 0.1 }])
   })
 
   it('silence cuts a skill’s wind-up but not a basic attack’s, and disarm the other way round', () => {
-    const skillUp = duel({ active1: swing })
-    skillUp.setups[1] = { ...skillUp.setups[1], kit: { ...skillUp.setups[1].kit, active1: hush, active2: unarm } }
-    skillUp.step(skillUp.press(slotBit('active1')))
+    // the tank holds the silence in Q and the disarm in R
+    const skillUp = duel({ active2: swing })
+    skillUp.setups[1] = { ...skillUp.setups[1], kit: { ...skillUp.setups[1].kit, active2: hush, ultimate: { ...unarm, slot: 'ultimate' } } }
+    skillUp.m.heroes[1].cooldowns.ultimate = 0
+    skillUp.step(skillUp.press(slotBit('active2')))
+    land(skillUp.ctx, 1, 'ultimate')
+    expect(skillUp.m.heroes[0].action?.slot).toBe('active2')
     land(skillUp.ctx, 1, 'active2')
-    expect(skillUp.m.heroes[0].action?.slot).toBe('active1')
-    land(skillUp.ctx, 1, 'active1')
     expect(skillUp.m.heroes[0].action).toBeUndefined()
 
     const swingUp = duel({})
-    swingUp.setups[1] = { ...swingUp.setups[1], kit: { ...swingUp.setups[1].kit, active1: hush, active2: unarm } }
+    swingUp.setups[1] = { ...swingUp.setups[1], kit: { ...swingUp.setups[1].kit, active2: hush, ultimate: { ...unarm, slot: 'ultimate' } } }
+    swingUp.m.heroes[1].cooldowns.ultimate = 0
     // the basic attack strikes as its button is let go (combat.ts)
     swingUp.step(swingUp.press(slotBit('basic')))
     swingUp.step(swingUp.press(0))
-    land(swingUp.ctx, 1, 'active1')
-    expect(swingUp.m.heroes[0].action?.slot).toBe('basic')
     land(swingUp.ctx, 1, 'active2')
+    expect(swingUp.m.heroes[0].action?.slot).toBe('basic')
+    land(swingUp.ctx, 1, 'ultimate')
     expect(swingUp.m.heroes[0].action).toBeUndefined()
   })
 
   it('a skill pressed during a basic attack’s wind-up takes over, and the swing never lands', () => {
-    const d = duel({ active1: swing })
+    const d = duel({ active2: swing })
     d.step(d.press(slotBit('basic')))
     d.step(d.press(0))
     expect(d.m.heroes[0].action?.slot).toBe('basic')
-    d.step(d.press(slotBit('active1')))
+    d.step(d.press(slotBit('active2')))
     expect(d.of('interrupt')).toEqual([{ type: 'interrupt', hero: 0, slot: 'basic' }])
-    expect(d.m.heroes[0].action?.slot).toBe('active1')
+    expect(d.m.heroes[0].action?.slot).toBe('active2')
     for (let i = 0; i < 60; i++) d.step()
-    expect(d.of('release').map((e) => e.slot)).toEqual(['active1'])
+    expect(d.of('release').map((e) => e.slot)).toEqual(['active2'])
   })
 
   it('feet stay planted through a wind-up: slowed for a skill, rooted for an ultimate', () => {

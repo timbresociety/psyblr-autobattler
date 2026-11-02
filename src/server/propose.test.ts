@@ -8,14 +8,14 @@ import { proposeBuild } from '../charter/build.js'
 const input = {
   heroName: 'Dario',
   skills: {
-    active1: { name: 'Rewind', flavour: 'rewind the last 5 seconds' },
+    active2: { name: 'Rewind', flavour: 'rewind the last 5 seconds' },
     ultimate: { name: 'Big Beam', flavour: 'a giant kamehameha wave' },
   },
 }
 
 const valid = {
   roleId: 'mage',
-  templates: { basic: 'mage-arcane-bolt', active1: 'mage-arcane-orb', active2: 'mage-fireball', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
+  templates: { basic: 'melee-staff', active1: 'mage-arcane-bolt', active2: 'mage-arcane-orb', passive: 'mage-arcane-focus', ultimate: 'mage-mega-beam', movement: 'mage-teleport' },
   spread: { strength: 6, agility: 6, intellect: 18 },
 }
 
@@ -25,16 +25,16 @@ describe('proposeHero', () => {
     const result = await proposeHero(input, { callModel: call })
     expect(result.offline).toBe(false)
     expect(result.build.roleId).toBe('mage')
-    expect(result.build.slots.active1.templateId).toBe('mage-arcane-orb')
-    expect(result.build.slots.active1.name).toBe('Rewind')
+    expect(result.build.slots.active2.templateId).toBe('mage-arcane-orb')
+    expect(result.build.slots.active2.name).toBe('Rewind')
     expect(result.build.gate.state).toBe('draft')
   })
 
   it('the model names only the slots the player left unnamed, and never with numbers', async () => {
-    const call: ModelCall = vi.fn(async () => ({ ...valid, names: { active1: 'Not This', active2: 'Ember Lance 9000', movement: 'Phase  Step' } }))
+    const call: ModelCall = vi.fn(async () => ({ ...valid, names: { active2: 'Not This', active1: 'Ember Lance 9000', movement: 'Phase  Step' } }))
     const result = await proposeHero(input, { callModel: call })
-    expect(result.build.slots.active1.name).toBe('Rewind')
-    expect(result.build.slots.active2.name).toBe('Ember Lance')
+    expect(result.build.slots.active2.name).toBe('Rewind')
+    expect(result.build.slots.active1.name).toBe('Ember Lance')
     expect(result.build.slots.movement.name).toBe('Phase Step')
     expect(result.build.slots.basic.name).toBe('')
   })
@@ -63,8 +63,8 @@ describe('proposeHero', () => {
     }
     const result = await proposeHero(input, { callModel: call })
     expect(result.offline).toBe(true)
-    // a rewind only lifts its caster, so the actives hold none (fitsSlot): the matcher's pick is a spell of the pool
-    expect(getTemplate(result.build.slots.active1.templateId).tags).not.toContain('return-to-past')
+    // a rewind that only lifts its caster is F's, never Q's (fitsSlot): the matcher's pick for Q is a spell of the pool
+    expect(getTemplate(result.build.slots.active2.templateId).slot).toBe('spell')
   })
 
   it('injected power numbers in the model answer never reach the build (R4)', async () => {
@@ -92,11 +92,10 @@ describe('proposeHero', () => {
 })
 
 describe('proposeHero input and actives', () => {
-  it("the model's active1 equal to the matcher's active2 never leaves two identical actives", async () => {
-    const base = proposeBuild({ heroName: 'Dario', roleId: 'mage', skills: input.skills }).build
-    const call: ModelCall = async () => ({ ...valid, templates: { ...valid.templates, active1: base.slots.active2.templateId, active2: 'not-a-template' } })
+  it("a model pick from the wrong row (a spell for the ranged weapon) falls back to the matcher's pick for that row", async () => {
+    const call: ModelCall = async () => ({ ...valid, templates: { ...valid.templates, active1: 'mage-arcane-orb' } })
     const result = await proposeHero(input, { callModel: call })
-    expect(result.build.slots.active1.templateId).not.toBe(result.build.slots.active2.templateId)
+    expect(getTemplate(result.build.slots.active1.templateId).slot).toBe('ranged')
   })
 
   it('malformed requests are input errors, not crashes', async () => {

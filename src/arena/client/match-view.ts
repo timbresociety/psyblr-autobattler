@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { BUILD_SLOTS } from '../../charter/build.js'
 import type { Style } from '../../charter/motions.js'
 import type { BuildSlot } from '../../charter/types.js'
+import type { AiLevel } from '../ai/calibration.js'
 import type { HeroPackage } from '../../forge/package.js'
 import { aiCommands } from '../ai/brain.js'
 import { ENGINE } from '../engine/calibration.js'
@@ -42,6 +43,8 @@ export interface MatchSetup {
   side: Team
   /** Heroes the AI leaves standing, by index: a training dummy that only takes hits. */
   idle?: readonly number[]
+  /** How well the AI plays each side (§2); Hard, the gate's level, when absent. */
+  aiLevels?: [AiLevel, AiLevel]
 }
 
 export interface HudHero {
@@ -179,7 +182,7 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
       ...(h.basicSince >= 0 ? { holding: (match.tick - h.basicSince) / ENGINE.tickHz } : {}),
       fallback: views[h.id]?.fallback ?? false,
       // Skill 1 is a gun: its wait is the time between shots
-      cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: s === 'active1' ? shotSeconds(setups[h.id].sheet.fireRate) : setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
+      cooldowns: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { left: h.cooldowns[s] / ENGINE.tickHz, total: s === 'active1' ? shotSeconds(setups[h.id].kit.active1.ranged?.rate ?? 1, setups[h.id].sheet.fireRate) : setups[h.id].kit[s].cooldown }])) as HudHero['cooldowns'],
     })),
   }
 }
@@ -533,6 +536,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations })
+  if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
   // dev only: ?style=rifle hands every hero that fighting style, to watch a style's clips in a live match
   const devStyle = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('style') : null
   const builds = arena.setups.map((s) => (devStyle && s.build.look ? { ...s.build, look: { ...s.build.look, style: devStyle as Style } } : s.build))

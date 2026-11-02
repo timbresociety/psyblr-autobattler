@@ -105,7 +105,7 @@ export function HealthBlock({ hero, info, shield }: { hero: HudHero; info: HudHe
           ))}
         </span>
         <span className="hud-health-hint">
-          <kbd>Tab</kbd> hands back · <kbd>V</kbd> jumps · <kbd>Shift</kbd> dashes, held sprints · <kbd>Z</kbd> rolls · <kbd>X</kbd> guards · <kbd>C</kbd> crouches
+          <kbd>Tab</kbd> hands back · <kbd>Space</kbd> jumps · <kbd>Shift</kbd> dashes, held sprints · <kbd>Z</kbd> rolls · <kbd>X</kbd> guards · <kbd>C</kbd> crouches
         </span>
       </div>
     </div>
@@ -247,7 +247,7 @@ export function SelfStatus({ hero }: { hero: HudHero }) {
 const { heavyHold, chargeFull } = ENGINE.melee
 
 /**
- * Under the reticle while Space is held: let go in the first beat for a quick strike; past it the bar fills as the heavy
+ * Under the reticle while V is held: let go in the first beat for a quick strike; past it the bar fills as the heavy
  * blow charges, and glows once it's full. The bar runs on CSS from the moment the hold began (the HUD speaks ten times a
  * second, too coarse to fill it), set back by however long it was already held when it first showed.
  */

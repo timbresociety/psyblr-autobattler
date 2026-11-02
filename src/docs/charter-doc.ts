@@ -1,5 +1,4 @@
-import { demoLook } from '../arena/demo/looks.js'
-import { DEMO_HEROES, type DemoHero } from '../arena/demo/roster.js'
+import { SQUAD_NAME, STARTERS, type Starter } from '../arena/starters.js'
 import { ENGINE, ENGINE_CALIBRATION_VERSION } from '../arena/engine/calibration.js'
 import { famousMove, formLookOf, lookFromWords, templateWords } from '../arena/recipes/looks.js'
 import { BUILD_SLOTS, SLOT_KIND } from '../charter/build.js'
@@ -66,7 +65,7 @@ import { FINISH_LABEL, KNOB_LABEL, LOOK_SLOT_LABEL, RUNG_LABEL, isRigid } from '
  * It comes in two halves. What the engine owns: the roles and their synergies, how stats are bought, sizes, every
  * skill template with its numbers, transformations and the balance check. What the player owns: the body and face,
  * the wardrobe with every item in the library, skill looks and forms, the four rungs and what keeps it all fair. The
- * worked examples (Encore ABJ, three beams, four transformations, the twenty starters) are computed by the same code
+ * worked examples (Encore ABJ, three beams, four transformations, the twenty generated starters) are computed by the same code
  * the Forge runs. `npx tsx scripts/charter-doc.ts` writes it; a test fails when the committed page is stale.
  */
 
@@ -102,15 +101,15 @@ const STAT_DOC: Record<SecondaryStat, [label: string, unit: string, meaning: str
 }
 
 const SLOT_DOC: Record<BuildSlot, [key: string, what: string]> = {
-  basic: ['Left click', 'The basic attack, swung or fired again and again. Its rate is attack speed up close and fire rate at range.'],
-  active1: ['Q', 'The first active skill.'],
-  active2: ['E', 'The second active skill, never the same template as the first.'],
-  passive: ['None', 'Always on, or set off by a hit, every third hit, low health or a kill.'],
+  basic: ['V', 'The melee weapon style: tap for a three-hit combo (the third knocks back), hold for the heavy blow, X to guard.'],
+  active1: ['Left click', 'The ranged weapon: pistol, rifle, thrown or magic, fired again and again at its fire rate, with ammo and reload.'],
+  active2: ['Q', 'A spell from the ten families: one cast on a cooldown.'],
+  passive: ['F', 'Self-buffs, states and transformations, switched on and off, on an energy meter.'],
   ultimate: ['R', `The big one. It starts each fight ${ENGINE.ultimateStartCooldown} s into its cooldown.`],
-  movement: ['F', 'A dash, blink, leap or grapple, on top of the run, the jumps, the dash and the slide every hero has.'],
+  movement: ['E', 'A dash, blink, leap or grapple, on top of the run, the jumps, the dash and the slide every hero has.'],
 }
 
-const BUDGET_UNIT: Record<SlotKind, string> = { basic: 'per hit', active: 'per second of cooldown', passive: 'per trigger', ultimate: 'per second of cooldown', movement: 'per second of cooldown' }
+const BUDGET_UNIT: Record<SlotKind, string> = { melee: 'per hit', ranged: 'per shot', spell: 'per second of cooldown', passive: 'per trigger, by uptime', ultimate: 'per second of cooldown', movement: 'per second of cooldown' }
 
 /** The sheet every template is priced against, so the numbers shown are the catalogue's own. */
 const REFERENCE: SecondarySheet = { ...getRole('fighter').base, ...REFERENCE_SHEET, cooldownReduction: 0 }
@@ -273,8 +272,8 @@ function kitSection(): string {
     return [`<b>${SLOT_LABEL[s]}</b>`, SLOT_DOC[s][0], esc(SLOT_DOC[s][1]), `${SLOT_BUDGETS[kind]} ${BUDGET_UNIT[kind]}`]
   })
   const familyCounts = FAMILIES.map((f) => [`<span class="chip fam-${f}">${FAMILY_LABEL[f]}</span>`, String(CATALOG.filter((t) => primaryFamily(t) === f).length)])
-  const kinds: SlotKind[] = ['basic', 'active', 'passive', 'ultimate', 'movement']
-  const KIND_TITLE: Record<SlotKind, string> = { basic: 'Basic attacks', active: 'Actives', passive: 'Passives', ultimate: 'Ultimates', movement: 'Movement' }
+  const kinds: SlotKind[] = ['melee', 'ranged', 'spell', 'passive', 'ultimate', 'movement']
+  const KIND_TITLE: Record<SlotKind, string> = { melee: 'Melee styles', ranged: 'Ranged weapons', spell: 'Spells', passive: 'Passives', ultimate: 'Ultimates', movement: 'Movement' }
   const perRole = ROLES.map((r) => {
     const groups = kinds.map((k) => {
       const pool = poolFor(r.id, k)
@@ -566,22 +565,18 @@ function formsExample(): string {
 ${table(['Form', 'Template', 'Size', 'Arrives as', 'Around it', 'Size change', 'And'], rows)}`
 }
 
-function starterCard(hero: DemoHero): string {
-  const look = demoLook(hero.id)
+function starterCard(hero: Starter): string {
+  const look = hero.build.look!
   const p = look.physique!
-  const worn = LOOK_SLOTS.filter((s) => look.wear?.[s]).map((s) => {
-    const w = look.wear![s]!
-    return `<li><span class="slot">${LOOK_SLOT_LABEL[s]}</span><span>${esc(libraryItem(w.id)?.name ?? w.id)} ${swatches(wornColors(w))}</span></li>`
-  })
-  return `<figure class="starter">${picture(look.face!.url)}<figcaption><b>${esc(hero.heroName)}</b><small>${getRole(hero.roleId).name} · ${SIZES[hero.sizeClass].label} · ${GENDER_LABEL[look.gender]}</small><p class="build">Weight ${num(p.weight)} · muscle ${num(p.muscle)} · age ${num(p.age)}</p><ul class="worn">${worn.join('')}</ul></figcaption></figure>`
+  const kit = BUILD_SLOTS.map((slot) => `<li><span class="slot">${SLOT_DOC[slot][0]}</span><span>${esc(getTemplate(hero.build.slots[slot].templateId).name)}</span></li>`)
+  return `<figure class="starter"><figcaption><b>${esc(hero.heroName)}</b><small>${SQUAD_NAME[hero.squad]} · ${getRole(hero.roleId).name} · ${SIZES[hero.sizeClass].label} · ${GENDER_LABEL[look.gender]}</small><p class="build">Weight ${num(p.weight)} · muscle ${num(p.muscle)} · age ${num(p.age)}</p><ul class="worn">${kit.join('')}</ul></figcaption></figure>`
 }
 
 function startersExample(): string {
   return `
 <h3>The twenty starters</h3>
-<p>The heroes the game ships with are made the way yours is: a body, a physique for their build, their portrait as a photo face, library hair and a beard, a signature outfit of library items in their colours, and their gear.</p>
-<p>Nothing about them is bespoke, so a remix keeps the whole look, and anyone can dress like them. They lose one thing on purpose, their own heights. A hero's size class sets its height, so the hitbox stays the truth.</p>
-<div class="starters">${DEMO_HEROES.map(starterCard).join('')}</div>`
+<p>The heroes the game ships with are generated, two squads of ten, from one seed: every role at least once a squad, a kit drawn from each row's pool, an invented name, a body and colours. Nothing about them is hand-made, so each is a fair sample of what the Forge builds, and the balance gate holds them to the same band.</p>
+<div class="starters">${STARTERS.map(starterCard).join('')}</div>`
 }
 
 function examplesSection(): string {

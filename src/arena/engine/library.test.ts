@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import {
-  active, ai, at, blind, breakPassive, cleanse, disarm, fear, field, ground, heal, knockup, mark, phys, pull, refresh, root, shred, silence, sleep, spirit, stun,
+  spell, ai, at, blind, breakPassive, cleanse, disarm, fear, field, ground, heal, knockup, mark, phys, pull, refresh, root, shred, silence, sleep, spirit, stun,
   taunt, trap, turret, unstoppable, vulnerable, wall, wound,
 } from '../../charter/templates/dsl.js'
 import { defaultBuild } from '../../sim/fixtures.js'
@@ -16,7 +16,7 @@ import { createHero, emptyMatch, MOVES, prepareHero, slotBit, type Command, type
 import { tick } from './tick.js'
 
 const base = { id: 'lib', name: 'Lib', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
-const skill = (delivery: Template['delivery'], effects: Template['effects']) => active({ ...base, delivery, effects })
+const skill = (delivery: Template['delivery'], effects: Template['effects']) => spell({ ...base, family: 'burst', delivery, effects })
 
 /** Caster (blue) at the origin facing +z with `template` in active2; enemies (red tanks) at the given spots. */
 function arena(template: Template, enemies: { x?: number; y?: number; z: number }[]) {

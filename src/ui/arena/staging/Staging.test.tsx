@@ -2,7 +2,17 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Staging, type StagingResult } from './Staging'
-import { demoLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
+import { starterLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
+
+import { STARTERS } from '../../../arena/starters'
+
+/** A starter's bust by its name: the first of its squad in the role. */
+const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp(STARTERS.find((s) => s.squad === squad && s.roleId === role)!.heroName)
+const MAGE = starter('vanguard', 'mage')
+const MARKSMAN = starter('vanguard', 'marksman')
+const TANK = starter('vanguard', 'tank')
+const FIGHTER = starter('outlaws', 'fighter')
+const CONTROLLER = starter('outlaws', 'controller')
 
 const none: LoadoutDeps = { search: async () => [] }
 
@@ -32,16 +42,16 @@ describe('staging (U16)', () => {
   it('refuses a hero dropped on the other half, and places it on its own', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    await placeAt(/Musk/, 0, 10)
+    await placeAt(MAGE, 0, 10)
     expect(screen.getByText('That spot is on the other half.')).toBeTruthy()
-    await placeAt(/Musk/, 0, -10)
+    await placeAt(MAGE, 0, -10)
     expect(screen.getByTestId('token-0-0')).toBeTruthy()
   })
 
   it('places the same hero three times, removes one with Delete, and drags one off the field', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    for (const x of [-6, 0, 6]) await placeAt(/Huang/, x, -10)
+    for (const x of [-6, 0, 6]) await placeAt(MARKSMAN, x, -10)
     expect(screen.getByTestId('token-0-2')).toBeTruthy()
     fireEvent.pointerDown(screen.getByTestId('token-0-2'), { pointerId: 1 })
     fireEvent.keyDown(window, { key: 'Delete' })
@@ -56,17 +66,17 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     const synergies = () => within(screen.getByRole('region', { name: 'Synergies' }))
     const bulwark = () => synergies().getByText('Bulwark').closest('li')!
-    await placeAt(/Bezos/, -12, -10)
+    await placeAt(TANK, -12, -10)
     // one tank: the trait shows, unlit, with what lights it
     expect(bulwark().className).toContain('tier--1')
     expect(within(bulwark()).getByText(/1 more to light it/)).toBeTruthy()
-    await placeAt(/Bezos/, -6, -10)
+    await placeAt(TANK, -6, -10)
     expect(bulwark().className).toContain('tier-0')
-    for (const x of [0, 6]) await placeAt(/Bezos/, x, -10)
+    for (const x of [0, 6]) await placeAt(TANK, x, -10)
     // a fourth tank lights the second tier, which reaches the rest of the side
     expect(bulwark().className).toContain('tier-1')
     expect(within(bulwark()).getByText(/everyone else \+10%/)).toBeTruthy()
-    await placeAt(/Musk/, -12, -14)
+    await placeAt(MAGE, -12, -14)
     // the lit trait sorts above the unlit one
     expect(synergies().getAllByRole('listitem')[0]).toBe(bulwark())
   })
@@ -76,32 +86,36 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Red side' }))
     const start = () => screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement
     expect(start().disabled).toBe(true)
-    await placeAt(/Lincoln/, 0, 10)
+    await placeAt(FIGHTER, 0, 10)
     expect(start().disabled).toBe(true)
     fireEvent.click(screen.getByRole('radio', { name: /Enemy side/ }))
     fireEvent.click(screen.getByRole('button', { name: /Auto-deploy enemy side/ }))
     expect(start().disabled).toBe(false)
+    // the AI plays both sides at Normal unless picked otherwise (§2); here the enemy (blue) is set to Hard
+    expect((screen.getByLabelText('Your AI') as HTMLSelectElement).value).toBe('normal')
+    fireEvent.change(screen.getByLabelText('Enemy AI'), { target: { value: 'hard' } })
     fireEvent.click(start())
     const result = onStart.mock.calls[0][0]
     expect(result.side).toBe(1)
     expect(result.formation[0]).toHaveLength(10)
     expect(result.formation[1]).toHaveLength(1)
+    expect(result.aiLevels).toEqual(['hard', 'normal'])
   })
 
   it("shows a selected hero's tooltips in the details panel", async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    fireEvent.click(bustOf(/Merkel/))
+    fireEvent.click(bustOf(CONTROLLER))
     const details = screen.getByRole('region', { name: 'Hero details' })
-    expect(details.textContent).toContain('Angela')
+    expect(details.textContent).toContain(STARTERS.find((h) => h.squad === 'outlaws' && h.roleId === 'controller')!.heroName)
     expect(details.textContent).toContain('Ultimate')
   })
 
   it('shows a unit card like TFT: the trait it counts toward, its health, a stats grid and the attribute split', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    await placeAt(/Bezos/, -12, -10)
-    fireEvent.click(bustOf(/Bezos/))
+    await placeAt(TANK, -12, -10)
+    fireEvent.click(bustOf(TANK))
     const card = () => screen.getByRole('region', { name: 'Hero details' })
     const value = (stat: string) => Number(card().querySelector(`.stat-${stat} .stat-value`)!.firstChild!.textContent)
     // one tank on the side: Bulwark shows 1 of the 2 it needs
@@ -112,46 +126,46 @@ describe('staging (U16)', () => {
     expect(within(within(card()).getByLabelText('Attribute split')).getAllByText(/^(Str|Agi|Int)$/)).toHaveLength(3)
     const armor = value('armor')
     // a second tank lights Bulwark, and the card shows the armor it fights with
-    fireEvent.click(bustOf(/Bezos/))
-    await placeAt(/Bezos/, -6, -10)
-    fireEvent.click(bustOf(/Bezos/))
+    fireEvent.click(bustOf(TANK))
+    await placeAt(TANK, -6, -10)
+    fireEvent.click(bustOf(TANK))
     expect(within(card()).getByText('2/4')).toBeTruthy()
     expect(value('armor') / armor).toBeCloseTo(1.2, 1)
   })
 
-  it('offers the Forge, the Loadout and the demo roster when the loadout is empty', async () => {
+  it('offers the Forge, the Loadout and the starter squads when the loadout is empty', async () => {
     await open({ demo: false })
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     expect(screen.getByRole('link', { name: /Make one in the Forge/ })).toBeTruthy()
     expect(screen.getByRole('link', { name: /add some in the Loadout/ }).getAttribute('href')).toBe('?loadout')
-    fireEvent.click(screen.getByRole('button', { name: 'use the demo roster' }))
+    fireEvent.click(screen.getByRole('button', { name: 'use the starter squads' }))
     // the row of heroes (the army panel and the map key are lists too)
-    expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(demoLoadout().length)
+    expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(starterLoadout().length)
   })
 
-  it('Quick battle goes from the side pick to two full armies, moguls against world leaders, ready to start', async () => {
+  it('Quick battle goes from the side pick to two full armies, the Vanguard against the Outlaws, ready to start', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: /Quick battle/ }))
-    expect(screen.getByRole('radio', { name: 'Your side Moguls (10/10)' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Your side Vanguard (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(onStart.mock.calls[0][0].side).toBe(0)
   })
 
-  it('"Moguls vs Leaders" sets up both sides from opposite factions in one click', async () => {
+  it('"Vanguard vs Outlaws" sets up both sides from opposite squads in one click', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: 'Red side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
-    expect(screen.getByRole('radio', { name: 'Your side Moguls (10/10)' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    expect(screen.getByRole('radio', { name: 'Your side Vanguard (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     const { formation, loadout } = onStart.mock.calls[0][0]
-    const factions = (s: 0 | 1) => new Set(formation[s].map((p) => loadout[p.hero].faction))
-    expect(factions(1)).toEqual(new Set(['mogul']))
-    expect(factions(0)).toEqual(new Set(['leader']))
+    const squads = (s: 0 | 1) => new Set(formation[s].map((p) => loadout[p.hero].squad))
+    expect(squads(1)).toEqual(new Set(['vanguard']))
+    expect(squads(0)).toEqual(new Set(['outlaws']))
   })
 
-  it('auto-deploying both sides gives a faction matchup, never a mirror', async () => {
+  it('auto-deploying both sides gives a squad matchup, never a mirror', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     fireEvent.click(screen.getByRole('button', { name: 'Auto-deploy your side' }))
@@ -162,16 +176,16 @@ describe('staging (U16)', () => {
     const mine = formation[0].map((p) => p.hero)
     const theirs = formation[1].map((p) => p.hero)
     expect(mine.filter((h) => theirs.includes(h))).toEqual([])
-    expect(new Set(mine.map((h) => loadout[h].faction))).toEqual(new Set(['mogul']))
-    expect(new Set(theirs.map((h) => loadout[h].faction))).toEqual(new Set(['leader']))
+    expect(new Set(mine.map((h) => loadout[h].squad))).toEqual(new Set(['vanguard']))
+    expect(new Set(theirs.map((h) => loadout[h].squad))).toEqual(new Set(['outlaws']))
   })
 
   it('mirror copies your lineup to the enemy, and Clear empties the side being set up', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Leaders vs Moguls' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Outlaws vs Vanguard' }))
     fireEvent.click(screen.getByRole('button', { name: 'Mirror' }))
-    expect(screen.getByRole('radio', { name: 'Enemy side World leaders (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByRole('radio', { name: 'Your side Empty (0/10)' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(true)
@@ -183,14 +197,14 @@ describe('staging (U16)', () => {
     const onStart = vi.fn<(r: StagingResult) => void>()
     render(<Staging onStart={onStart} deps={deps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
-    const base = demoLoadout()[0]
+    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    const base = starterLoadout()[0]
     await act(async () => resolve([{ key: 'build:mine', build: { ...base.build, heroName: 'Dario' }, symbol: base.symbol }]))
     const row = within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')
     expect(row[0].getAttribute('aria-label')).toMatch(/^Dario,/)
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     const { formation, loadout } = onStart.mock.calls[0][0]
-    expect(new Set(formation[0].map((p) => loadout[p.hero].faction))).toEqual(new Set(['mogul']))
-    expect(new Set(formation[1].map((p) => loadout[p.hero].faction))).toEqual(new Set(['leader']))
+    expect(new Set(formation[0].map((p) => loadout[p.hero].squad))).toEqual(new Set(['vanguard']))
+    expect(new Set(formation[1].map((p) => loadout[p.hero].squad))).toEqual(new Set(['outlaws']))
   })
 })

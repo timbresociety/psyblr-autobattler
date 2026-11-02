@@ -14,10 +14,11 @@ import type { Attribute, BuildSlot, LimitHit, RoleId, SecondaryStat, SlotKind, S
 
 export const BUILD_SLOTS: readonly BuildSlot[] = ['basic', 'active1', 'active2', 'passive', 'ultimate', 'movement']
 
+/** Each slot's row (GAME.md §4): V the melee style, LMB the ranged weapon, Q the spell. */
 export const SLOT_KIND: Record<BuildSlot, SlotKind> = {
-  basic: 'basic',
-  active1: 'active',
-  active2: 'active',
+  basic: 'melee',
+  active1: 'ranged',
+  active2: 'spell',
   passive: 'passive',
   ultimate: 'ultimate',
   movement: 'movement',
@@ -27,13 +28,6 @@ export const TEXT_LIMITS = { heroName: 60, name: 40, flavour: 280, visual: 200 }
 /** Reference photos per hero, and the longest chat message or hero description. */
 export const MAX_PHOTOS = 3
 export const MAX_CHAT = 500
-
-/** The template the other active slot holds, which this slot must not repeat (R1: two different actives). */
-export function otherActive(slots: Record<BuildSlot, { templateId: string }>, slot: BuildSlot): string[] {
-  if (slot === 'active1') return [slots.active2.templateId]
-  if (slot === 'active2') return [slots.active1.templateId]
-  return []
-}
 
 /** A rejection for a malformed field (unknown template, role or spread shape). */
 export function invalidField(field: string): LimitHit {
@@ -95,10 +89,9 @@ const describe = (spec: Pick<SkillSpec, 'name' | 'flavour'>) => `${spec.name} ${
 function pickTemplates(roleId: RoleId, skills: Partial<Record<BuildSlot, Pick<SkillSpec, 'name' | 'flavour'>>>, description = ''): Record<BuildSlot, Template> {
   const picks = {} as Record<BuildSlot, Template>
   for (const slot of BUILD_SLOTS) {
-    const exclude = slot === 'active2' ? [picks.active1.id] : []
     // a slot the player has not described yet takes its cue from the hero description
     const text = describe(skills[slot] ?? { name: '', flavour: '' }) || description
-    picks[slot] = matchTemplate(roleId, SLOT_KIND[slot], text, exclude).template
+    picks[slot] = matchTemplate(roleId, SLOT_KIND[slot], text).template
   }
   return picks
 }
@@ -275,7 +268,7 @@ export function requestStats(build: Build, goals: Partial<Record<SecondaryStat, 
 
 /** The closest swaps for a slot (R7): what the gate suggests when a build is blocked, and the top of the swap menu. */
 export function swapAlternatives(build: Build, slot: BuildSlot): Template[] {
-  return nearestAlternatives(build.roleId, SLOT_KIND[slot], build.slots[slot].templateId, describe(build.slots[slot]), otherActive(build.slots, slot))
+  return nearestAlternatives(build.roleId, SLOT_KIND[slot], build.slots[slot].templateId, describe(build.slots[slot]))
 }
 
 /**
@@ -284,7 +277,7 @@ export function swapAlternatives(build: Build, slot: BuildSlot): Template[] {
  */
 export function swapOptions(build: Build, slot: BuildSlot): Template[] {
   const near = swapAlternatives(build, slot)
-  const taken = new Set([build.slots[slot].templateId, ...otherActive(build.slots, slot), ...near.map((t) => t.id)])
+  const taken = new Set([build.slots[slot].templateId, ...near.map((t) => t.id)])
   return [...near, ...poolFor(build.roleId, SLOT_KIND[slot]).filter((t) => !taken.has(t.id))]
 }
 
@@ -356,7 +349,7 @@ export function editSkillText(build: Build, slot: BuildSlot, text: SkillText, re
   if (flavourChanged) {
     if (current.swapped && !replace) needsConfirm = true
     else {
-      next.templateId = matchTemplate(build.roleId, SLOT_KIND[slot], describe(next), otherActive(build.slots, slot)).template.id
+      next.templateId = matchTemplate(build.roleId, SLOT_KIND[slot], describe(next)).template.id
       next.swapped = false
       next.retuneSteps = 0
     }
@@ -378,10 +371,14 @@ export function hydrateBuild(raw: unknown): OpResult {
   if (!isRoleId(roleId)) return fail('roleId')
   const rawSlots = (input.slots ?? {}) as Record<string, Record<string, unknown> | undefined>
   const slots = {} as Record<BuildSlot, SkillSpec>
+  // a build stored before §4's rows kept its gun in the basic slot: the gun moves to LMB, and V takes a weapon style
+  const oldBasic = typeof rawSlots.basic?.templateId === 'string' ? rawSlots.basic.templateId : undefined
+  const gun = oldBasic && poolFor(roleId, 'ranged').some((t) => t.id === oldBasic) ? oldBasic : undefined
   for (const slot of BUILD_SLOTS) {
     const s = rawSlots[slot] ?? {}
+    const stored = slot === 'active1' && gun ? gun : s.templateId
     // a template retired from this slot by a catalogue change is replaced by its successor
-    const templateId = typeof s.templateId === 'string' ? currentTemplate(s.templateId, roleId, SLOT_KIND[slot]) : undefined
+    const templateId = typeof stored === 'string' ? currentTemplate(stored, roleId, SLOT_KIND[slot]) : undefined
     if (!templateId) return fail(`${slot}.templateId`)
     slots[slot] = {
       name: str(s.name, TEXT_LIMITS.name),
@@ -392,7 +389,6 @@ export function hydrateBuild(raw: unknown): OpResult {
       retuneSteps: 0,
     }
   }
-  if (slots.active1.templateId === slots.active2.templateId) return fail('active2.templateId')
   const rawSpread = (input.spread ?? {}) as Record<string, unknown>
   const spread = {} as Spread
   for (const attr of ATTRIBUTES) spread[attr] = typeof rawSpread[attr] === 'number' ? (rawSpread[attr] as number) : NaN

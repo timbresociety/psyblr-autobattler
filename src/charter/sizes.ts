@@ -43,18 +43,19 @@ export const SIZES: Record<SizeClass, SizeProfile> = {
 /**
  * What each class costs each role in health, tuned so every size of a role does as well in 3v3 skirmishes as the same
  * role at medium. Reach decides blade fights and a small body slips shots, so the same class is worth very different
- * amounts to a tank and a marksman: a tiny tank needs twice the health to keep up, and since the canon's melee
- * (2026-11-01) a big body that fights from range is a target that needs up to two and a half times its health.
+ * amounts to a tank and a support. Retuned for the kit engine (GAME.md §4, every hero carries a ranged weapon and a
+ * melee style): most classes now sit near the role's medium health, a small tank needs nearly twice it, and a support
+ * any size off medium pays about half (the old prices left a huge marksman winning 98%).
  */
 export const SIZE_HEALTH: Partial<Record<RoleId, Partial<Record<SizeClass, number>>>> = {
-  tank: { tiny: 1.858, small: 0.973, large: 0.878, huge: 1.241 },
-  fighter: { tiny: 0.978, small: 1.062, large: 1.041, huge: 1.046 },
-  assassin: { tiny: 1.015, small: 0.983, large: 1.087, huge: 1.127 },
-  mage: { tiny: 1.023, small: 1.057, large: 1.785, huge: 2.088 },
-  marksman: { tiny: 1.083, small: 1.043, large: 1.891, huge: 2.653 },
-  support: { tiny: 1.513, small: 0.855, large: 1.284, huge: 1.041 },
-  controller: { tiny: 0.934, small: 0.974, large: 1.115, huge: 1.239 },
-  summoner: { tiny: 0.928, small: 0.944, large: 1.03, huge: 1.135 },
+  tank: { tiny: 1.244, small: 1.827, large: 1.349, huge: 0.88 },
+  fighter: { tiny: 0.978, small: 1.157, large: 0.983, huge: 1.108 },
+  assassin: { tiny: 1.075, small: 0.983, large: 1.087, huge: 1.064 },
+  mage: { tiny: 0.802, small: 0.841, large: 1.066, huge: 0.992 },
+  marksman: { tiny: 1.023, small: 0.971, large: 0.951, huge: 1.077 },
+  support: { tiny: 0.957, small: 0.462, large: 0.544, huge: 0.524 },
+  controller: { tiny: 0.934, small: 0.974, large: 1.068, huge: 0.904 },
+  summoner: { tiny: 0.902, small: 0.751, large: 0.893, huge: 0.877 },
 }
 
 /** The health multiplier `role` pays for `size`. */

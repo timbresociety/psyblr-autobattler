@@ -10,9 +10,8 @@ import { wearNow, type LoadedWear } from '../../../arena/client/wear/items.js'
 import type { Build } from '../../../charter/build.js'
 import type { RoleId } from '../../../charter/types.js'
 import type { HeroPackage } from '../../../forge/package.js'
-import { DEMO_HEROES, demoBuild, type DemoFaction } from '../../../arena/demo/roster.js'
-import { demoLook } from '../../../arena/demo/looks.js'
-import { benchHero } from '../../../arena/demo/procedural-hero.js'
+import { STARTERS, starterBuild, type Squad } from '../../../arena/starters.js'
+import { benchHero } from '../../../arena/client/procedural-hero.js'
 import { liveDeps } from '../../api.js'
 
 /** One hero the streamer can place: a build, plus its package when it was forged. */
@@ -22,19 +21,18 @@ export interface LoadoutEntry {
   pkg?: HeroPackage
   /** A short symbol for the hero's primary role, shown under its bust (R3). */
   symbol: string
-  /** Demo heroes fight for a faction (moguls or world leaders); the player's own heroes have none. */
-  faction?: DemoFaction
-  /** Suit colour. Demo heroes carry their own; others take one from their place in the row. */
+  /** Starters fight for a squad (the Vanguard or the Outlaws); the player's own heroes have none. */
+  squad?: Squad
+  /** Suit colour. Starters carry their own; others take one from their place in the row. */
   hue?: number
 }
 
 const ROLE_SYMBOL: Record<string, string> = { tank: '🛡', fighter: '⚔', assassin: '🗡', mage: '✦', marksman: '◎', support: '✚', controller: '⛓', summoner: '⚙' }
 export const roleSymbol = (role: string) => ROLE_SYMBOL[role] ?? '•'
 
-export const demoLoadout = (): LoadoutEntry[] => DEMO_HEROES.map((h) => {
-  const build = demoBuild(h)
-  return { key: `demo:${h.heroName}`, build, symbol: roleSymbol(build.roleId), faction: h.faction, hue: h.hue }
-})
+export const starterEntry = (s: (typeof STARTERS)[number]): LoadoutEntry => ({ key: `starter:${s.id}`, build: starterBuild(s), symbol: roleSymbol(s.roleId), squad: s.squad, hue: s.hue })
+
+export const starterLoadout = (): LoadoutEntry[] => STARTERS.map(starterEntry)
 
 export interface LoadoutDeps {
   /** Heroes to add to the row, with their packages when forged. An empty query means the player's own heroes. */
@@ -78,8 +76,8 @@ const standIns = new Map<string, string>()
 let bustRenderer: THREE.WebGLRenderer | undefined | null
 const BUST_PX = 160
 
-/** Loaded with the busts up front: the bodies the demo roster wears and the medium ones; other bodies load when needed. */
-const BUILDS: BodyName[] = [...new Set<BodyName>(['m-medium', 'f-medium', ...DEMO_HEROES.map((h) => bodyFor({ roleId: h.roleId, sizeClass: h.sizeClass, look: demoLook(h.id) }))])]
+/** Loaded with the busts up front: the bodies the starters wear and the medium ones; other bodies load when needed. */
+const BUILDS: BodyName[] = [...new Set<BodyName>(['m-medium', 'f-medium', ...STARTERS.map((s) => bodyFor(s.build))])]
 const characters = new Map<BodyName, Gltf>()
 const wanted = new Set<BodyName>()
 const listeners = new Set<() => void>()

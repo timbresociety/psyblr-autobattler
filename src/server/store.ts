@@ -54,7 +54,12 @@ export async function issueDeviceId(db: Db): Promise<string> {
 function validated(raw: unknown): Build {
   const result = hydrateBuild(raw)
   if (!result.ok) throw new StoreInputError(`invalid build: ${result.errors.map((e) => e.field).join(', ')}`)
-  // a face is a photo like any other: it must have come through the upload endpoint, unless it is a demo hero's own
+  // the typing rules (GAME.md §4): hydration moves an old stored build's item to its new row, but a save that puts an
+  // item in a row it doesn't fit is refused, not quietly fixed
+  const slots = (raw as { slots?: Record<string, { templateId?: unknown }> }).slots ?? {}
+  const moved = BUILD_SLOTS.filter((slot) => slots[slot]?.templateId !== result.build.slots[slot].templateId)
+  if (moved.length) throw new StoreInputError(`invalid build: ${moved.map((slot) => `${slot}.templateId`).join(', ')}`)
+  // a face is a photo like any other: it must have come through the upload endpoint
   if (result.build.look?.face && !isFacePhotoUrl(result.build.look.face.url)) throw new StoreInputError('the face photo must be uploaded through the photo endpoint')
   return result.build
 }

@@ -2,7 +2,7 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 13
+export const ENGINE_CALIBRATION_VERSION = 14
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
@@ -78,7 +78,7 @@ export const ENGINE = {
     step: 0.4,
   },
   /**
-   * Melee (the canon, 2026-10-31). Space tapped strikes; held past `heavyHold` it charges and lands a heavy blow on
+   * Melee (the canon, 2026-10-31). V tapped strikes; held past `heavyHold` it charges and lands a heavy blow on
    * release, worth `heavy` times a strike charged for nothing to `heavyFull` charged for `chargeFull` seconds, launching
    * the target as high as a jump. Strikes that land chain while each follows the last within `chain` seconds: the
    * third is the finisher, worth `finisher` times, launching as high as a double jump. A guarded strike breaks the
@@ -90,7 +90,29 @@ export const ENGINE = {
    * than one shot every `fastest` seconds (combat.ts, shotTemplate).
    */
   primary: { rate: 2.2, fastest: 0.16 },
-  melee: { heavyHold: 0.28, chargeFull: 1, heavy: 1.25, heavyFull: 1.8, chain: 0.7, buffer: 0.45, finisher: 1.4, blockStagger: 0.4, regainAfter: 0.2, launchPush: 4 },
+  /**
+   * The ranged weapon (§5). A magazine holds the weapon's shots times the sheet's ammo over `ammoReference`; an empty
+   * one reloads at once, and one left unfired for `topUp` seconds reloads too. Bloom (radians of random spread) starts
+   * at the style's `base`, grows `perShot` a shot and falls `recover` a second, plus `moving` at a run and `airborne`
+   * in the air, never past `max`. Pellets spread over the weapon's cone; a burst's shots are `burstGap` seconds apart.
+   * Shots leave the muzzle (`muzzle`: height, forward and right of the feet, as shares of the body's height) and fly at
+   * the point the crosshair covers.
+   */
+  ranged: {
+    topUp: 2.5,
+    base: { pistol: 0.012, rifle: 0.006, thrown: 0.018, magic: 0.01 },
+    perShot: 0.012,
+    recover: 0.02,
+    moving: 0.03,
+    airborne: 0.05,
+    max: 0.12,
+    burstGap: 0.07,
+    muzzle: { pistol: [0.72, 0.3, 0.12], rifle: [0.75, 0.42, 0.1], thrown: [0.8, 0.22, 0.16], magic: [0.72, 0.32, 0.08] },
+  },
+  ammoReference: 12,
+  /** The passive (§4 F): a power that lands once as it switches on spends this share of its meter to do it. */
+  passive: { switchCost: 0.35 },
+  melee: { heavyHold: 0.28, chargeFull: 1, heavy: 1.25, heavyFull: 1.8, chain: 0.7, buffer: 0.45, finisher: 1.4, blockStagger: 0.4, guardBreak: 0.6, regainAfter: 0.2, launchPush: 4, lungeArc: 70, lungeTime: 0.12 },
   /** Shreds can't push a resist below this. */
   resistFloor: -20,
   /** No armor or spirit resist takes more than this percentage off a hit. */

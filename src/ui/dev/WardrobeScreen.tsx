@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { defaultLook, wearUrl, type FacePhoto, type Gender, type LookSlot, type Worn } from '../../charter/look'
+import { useState } from 'react'
+import { defaultLook, wearUrl, type Gender, type LookSlot, type Worn } from '../../charter/look'
 import type { RoleId } from '../../charter/types'
 import { heroHue } from '../../arena/client/characters'
-import { DEMO_HEROES, demoBuild } from '../../arena/demo/roster'
+import { STARTERS, starterBuild } from '../../arena/starters'
 import { BUILT_IN_ITEMS } from '../../kit/wear/library.gen'
 import { HeroStage } from '../common/HeroStage'
 import type { StageClip } from '../common/hero-look'
@@ -12,9 +12,7 @@ import { HeroPortrait } from '../common/portrait'
  * A dev bench for the wardrobe (?wardrobe, dev builds only): outfits from the library on the shared bodies, to check
  * how items sit and how their loose cloth swings. ?wardrobe=kimono,hair_long,geta wears just the listed items,
  * &gender=m or f picks the body, &facing=3.14 holds it turned (radians; that one shows the back), &speed=0.25 plays
- * in slow motion and &face=musk wears a demo hero's portrait (public/kit/faces): its photo and fitted shape.
- * &hero=3 shows the fourth demo hero instead, its bust and its whole body, as the likeness sheet captures them
- * (docs/forge/likeness.html). &generated=full:<id>,feet:<id> also wears garments the dev server generated
+ * in slow motion. &hero=3 shows the fourth starter instead, its bust and its whole body. &generated=full:<id>,feet:<id> also wears garments the dev server generated
  * (.dev-store/wear), and &recolor=#1f2a44,#c9a227 recolours their channels.
  */
 
@@ -53,19 +51,11 @@ export function WardrobeScreen() {
   const facing = params.has('facing') ? Number(params.get('facing')) : undefined
   const speed = Number(params.get('speed') ?? 1) || 1
   const outfits = listed ? [{ name: 'Listed', role: 'fighter' as RoleId, items: listed.split(',').map((s) => s.trim()) }] : PRESETS
-  const portrait = params.get('face')
   const generated = params.get('generated')
   const recolor = params.get('recolor')
-  const [face, setFace] = useState<FacePhoto>()
   const [cue, setCue] = useState<{ clip: StageClip; at: number }>()
-  useEffect(() => {
-    if (!portrait) return
-    const demo = DEMO_HEROES.find((h) => h.id === portrait)
-    if (demo) setFace(demoBuild(demo).look!.face)
-  }, [portrait])
   const pick = params.get('hero')
-  if (pick !== null && DEMO_HEROES[Number(pick)]) return <DemoHeroBench index={Number(pick)} {...(facing === undefined ? {} : { facing })} />
-  if (portrait && !face) return <p className="screen-loading">Loading the face…</p>
+  if (pick !== null && STARTERS[Number(pick)]) return <StarterBench index={Number(pick)} {...(facing === undefined ? {} : { facing })} />
   return (
     <main style={{ padding: 16, display: 'grid', gap: 12 }}>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -77,7 +67,7 @@ export function WardrobeScreen() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${outfits.length}, minmax(0, 1fr))`, gap: 12 }}>
         {outfits.map((o) => {
-          const look = { ...defaultLook(o.role, o.name, heroHue(o.name)), ...(gender ? { gender } : {}), wear: wearing(o.items, generated, recolor), ...(face ? { face } : {}) }
+          const look = { ...defaultLook(o.role, o.name, heroHue(o.name)), ...(gender ? { gender } : {}), wear: wearing(o.items, generated, recolor) }
           return (
             <section key={o.name} style={{ height: 560, display: 'grid', gridTemplateRows: 'auto 1fr' }}>
               <h2 style={{ margin: 0, fontSize: 14 }}>{`${o.name}: ${o.items.join(', ')}`}</h2>
@@ -90,10 +80,10 @@ export function WardrobeScreen() {
   )
 }
 
-/** One demo hero as the game draws it: the bust the staging row and the HUD show, and the whole body on the plinth. */
-function DemoHeroBench({ index, facing }: { index: number; facing?: number }) {
-  const hero = DEMO_HEROES[index]
-  const build = demoBuild(hero)
+/** One starter as the game draws it: the bust the staging row and the HUD show, and the whole body on the plinth. */
+function StarterBench({ index, facing }: { index: number; facing?: number }) {
+  const hero = STARTERS[index]
+  const build = starterBuild(hero)
   return (
     <main style={{ padding: 16, display: 'flex', gap: 16, alignItems: 'flex-start' }}>
       <HeroPortrait hero={{ key: `bench:${index}`, heroName: build.heroName, roleId: build.roleId, hue: hero.hue, build }} className="bench-bust" />

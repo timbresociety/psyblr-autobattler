@@ -3,9 +3,9 @@ import type { BuildSlot } from '../../charter/types.js'
 import { AIM_STEPS, MOVES, slotBit, type Command } from '../engine/state.js'
 
 /**
- * Keyboard and mouse, as the canon binds them (docs/plans/2026-10-31-canon-psyblr-human.md). WASD moves relative to the
- * camera; V jumps (again in the air for the double jump); Z rolls along the facing; Shift tapped dashes and held
- * sprints; C crouches (at a run it slides) and Ctrl lies prone, each again to stand; Space strikes (tapped, chaining
+ * Keyboard and mouse, as GAME.md §3 binds them (jump Space, melee V, owner 2026-11-02). WASD moves relative to the
+ * camera; Space jumps (again in the air for the double jump); Z rolls along the facing; Shift tapped dashes and held
+ * sprints; C crouches (at a run it slides) and Ctrl lies prone, each again to stand; V strikes (tapped, chaining
  * into a combo) or charges a heavy blow (held, let go to land it); X guards; left click is Skill 1, Q Skill 2, E the
  * movement skill, F turns the passive on and off, R the ultimate; the right button held zooms to first person (the
  * camera's, not the engine's). Pointer lock holds the mouse in a fight, so Ctrl+click never reaches the page.
@@ -18,13 +18,13 @@ export const BINDINGS: Record<string, Action> = {
   KeyS: 'back',
   KeyA: 'left',
   KeyD: 'right',
-  KeyV: 'jump',
+  Space: 'jump',
   KeyZ: 'dodge',
   ShiftLeft: 'dash',
   ShiftRight: 'dash',
   KeyC: 'crouch',
   ControlLeft: 'prone',
-  Space: 'basic',
+  KeyV: 'basic',
   KeyX: 'block',
   Mouse0: 'active1',
   KeyQ: 'active2',

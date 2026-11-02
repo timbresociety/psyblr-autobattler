@@ -1,0 +1,26 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the starter squads (GAME.md §13: generated, not hand-made) > come out the same every time, and a copy never reaches the original 1`] = `
+[
+  "Kestrel Stormcall",
+  "Zephyr Swiftwater",
+  "Dax Ashwhisper",
+  "Jinx Deeproot",
+  "Wren Hollowbranch",
+  "Xan Emberfall",
+  "Bram Coldiron",
+  "Nova Ravencrest",
+  "Quill Redthorn",
+  "Bram Starling",
+  "Echo Stonejaw",
+  "Onyx Frostvein",
+  "Jinx Highwind",
+  "Sable Brightwater",
+  "Kestrel Quickstep",
+  "Wren Thornwick",
+  "Mire Silverleaf",
+  "Xan Goldspark",
+  "Dax Duskmantle",
+  "Zephyr Wildfire",
+]
+`;

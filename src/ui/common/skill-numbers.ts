@@ -26,10 +26,10 @@ const BUFF_LABEL: Record<Extract<Effect, { kind: 'buff' }>['stat'], string> = {
 
 const CONTROL_LABEL = { root: 'Root', silence: 'Silence', disarm: 'Disarm', sleep: 'Sleep', blind: 'Blind', grounded: 'Ground', fear: 'Fear', taunt: 'Taunt', break: 'Break' } as const
 const DEBUFF_LABEL = { armorShred: 'Armour', spiritShred: 'Spirit resist', vulnerable: 'Vulnerable', wound: 'Anti-heal', mark: 'Mark' } as const
-const STATE_LABEL = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable', cleanse: 'Cleanse' } as const
+const STATE_LABEL = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable', cleanse: 'Cleanse', reflect: 'Reflect' } as const
 
 /** Most telling first: damage, then healing and shields, then control, then the rest. */
-const ORDER: Effect['kind'][] = ['damage', 'turret', 'heal', 'shield', 'stun', 'knockup', 'control', 'wall', 'slow', 'debuff', 'pull', 'execute', 'resize', 'form', 'state', 'mobility', 'buff', 'displace', 'refresh', 'field', 'trap']
+const ORDER: Effect['kind'][] = ['damage', 'turret', 'heal', 'shield', 'stun', 'knockup', 'control', 'wall', 'slow', 'debuff', 'pull', 'execute', 'resize', 'form', 'state', 'mobility', 'buff', 'displace', 'refresh', 'field', 'trap', 'reveal', 'swapHealth', 'steal', 'rewind']
 
 function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headline {
   switch (effect.kind) {
@@ -73,6 +73,14 @@ function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headl
       return { label: 'Wall', value: n(effect.length), unit: 'm' }
     case 'trap':
       return { label: 'Trap', value: n(effect.lifetime), unit: 's' }
+    case 'reveal':
+      return { label: 'Reveal', value: n(effect.duration), unit: 's' }
+    case 'swapHealth':
+      return { label: 'Health swap', value: n(effect.cap * 100), unit: '%' }
+    case 'steal':
+      return { label: 'Steals', value: n(effect.seconds), unit: 's' }
+    case 'rewind':
+      return { label: 'Rewind', value: n(effect.seconds), unit: 's' }
     case 'turret':
       return { label: 'Turret', value: String(Math.round((effect.amount + effect.ratio * sheet[effect.scaling]) * factor)), unit: `every ${n(effect.interval)} s` }
   }

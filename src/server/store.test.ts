@@ -5,7 +5,7 @@ import { NotFoundError, OwnershipError, addHero, clearHeroPhotos, createHero, de
 import { CATALOG_VERSION } from '../charter/templates/catalog.js'
 import { defaultBuild } from '../sim/fixtures.js'
 import { remixBuild, setAttribute } from '../charter/build.js'
-import { DEMO_HEROES, demoBuild } from '../arena/demo/roster.js'
+import { STARTERS, starterBuild } from '../arena/starters.js'
 
 let db: Db
 
@@ -63,12 +63,12 @@ describe('photo faces', () => {
     expect((await getBuild(db, owner, ok.buildId)).build.look?.face?.points).toHaveLength(956)
   })
 
-  it('a remix of a demo hero keeps its portrait: the game serves those itself', async () => {
+  it('a remix of a starter saves with its look, and a face from the game\'s own folders is refused', async () => {
     const owner = await issueDeviceId(db)
-    const remix = remixBuild(demoBuild(DEMO_HEROES[0]))
+    const remix = remixBuild(starterBuild(STARTERS[0]))
     const saved = await createHero(db, owner, remix, [], quickGate)
     expect((await getBuild(db, owner, saved.buildId)).build.look).toEqual(remix.look)
-    const elsewhere = { ...remix, look: { ...remix.look!, face: { ...remix.look!.face!, url: '/kit/faces/../../secret.webp' } } }
+    const elsewhere = { ...remix, look: { ...remix.look!, face: { url: '/kit/faces/../../secret.webp', width: 512, height: 512, points: new Array(956).fill(0.5) } } }
     await expect(createHero(db, owner, elsewhere, [], quickGate)).rejects.toThrow(/face photo/)
   })
 })

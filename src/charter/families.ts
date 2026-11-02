@@ -1,4 +1,4 @@
-import type { Effect, Template } from './types.js'
+import type { Effect, SpellFamily, SpellShape, Template } from './types.js'
 
 /**
  * The skill library's effect families (docs/charter/skill-library.html). Every effect belongs to exactly one, so the
@@ -36,7 +36,13 @@ export function familyOf(effect: Effect): Family {
     case 'control':
       return 'control'
     case 'debuff':
+    case 'reveal':
       return 'debuff'
+    case 'swapHealth':
+    case 'rewind':
+      return 'protect'
+    case 'steal':
+      return 'tempo'
     case 'buff':
       return 'buff'
     case 'heal':
@@ -69,4 +75,41 @@ export function familiesOf(template: Pick<Template, 'effects'>): Family[] {
 export function primaryFamily(template: Pick<Template, 'effects'>): Family {
   const has = new Set(familiesOf(template))
   return PRECEDENCE.find((f) => has.has(f)) ?? 'damage'
+}
+
+/**
+ * The spell universe (GAME.md §4 Q): ten families, each spell in exactly one, its main purpose. These sort the Q row;
+ * the effect families above describe what any template does, across rows.
+ */
+export const SPELL_FAMILIES: readonly SpellFamily[] = ['control', 'displacement', 'zone', 'construct', 'summon', 'support', 'curse', 'burst', 'vision', 'trick']
+
+export const SPELL_FAMILY_LABEL: Record<SpellFamily, string> = {
+  control: 'Control',
+  displacement: 'Displacement',
+  zone: 'Zone',
+  construct: 'Construct',
+  summon: 'Summon or deploy',
+  support: 'Ally support',
+  curse: 'Curse',
+  burst: 'Burst spell',
+  vision: 'Vision',
+  trick: 'Trick',
+}
+
+export const SPELL_SHAPES: readonly SpellShape[] = ['projectile', 'beam', 'cone', 'line', 'zone', 'aura', 'tether', 'placed']
+
+/** A spell's shape (§4): its own when it names one, else read off its delivery; what it leaves behind is placed. */
+export function shapeOf(t: Pick<Template, 'shape' | 'delivery' | 'effects'>): SpellShape {
+  if (t.shape) return t.shape
+  if (t.effects.some((e) => e.kind === 'wall' || e.kind === 'trap' || e.kind === 'turret')) return 'placed'
+  switch (t.delivery.kind) {
+    case 'projectile':
+    case 'beam':
+    case 'cone':
+    case 'zone':
+    case 'aura':
+      return t.delivery.kind
+    default:
+      return 'aura'
+  }
 }

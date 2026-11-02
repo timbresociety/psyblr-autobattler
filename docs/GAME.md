@@ -778,16 +778,16 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 | Area | Gap | Status |
 | --- | --- | --- |
-| Roster | The 20 demo heroes (looks, faces, retunes) | **Dropped.** Balance uses generated kits (§4). |
-| Kit | Ki Blast sits in melee; Chain Hook in ranged; Skill 1 is forced into projectiles; strike skills in Q | Rework (§4) |
+| Roster | The 20 demo heroes (looks, faces, retunes) | **Dropped (M3):** deleted with their faces; staging and the soak use two generated squads of ten, and balance uses generated kits (§4) |
+| Kit | Ki Blast sits in melee; Chain Hook in ranged; Skill 1 is forced into projectiles; strike skills in Q | **Fixed (M3):** six typed rows enforced on save; melee is a weapon style, LMB the ranged library (magazine, reload, bloom, muzzle), Q the 10 spell families, F passives on an energy meter (§4, §5) |
 | Effects | Casts flash at the torso | Rework (§6) |
 | Effects | No proper blasts, craters or breakable props | Rework (§6b) |
 | Map | The arena is a flat 2D floor | Rework into the vertical House of Instinct (§7–8) |
 | Engine | No 3D collision, mantle or navmesh | Rework (§8) |
 | Engine | No LOD or crowd path for 100 heroes | Rework (§10) |
 | Engine | No netcode | Later phase; this rework is AI-only in the browser (§2) |
-| AI | Bots are too strong | Three levels: today's bots become Hard, plus Normal and Easy (§2) |
-| Controls | Jump and melee keys | Swap to Space and V (§3) |
+| AI | Bots are too strong | **Fixed (M3):** Easy, Normal (default) and Hard (today's bots, used by the gate), picked per side in staging (§2) |
+| Controls | Jump and melee keys | **Fixed (M3):** Space jumps, V is melee (§3) |
 | Forge | Moves and Kit are split | Merge (§11) |
 | App | Loose screen switching | Routes (§11) |
 | Body | No helper bones or corrective morphs | **Fixed (M1):** muscle helpers, correctives and drivers added at load (§9.2–9.4) |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-02: §13 status updated for Milestone 3 (kit engine, §2–§5): Roster, Kit, AI and Controls rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 2 (animation library, §12): three Animation/Kit gaps closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 1 (metarig, §9.1–9.7): five Body gaps closed. No rule changed.
 - 2026-11-02: **approved by the owner.** Bandai Namco left out.

@@ -15,11 +15,15 @@ export type MatchEvent =
   | { type: 'hit'; source: number; target: number; slot: BuildSlot; amount: number; heavy: boolean }
   | { type: 'knockback'; hero: number; phase: 'start' | 'end' }
   /** A jump, a second jump in the air, a dash or a slide began, or the hero landed, falling at `speed` m/s (phase 2). */
-  /** F switched the passive on or off. */
-  | { type: 'passive'; hero: number; on: boolean }
+  /** F switched the passive on or off; `dry` when it ran out of energy and switched itself off. */
+  | { type: 'passive'; hero: number; on: boolean; dry?: boolean }
+  /** The ranged weapon began reloading (until tick `until`), or finished. */
+  | { type: 'reload'; hero: number; phase: 'start' | 'end'; until: number }
+  /** A shot turned back by a reflect. */
+  | { type: 'reflect'; hero: number; projectile: number }
   | { type: 'move'; hero: number; move: 'jump' | 'air-jump' | 'dash' | 'slide' | 'land' | 'roll'; speed?: number }
   /** Melee (the canon): a heavy charge began, a guard caught a strike, a launched hero took control back. */
-  | { type: 'melee'; hero: number; what: 'charge' | 'blocked' | 'regain' | 'launch'; by?: number }
+  | { type: 'melee'; hero: number; what: 'charge' | 'blocked' | 'guard-broken' | 'regain' | 'launch'; by?: number }
   /** A transformation began or ended; `size` is the class the hero has now (a form may keep its own). */
   | { type: 'form'; hero: number; phase: 'start' | 'end'; size: SizeClass }
   | { type: 'death'; hero: number }

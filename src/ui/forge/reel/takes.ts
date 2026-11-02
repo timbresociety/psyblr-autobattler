@@ -24,8 +24,8 @@ const within = (t: number, from: number, to: number) => t >= from && t < to
 const tap = (t: number, at: number) => within(t, at, at + 0.06)
 
 export const TAKES: readonly Take[] = [
-  { key: 'combo', label: 'Melee combo', keys: 'Tap Space ×3', gap: 1.7, seconds: 3.2, press: (t) => ({ slots: [0.2, 0.75, 1.3].some((at) => tap(t, at)) ? ['basic'] : [] }) },
-  { key: 'heavy', label: 'Heavy blow', keys: 'Hold Space, let go', gap: 1.7, seconds: 3.4, press: (t) => ({ slots: within(t, 0.2, 0.2 + ENGINE.melee.heavyHold + ENGINE.melee.chargeFull) ? ['basic'] : [] }) },
+  { key: 'combo', label: 'Melee combo', keys: 'Tap V ×3', gap: 1.7, seconds: 3.2, press: (t) => ({ slots: [0.2, 0.75, 1.3].some((at) => tap(t, at)) ? ['basic'] : [] }) },
+  { key: 'heavy', label: 'Heavy blow', keys: 'Hold V, let go', gap: 1.7, seconds: 3.4, press: (t) => ({ slots: within(t, 0.2, 0.2 + ENGINE.melee.heavyHold + ENGINE.melee.chargeFull) ? ['basic'] : [] }) },
   { key: 'ranged', label: 'Ranged shots', keys: 'Hold left click', gap: 10, seconds: 3.2, press: (t) => ({ slots: within(t, 0.3, 2.6) ? ['active1'] : [] }) },
   { key: 'block', label: 'Block', keys: 'Hold X', gap: 2.5, seconds: 2.8, press: (t) => ({ moves: within(t, 0.3, 2.3) ? MOVES.block : 0 }) },
   { key: 'active2', label: 'Skill 2', keys: 'Q', gap: 7, seconds: 3.2, press: (t) => ({ slots: tap(t, 0.3) ? ['active2'] : [] }) },

@@ -13,7 +13,7 @@ import { RoleBadge, RoleIcon } from '../../common/RoleIcon'
 import { headline } from '../../common/skill-numbers'
 import { SkillIcon } from '../../common/SkillIcon'
 import { SLOT_LABEL } from '../../forge/labels'
-import { FACTION_NAME } from './presets'
+import { SQUAD_NAME } from './presets'
 import type { LoadoutEntry } from './loadout'
 
 /** A trait's tiers in one line each, for its tooltip. */
@@ -157,8 +157,8 @@ export function DetailsPanel({ build, entry, portrait, view3d = false, army = []
           <div className="details-tags">
             <RoleBadge role={build.roleId} />
             <small>{SIZES[build.sizeClass ?? 'medium'].label}</small>
-            {entry?.faction && <small>{FACTION_NAME[entry.faction]}</small>}
-            {entry && !entry.faction && <small>{entry.pkg ? 'Forged' : 'Your hero'}</small>}
+            {entry?.squad && <small>{SQUAD_NAME[entry.squad]}</small>}
+            {entry && !entry.squad && <small>{entry.pkg ? 'Forged' : 'Your hero'}</small>}
           </div>
         </div>
       </header>

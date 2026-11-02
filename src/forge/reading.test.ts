@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { BUILD_SLOTS, SLOT_KIND } from '../charter/build'
 import { poolFor } from '../charter/templates/catalog'
+import type { BuildSlot } from '../charter/types'
 import { ENCORE_COVER_ANSWER, ENCORE_PROMPT } from './examples'
 import { answerQuestion, buildFromReading, hydrateReading, namedSkills, offlineReading, readingSchema, withForm, withRole } from './reading'
 import { atRung, canReach, physiqueFromPrompt, wearFromPrompt } from './wardrobe-read'
@@ -33,7 +34,7 @@ describe('the offline reader', () => {
     const reading = offlineReading({ prompt: ENCORE })
     expect(reading.questions.map((q) => q.about)).toEqual(['active1', 'active2', 'form'])
     expect(reading.questions[0].ask).toBe('What should Encore Kha Ja do?')
-    const pool = poolFor(reading.roleId, 'active').map((t) => t.id)
+    const pool = poolFor(reading.roleId, SLOT_KIND[reading.questions[0].about as BuildSlot]).map((t) => t.id)
     for (const option of reading.questions[0].options) expect(pool).toContain(option.template)
     const form = reading.questions[2]
     expect(form.ask).toBe('Does Kendrick Se Bhi Upar grow, shrink, or keep his size?')

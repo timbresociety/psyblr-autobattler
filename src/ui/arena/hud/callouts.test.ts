@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { getTemplate } from '../../../charter/templates/catalog.js'
 import type { BuildSlot, Template } from '../../../charter/types.js'
-import { DEMO_HEROES, demoBuild } from '../../../arena/demo/roster.js'
+import { STARTERS, starterBuild } from '../../../arena/starters.js'
 import { CALLOUT_CAP, CALLOUT_LIFE, createCalloutPool } from './callouts.js'
 import { heroInfo } from './model.js'
 import type { ScreenPoint } from './world.js'
@@ -63,7 +63,7 @@ describe('move call-outs', () => {
   })
 
   it('calls out a famous move by the name the player gave it, in its palette', () => {
-    const build = demoBuild(DEMO_HEROES[0])
+    const build = starterBuild(STARTERS[0])
     const named = { ...build, look: { ...build.look!, skills: {} }, slots: { ...build.slots, active1: { ...build.slots.active1, name: 'Galick Gun' } } }
     const kit = Object.fromEntries(Object.entries(named.slots).map(([slot, s]) => [slot, getTemplate(s.templateId)])) as Record<BuildSlot, Template>
     const info = heroInfo(0, 0, { build: named, kit })

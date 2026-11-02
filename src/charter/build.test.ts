@@ -168,10 +168,10 @@ describe('swapTemplate (R7)', () => {
 
   it('accepts any template of the role for the slot, deep in the library too', () => {
     const build = mage()
-    const options = swapOptions(build, 'active1')
+    const options = swapOptions(build, 'active2')
     expect(options.length).toBeGreaterThanOrEqual(11)
     const last = options[options.length - 1]
-    expect(swapTemplate(build, 'active1', last.id).ok).toBe(true)
+    expect(swapTemplate(build, 'active2', last.id).ok).toBe(true)
   })
 
   it("rejects another role's template, another slot's template and the other active", () => {
@@ -220,7 +220,7 @@ describe('hydrateBuild (R4)', () => {
 
   it('rejects a template ID outside the role pool for its slot', () => {
     const raw = JSON.parse(JSON.stringify(mage()))
-    raw.slots.active1.templateId = 'tank-chain-hook'
+    raw.slots.active2.templateId = 'tank-chain-hook'
     expect(hydrateBuild(raw).ok).toBe(false)
   })
 

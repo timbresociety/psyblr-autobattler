@@ -1,13 +1,16 @@
 import { geometryOf } from '../../charter/geometry.js'
+import type { RoleId } from '../../charter/types.js'
 import { SIZES } from '../../charter/sizes.js'
+import { MELEE_STYLES } from '../../charter/templates/styles.js'
 import type { BuildSlot, Effect, Template } from '../../charter/types.js'
-import { ENGINE, ticks } from './calibration.js'
+import { DT, ENGINE, ticks } from './calibration.js'
 import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
+import { next } from './rng.js'
 import { tickWorld } from './world.js'
 import { afterBlow, blowTemplate, guarded, meleeButtons, regain, shotSeconds, shotTemplate, SKILL_SLOTS, type MeleeBlow, type Shot } from './combat.js'
 import { coverHit, coverInDisc, floorUnder } from './cover.js'
 import { keepOut, standOn } from './locomotion.js'
-import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sub, type Vec3 } from './maths.js'
+import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sin, sub, yawPitch, type Vec3 } from './maths.js'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import type { TickRules } from './tick.js'
 import { timingTicks } from './timing.js'
@@ -41,7 +44,9 @@ const top = (h: HeroState): Vec3 => ({ x: h.position.x, y: h.position.y + capsul
 const gap = (p: Vec3, h: HeroState) => distanceToSegment(p, h.position, top(h)) - capsule(h).radius
 const inArc = (from: Vec3, d: Vec3, h: HeroState, degrees: number) => dot(d, normalize(sub(chest(h), from))) >= cos((degrees / 2) * (PI / 180))
 const nearest = (from: Vec3, hs: HeroState[]) => (hs.length ? [hs.reduce((a, b) => (gap(from, b) < gap(from, a) ? b : a))] : [])
-export const isRanged = (setup: HeroSetup) => setup.kit.basic.delivery.range > 4
+/** Roles that fight from range by choice (every hero has both a melee style and a ranged weapon, §4). */
+const KEEPS_RANGE = new Set<RoleId>(['mage', 'marksman', 'support', 'controller', 'summoner'])
+export const isRanged = (setup: HeroSetup) => KEEPS_RANGE.has(setup.build.roleId)
 
 export interface Landing {
   hit: HeroState[]
@@ -105,10 +110,10 @@ function zoneReach(enemies: readonly HeroState[], from: Vec3, dir: Vec3, range: 
 }
 
 /** The enemies an instant delivery reaches from the caster's current aim, and where it lands. */
-export function landing(ctx: Ctx, caster: HeroState, template: Template): Landing {
+export function landing(ctx: Ctx, caster: HeroState, template: Template, aimed?: { from: Vec3; dir: Vec3 }, prefer?: HeroState): Landing {
   const d = template.delivery
-  const from = chest(caster)
-  const dir = aimOf(ctx.match, caster)
+  const from = aimed?.from ?? chest(caster)
+  const dir = aimed?.dir ?? aimOf(ctx.match, caster)
   const enemies = enemiesOf(ctx.match, caster)
   const reach = SIZES[caster.size].reachBonus
   const m = ctx.match
@@ -129,7 +134,10 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template): Landin
   switch (d.kind) {
     case 'melee': {
       // reach runs from the caster's body, not its chest: surface to surface, the way players and the AI judge it
-      const inReach = enemies.filter((e) => gap(from, e) - capsule(caster).radius <= d.range + ENGINE.meleeSlack + reach && inArc(from, dir, e, geometryOf(d).arcDegrees) && seen(e))
+      const inRange = (e: HeroState) => gap(from, e) - capsule(caster).radius <= d.range + ENGINE.meleeSlack + reach && seen(e)
+      // the swing's magnet: the hero it lunged at is struck while it's still in reach and roughly ahead (§5)
+      if (prefer?.alive && enemies.includes(prefer) && inRange(prefer) && inArc(from, dir, prefer, ENGINE.melee.lungeArc * 2)) return swing([prefer], d.range)
+      const inReach = enemies.filter((e) => inRange(e) && inArc(from, dir, e, geometryOf(d).arcDegrees))
       return swing(nearest(from, inReach), d.range)
     }
     case 'cone':
@@ -181,7 +189,7 @@ function impact(ctx: Ctx, caster: HeroState, slot: BuildSlot, template: Template
 function forbidden(match: MatchState, h: HeroState, slot: BuildSlot): boolean {
   const now = match.tick
   if (controlled(h, 'fear', now)) return true
-  if (slot === 'basic') return controlled(h, 'disarm', now)
+  if (slot === 'basic' || slot === 'active1') return controlled(h, 'disarm', now)
   if (controlled(h, 'silence', now) || taunter(match, h)) return true
   return slot === 'movement' && controlled(h, 'grounded', now)
 }
@@ -211,22 +219,25 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
   let shot: Shot | undefined
   // a cripple slows basic attacks and shots the way a slow slows feet: the strongest one counts
   const crippled = () => caster.slows.reduce((m, sl) => (sl.stat === 'attack' && sl.pct / 100 > m ? sl.pct / 100 : m), 0)
+  let target: HeroState | undefined
   if (slot === 'basic') {
     if (match.tick < caster.nextAttackAt) return false
-    const tempo = isRanged(setup) ? setup.sheet.fireRate : setup.sheet.attackSpeed
-    const between = ticks(1 / Math.max(0.2, tempo * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled())))
+    const between = ticks(1 / Math.max(0.2, setup.sheet.attackSpeed * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled())))
     caster.nextAttackAt = match.tick + between
     interval = between / ENGINE.tickHz
+    target = lungeAt(ctx, caster, template)
   } else if (slot === 'active1') {
-    // Skill 1 is a gun: held, it fires at the hero's fire rate, each shot a share of the skill (combat.ts)
-    if (caster.cooldowns.active1 > 0) return false
-    const cooldown = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
-    const between = Math.max(1, ticks(shotSeconds(setup.sheet.fireRate, (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled()))))
+    // the ranged weapon fires on repeat at its fire rate, while its magazine lasts (§4 LMB, §5)
+    const r = template.ranged
+    if (!r || caster.cooldowns.active1 > 0 || caster.reloadUntil > 0 || caster.burst) return false
+    if (caster.ammo <= 0) {
+      startReload(ctx, caster)
+      return false
+    }
+    const between = Math.max(1, ticks(shotSeconds(r.rate, setup.sheet.fireRate, (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled()))))
     caster.cooldowns.active1 = between
     interval = between / ENGINE.tickHz
-    const rider = match.tick >= caster.riderAt
-    if (rider) caster.riderAt = match.tick + cooldown
-    shot = { share: Math.min(1, between / Math.max(1, cooldown)), rider }
+    shot = { share: r.mode === 'pellets' ? 1 / (r.pellets ?? 1) : 1, rider: true }
   } else {
     if (slot === 'passive' || caster.cooldowns[slot] > 0) return false
     caster.cooldowns[slot] = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
@@ -236,7 +247,7 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
   if (before && !before.released && match.tick < before.ends) ctx.events.push({ type: 'interrupt', hero: caster.id, slot: before.slot })
   const { prep, recover } = timingTicks(template, slot, interval)
   const release = match.tick + prep
-  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}) }
+  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}), ...(target ? { target: target.id } : {}) }
   caster.blocking = false
   ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id, release, ends: release + recover, ...(blow ? { melee: blow } : {}) })
   return true
@@ -249,17 +260,18 @@ export function carryOn(ctx: Ctx, index: number) {
   if (!a) return
   if (!a.released && ctx.match.tick >= a.release) {
     a.released = true
-    release(ctx, index, a.slot, a.melee, a.ends - a.release, a.shot)
+    release(ctx, index, a.slot, a.melee, a.ends - a.release, a.shot, a.target)
   }
   if (ctx.match.tick >= a.ends && hero.action === a) hero.action = undefined
 }
 
 /** A cast lands: mobility first, then the delivery, then its effects. */
-function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot) {
+function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number) {
   const { match, setups } = ctx
   const caster = match.heroes[index]
   const template = slot === 'basic' ? blowTemplate(setups[index].kit[slot], blow) : shotTemplate(setups[index].kit[slot], shot)
   ctx.events.push({ type: 'release', hero: caster.id, slot })
+  if (slot === 'active1') return fire(ctx, caster, shot)
   for (const e of template.effects) {
     if (e.kind !== 'mobility') continue
     if (e.invulnerable) caster.invulnerableUntil = Math.max(caster.invulnerableUntil, match.tick + ticks(e.invulnerable))
@@ -292,16 +304,171 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
     ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: projectileRadius, speed })
     return
   }
-  const landed = landing(ctx, caster, template)
+  const landed = landing(ctx, caster, template, undefined, target !== undefined ? match.heroes[target] : undefined)
   const { at, cover } = landed
-  // a guard facing a close blow catches it (combat.ts)
-  const hit = guarded(ctx, caster, template, landed.hit)
+  // a guard facing a close blow catches it, unless the blow is heavy (combat.ts)
+  const hit = guarded(ctx, caster, template, landed.hit, blow)
   if (template.delivery.kind !== 'self') impact(ctx, caster, slot, template, at)
   strikeCover(ctx, caster, template, cover)
   resolve(ctx, caster, template, slot, hit, at)
   if (slot === 'basic') {
     afterBasic(ctx, caster, hit[0])
     afterBlow(ctx, caster, blow, hit, recovery)
+  }
+}
+
+/**
+ * The melee magnet (§5): the enemy a swing goes for, the nearest in reach plus the style's lunge and roughly ahead.
+ * The swing carries the body toward it through the wind-up, stopping at striking distance, and lands on it.
+ */
+function lungeAt(ctx: Ctx, caster: HeroState, template: Template): HeroState | undefined {
+  const style = template.style ? MELEE_STYLES[template.style] : undefined
+  if (!style) return undefined
+  const from = chest(caster)
+  const dir = aimOf(ctx.match, caster)
+  const reach = template.delivery.range + ENGINE.meleeSlack + SIZES[caster.size].reachBonus
+  const near = enemiesOf(ctx.match, caster).filter((e) => gap(from, e) - capsule(caster).radius <= reach + style.lunge && inArc(from, dir, e, ENGINE.melee.lungeArc) && canSee(ctx.match, from, chest(e)))
+  const [prey] = nearest(from, near)
+  if (!prey) return undefined
+  const dx = prey.position.x - caster.position.x
+  const dz = prey.position.z - caster.position.z
+  const flat = Math.sqrt(dx * dx + dz * dz) || 1
+  const room = flat - capsule(caster).radius - capsule(prey).radius - template.delivery.range * 0.6
+  if (room > 0.05) {
+    const n = Math.max(1, ticks(ENGINE.melee.lungeTime))
+    const metres = Math.min(style.lunge, room)
+    caster.lunge = { x: (dx / flat) * (metres / n), z: (dz / flat) * (metres / n), until: ctx.match.tick + n, target: prey.id }
+  }
+  return prey
+}
+
+function moveLunges(ctx: Ctx) {
+  for (const hero of ctx.match.heroes) {
+    const l = hero.lunge
+    if (!l) continue
+    if (!hero.alive || hero.knockback || hero.launch || ctx.match.tick > l.until) {
+      hero.lunge = undefined
+      continue
+    }
+    hero.position = { x: hero.position.x + l.x, y: hero.position.y, z: hero.position.z + l.z }
+    keepOut(hero, ctx.match)
+  }
+}
+
+/** The ranged weapon's magazine refills over its reload time (§5); a reload already under way runs on. */
+function startReload(ctx: Ctx, hero: HeroState) {
+  const r = ctx.setups[hero.id].kit.active1.ranged
+  if (!r || hero.reloadUntil > 0) return
+  hero.reloadUntil = ctx.match.tick + Math.max(1, ticks(r.reload))
+  hero.burst = undefined
+  ctx.events.push({ type: 'reload', hero: hero.id, phase: 'start', until: hero.reloadUntil })
+}
+
+/** Reloads finishing, an idle weapon topping up, bloom settling and a burst's next shot, once a tick per hero. */
+function tickWeapon(ctx: Ctx, hero: HeroState) {
+  const setup = ctx.setups[hero.id]
+  const now = ctx.match.tick
+  hero.bloom = Math.max(0, hero.bloom - ENGINE.ranged.recover * DT)
+  if (hero.reloadUntil > 0 && now >= hero.reloadUntil) {
+    hero.reloadUntil = 0
+    hero.ammo = setup.magazine
+    ctx.events.push({ type: 'reload', hero: hero.id, phase: 'end', until: now })
+  } else if (hero.reloadUntil === 0 && hero.ammo < setup.magazine && now - hero.lastShot >= ticks(ENGINE.ranged.topUp)) startReload(ctx, hero)
+  const b = hero.burst
+  if (b && now >= b.next) {
+    if (hero.ammo <= 0 || controlled(hero, 'disarm', now) || hero.stunnedUntil > now) hero.burst = undefined
+    else {
+      fire(ctx, hero, { share: 1, rider: true }, true)
+      b.left--
+      b.next = now + Math.max(1, ticks(ENGINE.ranged.burstGap))
+      if (b.left <= 0) hero.burst = undefined
+    }
+  }
+}
+
+/**
+ * Where the muzzle is (§5): the hand holding the weapon, by its style, a share of the body's height up, ahead and to the
+ * right of the feet along the facing. The character faces +z at yaw 0, so its right is -x.
+ */
+export function muzzle(hero: HeroState, style: keyof typeof ENGINE.ranged.muzzle): Vec3 {
+  const [up, ahead, right] = ENGINE.ranged.muzzle[style]
+  const h = capsule(hero).height
+  const fx = sin(hero.yaw)
+  const fz = cos(hero.yaw)
+  return { x: hero.position.x + (fx * ahead - fz * right) * h, y: hero.position.y + up * h, z: hero.position.z + (fz * ahead + fx * right) * h }
+}
+
+/**
+ * What the crosshair covers (§5): the first enemy or wall along the aim from the eye, else the weapon's full range.
+ * Shots fly from the muzzle at this point, so what the reticle sits on is what gets hit.
+ */
+function aimPoint(ctx: Ctx, hero: HeroState, range: number): Vec3 {
+  const eye = chest(hero)
+  const dir = aimOf(ctx.match, hero)
+  let best = range
+  for (const e of enemiesOf(ctx.match, hero)) {
+    const to = sub(chest(e), eye)
+    const along = dot(to, dir)
+    if (along <= 0 || along >= best) continue
+    if (segmentToCapsuleAxis(eye, add(eye, scale(dir, along)), e.position, capsule(e).height) <= capsule(e).radius) best = along
+  }
+  const wall = firstCover(ctx.match, eye, add(eye, scale(dir, best)))
+  return add(eye, scale(dir, wall ? wall.t * best : best))
+}
+
+/** A direction turned off `dir` by up to `spread` radians each way, from the rules' seeded dice. */
+function spreadOut(ctx: Ctx, dir: Vec3, spread: number): Vec3 {
+  if (spread <= 0) return dir
+  const a = yawPitch(dir)
+  return direction(a.yaw + (next(ctx.match.rules) * 2 - 1) * spread, a.pitch + (next(ctx.match.rules) * 2 - 1) * spread * 0.6)
+}
+
+/**
+ * One trigger pull of the ranged weapon (§5): a round from the magazine leaves the muzzle for the point the crosshair
+ * covers, turned by the bloom (the style's own, more while moving or in the air, growing a little each shot). A
+ * shotgun throws its pellets across its cone, a beam lands along its line at once, a burst queues its next shots.
+ */
+function fire(ctx: Ctx, hero: HeroState, shot: Shot | undefined, followUp = false) {
+  const { match, setups } = ctx
+  const setup = setups[hero.id]
+  const weapon = setup.kit.active1
+  const r = weapon.ranged
+  if (!r) return
+  const now = match.tick
+  hero.ammo = Math.max(0, hero.ammo - 1)
+  hero.lastShot = now
+  if (!followUp && r.mode === 'burst' && (r.burst ?? 1) > 1) hero.burst = { left: (r.burst ?? 1) - 1, next: now + Math.max(1, ticks(ENGINE.ranged.burstGap)) }
+  const template = shotTemplate(weapon, shot)
+  const from = muzzle(hero, r.style)
+  const target = aimPoint(ctx, hero, template.delivery.range)
+  const toTarget = sub(target, from)
+  // a target nearer than the muzzle's reach is shot along the aim itself
+  const straight = length(toTarget) > 1.5 ? normalize(toTarget) : aimOf(match, hero)
+  const moving = hero.velocity.x * hero.velocity.x + hero.velocity.z * hero.velocity.z > 1.5 * 1.5
+  const R = ENGINE.ranged
+  const spread = Math.min(R.max, R.base[r.style] + hero.bloom + (moving ? R.moving : 0) + (hero.airborne ? R.airborne : 0))
+  hero.bloom = Math.min(R.max, hero.bloom + R.perShot)
+  if (hero.ammo === 0) startReload(ctx, hero)
+  if (template.delivery.kind === 'beam') {
+    const dir = spreadOut(ctx, straight, spread)
+    const landed = landing(ctx, hero, template, { from, dir })
+    impact(ctx, hero, 'active1', template, landed.at)
+    strikeCover(ctx, hero, template, landed.cover)
+    resolve(ctx, hero, template, 'active1', landed.hit, landed.at)
+    if (landed.hit[0]) afterBasic(ctx, hero, landed.hit[0])
+    return
+  }
+  const { speed, projectileRadius } = geometryOf(template.delivery)
+  const pellets = r.mode === 'pellets' ? (r.pellets ?? 1) : 1
+  const cone = weapon.delivery.kind === 'cone' ? ((geometryOf(weapon.delivery).arcDegrees / 2) * PI) / 180 : 0
+  for (let i = 0; i < pellets; i++) {
+    // pellets fan evenly across the cone, each nudged by the bloom
+    const fan = pellets > 1 ? (i / (pellets - 1)) * 2 - 1 : 0
+    const aim0 = yawPitch(straight)
+    const base = fan ? direction(aim0.yaw + fan * cone * 0.5, aim0.pitch) : straight
+    const dir = spreadOut(ctx, base, spread)
+    match.projectiles.push({ id: match.nextProjectileId++, owner: hero.id, slot: 'active1', position: from, step: scale(dir, speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(template.delivery.range / speed)), ...(shot ? { shot } : {}) })
+    ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: hero.id, slot: 'active1', from, radius: projectileRadius, speed })
   }
 }
 
@@ -317,7 +484,7 @@ function flyProjectiles(ctx: Ctx) {
   const left: MatchState['projectiles'] = []
   for (const p of match.projectiles) {
     const owner = match.heroes[p.owner]
-    const template = shotTemplate(setups[p.owner].kit[p.slot], p.shot)
+    const template = shotTemplate(setups[p.source ?? p.owner].kit[p.slot], p.shot)
     const size = geometryOf(template.delivery).projectileRadius
     const end = add(p.position, p.step)
     const struck = enemiesOf(match, owner).filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
@@ -336,6 +503,16 @@ function flyProjectiles(ctx: Ctx) {
       if (area || raises(template)) resolve(ctx, owner, template, p.slot, area ? enemiesOf(match, owner).filter((e) => gap(wall.at, e) <= area) : [], wall.at)
       continue
     }
+    // a reflect turns the shot back on whoever fired it: it flies home as the reflector's
+    if (first && first.reflectUntil > match.tick) {
+      p.source ??= p.owner
+      p.owner = first.id
+      p.step = scale(p.step, -1)
+      p.position = end
+      ctx.events.push({ type: 'reflect', hero: first.id, projectile: p.id })
+      if (--p.ticksLeft > 0) left.push(p)
+      continue
+    }
     if (first) {
       const at = chest(first)
       const area = template.delivery.radius
@@ -343,7 +520,7 @@ function flyProjectiles(ctx: Ctx) {
       impact(ctx, owner, p.slot, template, at)
       if (area) strikeCover(ctx, owner, template, coverInBlast(match, at, area))
       resolve(ctx, owner, template, p.slot, hit, at)
-      if (p.slot === 'basic') afterBasic(ctx, owner, first)
+      if ((p.slot === 'basic' || p.slot === 'active1') && p.source === undefined) afterBasic(ctx, owner, first)
       continue
     }
     p.position = end
@@ -379,7 +556,12 @@ function moveKnockbacks(ctx: Ctx) {
 
 /** The combat rules for `tick`: statuses, casts from pressed buttons, then projectiles and knockback. */
 export const COMBAT_RULES: TickRules = {
-  statuses: (match, setups, events) => tickStatuses({ match, setups, events }),
+  statuses: (match, setups, events) => {
+    const ctx = { match, setups, events }
+    tickStatuses(ctx)
+    // reloads run on through a stun
+    for (const h of match.heroes) if (h.alive) tickWeapon(ctx, h)
+  },
   act: (match, setups, hero, command: Command, events) => {
     const ctx = { match, setups, events }
     carryOn(ctx, hero)
@@ -390,6 +572,7 @@ export const COMBAT_RULES: TickRules = {
   },
   after: (match, setups, events) => {
     const ctx = { match, setups, events }
+    moveLunges(ctx)
     flyProjectiles(ctx)
     moveKnockbacks(ctx)
     tickWorld(ctx)

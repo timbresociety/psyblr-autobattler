@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEMO_HEROES } from '../arena/demo/roster'
+import { STARTERS } from '../arena/starters'
 import { ROLES } from '../charter/roles'
 import { CHARGE_LABEL, ELEMENT_LABEL, FORM_AURA_LABEL, FORM_AVATAR_LABEL, FORM_ENTRY_LABEL, FORM_GROWTH_LABEL, FORM_LABEL, FORM_MARK_LABEL, FORM_TRAIL_LABEL, IMPACT_LABEL, MOTIF_LABEL, POSE_LABEL, TRAIL_LABEL } from '../charter/skill-look'
 import { CATALOG } from '../charter/templates/catalog'
@@ -37,10 +37,10 @@ describe('the character charter (docs/charter/character-charter.html)', () => {
     for (const label of labels.flatMap((l) => Object.values(l))) expect(lower, label).toContain(esc(label).toLowerCase())
   })
 
-  it('shows all twenty starters built from the library, and every picture it shows exists', () => {
-    for (const hero of DEMO_HEROES) expect(html).toContain(`<b>${esc(hero.heroName)}</b>`)
+  it('shows all twenty generated starters, and every picture it shows exists', () => {
+    for (const hero of STARTERS) expect(html).toContain(`<b>${esc(hero.heroName)}</b>`)
     const pictures = [...html.matchAll(/src="\.\.\/\.\.\/public([^"]+)"/g)].map((m) => m[1])
-    expect(pictures.length).toBeGreaterThanOrEqual(LIBRARY.length + DEMO_HEROES.length)
+    expect(pictures.length).toBeGreaterThanOrEqual(LIBRARY.length)
     for (const path of new Set(pictures)) expect(existsSync(join(root, 'public', path)), path).toBe(true)
   })
 

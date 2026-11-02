@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { remixBuild } from '../../charter/build.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import { defaultBuild } from '../../sim/fixtures.js'
-import { DEMO_HEROES, demoBuild } from '../demo/roster.js'
+import { STARTERS, starterBuild } from '../starters.js'
 import { BODIES, bodyFor, characterLook, formCharacterLook } from './character-look.js'
 import { lookFor } from '../recipes/looks.js'
 import { POSE_RELEASE, elementLook } from '../../charter/skill-look.js'
@@ -51,21 +51,19 @@ describe('a hero’s look', () => {
   })
 })
 
-describe('the demo roster', () => {
-  it('wears the bodies and wardrobe everyone does: its gender at its size, its own outfit, its portrait', () => {
-    for (const hero of DEMO_HEROES) {
-      const build = demoBuild(hero)
+describe('the starters', () => {
+  it('wear the bodies everyone does: their gender at their size, no photo face', () => {
+    for (const hero of STARTERS) {
+      const build = starterBuild(hero)
       const look = characterLook(build, hero.hue)
       expect(look.build, hero.id).toBe(`${build.look!.gender}-${hero.sizeClass}`)
-      expect(look.outfit, hero.id).toEqual(build.look!.wear)
-      expect(look.face?.url, hero.id).toBe(`/kit/faces/${hero.id}.webp`)
-      expect(look.colors.skin.getHexString(), hero.id).toBe(build.look!.colors.skin!.slice(1))
+      expect(look.face, hero.id).toBeUndefined()
     }
   })
 
   it('a remix looks exactly like the hero it came from: nothing about it depends on the name', () => {
-    for (const hero of DEMO_HEROES) {
-      const build = demoBuild(hero)
+    for (const hero of STARTERS) {
+      const build = starterBuild(hero)
       const remix = remixBuild(build)
       expect(remix.heroName).toBe(`${hero.heroName} Remix`)
       expect(remix.heroId).toBeUndefined()
@@ -80,18 +78,19 @@ describe('the demo roster', () => {
 })
 
 describe('which clip a cast plays', () => {
-  it('swings for close skills, shoots a basic projectile, casts the rest, and plays the ultimate as its own', () => {
+  it('swings the melee style, shoots or casts the ranged weapon, and plays the ultimate as its own', () => {
     const marksman = defaultBuild('marksman', 'M')
     const fighter = defaultBuild('fighter', 'F')
     expect(castClip(marksman, 'ultimate').clip).toBe('ultimate')
-    const kindOf = (b: typeof marksman, slot: 'basic' | 'active1') => getTemplate(b.slots[slot].templateId).delivery.kind
-    if (kindOf(marksman, 'basic') === 'projectile') expect(castClip(marksman, 'basic').clip).toBe('shoot')
-    if (kindOf(fighter, 'basic') === 'melee') expect(castClip(fighter, 'basic').clip).toBe('slash')
-    expect(['slash', 'shoot', 'cast']).toContain(castClip(fighter, 'active1').clip)
+    expect(getTemplate(fighter.slots.basic.templateId).delivery.kind).toBe('melee')
+    expect(castClip(fighter, 'basic').clip).toBe('slash')
+    // a gun shoots; a hand weapon (a ki blast, a bolt) plays its cast pose
+    expect(castClip(fighter, 'active1').clip).toMatch(/^(shoot|cast)/)
+    expect(castClip(marksman, 'active1').clip).toMatch(/^(shoot|cast)/)
   })
 
   it("plays the pose a skill's look picks, from just before its hands let go", () => {
-    const build = demoBuild(DEMO_HEROES[0])
+    const build = starterBuild(STARTERS[0])
     const palms = { ...build, look: { ...build.look!, skills: { active1: { ...elementLook('energy'), pose: 'palms' as const } } } }
     expect(castClip(palms, 'active1')).toEqual({ clip: 'cast_palms', from: POSE_RELEASE.palms - 0.08 })
     // with no stored look, a famous move's name is enough

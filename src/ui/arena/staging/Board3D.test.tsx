@@ -6,6 +6,13 @@ import type { BoardHandlers, BoardScene, BoardState } from './board-scene'
 import { Staging, type StagingResult } from './Staging'
 import type { LoadoutDeps } from './loadout'
 
+import { STARTERS } from '../../../arena/starters'
+
+/** A starter's bust by its name: the first of its squad in the role. */
+const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp(STARTERS.find((s) => s.squad === squad && s.roleId === role)!.heroName)
+const MAGE = starter('vanguard', 'mage')
+const MARKSMAN = starter('vanguard', 'marksman')
+
 // the 3D scene needs a GPU; here a stand-in records what the staging screen asks of it
 const fake = vi.hoisted(() => {
   const scene = {
@@ -55,7 +62,7 @@ describe('the 3D staging board', () => {
     const board = screen.getByRole('application', { name: 'Arena board' })
     expect(board.tagName).toBe('DIV')
     expect(fake.scene.update).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
     const last = fake.scene.update.mock.calls.at(-1)![0]
     expect(last.formation[0]).toHaveLength(10)
     expect(last.formation[1]).toHaveLength(10)
@@ -64,7 +71,7 @@ describe('the 3D staging board', () => {
 
   it('carries a hero from the row onto the floor', async () => {
     await open()
-    fireEvent.pointerDown(bust(/Musk/), { pointerId: 7, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
+    fireEvent.pointerDown(bust(MAGE), { pointerId: 7, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
     // a few pixels is still a click
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 102, clientY: 798 })
     expect(fake.scene.carry).not.toHaveBeenCalled()
@@ -74,18 +81,18 @@ describe('the 3D staging board', () => {
     expect(fake.scene.drop).toHaveBeenCalledWith(310, 410)
     expect(plate().textContent).toContain('(1/10)')
     // the click a drag ends with does not pick the hero for click-placing
-    fireEvent.click(bust(/Musk/))
+    fireEvent.click(bust(MAGE))
     expect(screen.queryByText(/Click spots to place more/)).toBeNull()
   })
 
   it('says why a carried hero was refused, and Escape puts it back', async () => {
     await open()
     fake.scene.drop.mockReturnValueOnce({ x: 0, z: 12 })
-    fireEvent.pointerDown(bust(/Huang/), { pointerId: 3, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
+    fireEvent.pointerDown(bust(MARKSMAN), { pointerId: 3, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
     fireEvent.pointerMove(window, { pointerId: 3, clientX: 300, clientY: 300 })
     fireEvent.pointerUp(window, { pointerId: 3, clientX: 300, clientY: 300 })
     expect(screen.getByText('That spot is on the other half.')).toBeTruthy()
-    fireEvent.pointerDown(bust(/Huang/), { pointerId: 4, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
+    fireEvent.pointerDown(bust(MARKSMAN), { pointerId: 4, isPrimary: true, button: 0, clientX: 100, clientY: 800 })
     fireEvent.pointerMove(window, { pointerId: 4, clientX: 300, clientY: 300 })
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(fake.scene.cancelCarry).toHaveBeenCalled()
@@ -96,7 +103,7 @@ describe('the 3D staging board', () => {
 
   it('moves, selects and removes placed heroes through the scene', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
     const h = fake.handlers!()
     // selecting an enemy hero shows it and sets up the enemy side
     act(() => h.select({ side: 1, index: 0 }))
@@ -117,7 +124,7 @@ describe('the 3D staging board', () => {
 
   it('gives the renderer back before the match starts', async () => {
     const onStart = await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Moguls vs Leaders' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(fake.scene.dispose).toHaveBeenCalled()
     await act(async () => {})

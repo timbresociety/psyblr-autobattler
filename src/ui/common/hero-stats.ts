@@ -1,4 +1,5 @@
 import { ENGINE } from '../../arena/engine/calibration.js'
+import { isRanged } from '../../arena/engine/deliveries.js'
 import { prepareHero } from '../../arena/engine/state.js'
 import { retuneFactor } from '../../charter/budget.js'
 import type { Build } from '../../charter/build.js'
@@ -21,15 +22,15 @@ export interface HeroStats {
   spiritResist: number
   /** Spirit damage taken off, in %. */
   spiritCut: number
-  /** The basic attack's damage per hit, and its type. */
+  /** The main weapon's damage per hit, and its type: the ranged weapon for a role that keeps its range, else the melee style. */
   perHit: number
   damageType: DamageType
-  /** Basic attacks a second: attack speed for a swing, fire rate for a shot. */
+  /** Hits a second: attack speed for a swing, the weapon's rate times fire rate for a shot. */
   rate: number
   ranged: boolean
-  /** How far the basic attack reaches, in metres, the way the engine measures it. */
+  /** How far the main weapon reaches, in metres, the way the engine measures it. */
   reach: number
-  /** The basic attack's damage a second before resist. */
+  /** The main weapon's damage a second before resist. */
   dps: number
   spiritPower: number
   regen: number
@@ -45,17 +46,20 @@ export interface HeroStats {
 const cut = (resist: number) => Math.max(ENGINE.resistFloor, Math.min(ENGINE.resistCap, resist))
 
 export function heroStats(build: Build, mods: TraitMods = {}): HeroStats {
-  const { sheet, kit } = prepareHero(build, 1, 0, mods)
-  const basic = kit.basic
-  const ranged = basic.delivery.range > 4
+  const setup = prepareHero(build, 1, 0, mods)
+  const { sheet, kit } = setup
+  // every hero carries a melee style and a ranged weapon (§4); the card shows the one its role fights with
+  const ranged = isRanged(setup)
+  const slot = ranged ? 'active1' : 'basic'
+  const weapon = kit[slot]
   // per hit the way the skill's own tooltip works it out, so the card and the kit list agree (the engine rounds a
   // retuned skill's numbers, which can sit a fraction of a point away)
-  const spec = build.slots.basic
+  const spec = build.slots[slot]
   const hit = getTemplate(spec.templateId).effects.find((e): e is Extract<typeof e, { kind: 'damage' }> => e.kind === 'damage')
   const perHit = hit ? (hit.amount + hit.ratio * sheet[hit.scaling]) * retuneFactor(spec.retuneSteps) : 0
-  const rate = ranged ? sheet.fireRate : sheet.attackSpeed
+  const rate = ranged ? (weapon.ranged?.rate ?? 1) * sheet.fireRate : sheet.attackSpeed
   const size = SIZES[build.sizeClass ?? 'medium']
-  const reach = ranged ? basic.delivery.range : basic.delivery.range + ENGINE.meleeSlack + size.reachBonus + ENGINE.capsule.radius * size.scale
+  const reach = ranged ? weapon.delivery.range : weapon.delivery.range + ENGINE.meleeSlack + size.reachBonus + ENGINE.capsule.radius * size.scale
   const move = locomotion(sheet.moveSpeed)
   return {
     health: sheet.maxHealth,

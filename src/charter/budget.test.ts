@@ -5,7 +5,8 @@ import type { Template } from './types.js'
 const nova: Template = {
   id: 'test-nova',
   name: 'Test Nova',
-  slot: 'active',
+  slot: 'spell',
+  family: 'burst',
   roles: ['mage'],
   tags: ['burst', 'zone'],
   delivery: { kind: 'zone', range: 10, radius: 4 },
@@ -30,8 +31,8 @@ describe('power budget', () => {
   it('normalized templates in the same slot score within the tolerance', () => {
     const a = scoreTemplate(normalizeTemplate(nova))
     const b = scoreTemplate(normalizeTemplate(stunBolt))
-    expect(Math.abs(a - SLOT_BUDGETS.active) / SLOT_BUDGETS.active).toBeLessThanOrEqual(BUDGET_TOLERANCE)
-    expect(Math.abs(b - SLOT_BUDGETS.active) / SLOT_BUDGETS.active).toBeLessThanOrEqual(BUDGET_TOLERANCE)
+    expect(Math.abs(a - SLOT_BUDGETS.spell) / SLOT_BUDGETS.spell).toBeLessThanOrEqual(BUDGET_TOLERANCE)
+    expect(Math.abs(b - SLOT_BUDGETS.spell) / SLOT_BUDGETS.spell).toBeLessThanOrEqual(BUDGET_TOLERANCE)
   })
 
   it('control costs budget, so a stun skill deals less damage after normalizing', () => {
@@ -42,9 +43,9 @@ describe('power budget', () => {
   })
 
   it('an override records its reason and the score targets the override budget', () => {
-    const tuned: Template = { ...nova, id: 'test-override', override: { budget: SLOT_BUDGETS.active * 0.9, reason: 'zone is easy to land in team fights' } }
+    const tuned: Template = { ...nova, id: 'test-override', override: { budget: SLOT_BUDGETS.spell * 0.9, reason: 'zone is easy to land in team fights' } }
     const score = scoreTemplate(normalizeTemplate(tuned))
-    expect(Math.abs(score - SLOT_BUDGETS.active * 0.9) / (SLOT_BUDGETS.active * 0.9)).toBeLessThanOrEqual(BUDGET_TOLERANCE)
+    expect(Math.abs(score - SLOT_BUDGETS.spell * 0.9) / (SLOT_BUDGETS.spell * 0.9)).toBeLessThanOrEqual(BUDGET_TOLERANCE)
     expect(validateTemplate(tuned).ok).toBe(true)
   })
 
@@ -72,6 +73,6 @@ describe('power budget', () => {
 
   it('passives and basics need no cooldown; actives do', () => {
     expect(validateTemplate({ ...nova, cooldown: 0 }).ok).toBe(false)
-    expect(validateTemplate({ ...nova, slot: 'basic', cooldown: 0 }).ok).toBe(true)
+    expect(validateTemplate({ ...nova, slot: 'melee', cooldown: 0 }).ok).toBe(true)
   })
 })

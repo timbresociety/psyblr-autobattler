@@ -4,7 +4,7 @@ import type { BuildSlot, Delivery, Effect, Template } from '../../charter/types.
 import { ENGINE, ticks } from './calibration.js'
 import { cos, sin } from './maths.js'
 import { slotBit, type Command, type HeroState } from './state.js'
-import { interrupt, immune, type Ctx } from './effects.js'
+import { interrupt, immune, togglePassive, type Ctx } from './effects.js'
 
 /**
  * Melee as the canon has it (docs/plans/2026-10-31-canon-psyblr-human.md): the basic attack button tapped strikes,
@@ -36,10 +36,7 @@ export function meleeButtons(ctx: Ctx, index: number, command: Command, strike: 
   const now = ctx.match.tick
   const held = command.buttons & BASIC
   const was = hero.buttonsHeld & BASIC
-  if (command.buttons & PASSIVE && !(hero.buttonsHeld & PASSIVE)) {
-    hero.passiveOn = !hero.passiveOn
-    ctx.events.push({ type: 'passive', hero: hero.id, on: hero.passiveOn })
-  }
+  if (command.buttons & PASSIVE && !(hero.buttonsHeld & PASSIVE)) togglePassive(ctx, hero)
   hero.buttonsHeld = command.buttons
   if (held && !was) hero.basicSince = now
   if (held && hero.basicSince >= 0 && now - hero.basicSince === ticks(MELEE.heavyHold)) ctx.events.push({ type: 'melee', hero: hero.id, what: 'charge' })
@@ -63,10 +60,9 @@ export const blowTemplate = (template: Template, blow: MeleeBlow | undefined) =>
 }
 
 /**
- * Skill 1 fires like a gun (the canon, 2026-11-02): held, it shoots every `shotSeconds`, each shot worth `share` of
- * the skill's damage, healing and shielding, so a stream of shots over one of the skill's old cooldowns adds up to a
- * single cast. What else the skill does (a slow, a stun, a mark, a field) rides only on a `rider` shot, at most once
- * per that cooldown.
+ * The ranged weapon fires on repeat (§4 LMB): each shot is the weapon's template. A shotgun's pellets each carry
+ * `share` of it (combat.ts, shotTemplate); `rider` says whether its slows, marks and the like ride along (always, now:
+ * a weapon's rider is part of every shot).
  */
 export interface Shot {
   share: number
@@ -92,25 +88,24 @@ export function shotTemplate(template: Template, shot: Shot | undefined): Templa
   return out
 }
 
-/**
- * Skill 1 is the ranged attack whatever its template (the kit, 2026-11-02): a skill that hurts and would land as a
- * zone, a cone, a strike or a ring flies as a shot to the crosshair instead, as wide as its area allows, and its rider
- * carries the rest onto what it hits. Beams and shots stay as they are, and so does a skill that only helps allies.
- */
+/** A pellet of a cone-shaped weapon flies as a shot across the cone's reach; beams and shots stay as they are. */
 function shotDelivery(template: Template): Template['delivery'] {
   const d = template.delivery
-  if (d.kind === 'projectile' || d.kind === 'beam' || !template.effects.some((e) => e.kind === 'damage')) return d
-  return { kind: 'projectile', range: Math.max(d.range, 12), speed: GEOMETRY_DEFAULTS.speed, projectileRadius: Math.min(0.8, Math.max(GEOMETRY_DEFAULTS.projectileRadius, (d.radius ?? 0) * 0.25)) }
+  if (d.kind === 'projectile' || d.kind === 'beam') return d
+  return { kind: 'projectile', range: Math.max(d.range, 6), speed: GEOMETRY_DEFAULTS.speed, projectileRadius: GEOMETRY_DEFAULTS.projectileRadius }
 }
 
-/** Seconds between Skill 1's shots for a hero firing `fireRate` times a second on its sheet, before buffs and cripples. */
-export const shotSeconds = (fireRate: number, tempo = 1) => Math.max(ENGINE.primary.fastest, 1 / Math.max(0.2, fireRate * ENGINE.primary.rate * tempo))
+/**
+ * Seconds between a weapon's shots (§5: fire rate follows attack speed): the weapon's rate times the sheet's fire rate,
+ * then buffs and cripples (`tempo`), never faster than one shot every `fastest` seconds.
+ */
+export const shotSeconds = (rate: number, fireRate: number, tempo = 1) => Math.max(ENGINE.primary.fastest, 1 / Math.max(0.2, rate * fireRate * tempo))
 
 /**
  * Take out of `hit` everyone whose guard faces the caster of a close blow: each reports the block, and the striker's
  * chain breaks and it staggers. Returns who is still hit.
  */
-export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: HeroState[]): HeroState[] {
+export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: HeroState[], blow?: MeleeBlow): HeroState[] {
   if (!CLOSE.has(template.delivery.kind)) return hit
   const now = ctx.match.tick
   const half = ((MELEE_BLOCK_ARC / 2) * Math.PI) / 180
@@ -121,6 +116,14 @@ export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: He
     const len = Math.sqrt(dx * dx + dz * dz) || 1
     // the caster within the arc the guard faces
     if ((dx / len) * sin(u.yaw) + (dz / len) * cos(u.yaw) < cos(half)) return true
+    // a heavy blow breaks the guard (§5): the guard drops, the guard staggers, and the blow lands
+    if (blow?.heavy !== undefined) {
+      u.blocking = false
+      u.stunnedUntil = Math.max(u.stunnedUntil, now + ticks(MELEE.guardBreak))
+      interrupt(ctx, u)
+      ctx.events.push({ type: 'melee', hero: u.id, what: 'guard-broken', by: caster.id })
+      return true
+    }
     ctx.events.push({ type: 'melee', hero: u.id, what: 'blocked', by: caster.id })
     return false
   })

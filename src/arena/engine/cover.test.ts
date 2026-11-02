@@ -80,12 +80,11 @@ describe('the ruins in a match (R25)', () => {
     target.position = { x: 0, y: 0, z: -3 }
     expect(canSee(a.match, { x: 0, y: 1.08, z: -12 }, { x: 0, y: 1.08, z: -3 })).toBe(false)
     const events: MatchEvent[] = []
-    // fire the basic attack straight at the barricade until it breaks
+    // hold the weapon's trigger straight at the barricade until it breaks
     for (let t = 0; t < 60 * 60 && a.match.cover!.health[index] > 0; t++) {
       shooter.position = { x: 0, y: 0, z: -12 }
       target.hp = target.maxHp
-      // tapped: the basic attack strikes as it's let go
-      events.push(...tick(a.match, a.setups, [{ ...IDLE, buttons: t % 2 ? 0 : slotBit('basic') }, IDLE], COMBAT_RULES))
+      events.push(...tick(a.match, a.setups, [{ ...IDLE, buttons: slotBit('active1') }, IDLE], COMBAT_RULES))
     }
     expect(a.match.cover!.health[index]).toBe(0)
     expect(events.some((e) => e.type === 'cover-broken' && e.index === index)).toBe(true)

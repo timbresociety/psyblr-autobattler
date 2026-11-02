@@ -5,7 +5,7 @@ import type { SecondarySheet, Template } from './types.js'
 const rewind: Template = {
   id: 'test-recall',
   name: 'Recall Step',
-  slot: 'active',
+  slot: 'movement',
   roles: ['mage'],
   tags: ['return-to-past', 'blink', 'heal'],
   delivery: { kind: 'blink', range: 8 },

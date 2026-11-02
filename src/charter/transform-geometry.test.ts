@@ -63,7 +63,7 @@ describe('a transformation grows the hero, keeps its size or shrinks it (R23)', 
     expect(transformOf(getTemplate('fighter-ascended-form'))).toEqual({ duration: 10 })
     expect(transformOf(getTemplate('fighter-avatar-form'))).toEqual({ size: 'huge', duration: 8 })
     expect(transformOf(getTemplate('tank-titan-form'))?.size).toBe('colossal')
-    expect(transformOf(getTemplate('fighter-haymaker'))).toBeUndefined()
+    expect(transformOf(getTemplate('fighter-force-palm'))).toBeUndefined()
   })
 
   it('marking a power-up as a form changes no number', () => {

@@ -21,7 +21,8 @@ const PASS_LINE = GATE_CEILING - GATE_MARGIN
  * line), so a player's hero is never sent in hopeless. A kit whose skills scale off stats its role lacks (a Ki Blast
  * fighter, a ninja with shadow bolts) used to win one duel in five or fewer.
  */
-export const GATE_FLOOR = 0.42
+// GAME.md §4: generated kits are balanced toward a 45–55% band, so a weak build is lifted up to its floor
+export const GATE_FLOOR = 0.45
 /** Most a weak build is lifted: twelve steps, every number up 72%. */
 export const MAX_LIFT_STEPS = 12
 /** Still under this at the full lift, a kit cannot hold its own: it is blocked and its weakest skill named. */
@@ -31,9 +32,10 @@ export interface GateOptions {
   /** Fights for each turn of the field (each member leads the opposing side once), alternating sides. */
   duelsPerMember?: number
   /**
-   * Heroes a side. 3, the default, is a skirmish: the candidate fights beside two field members against three others,
-   * so control, protection and soaking count the way they do in a real match. 1 is a plain duel, which measured
-   * a taunt-and-root tank at 0% and a stun-and-sleep controller at 6% while both did their job in team fights.
+   * Heroes a side. 3, the default, is a skirmish: the candidate fights beside two field members against a third
+   * beside the same two, so control, protection and soaking count the way they do in a real match. 1 is a plain duel,
+   * which measured a taunt-and-root tank at 0% and a stun-and-sleep controller at 6% while both did their job in team
+   * fights.
    */
   team?: number
   seed?: number
@@ -64,9 +66,13 @@ export function playScored(mine: Combatant[], theirs: Combatant[], flip: boolean
 }
 
 /**
- * A build's score against the field over some of its turns; draws count half. Turn f puts field members f, f+1, ...
- * on the other side and the members after them beside the candidate, so over all turns every member is met as an
- * opponent and as a partner. Workers each take some turns of one measurement (see `runGateAsync`).
+ * A build's score against the field over some of its turns; draws count half. Turn f is a straight swap: field
+ * member f leads the other side and the candidate takes its place on this one, with the same partners beside each,
+ * so a copy of a member scores 50%. The partners rotate through the other members fight by fight, so every member is
+ * met as an opponent and as a partner, and who stands beside f never depends on f. (With fixed partners the field's
+ * own matchups set the level: once every hero carried a gun, a melee trio lost four fights in five to anything beside
+ * a mage and a marksman, and partners taken from f's neighbours made breaking up such a trio a win, so the whole field
+ * read 57-58%.) Workers each take some turns of one measurement (see `runGateAsync`).
  */
 export function scoreVsField(build: Build, options: GateOptions = {}, turns?: readonly number[]): { score: number; fights: number } {
   const { duelsPerMember, seed, team } = { ...GATE_DEFAULTS, ...options }
@@ -75,11 +81,12 @@ export function scoreVsField(build: Build, options: GateOptions = {}, turns?: re
   const member = (k: number): Combatant => ({ build: field[k % field.length] })
   let score = 0
   let fights = 0
+  const others = Math.max(1, field.length - 1)
+  const stride = Math.max(1, Math.floor(others / Math.max(1, team - 1)))
   for (const f of turns ?? field.map((_, i) => i)) {
-    const theirs = Array.from({ length: team }, (_, k) => member(f + k))
-    const mine = [me, ...Array.from({ length: team - 1 }, (_, k) => member(f + team + k))]
     for (let i = 0; i < duelsPerMember; i++) {
-      score += playScored(mine, theirs, i % 2 === 1, seed * 100_003 + f * 1009 + i)
+      const partners = Array.from({ length: team - 1 }, (_, k) => member(f + 1 + ((i + k * stride) % others)))
+      score += playScored([me, ...partners], [member(f), ...partners], i % 2 === 1, seed * 100_003 + f * 1009 + i)
       fights++
     }
   }

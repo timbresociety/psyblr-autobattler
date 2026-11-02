@@ -68,6 +68,14 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
       return `Lingers ${num(effect.duration)} s, landing again every ${num(effect.interval)} s`
     case 'wall':
       return `Raises a wall ${num(effect.length)} m long and ${num(effect.height)} m tall for ${num(effect.duration)} s (${num(effect.health)} to break)`
+    case 'reveal':
+      return `Reveals for ${num(effect.duration)} s: no hiding, seen through walls`
+    case 'swapHealth':
+      return `Trades health shares with the target (at most ${num(effect.cap * 100)}% of max health each)`
+    case 'steal':
+      return `The target's spell waits ${num(effect.seconds)} s more; this hero's, ${num(effect.seconds)} s less`
+    case 'rewind':
+      return `An ally gets back the health it lost in the last ${num(effect.seconds)} s`
     case 'trap':
       return `Waits up to ${num(effect.lifetime)} s for an enemy to step in, armed after ${num(effect.arm)} s`
     case 'turret':
@@ -93,7 +101,7 @@ const DEBUFF_LINE = {
   wound: (a: string, d: string) => `Healing received −${a}% for ${d} s`,
   mark: (a: string, d: string) => `Marked for ${d} s: your team deals ${a}% more to it and it can't hide`,
 } as const
-const STATE_LINE = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable' } as const
+const STATE_LINE = { unstoppable: 'Unstoppable', stealth: 'Stealth', invulnerable: 'Untouchable', reflect: 'Reflects shots' } as const
 
 /** The tooltip shows the player's skill name with the template's real numbers on this hero's sheet (R6). */
 export function renderTooltip(template: Template, skill: SkillText, sheet: SecondarySheet, retuneSteps = 0): Tooltip {

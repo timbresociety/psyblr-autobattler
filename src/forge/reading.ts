@@ -328,10 +328,10 @@ function settleKit(roleId: RoleId, kit: Record<BuildSlot, ReadingSkill>): Record
   return out
 }
 
-/** The transformation an answer means: a template it names, or the size change its words describe. */
+/** The transformation an answer means: an ultimate it names (the form question is about the ultimate), or the size change its words describe. */
 function formOption(label: string): string | undefined {
   const lower = label.toLowerCase()
-  return FORM_TEMPLATES.find((t) => lower.includes(t.name.toLowerCase()))?.id ?? formFromWords(label)
+  return FORM_TEMPLATES.find((t) => t.slot === 'ultimate' && lower.includes(t.name.toLowerCase()))?.id ?? formFromWords(label)
 }
 
 /** A face, size or role question's answers carry the value they mean, read from their words. */

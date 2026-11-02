@@ -28,10 +28,10 @@ function fight(a: Build[], b: Build[], seed = 1) {
 
 describe('engine statuses and passives (U4)', () => {
   it('a healer shields the lowest-health ally', () => {
-    const f = fight([withSlot(defaultBuild('support'), 'active1', 'support-barrier'), defaultBuild('fighter', 'f1'), defaultBuild('fighter', 'f2')], [defaultBuild('tank')])
+    const f = fight([withSlot(defaultBuild('support'), 'active2', 'support-barrier'), defaultBuild('fighter', 'f1'), defaultBuild('fighter', 'f2')], [defaultBuild('tank')])
     const [me, a, b] = f.m.heroes
     f.quiet(0)
-    me.cooldowns.active1 = 0
+    me.cooldowns.active2 = 0
     a.hp = a.maxHp * 0.9
     b.hp = b.maxHp * 0.3
     for (const h of [me, a, b]) h.position = { x: 0, y: 0, z: -12 }
@@ -46,6 +46,8 @@ describe('engine statuses and passives (U4)', () => {
   it('a lowHealth passive fires once when health first drops below the line', () => {
     const f = fight([withSlot(defaultBuild('tank'), 'passive', 'tank-last-stand')], [defaultBuild('mage')])
     const me = f.m.heroes[0]
+    // a passive works only while it's switched on (§4 F)
+    me.passiveOn = true
     me.hp = me.maxHp * (ENGINE.lowHealth - 0.05)
     f.run(3)
     expect(me.lowHealthFired).toBe(true)

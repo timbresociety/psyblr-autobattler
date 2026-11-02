@@ -4,15 +4,15 @@ import { defaultTemplate, getTemplate, poolFor } from './templates/catalog.js'
 
 describe('description matcher', () => {
   it('"rewind the last 5 seconds" on a Mage active finds a spell that reaches others: a rewind only lifts its caster (AE1)', () => {
-    const result = matchTemplate('mage', 'active', 'rewind the last 5 seconds of the fight')
+    const result = matchTemplate('mage', 'spell', 'rewind the last 5 seconds of the fight')
     expect(result.template.tags).not.toContain('return-to-past')
-    expect(poolFor('mage', 'active').map((t) => t.id)).toContain(result.template.id)
+    expect(poolFor('mage', 'spell').map((t) => t.id)).toContain(result.template.id)
   })
 
   it('maps fantasy wording through synonyms', () => {
     expect(matchTemplate('mage', 'ultimate', 'a giant kamehameha wave').template.id).toBe('mage-mega-beam')
-    expect(matchTemplate('tank', 'active', 'throws a chain and drags them in').template.id).toBe('tank-chain-hook')
-    expect(matchTemplate('assassin', 'active', 'turns invisible and slips away').template.id).toBe('assassin-smoke-bomb')
+    expect(matchTemplate('tank', 'spell', 'throws a chain and drags them in').template.id).toBe('tank-chain-hook')
+    expect(matchTemplate('assassin', 'spell', 'turns invisible and slips away').template.id).toBe('assassin-smoke-bomb')
     expect(matchTemplate('fighter', 'ultimate', 'goes super saiyan').template.id).toBe('fighter-ascended-form')
   })
 
@@ -23,39 +23,39 @@ describe('description matcher', () => {
   })
 
   it('unknown words do not throw and fall back to the role default', () => {
-    const result = matchTemplate('marksman', 'active', 'zxqv blorp')
-    expect(result.template.id).toBe(defaultTemplate('marksman', 'active').id)
+    const result = matchTemplate('marksman', 'spell', 'zxqv blorp')
+    expect(result.template.id).toBe(defaultTemplate('marksman', 'spell').id)
     expect(result.fallback).toBe(true)
   })
 
   it('is deterministic', () => {
-    const a = matchTemplate('fighter', 'active', 'fast punches and fire')
-    const b = matchTemplate('fighter', 'active', 'fast punches and fire')
+    const a = matchTemplate('fighter', 'spell', 'fast punches and fire')
+    const b = matchTemplate('fighter', 'spell', 'fast punches and fire')
     expect(a.template.id).toBe(b.template.id)
   })
 
   it('can exclude a template, so the second active differs from the first', () => {
-    const first = matchTemplate('mage', 'active', 'fireball')
-    const second = matchTemplate('mage', 'active', 'fireball', [first.template.id])
+    const first = matchTemplate('mage', 'spell', 'fireball')
+    const second = matchTemplate('mage', 'spell', 'fireball', [first.template.id])
     expect(second.template.id).not.toBe(first.template.id)
   })
 
   it('only returns templates from the role pool for that slot', () => {
-    const result = matchTemplate('tank', 'active', 'snipe from far away with a rifle')
+    const result = matchTemplate('tank', 'spell', 'snipe from far away with a rifle')
     expect(result.template.roles).toContain('tank')
-    expect(result.template.slot).toBe('active')
+    expect(result.template.slot).toBe('spell')
   })
 })
 
 describe('nearest alternatives', () => {
   it('gives 2 to 3 options from the same slot and role, never the chosen one', () => {
     const chosen = getTemplate('mage-fireball')
-    const alternatives = nearestAlternatives('mage', 'active', chosen.id, 'hurls a ball of fire')
+    const alternatives = nearestAlternatives('mage', 'spell', chosen.id, 'hurls a ball of fire')
     expect(alternatives.length).toBeGreaterThanOrEqual(2)
     expect(alternatives.length).toBeLessThanOrEqual(3)
     for (const alt of alternatives) {
       expect(alt.id).not.toBe(chosen.id)
-      expect(alt.slot).toBe('active')
+      expect(alt.slot).toBe('spell')
       expect(alt.roles).toContain('mage')
     }
   })

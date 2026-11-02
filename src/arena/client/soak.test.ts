@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEMO_HEROES, demoBuild } from '../demo/roster.js'
+import { STARTERS, starterBuild } from '../starters.js'
 import { createMatch } from '../engine/match.js'
 import { AIM_STEPS, slotBit } from '../engine/state.js'
 import { DEFAULT_SOAK, createSoakRecorder, forceUltimates, frameStats, soakCommand, soakOptions } from './soak.js'
@@ -7,8 +7,8 @@ import { DEFAULT_SOAK, createSoakRecorder, forceUltimates, frameStats, soakComma
 const env = { userAgent: 'test', viewport: { width: 1440, height: 900, pixelRatio: 2 }, startedAt: '2026-10-30T00:00:00Z' }
 const arena = () =>
   createMatch(
-    DEMO_HEROES.slice(0, 3).map((h) => ({ build: demoBuild(h) })),
-    DEMO_HEROES.slice(10, 13).map((h) => ({ build: demoBuild(h) })),
+    STARTERS.slice(0, 3).map((h) => ({ build: starterBuild(h) })),
+    STARTERS.slice(10, 13).map((h) => ({ build: starterBuild(h) })),
     7,
   )
 

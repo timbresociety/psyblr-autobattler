@@ -10,6 +10,7 @@ import { ENGINE, ticks } from './calibration.js'
 import type { CoverHealth, CoverPiece } from './cover.js'
 import type { Vec3 } from './maths.js'
 import { aiSeed, rngState, type RngState } from './rng.js'
+import type { AiLevel } from '../ai/calibration.js'
 
 /**
  * Match state (KTD1): flat plain data, so it can be snapshotted, restored and hashed every tick. Everything that never
@@ -110,8 +111,26 @@ export interface HeroState {
   riderAt: number
   /** A strike tapped too early, waiting until this tick for the hero to be ready (combat.ts). */
   queued?: { until: number }
-  /** Whether the passive is on (F toggles it). */
+  /** Whether the passive is on (F toggles it), and its energy meter, 0 to 1 (§4 F: drains on, refills off). */
   passiveOn: boolean
+  energy: number
+  /**
+   * The ranged weapon (§5): shots left in the magazine, the tick a reload ends (0 when none), the tick of the last shot,
+   * the bloom the last shots built up (radians), and a burst's shots still to come.
+   */
+  ammo: number
+  reloadUntil: number
+  lastShot: number
+  bloom: number
+  burst?: { left: number; next: number }
+  /** A melee lunge (§5 magnetism): the swing carries the body `x`, `z` metres a tick toward `target` until `until`. */
+  lunge?: { x: number; z: number; until: number; target: number }
+  /** Revealed by a vision spell until this tick: it can't hide, and shows through walls. */
+  revealedUntil: number
+  /** Enemy shots that reach it turn back on their shooter until this tick (a trick spell). */
+  reflectUntil: number
+  /** Its health every half second over the last five, oldest first, for a rewind. */
+  hpTrail: number[]
   /** The slot buttons held last tick, so a press or a release counts once. */
   buttonsHeld: number
   /** `source` is the template that granted it; the same template refreshes its buff instead of stacking. */
@@ -125,7 +144,7 @@ export interface HeroState {
    * The action in progress (Forge goal, phase 1): pressed at `started`, it lands at `release` and frees the hero at
    * `ends`. Control that lands first cuts it short, and what hasn't been released never lands.
    */
-  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number }; shot?: { share: number; rider: boolean } }
+  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number }; shot?: { share: number; rider: boolean }; target?: number }
   chosenSize: SizeClass
   /** The current class, which a transformation can change until `formUntil` (KTD14). */
   size: SizeClass
@@ -150,8 +169,10 @@ export interface ProjectileState {
   /** Metres per tick. */
   step: Vec3
   ticksLeft: number
-  /** Skill 1's share and rider when it fires as a gun (combat.ts, shotTemplate). */
+  /** A pellet's share of the weapon's blast (combat.ts, shotTemplate). */
   shot?: { share: number; rider: boolean }
+  /** Whose kit the shot is, when a reflect turned it and `owner` is now the reflector. */
+  source?: number
 }
 
 export interface MatchState {
@@ -170,6 +191,8 @@ export interface MatchState {
   human?: number
   /** Each AI hero's memory, kept in the state so AI play snapshots and replays exactly (KTD7). */
   brains?: BrainState[]
+  /** Each side's AI level (GAME.md §2); Hard when absent, the level the balance gate plays at. */
+  aiLevels?: readonly [AiLevel, AiLevel]
   /** The ruins on this map and each piece's health; absent on an open test floor. Walls raised by skills join it. */
   cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
   /** Lingering areas and traps left by skills, turrets, and the walls skills raised (with when they fall). */
@@ -238,6 +261,9 @@ export interface BrainState {
   /** This decision it charges its next basic attack into a heavy blow, and raises its guard against a swing it sees coming. */
   heavy: boolean
   guard: boolean
+  /** This decision it keeps a melee chain going (its level's combo chance), and presses F once (the passive). */
+  chain: boolean
+  toggle: boolean
 }
 
 export interface HeroSetup {
@@ -249,6 +275,8 @@ export interface HeroSetup {
   mods: TraitMods
   /** The kit its zones, traps and turrets use: the kit scaled by its construct power, when it has any. */
   constructKit?: Record<BuildSlot, Template>
+  /** Shots in a full magazine of its ranged weapon: the weapon's, by the sheet's ammo against the reference 12. */
+  magazine: number
 }
 
 /** A derived sheet with trait multipliers and additions applied on top (they can pass the role's caps). */
@@ -268,7 +296,8 @@ export function prepareHero(build: Build, powerScale = 1, damageBonus = 0, mods:
     kit[slot] = scaleMagnitudes(getTemplate(spec.templateId), retuneFactor(spec.retuneSteps) * powerScale)
   }
   const constructKit = mods.constructPower ? (Object.fromEntries(BUILD_SLOTS.map((s) => [s, scaleMagnitudes(kit[s], 1 + mods.constructPower!)])) as Record<BuildSlot, Template>) : undefined
-  return { build, sheet, kit, powerScale, damageBonus, mods, ...(constructKit ? { constructKit } : {}) }
+  const magazine = Math.max(2, Math.round((kit.active1.ranged?.magazine ?? 10) * (sheet.ammo / ENGINE.ammoReference)))
+  return { build, sheet, kit, powerScale, damageBonus, mods, magazine, ...(constructKit ? { constructKit } : {}) }
 }
 
 export function createHero(setup: HeroSetup & { damageBonus?: number }, id: number, team: Team, position: Vec3): HeroState {
@@ -280,7 +309,8 @@ export function createHero(setup: HeroSetup & { damageBonus?: number }, id: numb
     slows: [], buffs: [], dots: [], hots: [], cooldowns, nextAttackAt: 0, chosenSize: size, size, formUntil: 0,
     cc: noControl(), fearFrom: -1, tauntBy: -1, unstoppableUntil: 0, stealthUntil: setup.mods?.stealthStart ? ticks(setup.mods.stealthStart) : 0, debuffs: [], landedAt: 0,
     velocity: { x: 0, y: 0, z: 0 }, stamina: ENGINE.move.stamina.max, airJumps: 0, held: 0, dashUntil: 0,
-    stance: 'stand', sprinting: false, shiftSince: -1, blocking: false, combo: { step: 0, until: 0 }, basicSince: -1, riderAt: 0, passiveOn: true, buttonsHeld: 0,
+    stance: 'stand', sprinting: false, shiftSince: -1, blocking: false, combo: { step: 0, until: 0 }, basicSince: -1, riderAt: 0, passiveOn: false, energy: 1, buttonsHeld: 0,
+    ammo: setup.magazine ?? 10, reloadUntil: 0, lastShot: -9999, bloom: 0, revealedUntil: 0, reflectUntil: 0, hpTrail: [],
     hitCount: 0, lowHealthFired: false, damageDealt: 0, recentHeals: [], passiveRegen: 0, damageBonus: setup.damageBonus ?? 0,
   }
 }

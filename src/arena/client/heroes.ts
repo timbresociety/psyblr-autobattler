@@ -3,7 +3,7 @@ import { BUILD_SLOTS, type Build } from '../../charter/build.js'
 import type { HeroPackage } from '../../forge/package.js'
 import type { Preset } from '../../forge/motion/library.js'
 import { pickAnimation, viewerSource } from '../../ui/common/viewer.js'
-import { SIZE_SCALE, benchHero } from '../demo/procedural-hero.js'
+import { SIZE_SCALE, benchHero } from './procedural-hero.js'
 import { heightFactor } from '../../kit/body/physique.js'
 import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
@@ -17,7 +17,7 @@ import { heroAtlas } from './face/hero-face.js'
 import { libraryGait, libraryMoves } from './library-gait.js'
 import { WEAPON_MOVES, weaponOf } from '../../kit/anim/weapon-gait.js'
 import { animIndex } from './anim-index.js'
-import { blockMotion, meleeSet, skillMotion } from '../recipes/motions.js'
+import { blockMotion, carriedStyle, meleeSet, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
 import { loadWear } from './wear/items.js'
 import { TEAM_COLORS } from './map.js'
@@ -29,7 +29,7 @@ import { TEAM_COLORS } from './map.js'
 
 /** A pistol or rifle hero's crouch, jump and air moves from its weapon's set (GAME.md §12). */
 const weaponMoves = (build: Build): Record<string, string> => {
-  const weapon = weaponOf(build.look?.style)
+  const weapon = weaponOf(carriedStyle(build))
   return weapon ? { ...WEAPON_MOVES[weapon] } : {}
 }
 
@@ -105,7 +105,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     const [atlas, wear, gait, moves] = await Promise.all([
       heroAtlas(file, shapeLook),
       loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
-      libraryGait(gender, build.look?.idle, rig, weaponOf(build.look?.style)),
+      libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build))),
       rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) })) : undefined,
     ])
     return characterView(file, shapeLook, color, build, atlas, wear, gait, moves)

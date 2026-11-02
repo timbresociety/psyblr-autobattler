@@ -3,11 +3,12 @@ import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { PerspectiveCamera } from 'three'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HudHero, HudState } from '../../../arena/client/match-view'
-import { DEMO_HEROES, demoBuild } from '../../../arena/demo/roster'
+import { STARTERS, starterBuild } from '../../../arena/starters'
 import type { MatchEvent } from '../../../arena/engine/events'
 import { capsule, prepareHero, type HeroState } from '../../../arena/engine/state'
 import { ControlHud } from '../MatchHud'
 import { ScoreBanner } from './Banner'
+import { shortName } from './format'
 import type { HudController } from './controller'
 import { KillFeed } from './KillFeed'
 import { hudHeroes } from './model'
@@ -15,8 +16,10 @@ import { AllyRoster, EnemyRoster } from './Rosters'
 import { attachWorldHud } from './WorldHud'
 import { overheadLift, project, screenPoint } from './world'
 
-// Musk and Huang on blue, Bezos and Zuckerberg on red, with their real kits
-const setups = DEMO_HEROES.slice(0, 4).map((h) => prepareHero(demoBuild(h)))
+// the first four starters: two on blue, two on red, with their generated kits
+const setups = STARTERS.slice(0, 4).map((h) => prepareHero(starterBuild(h)))
+/** The name the HUD shows a starter by. */
+const short = (i: number) => shortName(setups[i].build.heroName)
 const teams = [0, 0, 1, 1] as const
 const info = hudHeroes(setups, teams)
 
@@ -75,8 +78,8 @@ describe('enemy roster (R38)', () => {
     const list = screen.getByRole('list', { name: 'Enemy heroes' })
     const rows = within(list).getAllByRole('listitem')
     expect(rows).toHaveLength(2)
-    expect(rows[0].textContent).toContain('Bezos')
-    expect(rows[1].textContent).toContain('Zuckerberg')
+    expect(rows[0].textContent).toContain(short(2))
+    expect(rows[1].textContent).toContain(short(3))
     expect(rows[1].className).toContain('dead')
     expect(within(rows[0]).getByRole('meter', { name: 'Health' }).getAttribute('aria-valuenow')).toBe('640')
     expect(within(rows[0]).getByRole('img', { name: /^LMB .+: 4 s$/ }).className).toContain('is-cd')
@@ -97,7 +100,7 @@ describe('ally roster (R38)', () => {
     expect(cards[1].className).toContain('controlled')
     expect(cards[1].textContent).toContain('You')
     expect(cards[0].className).not.toContain('controlled')
-    expect(cards[0].textContent).toContain('Musk')
+    expect(cards[0].textContent).toContain(short(0))
   })
 })
 
@@ -132,7 +135,7 @@ describe('kill feed (R38)', () => {
     act(() => m.events([hit(1, 2), hit(0, 2), death(2)]))
     const feed = screen.getByRole('list', { name: 'Kill feed' })
     const [entry] = within(feed).getAllByRole('listitem')
-    expect(entry.textContent).toMatch(/Musk.*eliminated.*Bezos/)
+    expect(entry.textContent).toMatch(new RegExp(`${short(0)}.*eliminated.*${short(2)}`))
     act(() => void vi.advanceTimersByTime(2000))
     act(() => m.events([death(0), death(1), death(3), death(2)]))
     expect(within(feed).getAllByRole('listitem')).toHaveLength(4)
@@ -165,7 +168,7 @@ describe('world layer: overhead bars and damage numbers (R38)', () => {
     expect(bars[0].style.transform).toContain(`translate3d(${head.x.toFixed(1)}px, ${head.y.toFixed(1)}px, 0)`)
     expect(bars.map((b) => b.style.visibility)).toEqual(['visible', 'visible', 'visible', 'visible'])
     expect(bars[2].className).toContain('team-1')
-    expect(bars[2].querySelector('.hud-oh-name')!.textContent).toBe('Bezos')
+    expect(bars[2].querySelector('.hud-oh-name')!.textContent).toBe(short(2))
 
     m.match.human = 1
     m.match.heroes[2].alive = false
@@ -217,13 +220,13 @@ describe('while steering a hero (R14, R42)', () => {
     expect(screen.queryByRole('region', { name: 'Target' })).toBeNull()
     act(() => m.frame())
     const target = screen.getByRole('region', { name: 'Target' })
-    expect(target.textContent).toContain('Bezos')
+    expect(target.textContent).toContain(short(2))
     expect(target.textContent).toContain('420')
     expect(within(target).getByRole('img', { name: /^R .+: 13 s$/ })).toBeTruthy()
 
     const group = screen.getByRole('group', { name: 'Controlled hero' })
     expect(within(group).getByRole('meter', { name: 'Health' }).getAttribute('aria-valuenow')).toBe('800')
-    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['SPC', 'LMB', 'Q', 'E', 'F', 'R'])
+    expect(within(group).getAllByRole('img').map((i) => i.getAttribute('aria-label')!.split(' ')[0])).toEqual(['V', 'LMB', 'Q', 'E', 'F', 'R'])
 
     const crosshair = container.querySelector('.hud-crosshair')!
     act(() => (m.events([hit(0, 2)]), m.frame()))

@@ -244,7 +244,7 @@ export const motionOf = (id: string): Motion | undefined => BY_ID.get(id)
 
 /**
  * The kit's motions (the canon, 2026-11-02), mutually exclusive and together the whole kit. Eight are the hero's own,
- * each its own clip: the three steps of the Space combo (the third knocks back), the held heavy blow, the guard, Skill
+ * each its own clip: the three steps of the V combo (the third knocks back), the held heavy blow, the guard, Skill
  * 1's shot, Skill 2's spell and the ultimate. The rest are one clip for every hero (COMMON_MOTIONS): the passive's
  * toggle and the movement skill (their effects on the field tell them apart), and the body's own moves.
  */
@@ -255,7 +255,7 @@ export const MOTION_SLOT_TITLE: Record<MotionSlot, string> = {
   combo1: 'Combo, first strike',
   combo2: 'Combo, second strike',
   combo3: 'Combo finisher (knocks back)',
-  heavy: 'Heavy blow (hold Space)',
+  heavy: 'Heavy blow (hold V)',
   block: 'Block',
   active1: 'Skill 1 shot',
   active2: 'Skill 2 spell',

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { BUILD_SLOTS } from '../../charter/build.js'
+import { BUILD_SLOTS, SLOT_KIND } from '../../charter/build.js'
 import { GEOMETRY_DEFAULTS } from '../../charter/geometry.js'
 import { SIZES, type SizeClass } from '../../charter/sizes.js'
 import { CATALOG } from '../../charter/templates/catalog.js'
-import { ai, at, form, phys, push, resize, active, ultimate } from '../../charter/templates/dsl.js'
+import { ai, at, form, phys, push, resize, spell, ultimate } from '../../charter/templates/dsl.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE, ticks } from './calibration.js'
@@ -16,7 +16,7 @@ import { tick } from './tick.js'
 import { initHero } from './effects.js'
 
 const base = { id: 't', name: 'T', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
-const skill = (delivery: Template['delivery'], effects: Template['effects'] = [phys(100)]) => active({ ...base, delivery, effects })
+const skill = (delivery: Template['delivery'], effects: Template['effects'] = [phys(100)]) => spell({ ...base, family: 'burst', delivery, effects })
 
 /** Caster at the origin facing +z with `template` in active2; enemies at the given spots and sizes. */
 function arena(template: Template, enemies: { x?: number; y?: number; z: number; size?: SizeClass }[]) {
@@ -196,7 +196,7 @@ describe('3D deliveries (U4)', () => {
 
   it('every catalogue template can be cast headless without errors', () => {
     for (const template of CATALOG) {
-      const slot: BuildSlot = template.slot === 'active' ? 'active2' : template.slot
+      const slot = (Object.keys(SLOT_KIND) as BuildSlot[]).find((k) => SLOT_KIND[k] === template.slot)!
       const a = arena(template, [{ z: 3 }, { x: 2, z: 6 }])
       a.setups[0] = { ...a.setups[0], kit: { ...a.setups[0].kit, [slot]: template } }
       initHero(a.m.heroes[0], a.setups[0])

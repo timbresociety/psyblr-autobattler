@@ -16,7 +16,7 @@ import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../ar
 import { isShared } from '../../arena/client/head/kit.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { Gender, HeroLook } from '../../charter/look.js'
-import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
+import { SIZE_SCALE } from '../../arena/client/procedural-hero'
 import { heightFactor } from '../../kit/body/physique.js'
 import type { Build } from '../../charter/build'
 import { SIZES, type SizeClass } from '../../charter/sizes'

@@ -8,10 +8,14 @@ import type { ControlType, DebuffType, Delivery, Effect, SecondarySheet, SlotKin
  * are scaled so the whole template lands on its slot budget. So a stun skill hits softer than a pure nuke.
  */
 
-/** Score units: basic and passive are per trigger, the rest per second of cooldown. */
+/**
+ * Score units: melee and ranged per blow or shot, the passive per trigger (per second while on, for one that holds),
+ * the rest per second of cooldown.
+ */
 export const SLOT_BUDGETS: Record<SlotKind, number> = {
-  basic: 70,
-  active: 22,
+  melee: 70,
+  ranged: 70,
+  spell: 22,
   passive: 20,
   ultimate: 14,
   movement: 12,
@@ -37,7 +41,7 @@ const CONTROL_WEIGHT: Record<ControlType, number> = { root: 75, silence: 70, dis
 /** Per point (shreds) or percent (the rest) per second, on one enemy. */
 const DEBUFF_WEIGHT: Record<DebuffType, number> = { armorShred: 1.5, spiritShred: 1.5, vulnerable: 2, wound: 0.6, mark: 1.6 }
 /** Per second of the state on one hero; cleanse is a flat price. */
-const STATE_WEIGHT: Record<StateType, number> = { unstoppable: 80, stealth: 45, invulnerable: 130, cleanse: 45 }
+const STATE_WEIGHT: Record<StateType, number> = { unstoppable: 80, stealth: 45, invulnerable: 130, cleanse: 45, reflect: 70 }
 /**
  * What reaching more than one hero is worth. An area heal, shield or buff gives each of up to three allies its full
  * amount (ENGINE.alliesShare), so with the team close it lands two to three times over; 1.6 left team heals so cheap
@@ -114,6 +118,15 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
     case 'form':
       // a same-size form only says the power-up is a transformation, so the form look plays: it changes no number
       return 0
+    case 'reveal':
+      return effect.duration * 18 * area
+    case 'swapHealth':
+      // worth most to a caster in trouble: about a third of a big heal
+      return effect.cap * 400
+    case 'steal':
+      return effect.seconds * 12
+    case 'rewind':
+      return effect.seconds * 45
   }
 }
 
@@ -133,13 +146,23 @@ function lingerMultiplier(template: Template): number {
 export function scoreTemplate(template: Template): number {
   const raw = template.effects.reduce((sum, effect) => sum + effectValue(effect, template.delivery), 0) * lingerMultiplier(template) * rangeMultiplier(template.delivery) * geometryMultiplier(template.delivery)
   switch (template.slot) {
-    case 'basic':
+    case 'melee':
+    case 'ranged':
       return raw
     case 'passive':
-      return raw * PASSIVE_TRIGGER_WEIGHT[template.trigger ?? 'always']
+      return raw * PASSIVE_TRIGGER_WEIGHT[template.trigger ?? 'always'] * uptime(template)
     default:
       return raw / Math.max(template.cooldown, 1)
   }
+}
+
+/**
+ * The share of a fight a passive can be on (§4 F, its energy meter): on for `seconds`, then `refill` seconds off. A
+ * passive priced on its uptime is as strong while on as its meter makes it rare.
+ */
+export function uptime(template: Pick<Template, 'energy'>): number {
+  const e = template.energy
+  return e ? e.seconds / (e.seconds + e.refill) : 1
 }
 
 export function targetBudget(template: Template): number {
@@ -187,7 +210,7 @@ export function normalizeTemplate(template: Template): Template {
   return scaleMagnitudes(template, factor)
 }
 
-const COOLDOWN_SLOTS: SlotKind[] = ['active', 'ultimate', 'movement']
+const COOLDOWN_SLOTS: SlotKind[] = ['spell', 'ultimate', 'movement']
 
 export function validateTemplate(template: Template): Validation {
   const errors: LimitHit[] = []

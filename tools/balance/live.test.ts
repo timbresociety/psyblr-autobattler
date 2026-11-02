@@ -1,6 +1,6 @@
 import { it } from 'vitest'
 import { aiCommands } from '../../src/arena/ai/brain'
-import { DEMO_HEROES, demoBuild } from '../../src/arena/demo/roster'
+import { STARTERS, starterBuild } from '../../src/arena/starters'
 import { LIVE_PROFILE, createMatch, matchRules } from '../../src/arena/engine/match'
 import { tick } from '../../src/arena/engine/tick'
 import { armyModifiers } from '../../src/charter/traits'
@@ -15,10 +15,10 @@ function deployed(builds: Build[], side: 0 | 1): { team: Build[]; spots: { x: nu
   return { team: f.map((p) => builds[p.hero]), spots: f.map((p) => ({ x: p.x, y: 0, z: p.z })) }
 }
 
-// throwaway live check: 10v10 demo armies on the live profile, per-role damage, deaths and time alive
+// throwaway live check: 10v10 starter squads on the live profile, per-role damage, deaths and time alive
 it('live', () => {
-  const moguls = DEMO_HEROES.filter((h) => h.faction === 'mogul').map(demoBuild)
-  const leaders = DEMO_HEROES.filter((h) => h.faction === 'leader').map(demoBuild)
+  const moguls = STARTERS.filter((h) => h.squad === 'vanguard').map(starterBuild)
+  const leaders = STARTERS.filter((h) => h.squad === 'outlaws').map(starterBuild)
   const seeds = Number(process.env.SEEDS ?? 6)
   const roles = new Map<string, { dmg: number; deaths: number; alive: number; n: number; heal: number }>()
   const heroes = new Map<string, { dmg: number; deaths: number; alive: number; n: number }>()

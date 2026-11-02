@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { AI_LEVELS_ORDER, DEFAULT_AI_LEVEL, type AiLevel } from '../../../arena/ai/calibration'
 import type { Team } from '../../../arena/engine/state'
 import { shortName } from '../hud/format'
 import { RoleIcon } from '../../common/RoleIcon'
@@ -8,8 +9,8 @@ import { Board3D, canDraw3D, type Board3DHandle } from './Board3D'
 import { refine, type Reason } from './board-math'
 import type { BoardState } from './board-scene'
 import { MAX_PER_SIDE, deployHeroes, emptyFormation, move, place, remove, type Formation } from './formation'
-import { bust, demoLoadout, liveLoadout, onCharacters, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
-import { FACTION_NAME, MATCHUPS, defaultLineup, hasFactions, lineupName, matchup, type MatchupId } from './presets'
+import { bust, starterLoadout, liveLoadout, onCharacters, preloadBusts, type LoadoutDeps, type LoadoutEntry } from './loadout'
+import { SQUAD_NAME, MATCHUPS, defaultLineup, hasSquads, lineupName, matchup, type MatchupId } from './presets'
 import './staging.css'
 
 /**
@@ -24,15 +25,19 @@ export interface StagingResult {
   loadout: LoadoutEntry[]
   /** The other side is a training dummy: it stands still and takes a long time to fall. */
   dummy?: true
+  /** How well the AI plays each side (§2), by team; Normal when absent. */
+  aiLevels?: [AiLevel, AiLevel]
 }
+
+const AI_LABEL: Record<AiLevel, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' }
 
 const TEAM = ['Blue', 'Red'] as const
 
 type Selected = { kind: 'loadout'; index: number } | { kind: 'placed'; side: Team; index: number }
 
-type Group = 'Your heroes' | 'Forged' | 'Moguls' | 'World leaders'
-const groupOf = (entry: LoadoutEntry): Group => (entry.faction ? (FACTION_NAME[entry.faction] as Group) : entry.pkg ? 'Forged' : 'Your heroes')
-const GROUP_RANK: Record<Group, number> = { 'Your heroes': 0, Forged: 1, Moguls: 2, 'World leaders': 3 }
+type Group = 'Your heroes' | 'Forged' | 'Vanguard' | 'Outlaws'
+const groupOf = (entry: LoadoutEntry): Group => (entry.squad ? (SQUAD_NAME[entry.squad] as Group) : entry.pkg ? 'Forged' : 'Your heroes')
+const GROUP_RANK: Record<Group, number> = { 'Your heroes': 0, Forged: 1, Vanguard: 2, Outlaws: 3 }
 
 /** Why a spot was refused, as the notice under the board says it. */
 const NOTICE: Record<Reason, string> = {
@@ -51,13 +56,14 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const [side, setSide] = useState<Team | undefined>(initial?.side)
   const [editing, setEditing] = useState<Team>(initial?.side ?? 0)
   const [formation, setFormation] = useState<Formation>(initial?.formation ?? emptyFormation())
-  const [loadout, setLoadout] = useState<LoadoutEntry[]>(initial?.loadout ?? (demo ? demoLoadout() : []))
+  const [loadout, setLoadout] = useState<LoadoutEntry[]>(initial?.loadout ?? (demo ? starterLoadout() : []))
   const [searching, setSearching] = useState(!initial)
   const [selected, setSelected] = useState<Selected>()
   const [brush, setBrush] = useState<number>()
   const [count, setCount] = useState(10)
   const [notice, setNotice] = useState<string>()
   const [preset, setPreset] = useState<MatchupId>()
+  const [aiLevels, setAiLevels] = useState<[AiLevel, AiLevel]>(initial?.aiLevels ?? [DEFAULT_AI_LEVEL, DEFAULT_AI_LEVEL])
   // the 3D arena where the browser can draw it; the flat map where it cannot, or once the 3D board fails to start
   const [flat, setFlat] = useState(() => !canDraw3D())
   const board3d = useRef<Board3DHandle>(null)
@@ -83,7 +89,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
     }
   }, [])
 
-  // the player's own heroes (made in the Forge or added in the Loadout) join the demo roster (R2); appended, so a formation
+  // the player's own heroes (made in the Forge or added in the Loadout) join the starter squads (R2); appended, so a formation
   // already on the board keeps pointing at the same heroes, and shown first in the row
   useEffect(() => {
     if (initial) return
@@ -214,11 +220,11 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   }
 
   const details = selected?.kind === 'loadout' ? selected.index : selected?.kind === 'placed' ? formation[selected.side][selected.index]?.hero : undefined
-  // the row: the player's own heroes first, then each faction (the loadout's order stays as it is)
+  // the row: the player's own heroes first, then each squad (the loadout's order stays as it is)
   const rowOrder = useMemo(() => loadout.map((_, i) => i).sort((a, b) => GROUP_RANK[groupOf(loadout[a])] - GROUP_RANK[groupOf(loadout[b])]), [loadout])
   const sideBuilds = useMemo(() => formation[editing].map((p) => loadout[p.hero].build), [formation, editing, loadout])
   const ready = formation[0].length > 0 && formation[1].length > 0 && !searching
-  const factions = hasFactions(loadout)
+  const squads = hasSquads(loadout)
 
   if (side === undefined)
     return (
@@ -230,22 +236,22 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             <button key={s} className={`side-card team-${s}`} aria-label={s === 0 ? 'Blue side' : 'Red side'} onClick={() => (setSide(s), setEditing(s))}>
               <span className="side-card-name">{TEAM[s]} side</span>
               <span className="side-card-where">{s === 0 ? 'The near half of the ruins' : 'The far half of the ruins'}</span>
-              {factions && <span className="side-card-army">Fields the {FACTION_NAME.mogul.toLowerCase()} by default</span>}
+              {squads && <span className="side-card-army">Fields the {SQUAD_NAME.vanguard.toLowerCase()} by default</span>}
             </button>
           ))}
         </div>
-        {factions && (
+        {squads && (
           <button
             className="btn big primary quick-battle"
             onClick={() => {
-              // one click from the menu to a ready fight: the blue side, moguls against the world leaders
+              // one click from the menu to a ready fight: the blue side, the Vanguard against the Outlaws
               setSide(0)
               setEditing(0)
-              setFormation((f) => matchup('factions', loadout, 0, f))
-              setPreset('factions')
+              setFormation((f) => matchup('squads', loadout, 0, f))
+              setPreset('squads')
             }}
           >
-            Quick battle · Moguls vs Leaders
+            Quick battle · Vanguard vs Outlaws
           </button>
         )}
       </div>
@@ -266,7 +272,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   }
   const start = () => {
     if (starting.current) return
-    const result = { side, formation, loadout }
+    const result: StagingResult = { side, formation, loadout, aiLevels }
     const board = board3d.current
     if (!board) return onStart(result)
     // the board gives its renderer back before the match makes its own
@@ -295,7 +301,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
               key={m.id}
               className={`preset${preset === m.id ? ' on' : ''}`}
               aria-pressed={preset === m.id}
-              disabled={!loadout.length || (m.needsFactions && !factions)}
+              disabled={!loadout.length || (m.needsSquads && !squads)}
               onClick={() => {
                 setFormation((f) => matchup(m.id, loadout, side, f))
                 setPreset(m.id)
@@ -305,6 +311,20 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
             >
               {m.label}
             </button>
+          ))}
+        </div>
+        <div className="ai-levels" role="group" aria-label="AI level">
+          {([side, enemy] as const).map((s) => (
+            <label key={s} className={`ai-level team-${s}`}>
+              <span>{s === side ? 'Your AI' : 'Enemy AI'}</span>
+              <select value={aiLevels[s]} onChange={(e) => setAiLevels((l) => (s === 0 ? [e.target.value as AiLevel, l[1]] : [l[0], e.target.value as AiLevel]))}>
+                {AI_LEVELS_ORDER.map((level) => (
+                  <option key={level} value={level}>
+                    {AI_LABEL[level]}
+                  </option>
+                ))}
+              </select>
+            </label>
           ))}
         </div>
         <button className="btn primary big start" disabled={!ready} onClick={start}>
@@ -409,8 +429,8 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
         {loadout.length === 0 && (
           <p className="muted">
             No heroes yet. <a href="?">Make one in the Forge</a>, <a href="?loadout">add some in the Loadout</a> or{' '}
-            <button className="link-btn" onClick={() => setLoadout(demoLoadout())}>
-              use the demo roster
+            <button className="link-btn" onClick={() => setLoadout(starterLoadout())}>
+              use the starter squads
             </button>
           </p>
         )}

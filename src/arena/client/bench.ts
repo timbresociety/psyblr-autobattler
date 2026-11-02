@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { float, fract, instancedBufferAttribute, length, positionLocal, smoothstep, time, uv, vec3 } from 'three/tsl'
-import { DEMO_HEROES } from '../demo/roster.js'
-import { benchHero, type BenchHero } from '../demo/procedural-hero.js'
+import { STARTERS } from '../starters.js'
+import { benchHero, type BenchHero } from './procedural-hero.js'
 import { summarizeFrames, type FrameSummary } from './frames.js'
 import { createRenderer, type Backend } from './render/renderer.js'
 
@@ -98,10 +98,10 @@ export async function runBench(canvas: HTMLCanvasElement, options: { forceWebGL:
   const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400)
   arena(scene)
 
-  const heroes: { hero: BenchHero; radius: number; speed: number; flying: boolean; phase: number }[] = DEMO_HEROES.map((h, i) => {
+  const heroes: { hero: BenchHero; radius: number; speed: number; flying: boolean; phase: number }[] = STARTERS.map((h, i) => {
     const hero = benchHero({ hue: h.hue, sizeClass: h.sizeClass, textureSize: i < FOCUS_HEROES ? 2048 : 1024, seed: i + 1 })
     scene.add(hero.mesh)
-    return { hero, radius: 6 + (i % 5) * 4, speed: 0.4 + (i % 4) * 0.15, flying: i % 3 === 0, phase: (i / DEMO_HEROES.length) * Math.PI * 2 }
+    return { hero, radius: 6 + (i % 5) * 4, speed: 0.4 + (i % 4) * 0.15, flying: i % 3 === 0, phase: (i / STARTERS.length) * Math.PI * 2 }
   })
   const colors = [0x66ccff, 0xffaa33, 0xff4466, 0x99ff66]
   for (let i = 0; i < SYSTEMS; i++) scene.add(particleSystem(PARTICLES_PER_SYSTEM, new THREE.Color(colors[i]), new THREE.Vector3((i - 1.5) * 10, 1, (i % 2) * 8 - 4), 1000 + i))

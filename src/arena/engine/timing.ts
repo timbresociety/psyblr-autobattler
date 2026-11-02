@@ -1,5 +1,6 @@
 import type { BuildSlot, Delivery, Template } from '../../charter/types.js'
 import { ticks } from './calibration.js'
+import STYLE_TIMING from './style-timing.json'
 
 /**
  * Action timing (Forge goal, phase 1). Every cast winds up (prep), lands on its release tick, then recovers before the
@@ -49,7 +50,11 @@ export const BASIC_SHARE = 0.85
 export function timingOf(template: Template, slot: BuildSlot, interval = Infinity): Timing {
   const kind = template.delivery.kind
   if (slot === 'basic') {
-    const t = BASIC[kind] ?? BASIC_FALLBACK
+    const base = BASIC[kind] ?? BASIC_FALLBACK
+    // a melee style keeps its clips' beat (§5): how much slower or quicker its blows land than the median style's
+    // (scripts/style-timing.ts reads them off the clips' contact frames)
+    const beat = template.style ? STYLE_TIMING[template.style] : undefined
+    const t = beat ? { prep: base.prep * beat.prep, recover: base.recover * beat.recover } : base
     const fit = Math.min(1, (interval * BASIC_SHARE) / (t.prep + t.recover))
     return { prep: t.prep * fit, recover: t.recover * fit }
   }

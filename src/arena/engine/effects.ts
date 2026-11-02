@@ -1,3 +1,4 @@
+import { scaleMagnitudes } from '../../charter/budget.js'
 import { sizeHealth } from '../../charter/sizes.js'
 import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types.js'
 import { DT, ENGINE, ticks } from './calibration.js'
@@ -57,7 +58,7 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   const { match } = ctx
   if (!target.alive || target.invulnerableUntil > match.tick || raw <= 0) return
   // a blinded attacker's basic attacks miss, and evasion turns some aside
-  if (slot === 'basic') {
+  if (slot === 'basic' || slot === 'active1') {
     const evasion = Math.min(ENGINE.evasionCap, sumBuff(target, 'evasion'))
     if (controlled(source, 'blind', match.tick) || (evasion > 0 && next(match.rules) < evasion)) {
       ctx.events.push({ type: 'miss', source: source.id, target: target.id })
@@ -252,7 +253,10 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
         if (e.type === 'unstoppable') {
           u.unstoppableUntil = Math.max(u.unstoppableUntil, until)
           clearControl(u, now)
-        } else if (e.type === 'stealth') u.stealthUntil = Math.max(u.stealthUntil, until)
+        } else if (e.type === 'stealth') {
+          // a revealed hero can't hide until the reveal wears off
+          if (u.revealedUntil <= now) u.stealthUntil = Math.max(u.stealthUntil, until)
+        } else if (e.type === 'reflect') u.reflectUntil = Math.max(u.reflectUntil, until)
         else if (e.type === 'invulnerable') u.invulnerableUntil = Math.max(u.invulnerableUntil, until)
         else {
           clearControl(u, now)
@@ -281,6 +285,40 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
       if (e.kind === 'resize') setSize(ctx, caster, e.sizeClass)
       caster.formUntil = now + ticks(e.duration)
       ctx.events.push({ type: 'form', hero: caster.id, phase: 'start', size: caster.size })
+      break
+    case 'reveal':
+      for (const u of hit) {
+        u.revealedUntil = Math.max(u.revealedUntil, now + ticks(e.duration))
+        u.stealthUntil = Math.min(u.stealthUntil, now)
+        status(ctx, u, 'revealed', u.revealedUntil)
+      }
+      break
+    case 'swapHealth': {
+      // the first enemy it reached trades health shares with the caster, each change capped
+      const u = hit[0]
+      if (!u || u.invulnerableUntil > now || !caster.alive) break
+      const mine = hpFraction(caster)
+      const theirs = hpFraction(u)
+      const shift = clamp(theirs - mine, -e.cap, e.cap)
+      caster.hp = Math.max(1, Math.min(caster.maxHp, caster.maxHp * (mine + shift)))
+      u.hp = Math.max(1, Math.min(u.maxHp, u.maxHp * (theirs - shift)))
+      status(ctx, u, 'swapped', now)
+      break
+    }
+    case 'steal':
+      for (const u of hit.slice(0, 1)) {
+        u.cooldowns.active2 += ticks(e.seconds)
+        caster.cooldowns.active2 = Math.max(0, caster.cooldowns.active2 - ticks(e.seconds))
+        status(ctx, u, 'stolen', now + u.cooldowns.active2)
+      }
+      break
+    case 'rewind':
+      // an ally gets back what it lost: its health as it was `seconds` ago, when that was more
+      for (const u of friendlyTargets(ctx, caster, template, 'ally', area)) {
+        const back = u.hpTrail[Math.max(0, u.hpTrail.length - Math.round(e.seconds / TRAIL_STEP))]
+        if (back !== undefined && back > u.hp) u.hp = Math.min(u.maxHp, back)
+        status(ctx, u, 'rewind', now)
+      }
       break
     case 'displace':
     case 'pull':
@@ -358,31 +396,80 @@ export function firePassive(ctx: Ctx, hero: HeroState, trigger: PassiveTrigger, 
   resolve(ctx, hero, passive, 'passive', hit ? [hit] : [])
 }
 
+/** Seconds between the health samples a rewind reads (`hpTrail`), and how many are kept. */
+const TRAIL_STEP = 0.5
+const TRAIL_LENGTH = 10
+
+/** What a passive lands once as it switches on (§4 F, a power that used to be a cast): a heal, shield, cleanse or refresh. */
+const SWITCH_KINDS = new Set<Effect['kind']>(['heal', 'shield', 'refresh'])
+const onSwitch = (e: Effect) => SWITCH_KINDS.has(e.kind) || (e.kind === 'state' && e.type === 'cleanse')
+const switchTemplates = new WeakMap<Template, Template>()
+
+/**
+ * F switches the passive on or off (§4 F). It never blocks: an empty meter switches on and straight off again. A power
+ * that lands something once as it switches on (a heal, a shield, a cleanse, a refresh) spends `switchCost` of the meter
+ * to do it, and lands in proportion to what the meter had, so flicking it never repeats it for free.
+ */
+export function togglePassive(ctx: Ctx, hero: HeroState) {
+  hero.passiveOn = !hero.passiveOn
+  ctx.events.push({ type: 'passive', hero: hero.id, on: hero.passiveOn })
+  if (!hero.passiveOn) return
+  const passive = ctx.setups[hero.id].kit.passive
+  if (!passive.energy?.onSwitch || controlled(hero, 'break', ctx.match.tick)) return
+  let once = switchTemplates.get(passive)
+  if (!once) switchTemplates.set(passive, (once = { ...passive, effects: passive.effects.filter(onSwitch) }))
+  if (!once.effects.length) return
+  const paid = Math.min(hero.energy, ENGINE.passive.switchCost)
+  hero.energy -= paid
+  if (paid <= 0) return
+  resolve(ctx, hero, scaleMagnitudes(once, paid / ENGINE.passive.switchCost), 'passive', [])
+}
+
 /** Always-on regeneration and the ultimate's opening cooldown, set once when a hero enters a match. */
 export function initHero(hero: HeroState, setup: HeroSetup) {
   hero.cooldowns.ultimate = ticks(ENGINE.ultimateStartCooldown)
   const passive = setup.kit.passive
-  if ((passive.trigger ?? 'always') !== 'always') return
+  if ((passive.trigger ?? 'always') !== 'always' || passive.energy?.onSwitch) return
   for (const e of passive.effects) if (e.kind === 'heal' && e.target === 'self') hero.passiveRegen += e.amount + e.ratio * setup.sheet.spiritPower
 }
 
 /**
- * Always-on passive buffs, renewed every tick while the passive works: on the hero itself, or as an aura on every ally
- * near it. A break stops the renewal, so the buff lapses within a tick and comes back when the break ends.
+ * What an always-on passive holds while it's on, renewed every tick: buffs and states on the hero itself, and a
+ * transformation's size or form. A break or switching off stops the renewal, so it lapses within a tick or two.
  */
-function passiveBuffs(ctx: Ctx, hero: HeroState) {
+function passiveHolds(ctx: Ctx, hero: HeroState) {
   const passive = ctx.setups[hero.id].kit.passive
   const now = ctx.match.tick
   const source = `passive:${hero.id}`
   for (const e of passive.effects) {
-    if (e.kind !== 'buff') continue
-    const radius = passive.delivery.radius ?? ENGINE.alliesRadius
-    const targets = e.target === 'self' ? [hero] : alliesOf(ctx.match, hero).filter((a) => distance(a.position, hero.position) <= radius)
-    for (const u of targets) {
-      u.buffs = u.buffs.filter((b) => !(b.source === source && b.stat === e.stat))
-      u.buffs.push({ stat: e.stat, pct: e.pct, until: now + 2, source })
+    if (e.kind === 'buff') {
+      hero.buffs = hero.buffs.filter((b) => !(b.source === source && b.stat === e.stat))
+      hero.buffs.push({ stat: e.stat, pct: e.pct, until: now + 2, source })
+    } else if (e.kind === 'state' && e.type !== 'cleanse') {
+      if (e.type === 'unstoppable') hero.unstoppableUntil = Math.max(hero.unstoppableUntil, now + 2)
+      else if (e.type === 'invulnerable') hero.invulnerableUntil = Math.max(hero.invulnerableUntil, now + 2)
+      else if (e.type === 'reflect') hero.reflectUntil = Math.max(hero.reflectUntil, now + 2)
+      else if (hero.revealedUntil <= now && hero.stealthUntil <= now + 2) hero.stealthUntil = now + 2
+    } else if (e.kind === 'resize' || e.kind === 'form') {
+      const fresh = hero.formUntil <= now
+      if (e.kind === 'resize' && hero.size !== e.sizeClass) setSize(ctx, hero, e.sizeClass)
+      hero.formUntil = Math.max(hero.formUntil, now + 2)
+      if (fresh) ctx.events.push({ type: 'form', hero: hero.id, phase: 'start', size: hero.size })
     }
   }
+}
+
+/** The passive's meter (§4 F): drains while on, refills while off, and switches the passive off when it runs dry. */
+function tickEnergy(ctx: Ctx, hero: HeroState) {
+  const meter = ctx.setups[hero.id].kit.passive.energy
+  if (!meter) return
+  if (hero.passiveOn) {
+    hero.energy = Math.max(0, hero.energy - DT / meter.seconds)
+    if (hero.energy === 0) {
+      hero.passiveOn = false
+      ctx.events.push({ type: 'passive', hero: hero.id, on: false, dry: true })
+    }
+  } else hero.energy = Math.min(1, hero.energy + DT / meter.refill)
 }
 
 /** Expire statuses and run damage and healing over time, once per tick before anyone acts. */
@@ -408,18 +495,14 @@ export function tickStatuses(ctx: Ctx) {
     hero.hots = hero.hots.filter((h) => h.until > now)
     if (!hero.alive) continue
     const setup = setups[hero.id]
-    const broken = controlled(hero, 'break', now)
-    heal(hero, (setup.sheet.regen + (broken ? 0 : hero.passiveRegen)) * DT)
-    const passive = setup.kit.passive
-    if ((passive.trigger ?? 'always') === 'always' && !broken) passiveBuffs(ctx, hero)
-    if ((passive.trigger ?? 'always') === 'always' && !broken)
-      for (const e of passive.effects) {
-        if (e.kind !== 'heal' || e.target !== 'allies') continue
-        const perSecond = e.amount + e.ratio * setup.sheet.spiritPower
-        const radius = passive.delivery.radius ?? ENGINE.alliesRadius
-        const near = alliesOf(match, hero).filter((a) => a !== hero && distance(hero.position, a.position) <= radius)
-        for (const a of near) heal(a, perSecond * DT * share(near.length))
-      }
+    tickEnergy(ctx, hero)
+    const working = hero.passiveOn && !controlled(hero, 'break', now)
+    heal(hero, (setup.sheet.regen + (working ? hero.passiveRegen : 0)) * DT)
+    if ((setup.kit.passive.trigger ?? 'always') === 'always' && working) passiveHolds(ctx, hero)
+    if (now % ticks(TRAIL_STEP) === 0) {
+      hero.hpTrail.push(hero.hp)
+      if (hero.hpTrail.length > TRAIL_LENGTH) hero.hpTrail.shift()
+    }
     if (!hero.lowHealthFired && hpFraction(hero) < ENGINE.lowHealth) {
       hero.lowHealthFired = true
       firePassive(ctx, hero, 'lowHealth', undefined)

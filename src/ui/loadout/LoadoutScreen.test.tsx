@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { proposeBuild, type Build } from '../../charter/build'
 import type { BuildRecord, HeroResult, LoadoutDeps } from '../api'
+import { STARTERS } from '../../arena/starters'
 import { LoadoutScreen } from './LoadoutScreen'
 
 afterEach(cleanup)
@@ -82,6 +83,6 @@ describe('loadout (R18)', () => {
     // a starter can't be removed, only remixed into a new hero of your own
     expect(within(starters[0]).queryByRole('button', { name: /Remove/ })).toBeNull()
     fireEvent.click(within(starters[0]).getByRole('button', { name: 'Remix in Forge' }))
-    expect(h.onRemix).toHaveBeenCalledWith(expect.objectContaining({ heroName: expect.stringContaining('Musk') }))
+    expect(h.onRemix).toHaveBeenCalledWith(expect.objectContaining({ heroName: expect.stringContaining(STARTERS[0].heroName) }))
   })
 })

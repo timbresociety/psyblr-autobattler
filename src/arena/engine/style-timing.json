@@ -1,0 +1,37 @@
+{
+  "unarmed": {
+    "prep": 0.868,
+    "recover": 1,
+    "clips": 32
+  },
+  "kicks": {
+    "prep": 1,
+    "recover": 0.986,
+    "clips": 14
+  },
+  "blade": {
+    "prep": 1.026,
+    "recover": 1.256,
+    "clips": 12
+  },
+  "greatsword": {
+    "prep": 0.75,
+    "recover": 0.75,
+    "clips": 14
+  },
+  "shield": {
+    "prep": 0.842,
+    "recover": 0.75,
+    "clips": 14
+  },
+  "staff": {
+    "prep": 1.052,
+    "recover": 1.016,
+    "clips": 10
+  },
+  "club": {
+    "prep": 1.4,
+    "recover": 1.138,
+    "clips": 10
+  }
+}

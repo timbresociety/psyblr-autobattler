@@ -1,4 +1,4 @@
-import { BUILD_SLOTS, SLOT_KIND, otherActive, type Build } from '../charter/build.js'
+import { BUILD_SLOTS, SLOT_KIND, type Build } from '../charter/build.js'
 import { ROLE_IDS, getRole } from '../charter/roles.js'
 import { ATTRIBUTES } from '../charter/stats.js'
 import { poolFor } from '../charter/templates/catalog.js'
@@ -11,8 +11,7 @@ export function randomBuild(roleId: RoleId, rng: Rng, heroName = `${roleId}-rand
   const build = defaultBuild(roleId, heroName)
   const slots = { ...build.slots }
   for (const slot of BUILD_SLOTS) {
-    const exclude = slot === 'active2' ? otherActive(slots, slot) : []
-    const pool = poolFor(roleId, SLOT_KIND[slot]).filter((t) => !exclude.includes(t.id))
+    const pool = poolFor(roleId, SLOT_KIND[slot])
     slots[slot] = { ...slots[slot], templateId: pool[Math.floor(rng() * pool.length)].id }
   }
   // players start from the engine's proposed spread and nudge it, so samples do too

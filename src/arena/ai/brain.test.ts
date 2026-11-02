@@ -147,18 +147,22 @@ describe('demo AI (U7)', () => {
 
   it('fights on the ground among the ruins instead of drifting up into the sky (R25)', () => {
     const army = referenceArmy()
-    const arena = createMatch(armyModifiers(army), armyModifiers(army), 3)
-    const rules = matchRules(arena)
     let airborne = 0
     let samples = 0
-    for (let i = 0; i < 60 * 40 && arena.match.winner === undefined; i++) {
-      tick(arena.match, arena.setups, aiCommands(arena), rules)
-      // a hero thrown up by a knock-up is not flying, it is falling
-      for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && !h.launch && airborne++)
+    // over several fights: one fight's share swings by several points from seed to seed
+    for (const seed of [1, 2, 3, 4]) {
+      const arena = createMatch(armyModifiers(army), armyModifiers(army), seed)
+      const rules = matchRules(arena)
+      for (let i = 0; i < 60 * 40 && arena.match.winner === undefined; i++) {
+        tick(arena.match, arena.setups, aiCommands(arena), rules)
+        // a hero thrown up by a knock-up is not flying, it is falling
+        for (const h of arena.match.heroes) if (h.alive) (samples++, h.position.y > 0.5 && !h.launch && airborne++)
+      }
     }
     // hops over low cover only: a fight that chases targets upward ends at the ceiling, above every wall. The canon's
-    // jumps are bigger (2.2 m), so each hop hangs longer than the old 1.4 m one did
-    expect(airborne / samples).toBeLessThan(0.16)
+    // jumps are bigger (2.2 m), so each hop hangs longer than the old 1.4 m one did; with ranged weapons on every hero
+    // (§4) the AI hops cover a little more, about a sixth of the time over these seeds (2026-11-02)
+    expect(airborne / samples).toBeLessThan(0.22)
   })
 
   it('a sword across low cover from its target goes round it rather than standing there swinging at stone', () => {

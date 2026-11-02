@@ -56,11 +56,55 @@ export interface LimitHit {
 
 export type Validation = { ok: true } | { ok: false; errors: LimitHit[] }
 
-/** The kind of slot a template fills. A build has two `active` slots (R1). */
-export type SlotKind = 'basic' | 'active' | 'passive' | 'ultimate' | 'movement'
+/**
+ * The row a template fills (GAME.md §4): the melee weapon style (V), the ranged weapon (LMB), a spell (Q), the passive
+ * toggle (F), the ultimate (R) or the movement skill (E). Rows don't overlap, and the typing rules (catalog.ts
+ * `fitsSlot`) keep a wrong item out of each.
+ */
+export type SlotKind = 'melee' | 'ranged' | 'spell' | 'passive' | 'ultimate' | 'movement'
 
-/** The six slots of every build: basic attack, two actives, passive, ultimate, movement (R1). */
+/** The six slots of every build, one per row; the ids are the stored builds' (basic is V's melee, active1 LMB, active2 Q). */
 export type BuildSlot = 'basic' | 'active1' | 'active2' | 'passive' | 'ultimate' | 'movement'
+
+/** Melee weapon styles (§4 V), named as the coverage manifest and the motions name them. */
+export type MeleeStyle = 'unarmed' | 'kicks' | 'blade' | 'greatsword' | 'shield' | 'staff' | 'club'
+
+/** Ranged styles (§4 LMB): what the hand holds, which sets the clips and, for guns, the locomotion. */
+export type RangedStyle = 'pistol' | 'rifle' | 'thrown' | 'magic'
+
+/**
+ * How a ranged weapon fires, on repeat (§5): `rate` shots a second at attack speed 1 (a burst counts as one), a
+ * magazine of `magazine` shots and `reload` seconds to refill it. `pellets` spreads a shotgun cone into that many
+ * shots; `burst` fires that many in a quick string; `beam` lands along a line at once. `hands` picks one- or
+ * two-handed magic clips.
+ */
+export interface RangedSpec {
+  style: RangedStyle
+  mode: 'single' | 'burst' | 'pellets' | 'beam'
+  rate: number
+  magazine: number
+  reload: number
+  pellets?: number
+  burst?: number
+  hands?: 1 | 2
+}
+
+/** The spell universe's families (§4 Q): each spell has exactly one, its main purpose. */
+export type SpellFamily = 'control' | 'displacement' | 'zone' | 'construct' | 'summon' | 'support' | 'curse' | 'burst' | 'vision' | 'trick'
+
+/** Every spell has one shape (§4). */
+export type SpellShape = 'projectile' | 'beam' | 'cone' | 'line' | 'zone' | 'aura' | 'tether' | 'placed'
+
+/**
+ * A passive's energy meter (§4 F): it drains over `seconds` while on and refills over `refill` seconds while off; dry,
+ * the passive switches itself off. It never costs health and never blocks an action.
+ */
+export interface Energy {
+  seconds: number
+  refill: number
+  /** Its heal, shield, cleanse or refresh lands once as it switches on (a power that used to be a cast). */
+  onSwitch?: boolean
+}
 
 export type DamageType = 'physical' | 'spirit'
 
@@ -79,7 +123,8 @@ export type ControlType = 'root' | 'silence' | 'disarm' | 'sleep' | 'blind' | 'g
 export type DebuffType = 'armorShred' | 'spiritShred' | 'vulnerable' | 'wound' | 'mark'
 
 /** States on the caster or allies: immune to control, unseen, untouchable, or rid of control and debuffs. */
-export type StateType = 'unstoppable' | 'stealth' | 'invulnerable' | 'cleanse'
+/** `reflect` turns enemy shots that reach the hero back on their shooter. */
+export type StateType = 'unstoppable' | 'stealth' | 'invulnerable' | 'cleanse' | 'reflect'
 
 export type BuffStat = 'damage' | 'attackSpeed' | 'moveSpeed' | 'damageReduction' | 'lifesteal' | 'evasion'
 
@@ -119,6 +164,14 @@ export type Effect =
   /** The template's other effects wait in its area and spring on the first enemy to step in, armed after `arm` seconds. */
   | { kind: 'trap'; lifetime: number; arm: number }
   /** A construct at the landing point that shoots the nearest enemy in sight every `interval` seconds. */
+  /** Vision: enemies it reaches can't hide (stealth ends and won't start) and show through walls for `duration` seconds. */
+  | { kind: 'reveal'; duration: number }
+  /** Trick: the caster and the enemy it reaches trade health fractions, each change capped at `cap` of max health. */
+  | { kind: 'swapHealth'; cap: number }
+  /** Trick: the enemy's spell (Q) waits `seconds` more, and the caster's waits that much less. */
+  | { kind: 'steal'; seconds: number }
+  /** Trick: an ally gets back the health it lost over the last `seconds` seconds. */
+  | { kind: 'rewind'; seconds: number }
   | { kind: 'turret'; duration: number; interval: number; range: number; amount: number; ratio: number; scaling: ScalingStat; type: DamageType }
 
 export interface Delivery {
@@ -159,11 +212,20 @@ export interface Template {
   name: string
   slot: SlotKind
   roles: RoleId[]
+  /** Melee row: the weapon style, which sets the clips, reach, contact frames and lunge (§4). */
+  style?: MeleeStyle
+  /** Ranged row: how the weapon fires. */
+  ranged?: RangedSpec
+  /** Spell row: the family and the shape. */
+  family?: SpellFamily
+  shape?: SpellShape
+  /** Passive row: the energy meter. */
+  energy?: Energy
   /** Mechanic vocabulary used by the matcher (R5, R7). */
   tags: string[]
   delivery: Delivery
   effects: Effect[]
-  /** Seconds; 0 for basic attacks and passives. */
+  /** Seconds; 0 for melee, ranged and passives. */
   cooldown: number
   trigger?: PassiveTrigger
   ai: AiHint
