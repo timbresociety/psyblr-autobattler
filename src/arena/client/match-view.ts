@@ -222,20 +222,20 @@ async function newRenderer(host: HTMLElement, forceWebGL: boolean) {
 }
 
 /**
- * Tell every texture in the scene that this stage's renderer is done with it (Forge goal, phase 0). three's renderer
- * hangs a dispose listener on each texture it uploads and its own dispose() leaves those in place, so a texture shared
- * through a cache (faces, clothes, scenery) keeps the finished renderer reachable. Disposing a texture only frees its
- * copy on the graphics card: the next match's renderer uploads it again. three's own lookup textures can't be reached
- * from here, so `retire` lets go of those.
+ * Every texture the scene's materials hold, for `retire` to let go of (Forge goal, phase 0). three's renderer hangs a
+ * dispose listener on each texture it uploads and its own dispose() leaves those in place, so a texture shared through
+ * a cache (faces, clothes, scenery, the head kit) keeps the finished renderer reachable. Calling the texture's own
+ * dispose() would free it in every renderer at once, the live match's too, whose next frame then draws with destroyed
+ * buffers (StrictMode's discarded first arena finishes loading in the middle of the second one's battle).
  */
-function releaseTextures(scene: THREE.Scene) {
+function sceneTextures(scene: THREE.Scene) {
   const textures = new Set<THREE.Texture>()
   scene.traverse((o) => {
     const material = (o as THREE.Mesh).material
     for (const m of Array.isArray(material) ? material : material ? [material] : [])
       for (const value of Object.values(m)) if ((value as THREE.Texture | null)?.isTexture) textures.add(value as THREE.Texture)
   })
-  for (const t of textures) t.dispose()
+  return textures
 }
 
 /**
@@ -248,15 +248,16 @@ const ignoreLoss = () => {}
  * Let a finished renderer go (Forge goal, phase 0). three keeps a few textures for good, like the lookup table its
  * lighting reads (r186), and a renderer that drew one stays reachable through the listener it left there, along with
  * every scene it drew: one more match kept per match played. So before it's disposed, the renderer drops each texture
- * its shaders bound (its own copy only, so a live renderer elsewhere keeps drawing) and its device-loss hook.
+ * its shaders bound or its scene holds (its own copy only, so a live renderer elsewhere keeps drawing) and its
+ * device-loss hook.
  */
-function retire(renderer: Renderer) {
+function retire(renderer: Renderer, scene?: THREE.Scene) {
   const own = renderer as Renderer & {
     onDeviceLost: (info: unknown) => void
     _nodes?: { nodeBuilderCache?: Map<unknown, { bindings?: { bindings?: { texture?: THREE.Texture }[] }[] }> }
     _textures?: { _destroyTexture?: (texture: THREE.Texture) => void }
   }
-  const bound = new Set<THREE.Texture>()
+  const bound = scene ? sceneTextures(scene) : new Set<THREE.Texture>()
   for (const state of own._nodes?.nodeBuilderCache?.values() ?? [])
     for (const group of state.bindings ?? [])
       for (const binding of group.bindings ?? []) if (binding.texture?.isTexture && !binding.texture.isRenderTargetTexture) bound.add(binding.texture)
@@ -316,8 +317,7 @@ async function createStage(host: HTMLElement) {
       },
       dispose: () => {
         window.removeEventListener('resize', stage.resize)
-        releaseTextures(scene)
-        retire(stage.renderer)
+        retire(stage.renderer, scene)
         stage.canvas.remove()
       },
       /** Rebuild the renderer on a new canvas after the graphics device was lost; false once out of attempts. */
@@ -331,7 +331,7 @@ async function createStage(host: HTMLElement) {
           const bloomOn = stage.glow?.enabled ?? false
           const next = await newRenderer(host, true)
           try {
-            retire(stage.renderer)
+            retire(stage.renderer, scene)
           } catch {
             // a lost device may refuse to release; the canvas goes regardless
           }

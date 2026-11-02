@@ -37,6 +37,7 @@ import {
   type Verdict,
   type View,
 } from './board-math.js'
+import { isShared } from '../../../arena/client/head/kit.js'
 import type { Formation } from './formation.js'
 import type { LoadoutEntry } from './loadout.js'
 
@@ -1150,9 +1151,11 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
         for (const m of materials) for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v)
         if (scene.environment) textures.add(scene.environment)
         pipeline?.dispose()
-        geometries.forEach((g) => g.dispose())
+        // what every hero shares (the head kit, the eyes) the match may be drawing already: only this board's copy goes
+        const own = (renderer as unknown as { _textures?: { _destroyTexture?: (t: THREE.Texture) => void } })._textures
+        geometries.forEach((g) => !isShared(g) && g.dispose())
         materials.forEach((m) => m.dispose())
-        textures.forEach((t) => t.dispose())
+        textures.forEach((t) => (isShared(t) ? own?._destroyTexture?.(t) : t.dispose()))
         try {
           await renderer.dispose()
         } finally {

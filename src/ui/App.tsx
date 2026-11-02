@@ -11,6 +11,7 @@ const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ defa
 // so does the soak test, with `?soak`: real 10v10s back to back for ten minutes, graded on frame time and memory
 const SoakScreen = lazy(() => import('./arena/SoakScreen').then((m) => ({ default: m.SoakScreen })))
 const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./dev/WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
+const PhysiqueBench = import.meta.env.DEV ? lazy(() => import('./dev/PhysiqueBench').then((m) => ({ default: m.PhysiqueBench }))) : undefined
 // the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
 const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
 
@@ -100,6 +101,13 @@ export function App() {
     return (
       <Suspense fallback={<p className="screen-loading">Loading the wardrobe…</p>}>
         <WardrobeScreen />
+      </Suspense>
+    )
+  }
+  if (PhysiqueBench && new URLSearchParams(window.location.search).has('physique')) {
+    return (
+      <Suspense fallback={<p className="screen-loading">Loading the physique bench…</p>}>
+        <PhysiqueBench />
       </Suspense>
     )
   }

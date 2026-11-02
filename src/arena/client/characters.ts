@@ -21,6 +21,8 @@ import type { LoadedWear } from './wear/items.js'
 import { rigOf, RIGS, type RigNames } from './rig.js'
 import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
 import type { Metarig } from './metarig/upgrade.js'
+import type { HeadRig } from './head/build.js'
+import { headRuntime, type HeadRuntime } from './head/runtime.js'
 
 export { characterLook, heroHue, loadBuild } from './character-look.js'
 
@@ -289,10 +291,19 @@ export function standOn(spine: THREE.Quaternion, hips: THREE.Quaternion, castHip
   return out.copy(spine).premultiply(partway.identity().slerp(between, share))
 }
 
+/** A small seed from a string, so each hero blinks on its own beat. */
+const seedOf = (text: string) => {
+  let h = 7
+  for (let i = 0; i < text.length; i++) h = (h * 31 + text.charCodeAt(i)) & 0x7fffffff
+  return h || 1
+}
+
 export interface CharacterView {
   root: THREE.Group
   /** The metarig's muscles, correctives and jiggle (GAME.md §9.2, §9.4), on a body that has one. */
   metarig?: MetarigRuntime
+  /** The head's face (GAME.md §9.1): blinks, eyes, jaw and expression shapes, on a body that has its own head. */
+  head?: HeadRuntime
   pose: (state: AnimState, dt: number, moving: boolean) => void
   /**
    * The outfit's loose cloth, once the hero stands where it's drawn this frame: `far` steps it less often, `still`
@@ -690,7 +701,11 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const lastSpeed = new THREE.Vector3()
   const kick = new THREE.Vector3()
   let tracked = false
+  // the head (head/): blinks on each hero's own beat, the eyes held inside their limit, the jaw with jawOpen
+  const headRig = scene.userData.head as HeadRig | undefined
+  const face = headRig ? headRuntime(headRig, seedOf(look.build + build.heroName)) : undefined
   const runMeta = (dt: number, far: boolean) => {
+    face?.update(dt, { detail: far ? 'mid' : 'near' })
     if (!meta || dt <= 0) return
     root.getWorldPosition(bodyAt)
     if (tracked) speed.copy(bodyAt).sub(lastAt).divideScalar(dt)
@@ -705,6 +720,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   return {
     root,
     metarig: meta,
+    ...(face ? { head: face } : {}),
     pose: (state, dt, moving) => {
       // undone in the reverse order they went on: the feet's bend, then the legs' swing, the head's steadying, the twist,
       // the back stood on a cast's hips

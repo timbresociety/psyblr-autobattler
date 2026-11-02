@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { metarigRuntime, type MetarigRuntime } from '../../arena/client/metarig/runtime.js'
 import type { Metarig } from '../../arena/client/metarig/upgrade.js'
+import type { HeadRig } from '../../arena/client/head/build.js'
+import { ARKIT_SHAPES, type ArkitShape } from '../../kit/head/head.js'
+import { headRuntime, type HeadRuntime } from '../../arena/client/head/runtime.js'
 import * as THREE from 'three'
 import { headBone, type RigKind } from '../../arena/client/rig.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
@@ -10,6 +13,7 @@ import { characterLook, classicCharacterMaterial, V2_BODIES, type BodyName, type
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
 import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
+import { isShared } from '../../arena/client/head/kit.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { Gender, HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/demo/procedural-hero'
@@ -53,6 +57,8 @@ export interface HeroStageProps {
   framing?: StageFraming
   /** A clip from the motion library to loop in place of the idle (the creator's moves). */
   play?: string
+  /** Face shapes held at these weights (GAME.md §9.1): an expression, or a dev bench's check of each shape. */
+  face?: Partial<Record<ArkitShape, number>>
   label: string
   className?: string
 }
@@ -70,6 +76,8 @@ interface Live {
   mixer?: THREE.AnimationMixer
   /** The metarig's muscles, correctives and jiggle (GAME.md §9.2, §9.4), run after the clip. */
   meta?: MetarigRuntime
+  /** The head's face (GAME.md §9.1): blinks, eyes, jaw and expression shapes. */
+  face?: HeadRuntime
   actions?: Map<string, THREE.AnimationAction>
   /** The motion-library clip standing in for the file's idle: its name and action. */
   motion?: { name: string; action: THREE.AnimationAction }
@@ -180,7 +188,7 @@ function disposeModel(model: THREE.Object3D) {
     const mesh = o as THREE.Mesh
     if (!mesh.isMesh) return
     // the painted geometry is ours; its buffers are shared with the cached file, which only this renderer uploaded
-    mesh.geometry.dispose()
+    if (!isShared(mesh.geometry)) mesh.geometry.dispose()
     // so is each clone's skeleton (the outfit's own, when its cloth hangs on bones of its own)
     ;(o as THREE.SkinnedMesh).skeleton?.dispose()
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m)
@@ -188,11 +196,11 @@ function disposeModel(model: THREE.Object3D) {
   materials.forEach((m) => m.dispose())
 }
 
-export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing, speed = 1, studio = false, framing = 'body', play, label, className = '' }: HeroStageProps) {
+export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing, speed = 1, studio = false, framing = 'body', play, face, label, className = '' }: HeroStageProps) {
   const host = useRef<HTMLDivElement>(null)
   const live = useRef<Live | undefined>(undefined)
-  const pace = useRef({ facing, speed, studio, framing })
-  pace.current = { facing, speed, studio, framing }
+  const pace = useRef({ facing, speed, studio, framing, face })
+  pace.current = { facing, speed, studio, framing, face }
   const [failed, setFailed] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const reduced = useRef(prefersReducedMotion())
@@ -402,6 +410,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       if (!calm) {
         state.mixer?.update(step)
         state.meta?.update(step)
+        if (state.face) for (const s of ARKIT_SHAPES) state.face.set(s, pace.current.face?.[s] ?? 0)
+        state.face?.update(step)
       }
       if (!dragging && Math.abs(spin) > 0.01) {
         turntable.rotation.y += spin * step
@@ -520,7 +530,11 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
           state.sizer.add(model)
           const metarig = model.userData.metarig as Metarig | undefined
           const meta = metarig ? metarigRuntime(metarig, model, painted.physique, gender) : undefined
-          Object.assign(state, { model, mixer, meta, actions, motion, body: painted.build, gender, head: headSpan(model), dirty: true })
+          const headRig = model.userData.head as HeadRig | undefined
+          const face = headRig ? headRuntime(headRig, 3) : undefined
+          // dev probe: the head's face, to set shapes by hand (window.__face.set('jawOpen', 1))
+          if (face && typeof window !== 'undefined') (window as unknown as { __face?: HeadRuntime }).__face = face
+          Object.assign(state, { model, mixer, meta, face, actions, motion, body: painted.build, gender, head: headSpan(model), dirty: true })
           setLoaded(true)
         },
         () => !cancelled && setFailed(true),

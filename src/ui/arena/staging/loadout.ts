@@ -5,6 +5,7 @@ import { bodyFor, characterLook, classicCharacterMaterial, heroHue, loadBuild, t
 import { heroAtlasNow } from '../../../arena/client/face/hero-face.js'
 import { restClothOn } from '../../../arena/client/wear/cloth-model.js'
 import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../../arena/client/wear/dress-model.js'
+import { isShared } from '../../../arena/client/head/kit.js'
 import { wearNow, type LoadedWear } from '../../../arena/client/wear/items.js'
 import type { Build } from '../../../charter/build.js'
 import type { RoleId } from '../../../charter/types.js'
@@ -229,11 +230,13 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
       model.traverse((o) => {
         const mesh = o as THREE.Mesh
         if (!mesh.isMesh) return
-        mesh.geometry.dispose()
-        const m = mesh.material as THREE.MeshStandardMaterial
-        m.map?.dispose()
-        m.normalMap?.dispose()
-        m.dispose()
+        if (!isShared(mesh.geometry)) mesh.geometry.dispose()
+        // a head draws its skin, brows and lashes with a material each
+        for (const m of (Array.isArray(mesh.material) ? mesh.material : [mesh.material]) as THREE.MeshStandardMaterial[]) {
+          if (!isShared(m.map)) m.map?.dispose()
+          if (!isShared(m.normalMap)) m.normalMap?.dispose()
+          m.dispose()
+        }
       })
   } else {
     const stand = benchHero({ hue, sizeClass: 'medium', textureSize: 128, seed: index + 1, look: 'suit' })

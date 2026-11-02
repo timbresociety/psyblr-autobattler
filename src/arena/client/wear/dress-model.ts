@@ -19,6 +19,7 @@ import { refineGeometry } from '../../../kit/body/refine.js'
 import { helperSkin, planHelpers } from '../../../kit/body/helpers.js'
 import { meshRest, upgradeRig } from '../metarig/upgrade.js'
 import { applyPosture } from '../metarig/posture.js'
+import { buildHead } from '../head/build.js'
 
 /**
  * Dressing a cloned body for one hero: its physique and face baked into its own copy of the body's positions, the
@@ -140,6 +141,9 @@ interface BodyCache {
 }
 
 const bodies = new WeakMap<THREE.BufferGeometry, BodyCache>()
+
+/** Brows for a hero with no hair colour: a dark brown. */
+const DARK_BROW = new THREE.Color().setStyle('#2b1d14', THREE.SRGBColorSpace)
 
 const read = (attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, size: number) => {
   const out = new Float32Array(attr.count * size)
@@ -309,8 +313,7 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
   geo.setAttribute('_skin', new THREE.BufferAttribute(isSkin, 1))
   const index = source.getIndex()!.array
-  // the eyeballs are left out: the bodies' skin runs closed over them, lids and all, with the eyes painted on the atlas
-  // (or the photo's own), so a ball shows only where it bulges through the lid, as a blank dome over each eye
+  // the file's eyeballs are left out: the head brings real ones (head/build.ts), turning in the sockets behind the lids
   const kept: number[] = []
   for (const t of shown) {
     const v = [index[t * 3], index[t * 3 + 1], index[t * 3 + 2]]
@@ -448,7 +451,6 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const normalMap = characterNormalMap(mesh)
   const fileMaterial = (Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial
   mesh.geometry = bodyGeometry(source, cache, shape, dressed.body, look)
-  if (refine) mesh.geometry = refineGeometry(mesh.geometry, refine)
   // the physique is baked in, so the file's morphs go
   mesh.morphTargetInfluences = undefined
   mesh.morphTargetDictionary = undefined
@@ -457,6 +459,23 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   if (normalMap && fileMaterial?.normalScale && made.normalScale) made.normalScale.copy(fileMaterial.normalScale)
   mesh.material = made
   mesh.frustumCulled = false
+  // the head as its own object (GAME.md §9.1): its triangles leave the body's, it brings its eyes, teeth and face shapes
+  if (wear?.head && kit?.faceScale) {
+    const brow = look.outfit.hair?.colors?.[0]
+    model.userData.head = buildHead({
+      model,
+      mesh,
+      body: shape,
+      kit: wear.head,
+      faceScale: kit.faceScale,
+      iris: look.colors.iris,
+      white: look.colors.eye,
+      brow: brow ? new THREE.Color().setStyle(brow, THREE.SRGBColorSpace) : DARK_BROW,
+      full: refine > 0,
+      refine,
+    })
+  }
+  if (refine) mesh.geometry = refineGeometry(mesh.geometry, refine)
   const parts = drawn(items, textured)
   const cloth = clothGeometry(parts, textured, patterns)
   if (cloth) {

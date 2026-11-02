@@ -5,6 +5,7 @@ import { SURFACE_VERTICES, type RigKind } from '../../../kit/rig/names.js'
 import { bodyKit, bodyKitNow } from '../body-kit.js'
 import { V2_BODIES, type BodyName, type Gltf } from '../character-look.js'
 import type { BodySockets } from '../gear.js'
+import { headKit, headKitNow, type HeadKit } from '../head/kit.js'
 
 /**
  * Wardrobe files as the client holds them: each loaded once and shared by every hero who wears it. A file is a
@@ -113,6 +114,8 @@ export function loadItem(url: string, load: (url: string) => Promise<Gltf>, rig:
 export interface LoadedWear {
   items: Map<string, LoadedItem>
   sockets?: BodySockets
+  /** The head kit (GAME.md §9.1) for a Psyblr Human body: its face shapes, eyes' parts, teeth, brows and lashes. */
+  head?: HeadKit
 }
 
 const wornUrls = (outfit: Partial<Record<LookSlot, Worn>>) => [...new Set(LOOK_SLOTS.flatMap((slot) => (outfit[slot] ? [outfit[slot]!.url] : [])))]
@@ -120,8 +123,8 @@ const wornUrls = (outfit: Partial<Record<LookSlot, Worn>>) => [...new Set(LOOK_S
 export async function loadWear(body: string, outfit: Partial<Record<LookSlot, Worn>>, load: (url: string) => Promise<Gltf>): Promise<LoadedWear> {
   const urls = wornUrls(outfit)
   const rig = bodyRig(body)
-  const [kit, ...loaded] = await Promise.all([bodyKit(body), ...urls.map((url) => loadItem(url, load, rig))])
-  return { items: new Map(urls.flatMap((url, i) => (loaded[i] ? [[url, loaded[i]!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}) }
+  const [kit, head, ...loaded] = await Promise.all([bodyKit(body), rig === 'standard' ? headKit(body) : undefined, ...urls.map((url) => loadItem(url, load, rig))])
+  return { items: new Map(urls.flatMap((url, i) => (loaded[i] ? [[url, loaded[i]!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}), ...(head ? { head } : {}) }
 }
 
 /**
@@ -138,6 +141,7 @@ export function wearNow(body: string, outfit: Partial<Record<LookSlot, Worn>>, l
     waiting = true
     void loadItem(url, load, rig).then(changed)
   }
-  if (waiting) return null
-  return { items: new Map(urls.flatMap((url) => (ready.get(`${rig}:${url}`) ? [[url, ready.get(`${rig}:${url}`)!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}) }
+  const head = rig === 'standard' ? headKitNow(body, changed) : undefined
+  if (waiting || head === null) return null
+  return { items: new Map(urls.flatMap((url) => (ready.get(`${rig}:${url}`) ? [[url, ready.get(`${rig}:${url}`)!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}), ...(head ? { head } : {}) }
 }

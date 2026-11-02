@@ -6,6 +6,7 @@ GLB with a kit sidecar (version 3). Clips are not authored here: every move is m
 scripts/rpm-anim.ts onto this rig.
 
     Blender -b --python tools/blender/human2.py -- --base m-medium --out public/heroes/v2/m-medium.glb [--size 2048] [--render dir]
+    Blender -b --python tools/blender/human2.py -- --base m-medium --head public/kit/v2/head-m   (the head's face shapes and parts, humanlib/head.py)
 """
 
 import json
@@ -162,6 +163,10 @@ def main():
     t0 = time.time()
     if opts.get('face-basis'):
         return face_basis(opts['face-basis'])
+    if opts.get('head'):
+        from humanlib import head as HD
+
+        return HD.build_head(heroes.spec(opts.get('base', 'm-medium')), build_body, opts['head'], float(opts.get('head-scale', 1.08)), log=log)
     spec = heroes.spec(opts.get('base', 'm-medium'))
     if opts.get('portrait'):
         spec['portrait'] = opts['portrait']
