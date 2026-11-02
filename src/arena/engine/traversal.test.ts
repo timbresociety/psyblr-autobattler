@@ -147,6 +147,23 @@ describe('ramps (§8 card ramps and stairs)', () => {
   })
 })
 
+describe('ceilings (§8)', () => {
+  it('a jump under a deck bumps its head and comes down, without being pushed aside', () => {
+    const deck = block(0, 0, 4, 4, 3, { base: 2.6 })
+    const { h, step } = solo({ pieces: [deck] })
+    step(go(0, 0, MOVES.jump))
+    let top = 0
+    for (let i = 0; i < 60; i++) {
+      step(go(0, 0))
+      top = Math.max(top, h.position.y + capsule(h).height)
+    }
+    expect(top).toBeLessThanOrEqual(2.6 + 1e-6)
+    expect(h.position.x).toBeCloseTo(0)
+    expect(h.position.z).toBeCloseTo(0)
+    expect(h.airborne).toBe(false)
+  })
+})
+
 describe('mantle (§7)', () => {
   it('walking into a ledge up to 1.4 m high pulls the hero up onto it', () => {
     const { h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })

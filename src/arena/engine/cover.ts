@@ -340,6 +340,27 @@ export function floorUnder(pieces: readonly CoverPiece[], health: readonly Cover
   return floor
 }
 
+/**
+ * The lowest underside of a standing piece over a disc of `radius` at `p` that a head rising from `from` to `to`
+ * passes, or undefined: a deck or a tunnel roof a jump bumps into.
+ */
+export function ceilingOver(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, from: number, to: number): number | undefined {
+  const bounds = boundsOf(pieces)
+  let roof: number | undefined
+  for (let i = 0; i < pieces.length; i++) {
+    const piece = pieces[i]
+    if (health[i] === 0 || piece.base <= 0 || piece.base < from - 1e-6 || piece.base > to) continue
+    if (p.x + radius < bounds.minX[i] || p.x - radius > bounds.maxX[i] || p.z + radius < bounds.minZ[i] || p.z - radius > bounds.maxZ[i]) continue
+    const s = piece.shape
+    const over =
+      s.kind === 'block'
+        ? Math.abs(p.x - s.x) <= s.hx + radius && Math.abs(p.z - s.z) <= s.hz + radius
+        : (p.x - s.x) * (p.x - s.x) + (p.z - s.z) * (p.z - s.z) <= (s.r + radius) * (s.r + radius)
+    if (over && (roof === undefined || piece.base < roof)) roof = piece.base
+  }
+  return roof
+}
+
 /** The pieces a disc of `radius` around `at` overlaps, for area attacks that wear barriers down. */
 export function coverInDisc(pieces: readonly CoverPiece[], health: readonly CoverHealth[], at: Vec3, radius: number): number[] {
   const out: number[] = []

@@ -1,10 +1,11 @@
-import { RUINS, initialCoverHealth, type CoverPiece } from './cover.js'
+import { initialCoverHealth, type CoverPiece } from './cover.js'
 import type { TraitMods } from '../../charter/traits.js'
 import { keepOut } from './locomotion.js'
 import type { Build } from '../../charter/build.js'
 import { ENGINE, ticks } from './calibration.js'
 import { COMBAT_RULES } from './deliveries.js'
 import { initHero } from './effects.js'
+import { MAPS, standingHeight, type ArenaMap, type MapId } from './maps.js'
 import { clamp, type Vec3 } from './maths.js'
 import { next } from './rng.js'
 import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state.js'
@@ -44,35 +45,42 @@ export interface Arena {
 /** Starting gap between the two sides and between teammates in the default line, metres. */
 export const DEFAULT_FORMATION = { startDistance: 22, lineSpacing: 2.5 }
 
-function defaultSpot(match: MatchState, side: Team, index: number, count: number): Vec3 {
+function defaultSpot(match: MatchState, side: Team, index: number, count: number, map?: ArenaMap): Vec3 {
   const z = (side === 0 ? -1 : 1) * (DEFAULT_FORMATION.startDistance / 2 + next(match.rules) * 2)
   const x = (index - (count - 1) / 2) * DEFAULT_FORMATION.lineSpacing + (next(match.rules) - 0.5)
-  return { x, y: 0, z }
+  return { x, y: map ? standingHeight(map, x, z) : 0, z }
 }
 
-/** Keep a staged spot on its own half of the arena (R1, R2). */
-function ownHalf(side: Team, p: Vec3): Vec3 {
+/** Keep a staged spot on its own half of the arena (R1, R2), standing on the map's floor there. */
+function ownHalf(side: Team, p: Vec3, map?: ArenaMap): Vec3 {
   const z = side === 0 ? Math.min(-0.5, p.z) : Math.max(0.5, p.z)
-  return { x: clamp(p.x, -ENGINE.arena.halfWidth, ENGINE.arena.halfWidth), y: clamp(p.y, 0, ENGINE.arena.ceiling), z }
+  const x = clamp(p.x, -ENGINE.arena.halfWidth, ENGINE.arena.halfWidth)
+  return { x, y: map ? Math.max(p.y, standingHeight(map, x, z)) : clamp(p.y, 0, ENGINE.arena.ceiling), z }
 }
 
 export function createMatch(
   teamA: Combatant[],
   teamB: Combatant[],
   seed: number,
-  /** `cover: false` plays on an open floor (tests); the default is the ruins every real match uses. */
-  options: { profile?: Profile; formations?: [Vec3[]?, Vec3[]?]; cover?: readonly CoverPiece[] | false } = {},
+  /**
+   * `map` picks the arena (the ruins when absent: the gate and the tests); `cover` replaces its pieces, and
+   * `cover: false` plays on an open floor (tests).
+   */
+  options: { profile?: Profile; formations?: [Vec3[]?, Vec3[]?]; cover?: readonly CoverPiece[] | false; map?: MapId } = {},
 ): Arena {
   const profile = options.profile ?? LIVE_PROFILE
   const match = emptyMatch(seed)
-  const pieces = options.cover === undefined ? RUINS : options.cover
+  const map = options.cover === undefined ? MAPS[options.map ?? 'ruins'] : undefined
+  const pieces = options.cover === undefined ? map!.pieces : options.cover
   if (pieces) match.cover = { pieces, health: initialCoverHealth(pieces) }
+  if (map?.lines.length) match.lines = map.lines
+  const stand = map && map.stand > 0 ? map : undefined
   const setups: HeroSetup[] = []
   const add = (team: Combatant[], side: Team) =>
     team.forEach((c, i) => {
       const setup = prepareHero(c.build, c.powerScale ?? 1, c.damageBonus ?? 0, c.mods)
       const staged = options.formations?.[side]?.[i]
-      const spot = staged ? ownHalf(side, staged) : defaultSpot(match, side, i, team.length)
+      const spot = staged ? ownHalf(side, staged, stand) : defaultSpot(match, side, i, team.length, stand)
       const hero = createHero(setup, setups.length, side, spot)
       // nobody starts inside the stone: a spot on a wall moves to its nearest face
       keepOut(hero, match)

@@ -1,7 +1,7 @@
 import { SIZES } from '../../charter/sizes.js'
 import { DT, ENGINE, ticks } from './calibration.js'
 import { atan2, clamp, cos, sin } from './maths.js'
-import { floorUnder, pushOut, type MapLine } from './cover.js'
+import { ceilingOver, floorUnder, pushOut, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
 import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import { moveShare } from './timing.js'
@@ -169,6 +169,14 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   if (hero.airborne && !hero.launch) {
     v.y = pinned ? -M.fall : Math.max(-M.fall, v.y - M.gravity * DT)
     p.y += v.y * DT
+    // a head rising into a deck or a tunnel's roof stops under it (GAME.md §8 ceilings)
+    if (v.y > 0 && match?.cover) {
+      const roof = ceilingOver(match.cover.pieces, match.cover.health, p, bodyRadius(hero) * 0.7, from + capsule(hero).height, p.y + capsule(hero).height)
+      if (roof !== undefined) {
+        p.y = roof - capsule(hero).height
+        v.y = 0
+      }
+    }
   }
   p.x += v.x * DT
   p.z += v.z * DT
@@ -274,7 +282,10 @@ function catchLine(hero: HeroState, lines: readonly MapLine[], mx: number, mz: n
     if (l.kind === 'rail' && hero.velocity.y > 0) continue
     const [wx, wz] = steering ? [mx, mz] : [hero.velocity.x, hero.velocity.z]
     const way = wx * ex + wz * ez
-    hero.zip = { line: i, t, dir: way < 0 ? -1 : 1, hang: l.kind === 'zip' }
+    // caught near an end, it rides away from that end rather than straight off it
+    const len = Math.sqrt(len2)
+    const dir = t * len < M.zip.endGrab ? 1 : (1 - t) * len < M.zip.endGrab ? -1 : way < 0 ? -1 : 1
+    hero.zip = { line: i, t, dir, hang: l.kind === 'zip' }
     hero.airJumps = 0
     hero.slide = undefined
     events?.push({ type: 'move', hero: hero.id, move: 'zip-on' })

@@ -93,9 +93,10 @@ export const ENGINE = {
     landing: { big: 20 },
     /**
      * Ziplines and rails (§7): a hero in the air whose hands (a zipline) or feet (a rail) come within `grab` metres of
-     * one rides it at `speed` m/s the way it was moving; a jump lets go with a jump, the end lets go with the speed.
+     * one rides it at `speed` m/s the way it was moving (away from the end, when caught within `endGrab` metres of
+     * one); a jump lets go with a jump, the end lets go with the speed.
      */
-    zip: { speed: 15, grab: 0.8, hang: 0.25, again: 0.5 },
+    zip: { speed: 15, grab: 0.8, hang: 0.25, again: 0.5, endGrab: 1.5 },
   },
   /**
    * Melee (the canon, 2026-10-31). V tapped strikes; held past `heavyHold` it charges and lands a heavy blow on
