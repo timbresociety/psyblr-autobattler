@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { metarigRuntime, type MetarigRuntime } from '../../arena/client/metarig/runtime.js'
+import type { Metarig } from '../../arena/client/metarig/upgrade.js'
 import * as THREE from 'three'
 import { headBone, type RigKind } from '../../arena/client/rig.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
@@ -66,6 +68,8 @@ interface Live {
   hitbox: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>
   model?: THREE.Object3D
   mixer?: THREE.AnimationMixer
+  /** The metarig's muscles, correctives and jiggle (GAME.md §9.2, §9.4), run after the clip. */
+  meta?: MetarigRuntime
   actions?: Map<string, THREE.AnimationAction>
   /** The motion-library clip standing in for the file's idle: its name and action. */
   motion?: { name: string; action: THREE.AnimationAction }
@@ -395,7 +399,10 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       const real = acc
       acc = 0
       const calm = reduced.current
-      if (!calm) state.mixer?.update(step)
+      if (!calm) {
+        state.mixer?.update(step)
+        state.meta?.update(step)
+      }
       if (!dragging && Math.abs(spin) > 0.01) {
         turntable.rotation.y += spin * step
         spin *= Math.pow(0.04, step)
@@ -472,7 +479,13 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
         const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex(rigFor(painted.build))])
         if (cancelled || live.current !== state) return undefined
         const model = cloneSkinned(file.scene)
-        // its rest, read before anything moves it, fits the library's clips to this body
+        // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
+        const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
+        const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
+        // the studio looks close: the coarse body's triangles split twice over, so the jaw and cheeks read round
+        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty), cards: !!look && pace.current.studio }, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
+        // its rest, read once it is dressed (its proportions and posture) and before anything moves it, fits the
+        // library's clips to this body
         const rest = idx ? restPose(model, idx.bones) : undefined
         const clip = await libraryClip(gender, wanted.current.name, painted.build, rest, wanted.current.stance)
         return { file, atlas, wear, model, rest, clip }
@@ -480,12 +493,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       .then(
         (made) => {
           if (!made || cancelled || live.current !== state) return
-          const { file, atlas, wear, model, clip } = made
-          // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
-          const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
-          const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
-          // the studio looks close: the coarse body's triangles split twice over, so the jaw and cheeks read round
-          dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty), cards: !!look && pace.current.studio }, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
+          const { file, model, clip } = made
           // a rebuilt hero (a slider moved) carries on from where the last one was in its clip
           const was = state.motion
           const time = was && clip && was.name === clip.name ? was.action.time : undefined
@@ -510,7 +518,9 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
           }
           if (time !== undefined) mixer.update(0)
           state.sizer.add(model)
-          Object.assign(state, { model, mixer, actions, motion, body: painted.build, gender, head: headSpan(model), dirty: true })
+          const metarig = model.userData.metarig as Metarig | undefined
+          const meta = metarig ? metarigRuntime(metarig, model, painted.physique, gender) : undefined
+          Object.assign(state, { model, mixer, meta, actions, motion, body: painted.build, gender, head: headSpan(model), dirty: true })
           setLoaded(true)
         },
         () => !cancelled && setFailed(true),
@@ -527,9 +537,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     let cancelled = false
     const { model, mixer, gender, body } = state
     void animIndex(rigFor(body)).then(async (idx) => {
-      // the rest is read off the file's own scene: the model on stage is mid-clip
-      const file = await characterFile(body)
-      const rest = idx ? restPose(file.scene, idx.bones) : undefined
+      // the rest was read off the model as it was dressed (restPose keeps it): the model on stage is mid-clip
+      const rest = idx ? restPose(model, idx.bones) : undefined
       const clip = await libraryClip(gender, want, body, rest, stance)
       if (cancelled || !clip || state.model !== model || state.motion?.name === clip.name) return
       const action = mixer.clipAction(clip)
@@ -585,8 +594,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       ? Promise.resolve(own)
       : gender && body
         ? animIndex(rigFor(body)).then(async (idx) => {
-            const file = await characterFile(body)
-            const clip = await libraryClip(gender, cue.clip, body, idx ? restPose(file.scene, idx.bones) : undefined, false)
+            const clip = await libraryClip(gender, cue.clip, body, idx ? restPose(state.model!, idx.bones) : undefined, false)
             return clip && clip.name === cue.clip ? mixer.clipAction(clip) : undefined
           })
         : Promise.resolve(undefined)

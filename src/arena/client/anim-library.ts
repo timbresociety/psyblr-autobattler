@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type { Gender } from '../../charter/look.js'
 import { animFolder, animIndex, animIndexNow, setOf, type AnimIndex } from './anim-index.js'
 import type { RigKind } from './rig.js'
+import { retargetClip } from '../../kit/rig/retarget.js'
 
 /**
  * Motion-captured clips from Ready Player Me's animation library, retargeted onto the heroes' rig by
@@ -73,10 +74,22 @@ function toClip(name: string, file: ClipFile, idx: AnimIndex): THREE.AnimationCl
 /** A body's rest: each rig bone's local rotation, and the hips' position, read off a model before it is animated. */
 export interface RestPose {
   rotations: Map<string, THREE.Quaternion>
+  /** Where the hips stand at rest: the file's, raised by however much longer its proportions made the legs. */
   hips: THREE.Vector3
 }
 
+const rests = new WeakMap<THREE.Object3D, Map<string, RestPose>>()
+
+/**
+ * A model's rest, read once per model: pass a hero's own dressed clone, so its proportions and posture (put on its
+ * rest pose at dressing) are what its clips play over (GAME.md §9.6).
+ */
 export function restPose(model: THREE.Object3D, bones: readonly string[]): RestPose | undefined {
+  const key = bones.join()
+  let mine = rests.get(model)
+  if (!mine) rests.set(model, (mine = new Map()))
+  const known = mine.get(key)
+  if (known) return known
   const rotations = new Map<string, THREE.Quaternion>()
   for (const name of bones) {
     const bone = model.getObjectByName(name)
@@ -85,49 +98,33 @@ export function restPose(model: THREE.Object3D, bones: readonly string[]): RestP
   }
   // the index lists the hips first
   const hips = model.getObjectByName(bones[0])
-  return hips ? { rotations, hips: hips.position.clone() } : undefined
+  if (!hips) return undefined
+  let drop = 0
+  model.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && typeof o.userData.legDrop === 'number') drop = Math.max(drop, o.userData.legDrop)
+  })
+  const rest = { rotations, hips: hips.position.clone().add(new THREE.Vector3(0, drop, 0)) }
+  mine.set(key, rest)
+  return rest
 }
 
-const fitted = new WeakMap<THREE.AnimationClip, Map<string, THREE.AnimationClip>>()
+const fitted = new WeakMap<THREE.AnimationClip, WeakMap<RestPose, THREE.AnimationClip>>()
 
 /**
- * A clip for one body: each bone's change from the medium body's rest put on this body's rest, and the hips' travel
- * scaled to its height. Cached per clip and `body` (its file's name); the medium body takes the clip as it is.
+ * A clip on one body (src/kit/rig/retarget.ts): each bone's turn from the gender's reference rest put on this body's
+ * own rest, and the hips' travel scaled by its leg-length ratio. Cached per clip and rest pose. `body` names the body
+ * for messages only.
  */
 export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string, rest: RestPose, rig: RigKind = 'legacy'): THREE.AnimationClip {
   const idx = animIndexNow(rig)
-  if (!idx || body === `${gender}-medium`) return clip
+  if (!idx) return clip
   let mine = fitted.get(clip)
-  if (!mine) fitted.set(clip, (mine = new Map()))
-  const done = mine.get(body)
+  if (!mine) fitted.set(clip, (mine = new WeakMap()))
+  const done = mine.get(rest)
   if (done) return done
   const ref = idx.genders[gender]
-  const refHips = new THREE.Vector3().fromArray(ref.hips)
-  const scale = rest.hips.y / refHips.y
-  const q = new THREE.Quaternion()
-  const tracks = clip.tracks.map((track) => {
-    const [bone, prop] = track.name.split('.')
-    const values = Float32Array.from(track.values)
-    if (prop === 'quaternion') {
-      const k = idx.bones.indexOf(bone)
-      const own = rest.rotations.get(bone)
-      if (k < 0 || !own) return track
-      // this body's rest times the reference's inverse: the same change from rest, on this body's own rest
-      const fix = own.clone().multiply(new THREE.Quaternion().fromArray(ref.rest[k]).invert())
-      for (let i = 0; i < values.length; i += 4) q.fromArray(values, i).premultiply(fix).normalize().toArray(values, i)
-      return new THREE.QuaternionKeyframeTrack(track.name, track.times, values)
-    }
-    if (track.name === `${idx.bones[0]}.position`) {
-      for (let i = 0; i < values.length; i += 3) {
-        values[i] = rest.hips.x + (values[i] - refHips.x) * scale
-        values[i + 1] = rest.hips.y + (values[i + 1] - refHips.y) * scale
-        values[i + 2] = rest.hips.z + (values[i + 2] - refHips.z) * scale
-      }
-      return new THREE.VectorKeyframeTrack(track.name, track.times, values)
-    }
-    return track
-  })
-  const out = new THREE.AnimationClip(clip.name, clip.duration, tracks)
-  mine.set(body, out)
+  if (!ref) throw new Error(`${body}: no ${gender} clips`)
+  const out = retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips }, { rest: rest.rotations, hips: rest.hips.toArray() })
+  mine.set(rest, out)
   return out
 }

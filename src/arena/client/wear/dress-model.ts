@@ -16,6 +16,9 @@ import type { GearSlot } from '../../../charter/look.js'
 import { rigCloth } from './cloth-model.js'
 import type { LoadedWear } from './items.js'
 import { refineGeometry } from '../../../kit/body/refine.js'
+import { helperSkin, planHelpers } from '../../../kit/body/helpers.js'
+import { meshRest, upgradeRig } from '../metarig/upgrade.js'
+import { applyPosture } from '../metarig/posture.js'
 
 /**
  * Dressing a cloned body for one hero: its physique and face baked into its own copy of the body's positions, the
@@ -278,10 +281,13 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
   const { surface } = cache.base
   geo.setAttribute('position', new THREE.BufferAttribute(splitValues(surface, shape.positions, 3), 3))
   geo.setAttribute('normal', new THREE.BufferAttribute(splitValues(surface, shape.normals, 3), 3))
-  for (const name of ['uv', 'uv1', 'skinIndex', 'skinWeight']) {
+  for (const name of ['uv', 'uv1']) {
     const a = source.getAttribute(name)
     if (a) geo.setAttribute(name, a)
   }
+  // the skin as the shape has it: the file's, with the metarig's helpers taking their shares (helpers.ts)
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(splitValues(surface, shape.joints, 4)), 4))
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(splitValues(surface, shape.weights, 4), 4))
   const meta = source.getAttribute(metaChannel(source))
   const n = meta.count
   const colors = new Float32Array(n * 3)
@@ -420,8 +426,18 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const cache = bodyCache(mesh)
   const kit = bodyKitLoaded(look.build)
   const face = faceShape(look.face, look.sculpt, look.build, kit, cache.base.positions)
-  // the physique's weight, muscle and age in the morphs, then its proportions on the skeleton's rest
-  const shape = proportion(mesh, shapeBody(cache.base, cache.morphs, look.physique, face), look.physique)
+  // the physique's weight, muscle and age in the morphs and its Volume dials sculpted on, then its proportions on the
+  // skeleton's rest; then the metarig (GAME.md §9.2): helpers placed and weighted on this body, before the clothes copy
+  // its skin, so they swell with it
+  const gender = look.build.startsWith('f') ? 'f' : 'm'
+  const fileSkeleton = { bones: mesh.skeleton.bones.map((b) => b.name), rest: Object.fromEntries(cache.rest) }
+  const proportioned = proportion(mesh, shapeBody(cache.base, cache.morphs, look.physique, face, { skeleton: fileSkeleton, gender }), look.physique)
+  const restNow = meshRest(mesh)
+  const plans = planHelpers(proportioned, restNow)
+  const helped = helperSkin(proportioned, restNow, plans)
+  const shape = { ...proportioned, joints: helped.joints, weights: helped.weights }
+  model.userData.metarig = upgradeRig(model, mesh, plans)
+  applyPosture(model, look.physique)
   const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear, cache.base.surface.count)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
   // dev probe: what the dresser kept, to check against the fit tool's report (window.__dressed)

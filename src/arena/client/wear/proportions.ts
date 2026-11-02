@@ -66,12 +66,11 @@ export function proportion(mesh: THREE.SkinnedMesh, shape: BodyShape, proportion
     sum.applyMatrix4(unbind).toArray(positions, k * 3)
   }
   skeleton.boneInverses = after.map((a) => a.clone().invert())
-  // longer legs would sink the feet: the rig rises by what the lowest foot dropped
+  // longer legs would sink the feet: the clips' hips stand higher by what the lowest foot dropped (the leg-length
+  // ratio, src/kit/rig/retarget.ts), which the retargeter reads from here
   const feet = ['LeftFoot', 'RightFoot'].map((name) => bones.findIndex((b) => b.name === name)).filter((i) => i >= 0)
   const drop = feet.length ? Math.max(...feet.map((i) => new THREE.Vector3().setFromMatrixPosition(before[i]).y - new THREE.Vector3().setFromMatrixPosition(after[i]).y)) : 0
-  const hips = bones.find((b) => b.name === PROPORTIONS.hips)
-  const rig = hips?.parent
-  // the bind is in the file's own units, the rig's parent's space
-  if (rig && drop) rig.position.y += drop
+  // in the file's own units, which are the hips' parent's (as the rig was lifted before)
+  mesh.userData.legDrop = drop
   return { ...shape, positions, normals: weldedNormals(shape.surface, positions) }
 }

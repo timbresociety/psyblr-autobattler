@@ -59,7 +59,9 @@ describe('the motion library', () => {
     expect(new THREE.Quaternion().fromArray(hips, 4).angleTo(turned)).toBeLessThan(1e-3)
     expect(track(big, 'hips.position').map((v) => +v.toFixed(3))).toEqual([0, 1.2, 0, 0.12, 1.2, 0])
     expect(fitClip(clip, 'm', 'm-large', rest)).toBe(big)
-    expect(fitClip(clip, 'm', 'm-medium', rest)).toBe(clip)
+    // every body plays its own fit, the medium one too (its posture and proportions are its own); the same rest is fitted once
+    expect(fitClip(clip, 'm', 'm-medium', rest)).toBe(big)
+    expect(fitClip(clip, 'm', 'm-medium', { ...rest })).not.toBe(clip)
   })
 
   it('reads a model’s rest pose, or none when a bone is missing', () => {

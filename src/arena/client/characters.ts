@@ -19,6 +19,8 @@ import { restClothOn, settleCloth } from './wear/cloth-model.js'
 import { dressModel, type ClothPrint } from './wear/dress-model.js'
 import type { LoadedWear } from './wear/items.js'
 import { rigOf, RIGS, type RigNames } from './rig.js'
+import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
+import type { Metarig } from './metarig/upgrade.js'
 
 export { characterLook, heroHue, loadBuild } from './character-look.js'
 
@@ -100,6 +102,8 @@ const PLANTED = 0.03
 const PACE = [0.4, 2.6] as const
 /** Seconds a cast takes to take over the body, and the legs to change between running and the cast's stance. */
 const CAST_FADE = 0.08
+/** Metres a second of sudden change in a body's speed that kick its jiggle (a landing, a dash, a knockback). */
+const KICK_FROM = 2
 const LEG_FADE = 0.12
 
 type Halves<T> = { legs: T; top: T }
@@ -287,6 +291,8 @@ export function standOn(spine: THREE.Quaternion, hips: THREE.Quaternion, castHip
 
 export interface CharacterView {
   root: THREE.Group
+  /** The metarig's muscles, correctives and jiggle (GAME.md §9.2, §9.4), on a body that has one. */
+  metarig?: MetarigRuntime
   pose: (state: AnimState, dt: number, moving: boolean) => void
   /**
    * The outfit's loose cloth, once the hero stands where it's drawn this frame: `far` steps it less often, `still`
@@ -417,7 +423,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   // with the motion library's gait (Forge goal, phase B), fitted to this body from its rest as the file has it, the
   // hero stands in the library's stance and moves on its walks, jogs and runs; 'run' becomes a stand-in with no tracks
   // that only carries the run's fades and weight, which the gait plays under
-  const rest = gait && restPose(file.scene, gait.bones)
+  const rest = gait && restPose(scene, gait.bones)
   const fitted = (clip: THREE.AnimationClip) => (gait && rest ? fitClip(clip, gait.gender, look.build, rest, gait.rig) : clip)
   if (combat) for (const [name, clip] of combat) if (!actions.has(name)) actions.set(name, mixer.clipAction(fitted(clip)))
   const strides = gait && rest ? gaitPlayer(mixer, gait, fitted, rig) : undefined
@@ -674,8 +680,31 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       gripped = true
     }
   }
+  // the metarig (metarig/): muscles, correctives and jiggle after everything else has posed the body. Jiggle and the
+  // muscles' ring are kicked by any sudden change in the body's speed: a jump, a landing, a dash, a knockback
+  const metarig = scene.userData.metarig as Metarig | undefined
+  const meta = metarig ? metarigRuntime(metarig, scene, look.physique, look.build.startsWith('f') ? 'f' : 'm') : undefined
+  const bodyAt = new THREE.Vector3()
+  const lastAt = new THREE.Vector3()
+  const speed = new THREE.Vector3()
+  const lastSpeed = new THREE.Vector3()
+  const kick = new THREE.Vector3()
+  let tracked = false
+  const runMeta = (dt: number, far: boolean) => {
+    if (!meta || dt <= 0) return
+    root.getWorldPosition(bodyAt)
+    if (tracked) speed.copy(bodyAt).sub(lastAt).divideScalar(dt)
+    // the body's change of speed this frame, against it: the flesh carries on the way it was going
+    kick.copy(lastSpeed).sub(speed)
+    const kicked = tracked && kick.length() > KICK_FROM
+    meta.update(dt, { detail: far ? 'mid' : 'near', kick: kicked ? kick : undefined })
+    lastAt.copy(bodyAt)
+    lastSpeed.copy(speed)
+    tracked = true
+  }
   return {
     root,
+    metarig: meta,
     pose: (state, dt, moving) => {
       // undone in the reverse order they went on: the feet's bend, then the legs' swing, the head's steadying, the twist,
       // the back stood on a cast's hips
@@ -769,6 +798,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     settle: (dt, far, still) => {
       plantFeet()
       if (bent) solveTwists()
+      runMeta(dt, !!far)
       if (!still) return settleCloth(scene, dt, far)
       restClothOn(scene)
       return false

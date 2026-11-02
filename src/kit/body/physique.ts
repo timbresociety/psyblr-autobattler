@@ -124,35 +124,34 @@ export function heightScale(p: Partial<PhysiqueDials>, fallback = 1): number {
 // ------------------------------------------------------------------------------------------------ posture
 
 /**
- * Posture and pelvis tilt as turns on the rest pose, in degrees about each bone's local X (forward bend is negative
- * on the Mixamo spine, a chin dropped toward the chest positive on the neck). Every clip plays on top of them.
+ * Posture and pelvis tilt as turns on the rest pose, in degrees about the body's left-right axis: positive tips a
+ * bone forward (its top toward where the body faces). Every clip plays on top of them (metarig/posture.ts applies them).
  */
 export function postureTurns(p: Partial<PhysiqueDials>): Record<string, number> {
   const out: Record<string, number> = {}
   const add = (bone: string, deg: number) => (out[bone] = (out[bone] ?? 0) + deg)
   switch (p.posture) {
     case 'heroic':
-      // chest out and up, shoulders back, chin level
+      // chest out and up, the neck bringing the chin back to level
       add('Spine1', -4)
       add('Spine2', -6)
-      add('Neck', 5)
-      add('LeftShoulder', -4)
-      add('RightShoulder', -4)
+      add('Neck', 6)
+      add('Head', 3)
       break
     case 'hunched':
-      // a brute's forward hunch: rounded upper back, head thrust forward
+      // a brute's forward hunch: rounded upper back, head thrust forward, eyes still ahead
       add('Spine1', 6)
       add('Spine2', 10)
-      add('Neck', -8)
-      add('Head', -6)
+      add('Neck', 10)
+      add('Head', -18)
       break
     case 'stoop':
-      // an elder's stoop: the whole back rounds, the neck reaches forward
+      // an elder's stoop: the whole back rounds, the neck reaches forward, the face lifts to see
       add('Spine', 6)
       add('Spine1', 8)
       add('Spine2', 10)
-      add('Neck', 4)
-      add('Head', -10)
+      add('Neck', 6)
+      add('Head', -20)
       break
   }
   // pelvis tilt: the hips tip and the lower back takes most of it back, so the chest stays where it was
