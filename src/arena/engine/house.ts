@@ -18,6 +18,9 @@ import { cos, sin } from './maths.js'
 export const LEVEL = { low: 0, main: 4.5, up: 11, air: 16.5 } as const
 /** How thick the decks are: a deck over a tunnel leaves 4 m of headroom below the main floor. */
 const DECK = 0.5
+/** Health of the breakable map pieces (§6b), on the same scale as the barricades' 1200. */
+const GLASS = 400
+const CARD_BRIDGE = 900
 
 const pieces: CoverPiece[] = []
 const lines: MapLine[] = []
@@ -48,12 +51,13 @@ for (const s of [-1, 1]) {
   ramp(-48, -38, ...z(23, 34), 0, main, s > 0 ? 'z+' : 'z-')
   ramp(38, 48, ...z(23, 34), 0, main, s > 0 ? 'z+' : 'z-')
   ramp(-3, 3, ...z(21, 32), 0, main, s > 0 ? 'z+' : 'z-')
-  // the tunnel's roof between the vault and the court's edge, and bridges across both trenches
+  // the tunnel's roof between the vault and the court's edge, and bridges across both trenches: the far ones are card
+  // bridges that collapse under fire (§6b), with the middle bridges and the ramps still crossing the trench
   box(-3, 3, ...z(6, 16), main, 'grey', main - DECK)
-  for (const at of [8, 20]) {
-    box(-48, -38, ...z(at - 1.5, at + 1.5), main, 'grey', main - DECK)
-    box(38, 48, ...z(at - 1.5, at + 1.5), main, 'grey', main - DECK)
-  }
+  box(-48, -38, ...z(6.5, 9.5), main, 'grey', main - DECK)
+  box(38, 48, ...z(6.5, 9.5), main, 'grey', main - DECK)
+  box(-48, -38, ...z(18.5, 21.5), main, 'card', main - DECK, { health: CARD_BRIDGE })
+  box(38, 48, ...z(18.5, 21.5), main, 'card', main - DECK, { health: CARD_BRIDGE })
 }
 // the bridge over both trenches at the middle, and the vault's roof under the court
 box(-48, -38, -1.5, 1.5, main, 'grey', main - DECK)
@@ -90,7 +94,7 @@ for (const s of [-1, 1]) {
   box(-36, -22, ...z(26, 36), up, 'grey', up - DECK)
   box(22, 32, ...z(26, 36), up, 'grey', up - DECK)
   box(-1, 1, ...z(ring + half, 30), up, 'grey', up - DECK)
-  for (const x of [-14, 12]) box(x - 2, x + 2, ...z(30, 30.4), up + 1.2, 'grey', up)
+  for (const x of [-14, 12]) box(x - 2, x + 2, ...z(30, 30.4), up + 1.2, 'glass', up, { health: GLASS })
   for (const [x, zz] of [[-36, 26], [32, 26], [-36, 36], [32, 36]] as const) box(x - 0.5, x + 0.5, ...z(zz - 0.5, zz + 0.5), up - DECK, 'pillar', main)
 
   // Card Hall (-x): the card ramp from the main floor up to the lounge pad, a main staircase up to the balcony loop,

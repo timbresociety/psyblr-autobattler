@@ -14,6 +14,7 @@ import { PI, atan2 } from './maths.js'
 import { IDLE, capsule, createHero, emptyMatch, prepareHero, slotBit, type HeroSetup, type MatchState } from './state.js'
 import { tick } from './tick.js'
 import { initHero } from './effects.js'
+import { initialCoverHealth } from './cover.js'
 
 const base = { id: 't', name: 'T', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const skill = (delivery: Template['delivery'], effects: Template['effects'] = [phys(100)]) => spell({ ...base, family: 'burst', delivery, effects })
@@ -45,8 +46,10 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number;
   const run = (n: number) => {
     for (let i = 0; i < n; i++) events.push(...tick(m, setups, [], COMBAT_RULES))
   }
+  // cast inside a tick, as play does: a knockback starts in act and takes its first step in the same tick's after()
+  const strike = (slot: BuildSlot = 'active2') => events.push(...tick(m, setups, [{ ...IDLE, buttons: slotBit(slot) }], COMBAT_RULES))
   const hits = () => events.filter((e) => e.type === 'hit').map((e) => (e as Extract<MatchEvent, { type: 'hit' }>).target)
-  return { m, setups, ctx, events, fire, run, hits, aimAt }
+  return { m, setups, ctx, events, fire, strike, run, hits, aimAt }
 }
 
 describe('3D deliveries (U4)', () => {
@@ -183,6 +186,72 @@ describe('3D deliveries (U4)', () => {
     wall.fire()
     wall.run(30)
     expect(wall.m.heroes[1].position.z).toBe(ENGINE.arena.halfLength)
+  })
+
+  it('a blow along the ground throws its target in an arc and lands it on the floor (§5)', () => {
+    const a = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: 2 }])
+    const target = a.m.heroes[1]
+    a.strike()
+    let peak = 0
+    let flew = false
+    for (let i = 0; i < 60 && !(flew && !target.knockback); i++) {
+      flew ||= !!target.knockback
+      a.run(1)
+      peak = Math.max(peak, target.position.y)
+    }
+    expect(flew).toBe(true)
+    expect(peak).toBeGreaterThan(0.8)
+    expect(peak).toBeLessThanOrEqual(ENGINE.knock.hopMax)
+    expect(target.position.y).toBe(0)
+    expect(target.airborne).toBe(false)
+    expect(target.position.z - 2).toBeCloseTo(6, 1)
+  })
+
+  it('a heavier body goes less far, a lighter one further (§5 mass)', () => {
+    const pushed = (size: SizeClass) => {
+      const a = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: 2, size }])
+      a.strike()
+      a.run(30)
+      return a.m.heroes[1].position.z - 2
+    }
+    const medium = pushed('medium')
+    expect(pushed('huge') / medium).toBeCloseTo(1 / (1.3 * Math.sqrt(1.3)), 1)
+    expect(pushed('tiny')).toBeGreaterThan(medium * 1.3)
+  })
+
+  it('a hero knocked into a breakable piece slams it: the piece wears down and the flight stops, then breaks through (§6b)', () => {
+    const a = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: 2 }])
+    const pieces = [{ shape: { kind: 'block' as const, x: 0, z: 5.5, hx: 2, hz: 0.25 }, base: 0, top: 1.4, health: 300, look: 'barricade' as const }]
+    a.m.cover = { pieces, health: initialCoverHealth(pieces) }
+    a.fire()
+    a.run(30)
+    const slam = a.events.find((e) => e.type === 'slam') as Extract<MatchEvent, { type: 'slam' }>
+    expect(slam).toMatchObject({ hero: 1, index: 0 })
+    expect(slam.speed).toBeGreaterThan(10)
+    expect(a.m.cover.health[0]).toBe(300 - ENGINE.knock.slamDamage)
+    // stopped at the barricade, not through it
+    expect(a.m.heroes[1].position.z).toBeLessThan(5.5)
+    expect(a.m.heroes[1].knockback).toBeUndefined()
+    // the next slam breaks it, and the hero flies on through the gap
+    a.m.heroes[1].position = { x: 0, y: 0, z: 2 }
+    for (const k of BUILD_SLOTS) a.m.heroes[0].cooldowns[k] = 0
+    a.fire()
+    a.run(30)
+    expect(a.events).toContainEqual(expect.objectContaining({ type: 'cover-broken', index: 0 }))
+    expect(a.m.heroes[1].position.z).toBeGreaterThan(6)
+  })
+
+  it('knocked off a ledge, a hero falls to the floor below instead of hanging in the air', () => {
+    const a = arena(skill(at.melee(3), [push(6), phys(10)]), [{ z: 2, y: 3 }])
+    const pieces = [{ shape: { kind: 'block' as const, x: 0, z: 0, hx: 4, hz: 3 }, base: 0, top: 3, look: 'grey' as const }]
+    a.m.cover = { pieces, health: initialCoverHealth(pieces) }
+    a.m.heroes[0].position = { x: 0, y: 3, z: 0 }
+    a.fire()
+    a.run(15)
+    expect(a.m.heroes[1].position.z).toBeGreaterThan(3)
+    a.run(60)
+    expect(a.m.heroes[1].position.y).toBe(0)
+    expect(a.m.heroes[1].airborne).toBe(false)
   })
 
   it('every impact event carries the geometry its hit check used', () => {

@@ -1,9 +1,9 @@
 import { scaleMagnitudes } from '../../charter/budget.js'
-import { sizeHealth } from '../../charter/sizes.js'
+import { SIZES, sizeHealth } from '../../charter/sizes.js'
 import type { BuildSlot, ControlType, DamageType, Effect, Template } from '../../charter/types.js'
 import { DT, ENGINE, ticks } from './calibration.js'
 import type { MatchEvent } from './events.js'
-import { clamp, distance, normalize, scale, sub, type Vec3 } from './maths.js'
+import { clamp, cos, distance, normalize, scale, sin, sub, type Vec3 } from './maths.js'
 import { next } from './rng.js'
 import type { HeroSetup, HeroState, MatchState, Stat } from './state.js'
 
@@ -345,12 +345,30 @@ function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Temp
   if (immune(target, ctx.match.tick)) return
   const pull = forcePull || template.delivery.kind === 'grapple' || template.tags.some((t) => PULL_TAGS.includes(t))
   const away = sub(target.position, origin)
-  const dir = normalize(pull ? scale(away, -1) : { x: away.x, y: away.y + Math.sqrt(away.x * away.x + away.z * away.z) * 0.25, z: away.z })
-  const metres = pull ? clamp(distance(target.position, origin) - 1.5, 0, distanceM) : distanceM
+  // a heavier body goes less far (§5): the push divides by the body's scale to the power 1.5
+  const { scale: s } = SIZES[target.size]
+  const reach = distanceM / (s * Math.sqrt(s))
+  const flat = Math.sqrt(away.x * away.x + away.z * away.z)
+  // knocked along the ground, a hero flies in an arc over the floor (moveKnockbacks); out of the air, it goes straight
+  const thrown = !pull && !target.airborne
+  const dir = pull
+    ? normalize(scale(away, -1))
+    : thrown
+      ? flat > 1e-6
+        ? { x: away.x / flat, y: 0, z: away.z / flat }
+        : { x: sin(caster.yaw), y: 0, z: cos(caster.yaw) }
+      : normalize({ x: away.x, y: away.y + flat * 0.25, z: away.z })
+  const metres = pull ? clamp(distance(target.position, origin) - 1.5, 0, reach) : reach
   const n = ticks(ENGINE.knockbackTime)
   if (metres <= 0 || n <= 0) return
   // moveKnockbacks steps in this same tick's after(), so the last step lands on tick + n - 1: n steps in all
-  target.knockback = { step: scale(dir, metres / n), until: ctx.match.tick + n - 1, grounded: !target.airborne }
+  const K = ENGINE.knock
+  target.knockback = {
+    step: scale(dir, metres / n),
+    until: ctx.match.tick + n - 1,
+    grounded: !target.airborne,
+    ...(thrown ? { from: ctx.match.tick, hop: Math.min(K.hopMax, K.hop * metres), y: target.position.y, vy: 0 } : {}),
+  }
   interrupt(ctx, target)
   ctx.events.push({ type: 'knockback', hero: target.id, phase: 'start' })
 }

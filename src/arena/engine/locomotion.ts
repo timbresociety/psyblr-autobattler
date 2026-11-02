@@ -352,13 +352,14 @@ export function standOn(hero: HeroState, match: MatchState | undefined, reach = 
 }
 
 /**
- * Keep a hero inside the arena and out of every standing piece of cover; returns whether it touched cover. Anything a
- * hero could step onto never pushes it, or its body would stop short of the edge and its centre never get over it.
+ * Keep a hero inside the arena and out of every standing piece of cover; returns whether it touched cover (each piece
+ * touched goes into `hits` when given). Anything a hero could step onto (`clearance` above its feet) never pushes it,
+ * or its body would stop short of the edge and its centre never get over it.
  */
-export function keepOut(hero: HeroState, match: MatchState | undefined): boolean {
+export function keepOut(hero: HeroState, match: MatchState | undefined, hits?: number[], clearance: number = M.step): boolean {
   clampToArena(hero)
   if (!match?.cover) return false
-  const touched = pushOut(match.cover.pieces, match.cover.health, hero.position, bodyRadius(hero), capsule(hero).height, M.step)
+  const touched = pushOut(match.cover.pieces, match.cover.health, hero.position, bodyRadius(hero), capsule(hero).height, clearance, hits)
   if (touched) clampToArena(hero)
   return touched
 }

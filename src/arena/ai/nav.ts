@@ -1,5 +1,5 @@
 import { ENGINE } from '../engine/calibration.js'
-import { ceilingOver, coverHit, floorUnder, initialCoverHealth, pushOut, type CoverPiece, type MapLine } from '../engine/cover.js'
+import { ceilingOver, coverHit, floorUnder, initialCoverHealth, pushOut, type CoverHealth, type CoverPiece, type MapLine } from '../engine/cover.js'
 import type { Vec3 } from '../engine/maths.js'
 import { bodyRadius, type HeroState, type MatchState } from '../engine/state.js'
 
@@ -20,6 +20,8 @@ export interface NavNode {
   z: number
   /** The walkable region (connected by walking) the node is in. */
   region: number
+  /** The breakable piece the node stands on (a card bridge, §6b): once it is broken the node is gone. */
+  on?: number
 }
 
 export interface NavLink {
@@ -89,8 +91,13 @@ export function navFor(pieces: readonly CoverPiece[], lines: readonly MapLine[] 
 
 export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[] = []): NavGraph {
   const health = initialCoverHealth(pieces)
-  // breakable barricades are walls to the graph: their tops are no place to stand once they're gone
-  const solid = (i: number) => pieces[i].health === undefined
+  // breakable barricades and glass are walls to the graph: their tops are no place to stand once they're gone. A card
+  // bridge is a floor until it falls, and the nodes on it say so
+  const solid = (i: number) => pieces[i].health === undefined || pieces[i].look === 'card'
+  const over = (p: CoverPiece, x: number, z: number) => {
+    const s = p.shape
+    return s.kind === 'block' ? Math.abs(x - s.x) <= s.hx && Math.abs(z - s.z) <= s.hz : (x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) <= s.r * s.r
+  }
   const nodes: NavNode[] = []
   const columns = new Map<number, number[]>()
   const add = (x: number, y: number, z: number) => {
@@ -99,7 +106,8 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
     if (col.some((n) => Math.abs(nodes[n].y - y) < 0.5 && Math.abs(nodes[n].x - x) < 0.8 && Math.abs(nodes[n].z - z) < 0.8)) return
     col.push(nodes.length)
     columns.set(k, col)
-    nodes.push({ x, y, z, region: -1 })
+    const on = pieces.findIndex((p) => p.health !== undefined && Math.abs(p.top - y) < 0.02 && over(p, x, z))
+    nodes.push({ x, y, z, region: -1, ...(on >= 0 ? { on } : {}) })
   }
   // a floor under the body's middle and all round it (not the top of a glass partition or a lip)
   const floorAt = (x: number, y: number, z: number) => Math.abs(floorUnder(pieces, health, { x, y, z }, y + 0.01) - y) <= 0.02 || Math.abs(floorUnder(pieces, health, { x, y, z }, y + M.step) - y) <= M.step
@@ -113,10 +121,7 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
   const heightsAt = (x: number, z: number) => {
     const ys = [0]
     pieces.forEach((p, i) => {
-      if (!solid(i)) return
-      const s = p.shape
-      const over = s.kind === 'block' ? Math.abs(x - s.x) <= s.hx && Math.abs(z - s.z) <= s.hz : (x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) <= s.r * s.r
-      if (over) ys.push(floorUnder(pieces, health, { x, y: 0, z }, p.top + 0.001))
+      if (solid(i) && over(p, x, z)) ys.push(floorUnder(pieces, health, { x, y: 0, z }, p.top + 0.001))
     })
     return [...new Set(ys.map((y) => Math.round(y * 1000) / 1000))]
   }
@@ -315,6 +320,8 @@ export function nodeAt(g: NavGraph, p: { x: number; y: number; z: number }): num
 /** What a hero can take: the jumps its size reaches, and double jumps only with a stamina pip to spend. */
 export interface Mover {
   jumpScale: number
+  /** The map's cover health now: nodes on a broken piece are no way through. */
+  health?: readonly CoverHealth[]
 }
 
 /** The cheapest route from `from` to `to` (node ids, `from` first), or undefined when there is none. */
@@ -375,6 +382,8 @@ export function findPath(g: NavGraph, from: number, to: number, mover: Mover = {
     done[i] = 1
     if (i === to) break
     for (const l of g.links[i]) {
+      const on = g.nodes[l.to].on
+      if (on !== undefined && mover.health?.[on] === 0) continue
       if ((l.kind === 'jump' || l.kind === 'jump2') && mover.jumpScale !== 1 && !jumpable(l.span ?? 0, l.need, mover.jumpScale, false) && !jumpable(l.span ?? 0, l.need, mover.jumpScale, true)) continue
       if (l.kind === 'jump2' && mover.jumpScale === 1 && !jumpable(l.span ?? 0, l.need, 1, true)) continue
       const c = cost[i] + l.cost

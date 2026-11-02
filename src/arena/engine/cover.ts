@@ -24,7 +24,7 @@ export interface CoverPiece {
    */
   slope?: { rise: 'x+' | 'x-' | 'z+' | 'z-'; low: number }
   /** What the renderer builds here; the engine ignores it. */
-  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step' | 'grey' | 'ramp' | 'chip' | 'rail'
+  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step' | 'grey' | 'ramp' | 'chip' | 'rail' | 'glass' | 'card'
 }
 
 /**
@@ -269,9 +269,10 @@ export const clearLine = (pieces: readonly CoverPiece[], health: readonly CoverH
 /**
  * Push a hero's body (an upright capsule of `radius` and `height`) out of every standing piece it overlaps, sliding
  * along walls rather than stopping dead. A piece whose top is no more than `clearance` above the feet doesn't push:
- * the hero walks onto it, and steps up once its centre is over it. Returns whether it touched anything.
+ * the hero walks onto it, and steps up once its centre is over it. Returns whether it touched anything; the index of
+ * each piece touched goes into `hits` when given.
  */
-export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number, clearance = 0): boolean {
+export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number, clearance = 0, hits?: number[]): boolean {
   const bounds = boundsOf(pieces)
   let touched = false
   for (let i = 0; i < pieces.length; i++) {
@@ -290,6 +291,7 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
       const d2 = ox * ox + oz * oz
       if (d2 >= radius * radius) continue
       touched = true
+      hits?.push(i)
       if (d2 > 1e-12) {
         const d = Math.sqrt(d2)
         p.x = cx + (ox / d) * radius
@@ -310,6 +312,7 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
       const d2 = ox * ox + oz * oz
       if (d2 >= min * min) continue
       touched = true
+      hits?.push(i)
       const d = Math.sqrt(d2)
       if (d > 1e-9) {
         p.x = s.x + (ox / d) * min

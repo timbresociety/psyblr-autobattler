@@ -8,7 +8,8 @@ import type { RuinsView } from './ruins.js'
  * from the engine's own pieces and lines so what is drawn is what blocks. Each band has its own grey, tops are lighter
  * than sides with a metre grid to judge jumps by, and arcade yellow marks traversal (§1, §7 rule 4): the rims of chips
  * and candlesticks, the edges of decks and walkways, the sides of ramps, and the ziplines and rails. Everything that
- * cannot break is merged into a few meshes; breakable barricades stay separate so they can wear and burst.
+ * cannot break is merged into a few meshes; breakable barricades, glass and card bridges stay separate so they can
+ * wear and burst.
  */
 
 const YELLOW = new THREE.Color(0xffc820)
@@ -128,7 +129,13 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
   const map = grid()
   const greyMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02, ...(map ? { map } : {}) })
   const yellowMat = new THREE.MeshStandardMaterial({ color: YELLOW, emissive: YELLOW, emissiveIntensity: 0.55, roughness: 0.5 })
-  const barricadeMat = new THREE.MeshStandardMaterial({ color: 0xc0462e, roughness: 0.7 })
+  // what breaks (§6b) reads apart from what never does: red barricades, pale glass, and card bridges printed like cards
+  const BREAKABLE: Partial<Record<CoverPiece['look'], { color: number; opacity?: number }>> = { glass: { color: 0x9fd8ff, opacity: 0.38 }, card: { color: 0xf3ead6 } }
+  const tone = (piece: CoverPiece) => BREAKABLE[piece.look] ?? { color: 0xc0462e }
+  const breakableMat = (piece: CoverPiece) => {
+    const { color, opacity } = tone(piece)
+    return new THREE.MeshStandardMaterial({ color, roughness: piece.look === 'glass' ? 0.1 : 0.7, ...(opacity ? { transparent: true, opacity, depthWrite: false } : {}) })
+  }
   const solids: THREE.BufferGeometry[] = []
   const trims: THREE.BufferGeometry[] = []
   pieces.forEach((piece, index) => {
@@ -138,12 +145,15 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
     else box.set(new THREE.Vector3(s.x - s.r, piece.base, s.z - s.r), new THREE.Vector3(s.x + s.r, piece.top, s.z + s.r))
     proxies.push(box)
     if (piece.health) {
-      // a barricade: its own node, so it can shake, wear and break
+      // a barricade, a glass partition or a card bridge: its own node, so it can shake, wear and break
       const node = new THREE.Group()
-      node.name = 'cover:barricade'
-      const mesh = new THREE.Mesh(solid(piece), barricadeMat)
-      mesh.castShadow = mesh.receiveShadow = true
+      node.name = `cover:${piece.look}`
+      const mesh = new THREE.Mesh(solid(piece), breakableMat(piece))
+      mesh.castShadow = piece.look !== 'glass'
+      mesh.receiveShadow = true
       node.add(mesh)
+      // a card bridge is a deck to cross: yellow edges, like every other
+      if (piece.look === 'card') trims.push(...trim(piece))
       group.add(node)
       views[index] = node
       return
@@ -189,12 +199,8 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
       if (!shake.some((s) => s.obj === node)) shake.push({ obj: node, t: 0.25 })
       const wear = health >= 0 ? 1 - health / piece.health : 0
       const mesh = node.children[0] as THREE.Mesh
-      if (!node.userData.own) {
-        mesh.material = barricadeMat.clone()
-        node.userData.own = true
-      }
       const m = mesh.material as THREE.MeshStandardMaterial
-      m.color.set(0xc0462e).multiplyScalar(1 - wear * 0.45)
+      m.color.set(tone(piece).color).multiplyScalar(1 - wear * 0.45)
       m.emissive.copy(flash).multiplyScalar(0.12)
     },
     broken: (index) => {
@@ -214,7 +220,7 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
         if (s.t <= 0) {
           s.obj.position.set(0, 0, 0)
           const m = (s.obj.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
-          if (s.obj.userData.own) m.emissive.setScalar(0)
+          m.emissive.setScalar(0)
           shake.splice(i, 1)
         }
       }

@@ -2,7 +2,7 @@
  * Every tunable constant of the 3D arena engine lives here (KTD1, KTD2, KTD5). Bump the version on any change:
  * stored gate results stamped with an older version are re-checked.
  */
-export const ENGINE_CALIBRATION_VERSION = 15
+export const ENGINE_CALIBRATION_VERSION = 16
 
 export const ENGINE = {
   /** Fixed ticks per second; every timing in the engine and the AI is a whole number of ticks. */
@@ -37,6 +37,13 @@ export const ENGINE = {
   lungeArc: 40,
   /** A knockback or pull plays out over this long, seconds. */
   knockbackTime: 0.25,
+  /**
+   * Knockback physics (§5, §6b): a blow along the ground throws its target in an arc `hop` metres high for each metre
+   * of push (at most `hopMax`); a heavier body goes less far (the push divides by its scale to the power 1.5, so a huge
+   * body travels 0.67 of a medium one's push and a tiny one 1.4 times); slamming into a wall stops it, and a breakable
+   * piece it slams into takes `slamDamage`.
+   */
+  knock: { hop: 0.18, hopMax: 1.2, slamDamage: 200 },
   /** A hit worth this fraction of the target's health counts as heavy (hit-stop and launch on the client). */
   heavyHit: 0.12,
   /** Ground-disc zones reach heroes this close to the floor, metres. */

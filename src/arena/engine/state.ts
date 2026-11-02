@@ -158,8 +158,12 @@ export interface HeroState {
   /** The tick a transformation ends, whether it changed the hero's size or kept it; 0 when untransformed. */
   formUntil: number
   /** An engine-computed displacement in progress (KTD3): metres per tick until `until`. */
-  /** `grounded`: the hero was on the ground when hit, so it lands again when the knockback ends. */
-  knockback?: { step: Vec3; until: number; grounded?: boolean }
+  /**
+   * `grounded`: the hero was on the ground when hit, so it lands again when the knockback ends. A blow that knocks a
+   * hero along the ground throws it in an arc `hop` metres high over a track `y` that follows the floor it is pushed
+   * across (falling at `vy` off a ledge), from tick `from`. `slammed` once it has struck a wall (§6b).
+   */
+  knockback?: { step: Vec3; until: number; grounded?: boolean; from?: number; hop?: number; y?: number; vy?: number; slammed?: boolean }
   hitCount: number
   lowHealthFired: boolean
   damageDealt: number

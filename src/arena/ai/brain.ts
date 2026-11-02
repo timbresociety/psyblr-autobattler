@@ -271,12 +271,14 @@ function plan(m: MatchState, hero: HeroState, brain: BrainState, target: HeroSta
     return
   }
   const r = brain.route
-  if (r && r.at < r.path.length && m.tick - r.planned < AI.replanTicks) {
+  // a route over a bridge that has just fallen is planned again at once
+  const fallen = (i: number) => g.nodes[i].on !== undefined && m.cover?.health[g.nodes[i].on!] === 0
+  if (r && r.at < r.path.length && m.tick - r.planned < AI.replanTicks && !r.path.slice(r.at).some(fallen)) {
     const was = g.nodes[r.goal]
     const now = g.nodes[goal]
     if (was.region === now.region && (was.x - now.x) * (was.x - now.x) + (was.z - now.z) * (was.z - now.z) < 16) return
   }
-  const path = findPath(g, from, goal, { jumpScale: ENGINE.move.jumpScale[hero.size] })
+  const path = findPath(g, from, goal, { jumpScale: ENGINE.move.jumpScale[hero.size], health: m.cover?.health })
   brain.route = path ? { path, at: 0, goal, planned: m.tick } : undefined
 }
 

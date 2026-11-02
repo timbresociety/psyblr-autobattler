@@ -535,19 +535,58 @@ function flyProjectiles(ctx: Ctx) {
 const raises = (t: Template) => t.effects.some((e) => e.kind === 'field' || e.kind === 'wall' || e.kind === 'trap' || e.kind === 'turret')
 
 function moveKnockbacks(ctx: Ctx) {
+  const cover = ctx.match.cover
   for (const hero of ctx.match.heroes) {
     const kb = hero.knockback
     if (!kb || !hero.alive) continue
-    hero.position = add(hero.position, kb.step)
-    keepOut(hero, ctx.match)
+    const before = hero.position
+    let lift: number = ENGINE.move.step
+    if (kb.hop !== undefined && kb.from !== undefined && kb.y !== undefined) {
+      // thrown along the ground: an arc over a track that follows the floor it crosses, up a ramp or a step, and falls
+      // off a ledge (§5)
+      const n = kb.until - kb.from + 1
+      const k = ctx.match.tick - kb.from + 1
+      const arc = (4 * kb.hop * k * (n - k)) / (n * n)
+      const x = before.x + kb.step.x
+      const z = before.z + kb.step.z
+      // a body in flight lands only on what is under it; near the ground it still takes a step or a ramp in its stride
+      lift = Math.max(ENGINE.move.step - arc, 0.05)
+      const floor = cover ? floorUnder(cover.pieces, cover.health, { x, y: kb.y, z }, kb.y + arc + lift) : 0
+      let vy = kb.vy ?? 0
+      let y = kb.y
+      if (floor >= y - 1e-6) ((y = floor), (vy = 0))
+      else ((vy -= ENGINE.move.gravity * DT), (y = Math.max(floor, y + vy * DT)))
+      kb.y = y
+      kb.vy = vy
+      hero.position = { x, y: y + arc, z }
+    } else hero.position = add(before, kb.step)
+    const hits: number[] = []
+    keepOut(hero, ctx.match, hits, lift)
+    // a wall that turns the body back is a slam: once a flight, it wears a breakable piece down and stops the flight
+    // unless it broke through (§6b)
+    const pushed = sub(hero.position, before)
+    const along = dot(pushed, kb.step)
+    if (cover && hits.length && !kb.slammed && along < 0.5 * dot(kb.step, kb.step)) {
+      kb.slammed = true
+      const index = hits[0]
+      ctx.events.push({ type: 'slam', hero: hero.id, at: { ...hero.position }, index, speed: length(kb.step) * ENGINE.tickHz })
+      let standing = false
+      for (const i of new Set(hits)) {
+        const left = cover.health[i]
+        if (left > 0) {
+          cover.health[i] = Math.max(0, left - ENGINE.knock.slamDamage)
+          ctx.events.push({ type: 'cover-hit', index: i, at: { ...hero.position }, health: cover.health[i] })
+          if (cover.health[i] === 0) ctx.events.push({ type: 'cover-broken', index: i, at: { ...hero.position } })
+        }
+        if (cover.health[i] !== 0) standing = true
+      }
+      if (standing) kb.until = ctx.match.tick
+    }
     if (ctx.match.tick >= kb.until) {
-      // a hero knocked along the ground lands where it ends up; one knocked out of the air falls from there
-      hero.velocity = { x: 0, y: 0, z: 0 }
-      const cover = ctx.match.cover
-      if (kb.grounded) {
-        hero.position = { ...hero.position, y: cover ? floorUnder(cover.pieces, cover.health, hero.position, hero.position.y) : 0 }
-        hero.airborne = false
-      } else standOn(hero, ctx.match)
+      // the flight is over: a hero over the floor lands, one past a ledge or knocked out of the air falls from there
+      hero.velocity = { x: 0, y: kb.hop !== undefined ? Math.min(0, kb.vy ?? 0) : 0, z: 0 }
+      hero.airborne = true
+      standOn(hero, ctx.match)
       hero.knockback = undefined
       ctx.events.push({ type: 'knockback', hero: hero.id, phase: 'end' })
     }

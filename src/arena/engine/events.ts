@@ -30,6 +30,8 @@ export type MatchEvent =
   /** A shot or blast struck a piece of cover; breakable pieces report their health left. */
   | { type: 'cover-hit'; index: number; at: Vec3; health: number }
   | { type: 'cover-broken'; index: number; at: Vec3 }
+  /** A knocked-back hero struck a wall or a prop (piece `index`) at `at`, moving at `speed` m/s (§6b). */
+  | { type: 'slam'; hero: number; at: Vec3; index: number; speed: number }
   | { type: 'end'; winner: 0 | 1 | 'draw'; reason: 'wipe' | 'time' }
   /** A status landed on a hero: control, a debuff, a state, until a tick (cleanse reports the tick it fired). */
   | { type: 'status'; hero: number; status: string; until: number }

@@ -109,6 +109,28 @@ describe('the nav graph of the House of Instinct (§8)', () => {
     for (const m of ['jump', 'mantle', 'zip-on', 'zip-off'] as const) expect(moves).toContain(m)
   })
 
+  it('destruction never removes the only route to a position (§6b): with every breakable piece down, every platform is still reachable', () => {
+    const breakable = HOUSE.flatMap((p, i) => (p.health !== undefined ? [i] : []))
+    expect(HOUSE.filter((p) => p.look === 'card').length).toBeGreaterThanOrEqual(2)
+    expect(HOUSE.filter((p) => p.look === 'glass').length).toBeGreaterThanOrEqual(2)
+    // the card bridges carry nodes, so a route can take them while they stand
+    const onBridge = g.nodes.flatMap((n, i) => (n.on !== undefined ? [i] : []))
+    expect(onBridge.length).toBeGreaterThan(0)
+    const broken = initialCoverHealth(HOUSE).map((h, i) => (breakable.includes(i) ? 0 : h))
+    const standing = regions.filter((r) => g.nodes.some((n) => n.region === r && n.on === undefined))
+    for (const muster of [BLUE, RED]) {
+      const home = nodeAt(g, muster)
+      for (const scale of Object.values(ENGINE.move.jumpScale))
+        for (const r of standing) {
+          const ids = g.nodes.flatMap((n, i) => (n.region === r && n.on === undefined ? [i] : []))
+          const there = ids.reduce((a, b) => (Math.abs(g.nodes[b].x) + Math.abs(g.nodes[b].z) < Math.abs(g.nodes[a].x) + Math.abs(g.nodes[a].z) ? b : a))
+          const path = findPath(g, home, there, { jumpScale: scale, health: broken })
+          expect(path, `region ${r} at scale ${scale} with everything broken`).toBeDefined()
+          expect(path!.some((i) => g.nodes[i].on !== undefined)).toBe(false)
+        }
+    }
+  })
+
   it('rule 2: every strong position has more than one way in', () => {
     const inside = {
       'raised court': (n: (typeof g.nodes)[number]) => n.x * n.x + n.z * n.z <= 25 && Math.abs(n.y - (LEVEL.main + 2.5)) < 0.1,
