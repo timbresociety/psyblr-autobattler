@@ -57,6 +57,8 @@ export interface HeroView {
   tip?: (out: THREE.Vector3) => THREE.Vector3 | undefined
   /** Twist the chest from the hips, run backwards or not, covering the ground this fast (see CharacterView.lean); without it, the view faces its aim whole. */
   lean?: (twist: number, back: boolean, speed?: number, planted?: boolean, legs?: number, heading?: number, sprint?: boolean) => void
+  /** Where the hero aims this frame (radians, the engine's yaw and pitch), for the look and aim IK (GAME.md §9.6). */
+  aim?: (yaw: number, pitch: number) => void
   /** Whether it sidesteps and backpedals on clips of its own, its hips square to its aim (see CharacterView.strafes). */
   strafes?: boolean
 }
@@ -136,6 +138,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     hand: (dir, out) => shown().hand(dir, out),
     tip: (out) => shown().tip(out),
     lean: (twist, back, speed, planted, legs, heading, sprint) => shown().lean(twist, back, speed, planted, legs, heading, sprint),
+    aim: (yaw, pitch) => shown().aim(yaw, pitch),
     get strafes() {
       return shown().strafes
     },

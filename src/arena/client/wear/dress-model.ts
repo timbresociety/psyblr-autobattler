@@ -17,6 +17,7 @@ import { rigCloth } from './cloth-model.js'
 import type { LoadedWear } from './items.js'
 import { refineGeometry } from '../../../kit/body/refine.js'
 import { helperSkin, planHelpers } from '../../../kit/body/helpers.js'
+import { bodySpread } from '../../../kit/body/spread.js'
 import { meshRest, upgradeRig } from '../metarig/upgrade.js'
 import { applyPosture } from '../metarig/posture.js'
 import { buildHead } from '../head/build.js'
@@ -439,7 +440,9 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const plans = planHelpers(proportioned, restNow)
   const helped = helperSkin(proportioned, restNow, plans)
   const shape = { ...proportioned, joints: helped.joints, weights: helped.weights }
-  model.userData.metarig = upgradeRig(model, mesh, plans)
+  const metarig = upgradeRig(model, mesh, plans)
+  metarig.spread = bodySpread(proportioned, restNow)
+  model.userData.metarig = metarig
   applyPosture(model, look.physique)
   const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear, cache.base.surface.count)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })

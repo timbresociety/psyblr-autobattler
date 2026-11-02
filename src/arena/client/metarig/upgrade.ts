@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { HelperPlan } from '../../../kit/body/helpers.js'
 import type { Skeleton } from '../../../kit/body/regions.js'
+import type { Spread } from '../../../kit/body/spread.js'
 import { bodyDirection, IK_TARGETS, SOCKET_BONE, SOCKETS, type SocketName } from '../../../kit/rig/metarig.js'
 
 /**
@@ -29,6 +30,8 @@ export interface Metarig {
   ik: Record<(typeof IK_TARGETS)[number], THREE.Object3D>
   /** The body's skeleton at rest after the upgrade, in the mesh's own space (for measuring). */
   skeleton: Skeleton
+  /** The arm and leg spread this body needs at rest (bodySpread), set by the dresser once it has the shaped skin. */
+  spread?: Spread
 }
 
 /** Each bone's rest position in the mesh's own space, from its inverse bind. */

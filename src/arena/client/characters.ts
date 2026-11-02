@@ -23,6 +23,9 @@ import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
 import type { Metarig } from './metarig/upgrade.js'
 import type { HeadRig } from './head/build.js'
 import { headRuntime, type HeadRuntime } from './head/runtime.js'
+import { fixups as fixupsFor, type Fixups, type Gaze } from './metarig/fixups.js'
+import { extraSpread } from '../../kit/body/spread.js'
+import { heightScale } from '../../kit/body/physique.js'
 
 export { characterLook, heroHue, loadBuild } from './character-look.js'
 
@@ -327,6 +330,10 @@ export interface CharacterView {
    * its aim, sidestepping and backpedalling (see `stance`). Otherwise it runs on its body's own run, its legs swung.
    */
   strafes: boolean
+  /** Where the hero aims (the engine's yaw and pitch, radians), for the look and aim at the next pose (GAME.md §9.6). */
+  aim: (yaw: number, pitch: number) => void
+  /** The fix-ups after the clip (spread, two-hand grip, look and aim), on a body with the standard rig. */
+  fixups?: Fixups
 }
 
 const UP = new THREE.Vector3(0, 1, 0)
@@ -704,6 +711,22 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   // the head (head/): blinks on each hero's own beat, the eyes held inside their limit, the jaw with jawOpen
   const headRig = scene.userData.head as HeadRig | undefined
   const face = headRig ? headRuntime(headRig, seedOf(look.build + build.heroName)) : undefined
+  // the fix-ups after the clip (GAME.md §9.6): limbs spread by the body's girth, the off hand onto a two-handed grip,
+  // the look and aim spread up the back; like the twist, put back before the next update
+  const gender = look.build.startsWith('f') ? 'f' : 'm'
+  const fix =
+    rig.kind === 'standard'
+      ? fixupsFor(scene, root, metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, (out) => {
+          if (tip === null) tip = heldTip(holder!)
+          return tip && holder ? holder.localToWorld(out.copy(tip)) : undefined
+        }, 1.8 * heightScale(look.physique ?? {}))
+      : undefined
+  const gaze: Gaze = { yaw: 0, pitch: 0, mode: 'look' }
+  // dev probe: each hero's spread and the fix-ups' last leftovers (window.__fix)
+  if (import.meta.env.DEV && fix && typeof window !== 'undefined') {
+    const probe = window as unknown as { __fix?: unknown[] }
+    ;(probe.__fix ??= []).push({ hero: build.heroName, spread: metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, gaze, state: fix.state })
+  }
   const runMeta = (dt: number, far: boolean) => {
     face?.update(dt, { detail: far ? 'mid' : 'near' })
     if (!meta || dt <= 0) return
@@ -721,10 +744,16 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
     root,
     metarig: meta,
     ...(face ? { head: face } : {}),
+    ...(fix ? { fixups: fix } : {}),
+    aim: (yaw, pitch) => {
+      gaze.yaw = yaw
+      gaze.pitch = pitch
+    },
     pose: (state, dt, moving) => {
       // undone in the reverse order they went on: the feet's bend, then the legs' swing, the head's steadying, the twist,
       // the back stood on a cast's hips
       unbend()
+      fix?.undo()
       unswing()
       unsteady()
       untwist()
@@ -808,6 +837,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       steadyHead(gaitShare)
       swingLegs()
       gripHands()
+      gaze.mode = state.kind === 'cast' ? 'aim' : state.kind === 'dead' || state.kind === 'hit' || state.kind === 'slide' || state.kind === 'roll' ? 'off' : 'look'
+      fix?.apply(dt, gaze)
       solveTwists()
       posed = dt
     },

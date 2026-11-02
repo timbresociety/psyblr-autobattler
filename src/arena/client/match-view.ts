@@ -464,6 +464,7 @@ function drawHeroes(
     stances[i] = s
     // standing on the ground, the feet stay where they land
     if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading, h.sprinting)
+    view.aim?.(h.yaw, h.pitch)
     if (!far) view.pose(pose, frame.t + i, scaled, moving)
     else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
