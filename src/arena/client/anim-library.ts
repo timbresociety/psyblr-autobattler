@@ -13,7 +13,7 @@ import { retargetClip } from '../../kit/rig/retarget.js'
 
 export { ANIM_SETS, animFolder, animIndex, setOf, type AnimIndex, type AnimSet } from './anim-index.js'
 
-interface ClipFile {
+export interface ClipFile {
   frames: number
   from: string
   rot: number[]
@@ -55,7 +55,8 @@ function undelta(deltas: number[], frames: number, width: number, scale: number)
   return out
 }
 
-function toClip(name: string, file: ClipFile, idx: AnimIndex): THREE.AnimationClip {
+/** A clip file as a three.js clip on the gender's medium body (the library's own decoding, for tools and the bench too). */
+export function toClip(name: string, file: ClipFile, idx: AnimIndex): THREE.AnimationClip {
   const { frames } = file
   const bones = idx.bones
   const rot = undelta(file.rot, frames, 4, idx.rot)

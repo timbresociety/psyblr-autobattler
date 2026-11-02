@@ -1,0 +1,3813 @@
+{
+ "generated": "2026-11-02",
+ "clips": {
+  "combo": "punch_combo",
+  "heavy": "two_hand_sword_combo",
+  "block": "standing_block_idle",
+  "cast": "magic_standing_2h_cast_spell_01",
+  "jog": "jog",
+  "run": "run",
+  "sprint": "sprint_forward",
+  "slide": "running_slide_pose",
+  "landRoll": "falling_to_roll",
+  "hitReact": "hit_to_body",
+  "getUp": "getting_up",
+  "jump": "jump"
+ },
+ "scores": [
+  {
+   "archetype": "small",
+   "body": "m-tiny",
+   "spread": {
+    "arm": 11.73,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.09,
+       "frames": 0.036
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.07,
+       "frames": 0
+      }
+     },
+     "footSlide": 9.95,
+     "ground": -5.74
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.94,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.94,
+       "frames": 0
+      }
+     },
+     "footSlide": 39.74,
+     "ground": -7.14
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.17,
+     "ground": -8.29
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.95,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.12,
+       "frames": 0
+      }
+     },
+     "footSlide": 10.89,
+     "ground": -6.41
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.68,
+       "frames": 0.158
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.52,
+       "frames": 0
+      }
+     },
+     "footSlide": 69.89
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.35,
+       "frames": 0.2
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.28,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 85.3
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.1,
+       "frames": 0.143
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.06,
+       "frames": 0
+      }
+     },
+     "footSlide": 196.51
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.15,
+       "frames": 0.156
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.24,
+       "frames": 0.111
+      }
+     },
+     "footSlide": 44.33
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.33,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.91,
+     "ground": -5.95
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.88,
+       "frames": 0.045
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.16,
+       "frames": 0.015
+      }
+     },
+     "footSlide": 10.65
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.14,
+       "frames": 0.088
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.74,
+       "frames": 0
+      }
+     },
+     "footSlide": 75.82
+    }
+   }
+  },
+  {
+   "archetype": "lanky",
+   "body": "m-medium",
+   "spread": {
+    "arm": 1.86,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.13,
+     "ground": -5.32
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      },
+      "grip": 27.32
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      },
+      "grip": 26.95
+     },
+     "footSlide": 25.95,
+     "ground": -5.91
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.27,
+     "ground": -5.33
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.98,
+     "ground": -5.36
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 53.5
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.3,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.3,
+       "frames": 0
+      }
+     },
+     "footSlide": 38.69
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 172.29
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 42.17
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.98,
+     "ground": -5.46
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 11.56
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 46.44
+    }
+   }
+  },
+  {
+   "archetype": "slender",
+   "body": "m-small",
+   "spread": {
+    "arm": 0.53,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.48,
+     "ground": -5.61
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 34.28,
+     "ground": -6.5
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.2,
+     "ground": -6.73
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.46,
+     "ground": -5.82
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 79.73
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.08,
+       "frames": 0.133
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.08,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 37.88
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 136.57
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 43.68
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.83,
+     "ground": -5.75
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 11.1
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 66.44
+    }
+   }
+  },
+  {
+   "archetype": "athletic",
+   "body": "m-medium",
+   "spread": {
+    "arm": 0,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.18,
+     "ground": -5.23
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 23.99,
+     "ground": -5.74
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.13,
+     "ground": -5.33
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.45,
+     "ground": -5.2
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.99,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.99,
+       "frames": 0
+      }
+     },
+     "footSlide": 76.69
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.35,
+       "frames": 0.133
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.35,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 29.3
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 138.96
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 40.97
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.05,
+     "ground": -5.44
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 10.42
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.13,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.13,
+       "frames": 0
+      }
+     },
+     "footSlide": 59.71
+    }
+   }
+  },
+  {
+   "archetype": "heroine",
+   "body": "f-medium",
+   "spread": {
+    "arm": 0.14,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.26,
+     "ground": -4.41
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 16.56,
+     "ground": -4.66
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.42,
+     "ground": -4.58
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.99,
+     "ground": -4.35
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 18,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 163.37
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 181.46
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 158.49
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.87,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.87,
+       "frames": 0
+      }
+     },
+     "footSlide": 36
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.08,
+     "ground": -4.53
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 10.35
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 36.27
+    }
+   }
+  },
+  {
+   "archetype": "athleticHeroine",
+   "body": "f-small",
+   "spread": {
+    "arm": 0,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.38,
+     "ground": -4.51
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 19.41,
+     "ground": -4.97
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.3,
+     "ground": -5.65
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.09,
+     "ground": -4.85
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 18,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 145
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 208.71
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 142.81
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.43,
+       "frames": 0.022
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.43,
+       "frames": 0.022
+      }
+     },
+     "footSlide": 40.42
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.1,
+     "ground": -4.76
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 13.28
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 51.16
+    }
+   }
+  },
+  {
+   "archetype": "powerhouse",
+   "body": "m-large",
+   "spread": {
+    "arm": 0,
+    "leg": 0.52
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 3.49,
+     "ground": -5.23
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 25.94,
+     "ground": -5.61
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.15,
+     "ground": -5.14
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.66,
+     "ground": -5.07
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.7,
+       "frames": 0.158
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.88,
+       "frames": 0.158
+      }
+     },
+     "footSlide": 72.26
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.36,
+       "frames": 0.133
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.63,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 19.57
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 147.28
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.38,
+       "frames": 0.022
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.38,
+       "frames": 0.022
+      }
+     },
+     "footSlide": 42.45
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.27,
+     "ground": -5.3
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 13.53
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.68,
+       "frames": 0.074
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.49,
+       "frames": 0.044
+      }
+     },
+     "footSlide": 41.76
+    }
+   }
+  },
+  {
+   "archetype": "bodybuilder",
+   "body": "m-huge",
+   "spread": {
+    "arm": 0,
+    "leg": 2.68
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.92,
+     "ground": -5.47
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.21,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.21,
+       "frames": 0
+      }
+     },
+     "footSlide": 22.31,
+     "ground": -5.6
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.28,
+     "ground": -5.29
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 11.25,
+     "ground": -4.9
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 7.35,
+       "frames": 0.316
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.92,
+       "frames": 0.158
+      }
+     },
+     "footSlide": 44.7
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 7.58,
+       "frames": 0.2
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.6,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 24.61
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 168.65
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.41,
+       "frames": 0.089
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.41,
+       "frames": 0.089
+      }
+     },
+     "footSlide": 42.39
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.67,
+     "ground": -5.44
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 14.48
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.41,
+       "frames": 0.412
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.45,
+       "frames": 0.324
+      }
+     },
+     "footSlide": 41.21
+    }
+   }
+  },
+  {
+   "archetype": "heavyweight",
+   "body": "m-huge",
+   "spread": {
+    "arm": 1.21,
+    "leg": 7.71
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.71,
+     "ground": -5.71
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.04,
+       "frames": 0.013
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.04,
+       "frames": 0.013
+      }
+     },
+     "footSlide": 30.66,
+     "ground": -5.68
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.21,
+     "ground": -5.55
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 10.36,
+     "ground": -5.19
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 9.33,
+       "frames": 0.579
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.07,
+       "frames": 0.105
+      }
+     },
+     "footSlide": 72.16
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 9.58,
+       "frames": 0.4
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.6,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 23.97
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.4,
+       "frames": 0.214
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 144.78
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.01,
+       "frames": 0.089
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.01,
+       "frames": 0.089
+      }
+     },
+     "footSlide": 43.38
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.26,
+     "ground": -5.66
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 13.42
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 6.86,
+       "frames": 0.559
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 4.12,
+       "frames": 0.426
+      }
+     },
+     "footSlide": 48.63
+    }
+   }
+  },
+  {
+   "archetype": "stocky",
+   "body": "m-small",
+   "spread": {
+    "arm": 0,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.55,
+     "ground": -6.41
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 43.34,
+     "ground": -7.2
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.01,
+     "ground": -7.47
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 7.06,
+     "ground": -6.58
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.98,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.98,
+       "frames": 0
+      }
+     },
+     "footSlide": 99.68
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.53,
+       "frames": 0.133
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.53,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 64.99
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 193.05
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.05,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.05,
+       "frames": 0
+      }
+     },
+     "footSlide": 40.5
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.07,
+     "ground": -6.57
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 9.71
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.61,
+       "frames": 0.059
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.61,
+       "frames": 0.059
+      }
+     },
+     "footSlide": 73.91
+    }
+   }
+  },
+  {
+   "archetype": "giant",
+   "body": "m-huge",
+   "spread": {
+    "arm": 0,
+    "leg": 1.82
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.01,
+     "ground": -6.33
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 32.53,
+     "ground": -6.42
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.28,
+     "ground": -6.1
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 11.21,
+     "ground": -5.9
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 6.24,
+       "frames": 0.158
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.23,
+       "frames": 0.158
+      }
+     },
+     "footSlide": 77.06
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 6.47,
+       "frames": 0.2
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.76,
+       "frames": 0.133
+      }
+     },
+     "footSlide": 24.97
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 155.03
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.08,
+       "frames": 0.044
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.08,
+       "frames": 0.044
+      }
+     },
+     "footSlide": 44.24
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 6.82,
+     "ground": -6.27
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 14.45
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 3.3,
+       "frames": 0.221
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 2.65,
+       "frames": 0.147
+      }
+     },
+     "footSlide": 52.11
+    }
+   }
+  },
+  {
+   "archetype": "elder",
+   "body": "m-medium",
+   "spread": {
+    "arm": 4.04,
+    "leg": 0
+   },
+   "clips": {
+    "combo": {
+     "clip": "punch_combo",
+     "frames": 55,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 4.65,
+     "ground": -5.36
+    },
+    "heavy": {
+     "clip": "two_hand_sword_combo",
+     "frames": 80,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 28.75,
+     "ground": -5.85
+    },
+    "block": {
+     "clip": "standing_block_idle",
+     "frames": 46,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 1.07,
+     "ground": -5.48
+    },
+    "cast": {
+     "clip": "magic_standing_2h_cast_spell_01",
+     "frames": 54,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 5.36,
+     "ground": -5.35
+    },
+    "jog": {
+     "clip": "jog",
+     "frames": 19,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 71.35
+    },
+    "run": {
+     "clip": "run",
+     "frames": 15,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.4,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0.4,
+       "frames": 0
+      }
+     },
+     "footSlide": 24.38
+    },
+    "sprint": {
+     "clip": "sprint_forward",
+     "frames": 14,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.74,
+       "frames": 0.071
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 1.33,
+       "frames": 0.071
+      }
+     },
+     "footSlide": 130.54
+    },
+    "slide": {
+     "clip": "running_slide_pose",
+     "frames": 3,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 0
+    },
+    "mantle": "missing",
+    "landRoll": {
+     "clip": "falling_to_roll",
+     "frames": 45,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 39.65
+    },
+    "hitReact": {
+     "clip": "hit_to_body",
+     "frames": 34,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 2.8,
+     "ground": -5.58
+    },
+    "getUp": {
+     "clip": "getting_up",
+     "frames": 202,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 10.1
+    },
+    "jump": {
+     "clip": "jump",
+     "frames": 68,
+     "raw": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "fixed": {
+      "limits": {
+       "violations": 0,
+       "worst": 0
+      },
+      "penetration": {
+       "worst": 0,
+       "frames": 0
+      }
+     },
+     "footSlide": 57.39
+    }
+   }
+  }
+ ]
+}

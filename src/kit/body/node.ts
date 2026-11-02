@@ -75,3 +75,32 @@ function invertTranslation(m: number[]): [number, number, number] {
   const [r00, r10, r20, , r01, r11, r21, , r02, r12, r22, , tx, ty, tz] = m
   return [-(r00 * tx + r10 * ty + r20 * tz), -(r01 * tx + r11 * ty + r21 * tz), -(r02 * tx + r12 * ty + r22 * tz)]
 }
+
+/** A body file's node tree: each node's name, parent (index or -1), local translation, rotation and scale; and the skin. */
+export interface BodyNodes {
+  nodes: { name: string; parent: number; t: number[]; r: number[]; s: number[] }[]
+  /** The skinned mesh's node, its joints (node indices) and their inverse bind matrices (column-major, 16 each). */
+  mesh: number
+  joints: number[]
+  inverse: Float32Array
+  /** The mesh's morph targets by name (its extras' targetNames), in order. */
+  morphNames: string[]
+}
+
+export async function readNodes(path: string | URL): Promise<BodyNodes> {
+  const doc = await (await reader()).readBinary(new Uint8Array(readFileSync(path)))
+  const root = doc.getRoot()
+  const all = root.listNodes()
+  const at = new Map(all.map((n, i) => [n, i]))
+  const parent = new Map<number, number>()
+  all.forEach((n, i) => n.listChildren().forEach((c) => parent.set(at.get(c)!, i)))
+  const skin = root.listSkins()[0]
+  const mesh = all.findIndex((n) => n.getMesh() && n.getSkin())
+  return {
+    nodes: all.map((n, i) => ({ name: n.getName(), parent: parent.get(i) ?? -1, t: [...n.getTranslation()], r: [...n.getRotation()], s: [...n.getScale()] })),
+    mesh,
+    joints: (skin?.listJoints() ?? []).map((j) => at.get(j)!),
+    inverse: Float32Array.from(skin?.getInverseBindMatrices()?.getArray() ?? []),
+    morphNames: ((all[mesh]?.getMesh()?.getExtras() as { targetNames?: string[] } | undefined)?.targetNames ?? []).slice(),
+  }
+}
