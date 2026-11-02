@@ -795,11 +795,11 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Body | No hand IK | **Fixed (M1):** two-hand grip IK plus aim and look IK within joint limits (§9.6). Foot locking on tagged plants waits for the §12 tags |
 | Body | Googly eyes: the eyes show skin colour when they move in the Forge | **Fixed (M1):** the head is its own object with real eyeballs and 52 face shapes (§9.1). No dedicated 2K head texture yet |
 | Body | No jiggle or secondary motion; no root bone; no joint limits | **Fixed (M1):** Root bone, jiggle (off, realistic, anime), joint limits from the clip library (§9.2, §9.4) |
-| Animation | ~120 clips, from 2 sources | Grow to 600+ from free sources (§12) |
+| Animation | ~120 clips, from 2 sources | **Fixed (M2):** 1,147 combat clips per gender from Mixamo, Quaternius, CMU and 100STYLE, with name maps, rest alignment, contact/release/plant/root tags, mirrors and per-clip licences (§12). Fab not imported (needs an Epic account) |
 | Legal | The repo was public, but licensed clips can't be redistributed | **Fixed:** the repo was made private on 2026-11-02 |
 | Legal | Bandai Namco clips require credit | **Excluded** (Q8) |
-| Animation | Ranged heroes use unarmed locomotion | Weapon-held locomotion sets (§12) |
-| Kit | Styles offered without full animation coverage | Coverage manifest and build test (§12) |
+| Animation | Ranged heroes use unarmed locomotion | **Fixed (M2):** rifle and pistol locomotion sets, picked by the hero's style (§12). Gun props aren't drawn yet |
+| Kit | Styles offered without full animation coverage | **Fixed (M2):** coverage manifest and its test; every style, club included, is covered (§12) |
 | Docs | Ten conflicting plan files | **Fixed:** this file; the rest are in `docs/archive/` |
 | Round 3 | Eyes, slide, jog/run, crosshair, charge meter, knockback | Fixed |
 | Round 3 | One Skill 2 clip turns the hero away from the camera; a pillar can block the reel's side view | Open; re-check after the rework |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-02: §13 status updated for Milestone 2 (animation library, §12): three Animation/Kit gaps closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 1 (metarig, §9.1–9.7): five Body gaps closed. No rule changed.
 - 2026-11-02: **approved by the owner.** Bandai Namco left out.
 - 2026-11-02: repo made private on GitHub. Q8: the game stays free; Bandai Namco clips only with a Licences-page credit.
