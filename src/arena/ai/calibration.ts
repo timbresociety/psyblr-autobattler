@@ -56,6 +56,17 @@ const HARD = {
   /** A route is kept this many ticks while its target stays near the node it was planned to. */
   replanTicks: 60,
   /**
+   * The house's rules (GAME.md §2): a hero makes for safety when it would be outside the edge `edgeAhead` seconds from
+   * now, `edgeMargin` metres in from it; while the vault is open and not its squad's, the squad's `vaultRunners` heroes
+   * nearest it make for it unless their target is within `runnerCommit` metres, and the rest unless theirs is within
+   * `vaultCommit`.
+   */
+  edgeAhead: 4,
+  edgeMargin: 3,
+  vaultCommit: 18,
+  vaultRunners: 2,
+  runnerCommit: 8,
+  /**
    * The crowd path (GAME.md §10): a hero thinks less often the further it is from the player (from its target when
    * nobody plays): every decision `think[k].every` times as far apart beyond `think[k].from` metres.
    */

@@ -1,5 +1,6 @@
 import { RUINS, floorUnder, initialCoverHealth, type CoverPiece, type MapLine } from './cover.js'
-import { HOUSE, HOUSE_LINES, LEVEL } from './house.js'
+import { HOUSE, HOUSE_LINES, HOUSE_SPOTS, LEVEL } from './house.js'
+import type { HouseRules } from './house-rules.js'
 import { ENGINE } from './calibration.js'
 
 /**
@@ -21,10 +22,12 @@ export interface ArenaMap {
   levels: boolean
   /** How far from the middle a side's first rank musters when it deploys in one go, metres. */
   muster: number
+  /** The house's win rules (GAME.md §2): where its edge can close. Only maps with a vault have them. */
+  rules?: HouseRules
 }
 
 export const MAPS: Record<MapId, ArenaMap> = {
-  house: { id: 'house', name: 'House of Instinct', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main, levels: true, muster: 34 },
+  house: { id: 'house', name: 'House of Instinct', pieces: HOUSE, lines: HOUSE_LINES, stand: LEVEL.main, levels: true, muster: 34, rules: { spots: HOUSE_SPOTS } },
   ruins: { id: 'ruins', name: 'Roman ruins', pieces: RUINS, lines: [], stand: 0, levels: false, muster: 10 },
 }
 

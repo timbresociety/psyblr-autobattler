@@ -5,12 +5,12 @@ import type { BuildSlot } from '../../charter/types.js'
 import type { AiLevel } from '../ai/calibration.js'
 import type { HeroPackage } from '../../forge/package.js'
 import { aiCommands } from '../ai/brain.js'
-import { ENGINE } from '../engine/calibration.js'
+import { ENGINE, ticks } from '../engine/calibration.js'
 import { shotSeconds } from '../engine/combat.js'
 import type { MatchEvent } from '../engine/events.js'
 import type { Vec3 } from '../engine/maths.js'
-import { LIVE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
-import { capsule, type Command, type Team } from '../engine/state.js'
+import { LIVE_PROFILE, PRACTICE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
+import { capsule, type Command, type MatchState, type Team } from '../engine/state.js'
 import { tick } from '../engine/tick.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
 import { Cameras, FIRST_PERSON } from './camera.js'
@@ -22,7 +22,10 @@ import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { cascade, sunShadows, VIEW_FAR } from './sky.js'
 import { propLods } from './render/prop-lod.js'
+import { createHouseView } from './house-view.js'
+import { VAULT, edgeAt, insideEdge } from '../engine/house-rules.js'
 import { HIDE_AFTER, OCCLUDED_LAYER, occluded, setOccluded, sightHealth } from './occlusion.js'
+import { mayRest, setResting } from './rest.js'
 import { buildRuins } from './ruins.js'
 import { buildGreybox } from './greybox.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
@@ -89,6 +92,22 @@ export interface HudState {
   healthShare: [number, number]
   /** Overtime: the share of extra damage everyone deals now, 0 before it starts. */
   overtime?: number
+  /** The house's rules (GAME.md §2), when the match plays them. */
+  house?: HudHouse
+}
+
+export interface HudHouse {
+  /** Where the edge closes; shown once it starts to close. */
+  spot: string
+  phase: number
+  closing: boolean
+  /** Seconds until the edge next starts or stops moving; undefined once it has closed. */
+  nextIn?: number
+  /** What a hero outside loses each second, as a share of its health. */
+  dps: number
+  vault: { open: boolean; opensIn: number; holder?: Team; by?: Team; fill: number }
+  /** The controlled hero is outside the edge. */
+  outside: boolean
 }
 
 interface Listeners {
@@ -241,6 +260,24 @@ export function canRender(): boolean {
   }
 }
 
+function houseHud(match: MatchState): HudHouse | undefined {
+  const house = match.house
+  if (!house) return undefined
+  const edge = edgeAt(house.spot, match.tick)
+  const seconds = match.tick / ENGINE.tickHz
+  const v = house.vault
+  const player = match.human !== undefined ? match.heroes[match.human] : undefined
+  return {
+    spot: house.spot.name,
+    phase: edge.phase,
+    closing: edge.closing,
+    nextIn: edge.nextAt !== undefined ? edge.nextAt - seconds : undefined,
+    dps: edge.dps,
+    vault: { open: v.open, opensIn: Math.max(0, VAULT.opensAt - seconds), holder: v.holder, by: v.by, fill: v.by === undefined ? 0 : v.meter / ticks(v.holder === undefined ? VAULT.crack : VAULT.steal) },
+    outside: !!player?.alive && !insideEdge(edge, player.position),
+  }
+}
+
 function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend, quality: QualityLevel): HudState {
   const { match, setups } = arena
   return {
@@ -254,6 +291,7 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
     quality,
     healthShare: [healthShare(match, 0), healthShare(match, 1)],
     overtime: match.damageRamp && match.tick > match.damageRamp.fromTick ? ((match.tick - match.damageRamp.fromTick) / ENGINE.tickHz) * match.damageRamp.perSecond : 0,
+    house: houseHud(match),
     heroes: match.heroes.map((h) => ({
       id: h.id,
       name: setups[h.id].build.heroName,
@@ -573,7 +611,7 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[] },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
@@ -612,6 +650,12 @@ function drawHeroes(
         card.position.set(at.x, at.y + height / 2, at.z)
       }
     }
+    // a body that has lain dead and still a while is drawn as it lay: no pose, no cloth, no matrices worked out again
+    ctx.down[i] = h.alive ? 0 : (ctx.down[i] ?? 0) + frame.dt
+    const fallen = view.animatesDeath ? undefined : physics?.fallenPose(i)
+    const resting = !h.alive && mayRest(ctx.down[i], moved, ctx.swinging[i] ?? false, fallen?.sleeping ?? true)
+    setResting(view.root, resting)
+    if (resting) return at
     // mid heroes animate at 30 Hz and far ones at 15; under load, or seen only by its shadow, twice as seldom again; an
     // impostor not at all
     const every = POSE_EVERY[tier] * (frame.slowFar && tier !== 'near' ? 2 : 1) * (hide ? 2 : 1)
@@ -637,11 +681,10 @@ function drawHeroes(
     view.aim?.(h.yaw, h.pitch)
     if (every && (frame.frameNo + i) % every === 0) view.pose(pose, frame.t + i, scaled * every, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
-    const fallen = view.animatesDeath ? undefined : physics?.fallenPose(i)
     if (fallen) {
       view.root.position.set(fallen.position.x, fallen.position.y, fallen.position.z)
       view.root.quaternion.set(fallen.rotation.x, fallen.rotation.y, fallen.rotation.z, fallen.rotation.w)
-      view.settle?.(scaled, far)
+      ctx.swinging[i] = view.settle?.(scaled, far) ?? false
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
@@ -650,7 +693,7 @@ function drawHeroes(
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
     // the outfit's loose cloth swings once the hero stands where it's drawn
-    view.settle?.(scaled, far)
+    ctx.swinging[i] = view.settle?.(scaled, far) ?? false
     return at
   })
 }
@@ -693,7 +736,8 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void, signal?: AbortSignal): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
-  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations, map: LIVE_MAP })
+  // the range's drills (a dummy standing idle) play without the house's edge and vault
+  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: setup.idle?.length ? PRACTICE_PROFILE : LIVE_PROFILE, formations: setup.formations, map: LIVE_MAP })
   if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
   // dev only: ?style=rifle hands every hero that fighting style, to watch a style's clips in a live match
   const devStyle = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('style') : null
@@ -752,6 +796,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   scene.add(rings)
   // the controlled hero's basic attack reach, on the floor
   const range = createRangeIndicator(scene)
+  // the edge and the vault's ring first show 20 s in, mid-fight: built before the compile, their shaders are ready
+  const houseView = createHouseView(scene)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
   signal?.throwIfAborted()
@@ -759,7 +805,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
   const props = propLods(scene)
-  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true }
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[] }
   if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
@@ -836,6 +882,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     physics?.step(dt)
     ruins?.update(dt)
     for (const p of props) p.update(camera.position)
+    houseView.update(arena.match, alpha)
     drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined

@@ -9,6 +9,7 @@ import { MAPS, standingHeight, type ArenaMap, type MapId } from './maps.js'
 import { clamp, type Vec3 } from './maths.js'
 import { next } from './rng.js'
 import { createHero, emptyMatch, prepareHero, type Command, type HeroSetup, type MatchState, type Team } from './state.js'
+import { EDGE_CLOSED_SECONDS, houseState, houseTick } from './house-rules.js'
 import { tick, type TickRules } from './tick.js'
 
 /**
@@ -19,10 +20,17 @@ import { tick, type TickRules } from './tick.js'
 export interface Profile {
   timerSeconds: number
   damageRamp?: { fromSeconds: number; perSecond: number }
+  /**
+   * The house's win rules (GAME.md §2: last squad standing, the closing edge, the vault jackpot) on a map that has
+   * them. The edge replaces the damage ramp, and the timer only ends a match still going a minute after it has closed.
+   */
+  house?: boolean
 }
 
 /** Overtime from 2:30 in: damage grows 2% a second, so a stalled 4v4 is decided by a fight rather than the clock. */
-export const LIVE_PROFILE: Profile = { timerSeconds: 300, damageRamp: { fromSeconds: 150, perSecond: 0.02 } }
+export const LIVE_PROFILE: Profile = { timerSeconds: 300, damageRamp: { fromSeconds: 150, perSecond: 0.02 }, house: true }
+/** The range's drills: the live rules without the house's (no edge closing on a training dummy). */
+export const PRACTICE_PROFILE: Profile = { ...LIVE_PROFILE, house: false }
 export const GATE_PROFILE: Profile = { timerSeconds: 60, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
 /** Team fights in the balance report need longer to play out than duels. */
 export const GATE_TEAM_PROFILE: Profile = { timerSeconds: 120, damageRamp: { fromSeconds: 40, perSecond: 0.05 } }
@@ -91,8 +99,11 @@ export function createMatch(
     })
   add(teamA, 0)
   add(teamB, 1)
-  if (profile.damageRamp) match.damageRamp = { fromTick: ticks(profile.damageRamp.fromSeconds), perSecond: profile.damageRamp.perSecond }
-  return { match, setups, profile, timerTicks: ticks(profile.timerSeconds) }
+  const rules = profile.house ? map?.rules : undefined
+  if (rules) match.house = houseState(rules, seed)
+  else if (profile.damageRamp) match.damageRamp = { fromTick: ticks(profile.damageRamp.fromSeconds), perSecond: profile.damageRamp.perSecond }
+  const timer = rules ? Math.max(profile.timerSeconds, EDGE_CLOSED_SECONDS + 60) : profile.timerSeconds
+  return { match, setups, profile, timerTicks: ticks(timer) }
 }
 
 /** Share of a side's starting health still standing. */
@@ -107,12 +118,16 @@ export function healthShare(match: MatchState, side: Team): number {
   return max > 0 ? hp / max : 0
 }
 
-/** Decide the match after a tick: a wipe ends it at once; at the timer, more heroes alive wins, then health share (R12). */
+/**
+ * Decide the match after a tick: the last squad standing wins at once (GAME.md §2; nobody respawns); at the timer, more
+ * heroes alive wins, then health share (R12).
+ */
 export function endCheck(arena: Arena): TickRules['after'] {
   return (match, _setups, events) => {
     if (match.winner !== undefined) return
     const alive = [0, 1].map((side) => match.heroes.filter((h) => h.alive && h.team === side).length)
-    if (!alive[0] || !alive[1]) {
+    const standing = alive.filter((n) => n > 0).length
+    if (standing <= 1) {
       match.winner = alive[0] ? 0 : alive[1] ? 1 : 'draw'
       match.endReason = 'wipe'
     } else if (match.tick >= arena.timerTicks) {
@@ -131,6 +146,7 @@ export function matchRules(arena: Arena): TickRules {
     act: COMBAT_RULES.act,
     after: (match, setups, events) => {
       COMBAT_RULES.after?.(match, setups, events)
+      houseTick(match, events)
       end?.(match, setups, events)
     },
   }

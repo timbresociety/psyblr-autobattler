@@ -125,6 +125,20 @@ describe('score banner (R38)', () => {
     expect(screen.getByRole('timer').textContent).toContain('Overtime')
     expect(screen.getByRole('timer').textContent).toContain('+24% damage')
   })
+
+  it('under the clock: when the edge moves and where, who holds the jackpot, and a warning outside the edge', () => {
+    const base = hudState([hudHero(0), hudHero(2)])
+    const house = { spot: 'House Vault', phase: 0, closing: false, nextIn: 12, dps: 0, vault: { open: false, opensIn: 5, fill: 0 }, outside: false }
+    const { rerender, container } = render(<ScoreBanner state={{ ...base, house }} heroes={info} side={0} />)
+    expect(screen.getByText('Edge closes in 0:12')).toBeTruthy()
+    expect(screen.getByText('Vault opens in 0:05')).toBeTruthy()
+    expect(screen.queryByText(/Outside the edge/)).toBeNull()
+    rerender(<ScoreBanner state={{ ...base, house: { ...house, phase: 2, closing: true, dps: 0.04, vault: { open: true, opensIn: 0, holder: 1 as const, by: 0 as const, fill: 0.5 }, outside: true } }} heroes={info} side={0} />)
+    expect(screen.getByText('Edge closing on House Vault')).toBeTruthy()
+    expect(screen.getByText('Red holds the jackpot')).toBeTruthy()
+    expect((container.querySelector('.hud-vault-fill') as HTMLElement).style.transform).toBe('scaleX(0.5)')
+    expect(screen.getByText('Outside the edge · −4% a second')).toBeTruthy()
+  })
 })
 
 describe('kill feed (R38)', () => {

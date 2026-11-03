@@ -33,6 +33,12 @@ export type MatchEvent =
   /** A knocked-back hero struck a wall or a prop (piece `index`) at `at`, moving at `speed` m/s (§6b). */
   | { type: 'slam'; hero: number; at: Vec3; index: number; speed: number }
   | { type: 'end'; winner: 0 | 1 | 'draw'; reason: 'wipe' | 'time' }
+  /** The house edge (house-rules.ts) began closing, or stopped: `phase` closes have begun. */
+  | { type: 'edge'; phase: number; closing: boolean }
+  /** The edge took `amount` health from a hero left outside it. */
+  | { type: 'edge-hurt'; hero: number; amount: number }
+  /** The House Vault cracked open, or a squad took the jackpot from it, or stole it from the squad holding it. */
+  | { type: 'vault'; what: 'open' | 'cracked' | 'stolen'; team?: 0 | 1 }
   /** A status landed on a hero: control, a debuff, a state, until a tick (cleanse reports the tick it fired). */
   | { type: 'status'; hero: number; status: string; until: number }
   /** A basic attack missed: blinded, or turned aside by evasion. */

@@ -13,6 +13,7 @@ import { AI, useLevel } from './calibration.js'
 import { findPath, followRoute, navFor, nodeAt, type NavGraph } from './nav.js'
 import { MAPS } from '../engine/maps.js'
 import { floorUnder } from '../engine/cover.js'
+import { VAULT, edgeAt, insideEdge } from '../engine/house-rules.js'
 
 /**
  * The demo AI (KTD7, R17, R18, R31): utility scoring over a small action set, re-decided every 150 ms, with a thin
@@ -287,15 +288,17 @@ function graphOf(m: MatchState): NavGraph | undefined {
  * route is planned to the node under the target and kept while the target stays near that node, re-planned at most
  * every `AI.replanTicks` otherwise. Close by on the same floor, the hero walks straight at it as on flat ground.
  */
-function plan(m: MatchState, hero: HeroState, brain: BrainState, target: HeroState) {
+function plan(m: MatchState, hero: HeroState, brain: BrainState, at: { x: number; y: number; z: number }, place = false) {
   const g = graphOf(m)
   if (!g || hero.airborne || hero.zip || hero.mantle) return
-  const goal = nodeAt(g, target.position)
+  const goal = nodeAt(g, at)
   const from = nodeAt(g, hero.position)
   if (goal < 0 || from < 0) return
-  const dx = target.position.x - hero.position.x
-  const dz = target.position.z - hero.position.z
-  if (g.nodes[goal].region === g.nodes[from].region && dx * dx + dz * dz < AI.directRange * AI.directRange) {
+  const dx = at.x - hero.position.x
+  const dz = at.z - hero.position.z
+  // a place the rules send it (`place`) is walked straight at only on the same floor: on the balcony overhead it is a
+  // route away, however near it looks
+  if (g.nodes[goal].region === g.nodes[from].region && dx * dx + dz * dz < AI.directRange * AI.directRange && (!place || Math.abs(at.y - hero.position.y) < ENGINE.move.step + 1)) {
     brain.route = undefined
     return
   }
@@ -330,6 +333,28 @@ export function thinkEvery(m: MatchState, hero: HeroState): number {
   return every
 }
 
+/**
+ * Where the house's rules (GAME.md §2) send a hero before its target: inside the edge, when the edge will have passed
+ * it a few seconds from now (to the spot the edge closes on, which every step of it keeps inside); else to the vault,
+ * while it's open and not its squad's and no fight is close by. Undefined to fight on as usual.
+ */
+function objective(m: MatchState, hero: HeroState, target: HeroState | undefined): { x: number; y: number; z: number } | undefined {
+  const house = m.house
+  if (!house) return undefined
+  const spot = house.spot
+  const ahead = edgeAt(spot, m.tick + ticks(AI.edgeAhead))
+  if (!insideEdge(ahead, hero.position, AI.edgeMargin)) return { x: spot.x, y: spot.floor, z: spot.z }
+  const vault = house.vault
+  if (!vault.open || vault.holder === hero.team || !insideEdge(ahead, VAULT.at, AI.edgeMargin)) return undefined
+  // the squad's runners are the heroes nearest the vault: they leave all but a fight at arm's length to work it
+  const d2 = (h: HeroState) => lengthSq(sub(h.position, VAULT.at))
+  const mine = d2(hero)
+  let nearer = 0
+  for (const a of m.heroes) if (a.alive && a.team === hero.team && a.id !== hero.id && (d2(a) < mine || (d2(a) === mine && a.id < hero.id))) nearer++
+  const commit = nearer < AI.vaultRunners ? AI.runnerCommit : AI.vaultCommit
+  return !target || gapTo(hero, target) > commit ? VAULT.at : undefined
+}
+
 function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState, setups: readonly HeroSetup[]) {
   // in a crowd the first decision sets each hero's beat a few ticks apart, so they do not all think on the same tick
   const stagger = brain.nextDecision === 0 && m.heroes.length > CROWD ? hero.id % AI.decisionTicks : 0
@@ -344,9 +369,14 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   if (brain.target >= 0 && hidden(m, hero, m.heroes[brain.target])) brain.target = want?.id ?? -1
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
   brain.cast = undefined
-  if (!target || !target.alive) return
+  brain.goal = objective(m, hero, target?.alive ? target : undefined)
+  if (!target || !target.alive) {
+    if (brain.goal) plan(m, hero, brain, brain.goal, true)
+    return
+  }
   brain.nextDecision = m.tick + AI.decisionTicks * thinkEvery(m, hero) + stagger
-  plan(m, hero, brain, target)
+  if (brain.goal) plan(m, hero, brain, brain.goal, true)
+  else plan(m, hero, brain, target.position)
   let best: { slot: NonNullable<BrainState['cast']>['slot']; escape: boolean; priority: number } | undefined
   // a weaker bot often lets its skills sit ready (§2)
   const considers = AI.skillUse >= 1 || next(m.ai) < AI.skillUse
@@ -426,7 +456,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     brain.pending = undefined
   }
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
-  if (!target || !target.alive || hidden(m, hero, target)) return { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
+  if (!target || !target.alive || hidden(m, hero, target)) return brain.goal ? walkTo(m, hero, brain, setup, brain.goal) : { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
   // out of melee reach it shoots its ranged weapon, so it leads the target by that weapon's shot speed
@@ -461,6 +491,9 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   else if (isRanged(setup)) [moveX, moveZ] = [(-dz / flat) * brain.strafe * 0.6, (dx / flat) * brain.strafe * 0.6]
   // melee in contact stays on the target instead of circling off it
   else if (closing) [moveX, moveZ] = [dx / flat, dz / flat]
+  // the house's rules come first: it makes for the edge's safety or the vault, shooting as it goes
+  const goal = brain.goal && m.tick >= brain.dodgeUntil ? brain.goal : undefined
+  if (goal) [moveX, moveZ] = toward(hero, goal)
   // an assassin closing on a far target swings wide round the enemy's front instead of walking through it
   const role = setup.build.roleId
   if (role === 'assassin' && brain.action === 'approach' && gapTo(hero, target) > AI.flankGap) {
@@ -474,7 +507,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
   // the team moves as one (R31): tanks lead; fighters stride with the front and assassins and ranged heroes keep behind
   // it, so the first hero to arrive is not the one the whole enemy team burns down. Blades are let loose at the clash.
   const lead = AI.behindFront[role as keyof typeof AI.behindFront]
-  if (lead !== undefined) {
+  if (lead !== undefined && !goal) {
     const front = frontOf(m, hero, setups)
     // an assassin waits for prey that is already busy with a teammate, or already hurt, before it commits
     const prey = role !== 'assassin' || hpFraction(target) < AI.preyBelow || alliesOf(m, hero).some((a) => a.id !== hero.id && gapTo(a, target) <= AI.busyGap)
@@ -482,7 +515,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     if (front && !loose && progressOf(hero) >= front.progress - lead && (hero.team === 0 ? moveZ : -moveZ) > 0) moveZ = 0
   }
   // across a map in levels, the route: its own way round walls, up ledges and over gaps
-  const g = brain.route && m.tick >= brain.dodgeUntil && (brain.action === 'approach' || closing) ? graphOf(m) : undefined
+  const g = brain.route && m.tick >= brain.dodgeUntil && (brain.action === 'approach' || closing || goal) ? graphOf(m) : undefined
   const routed = g && brain.route ? followRoute(g, hero, brain.route, m, setup.sheet.moveSpeed) : undefined
   if (brain.route && brain.route.at >= brain.route.path.length) brain.route = undefined
   // walk around walls, or hop low cover
@@ -533,6 +566,26 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     else brain.heavy = false
   } else if (off <= basicTolerance && gapTo(hero, target) <= basic.range + ENGINE.meleeSlack && sight() && !(hero.buttonsHeld & BASIC) && (brain.chain || hero.combo.step === 0 || hero.combo.until < m.tick)) buttons |= BASIC
   return { moveX, moveZ, moves, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons }
+}
+
+/** A flat unit step from the hero toward `at`, or none once it's there. */
+function toward(hero: HeroState, at: { x: number; z: number }): [number, number] {
+  const dx = at.x - hero.position.x
+  const dz = at.z - hero.position.z
+  const d = Math.sqrt(dx * dx + dz * dz)
+  return d > 0.75 ? [dx / d, dz / d] : [0, 0]
+}
+
+/** With nobody to fight, a hero still makes for where the house's rules send it, along its route. */
+function walkTo(m: MatchState, hero: HeroState, brain: BrainState, setup: HeroSetup, at: { x: number; y: number; z: number }): Command {
+  const g = brain.route ? graphOf(m) : undefined
+  const routed = g && brain.route ? followRoute(g, hero, brain.route, m, setup.sheet.moveSpeed) : undefined
+  if (brain.route && brain.route.at >= brain.route.path.length) brain.route = undefined
+  const [x, z] = toward(hero, at)
+  const steered = routed ? { ...routed, hop: false } : steer(m, hero, brain, x, z, true)
+  let moves = 0
+  if (routed?.jump || (steered.hop && !hero.airborne)) moves |= MOVES.jump
+  return { moveX: steered.x, moveZ: steered.z, moves, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
 }
 
 /** Commands for every hero this tick; the human-controlled hero is left to its player (KTD4). */

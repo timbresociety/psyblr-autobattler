@@ -1,4 +1,5 @@
 import type { CoverPiece, MapLine } from './cover.js'
+import type { EdgeSpot } from './house-rules.js'
 import { cos, sin } from './maths.js'
 
 /**
@@ -133,6 +134,58 @@ for (const s of [-1, 1]) {
 
 // the chandelier: a platform hanging over the court, reached only along the spine
 disc(0, 0, 4, air, 'chip', air - DECK)
+
+// the rest of the house (§8's zones), in grey like the first deliverable. Every new top is a step of at most 1.2 m
+// from the one before it, or a jump the heaviest hero makes, so the whole house stays one network at every size
+for (const s of [-1, 1]) {
+  const z = (a: number, b: number): [number, number] => (s > 0 ? [a, b] : [-b, -a])
+  // Diamond Mines (+x trench): mine-cart roofs to fight over, and a rock step and ledge up the trench's outer wall,
+  // a short climb back to the main floor
+  box(39.5, 41.5, ...z(11, 15), 1.5, 'grey')
+  box(44.5, 46, ...z(13, 16), 1.2, 'step')
+  box(46, 48, ...z(10, 17), 2.4, 'terrace')
+  // Crypto Catacombs (-x trench): rows of server racks, a corridor wall splitting the lane, and the server-room
+  // walkway along the outer wall, a rack's height up
+  box(-47.5, -46.5, ...z(10, 14), 1.8, 'grey')
+  box(-39.5, -38.5, ...z(12, 16), 1.8, 'grey')
+  box(-43.2, -42.8, ...z(11, 17), 3, 'wall')
+  box(-48, -45.5, ...z(14.5, 17), 2.4, 'terrace')
+  // Gacha Arcade (+x main floor): two capsule machines and a cabinet climbing to the crane machine's roof, behind
+  // glass, the fast way onto the gallery overhead
+  disc(25.5, 6 * s, 1.3, main + 1.2, 'grey', main)
+  disc(27.5, 9 * s, 1.3, main + 2.4, 'grey', main)
+  box(29.5, 31.5, ...z(8, 10), main + 3.6, 'grey', main)
+  box(32.5, 36, ...z(5, 8.5), main + 4.6, 'grey', main)
+  box(32.5, 36, ...z(8.5, 8.8), main + 5.8, 'glass', main + 4.6, { health: GLASS })
+  // NFT Gallery: sculpture plinths on the gallery deck, glass along its far edge
+  box(28.5, 29.5, ...z(1.5, 2.5), up + 1.2, 'plinth', up)
+  box(36.2, 36.5, ...z(1, 3.5), up + 1.2, 'glass', up, { health: GLASS })
+  // Pachinko Spire: a stair of pins round the tower from the gallery to its top, and a suspended bridge from the top
+  // to the Chart Climb's last candlestick: §8's high-risk route, Chart Climb → gantry → bridge → spire
+  disc(28.6, 3.2 * s, 1.3, up + 1.2, 'chip', up)
+  disc(31.2, 5.6 * s, 1.3, up + 2.4, 'chip', up)
+  disc(34.6, 4.4 * s, 1.3, up + 3.6, 'chip', up)
+  disc(34.9, 1.3 * s, 1.3, up + 4.8, 'chip', up)
+  box(31.2, 32.8, ...z(1.6, 13), air, 'grey', air - DECK)
+}
+// the NFT Gallery's deck over the arcade, joined to the balcony loop by a bridge, with the Pachinko Spire through it
+box(27, 37, -4, 4, up, 'grey', up - DECK)
+box(ring + half, 27, -1, 1, up, 'grey', up - DECK)
+disc(32, 0, 1.6, air, 'chip', main)
+
+/**
+ * Where the house edge can close (GAME.md §2): floors on the mirror line, one per band but the aerial one, so the
+ * fight is pulled up or down as well as in: Roulette Court's floor, the vault under it, the middle of either trench
+ * under its bridge, and either side of the balcony loop.
+ */
+export const HOUSE_SPOTS: readonly EdgeSpot[] = [
+  { name: 'Roulette Court', x: 13, z: 0, floor: main },
+  { name: 'House Vault', x: 0, z: 0, floor: LEVEL.low },
+  { name: 'Diamond Mines', x: 43, z: 0, floor: LEVEL.low },
+  { name: 'Crypto Catacombs', x: -43, z: 0, floor: LEVEL.low },
+  { name: 'the balcony loop', x: ring, z: 0, floor: up },
+  { name: 'the balcony loop', x: -ring, z: 0, floor: up },
+]
 
 export const HOUSE: readonly CoverPiece[] = pieces
 export const HOUSE_LINES: readonly MapLine[] = lines

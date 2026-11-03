@@ -5,6 +5,7 @@ import { DT, ENGINE, ticks } from './calibration.js'
 import type { MatchEvent } from './events.js'
 import { clamp, cos, distance, normalize, scale, sin, sub, type Vec3 } from './maths.js'
 import { next } from './rng.js'
+import { jackpotBonus } from './house-rules.js'
 import type { HeroSetup, HeroState, MatchState, Stat } from './state.js'
 
 /**
@@ -74,7 +75,7 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   }
   if (slot !== 'dot') source.stealthUntil = Math.min(source.stealthUntil, match.tick)
   const ramp = match.damageRamp && match.tick > match.damageRamp.fromTick ? ((match.tick - match.damageRamp.fromTick) / ENGINE.tickHz) * match.damageRamp.perSecond : 0
-  let amount = raw * wake * (1 + source.damageBonus + sumBuff(source, 'damage') + executeBonus + ramp)
+  let amount = raw * wake * (1 + source.damageBonus + sumBuff(source, 'damage') + executeBonus + ramp + jackpotBonus(match, source))
   amount *= 1 + (next(match.rules) * 2 - 1) * ENGINE.variance
   const sourceSetup = ctx.setups[source.id]
   const passive = sourceSetup.kit.passive

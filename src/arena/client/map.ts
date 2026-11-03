@@ -4,6 +4,7 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { color, mix, positionWorld, smoothstep, texture, uv } from 'three/tsl'
 import { paintedTexture } from './ruins.js'
 import { PALETTE, SUN } from './sky.js'
+import { batchStatic } from './render/batch.js'
 import { valley } from './valley.js'
 
 export { atmosphere, lights, skyFlashOf, type SkyFlash } from './sky.js'
@@ -67,13 +68,19 @@ export function buildMap(): ArenaMap {
   half(0)
   half(1)
 
+  // the trim is batched into a draw per colour (GAME.md §10), so each colour shares one material
+  const trim = new THREE.Group()
+  const shared = new Map<string, THREE.Material>()
+  const once = (key: string, make: () => THREE.Material) => shared.get(key) ?? (shared.set(key, make()), shared.get(key)!)
+
   // the centre line and the edge trim glow faintly, enough to read the halves and the bounds without paint on the stone
   const glow = (w: number, d: number, x: number, z: number, color: number, strength: number) => {
-    const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(strength), toneMapped: false }))
+    const material = once(`line ${color} ${strength}`, () => new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(strength), toneMapped: false }))
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(w, d), material)
     strip.name = 'line'
     strip.rotation.x = -Math.PI / 2
     strip.position.set(x, 0.015, z)
-    group.add(strip)
+    trim.add(strip)
   }
   glow(W * 2, 0.22, 0, 0, PALETTE.line, 0.75)
   for (const side of [0, 1] as const) {
@@ -87,14 +94,12 @@ export function buildMap(): ArenaMap {
   const fade = barrierTexture()
   const height = 6
   const wall = (w: number, x: number, z: number, rotY: number, color: number) => {
-    const m = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, height),
-      new THREE.MeshBasicMaterial({ color, map: fade, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }),
-    )
+    const material = once(`barrier ${color}`, () => new THREE.MeshBasicMaterial({ color, map: fade, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, toneMapped: false }))
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, height), material)
     m.name = 'barrier'
     m.position.set(x, height / 2, z)
     m.rotation.y = rotY
-    group.add(m)
+    trim.add(m)
   }
   for (const side of [0, 1] as const) {
     const s = side ? 1 : -1
@@ -102,6 +107,11 @@ export function buildMap(): ArenaMap {
     wall(L, -W, s * (L / 2), Math.PI / 2, TEAM_COLORS[side])
     wall(L, W, s * (L / 2), Math.PI / 2, TEAM_COLORS[side])
   }
+
+  batchStatic(trim)
+  // the probe names what it looks through: the batches keep their pieces' names
+  for (const m of trim.children) if (m.name === 'batch') m.name = ((m as THREE.Mesh).material as THREE.Material).transparent ? 'barrier' : 'line'
+  group.add(trim)
 
   // the land outside: meadow and ruins at the courtyard's edge, pine forest, the lake and the mountains
   const around = valley(W, L, SUN)
