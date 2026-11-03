@@ -338,8 +338,10 @@ export const clearLine = (pieces: readonly CoverPiece[], health: readonly CoverH
 /**
  * Push a hero's body (an upright capsule of `radius` and `height`) out of every standing piece it overlaps, sliding
  * along walls rather than stopping dead. A piece whose top is no more than `clearance` above the feet doesn't push:
- * the hero walks onto it, and steps up once its centre is over it. Returns whether it touched anything; the index of
- * each piece touched goes into `hits` when given.
+ * the hero walks onto it, and steps up once its centre is over it. A piece overhead (its underside above the feet) with
+ * the body's centre under it is a ceiling and doesn't push either: keepOut pushes the body down under it, instead of it
+ * being thrown out sideways through the ceiling's nearest edge, into whatever wall stands there. Returns
+ * whether it touched anything; the index of each piece touched goes into `hits` when given.
  */
 export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number, clearance = 0, hits?: number[]): boolean {
   const bounds = boundsOf(pieces)
@@ -365,7 +367,22 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
     const piece = pieces[i]
     if (p.y + clearance >= piece.top || p.y + height <= piece.base) continue
     const s = piece.shape
+    // its underside is above the feet: whatever of the body is in it came from below
+    const overhead = piece.base > p.y
     if (s.kind === 'block') {
+      const under = Math.abs(p.x - s.x) <= s.hx && Math.abs(p.z - s.z) <= s.hz
+      if (overhead && under) continue
+      // a body over a ramp stands on its slope wherever it is on it (a blink or a throw can put the feet under it):
+      // only its sides push a body coming from beside it
+      if (piece.slope && under) {
+        const surface = surfaceAt(piece, p.x, p.z)
+        if (p.y + clearance >= surface) continue
+        // in the wedge below the slope, it touched the ramp
+        p.y = surface
+        touched = true
+        hits?.push(i)
+        continue
+      }
       const cx = Math.max(s.x - s.hx, Math.min(p.x, s.x + s.hx))
       const cz = Math.max(s.z - s.hz, Math.min(p.z, s.z + s.hz))
       // a ramp only pushes where its slope is too high to step onto
@@ -381,20 +398,24 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
         p.x = cx + (ox / d) * radius
         p.z = cz + (oz / d) * radius
       } else {
-        // the centre is inside the block: leave by the nearest face
-        const exits = [s.x + s.hx - p.x, p.x - (s.x - s.hx), s.z + s.hz - p.z, p.z - (s.z - s.hz)]
-        const k = exits.indexOf(Math.min(...exits))
-        if (k === 0) p.x = s.x + s.hx + radius
-        else if (k === 1) p.x = s.x - s.hx - radius
-        else if (k === 2) p.z = s.z + s.hz + radius
-        else p.z = s.z - s.hz - radius
+        // the centre is inside the block: leave by the nearest face that doesn't put it inside another piece
+        const exits: [number, number, number][] = [
+          [s.x + s.hx - p.x, s.x + s.hx + radius, p.z],
+          [p.x - (s.x - s.hx), s.x - s.hx - radius, p.z],
+          [s.z + s.hz - p.z, p.x, s.z + s.hz + radius],
+          [p.z - (s.z - s.hz), p.x, s.z - s.hz - radius],
+        ]
+        exits.sort((a, b) => a[0] - b[0])
+        const out = exits.find(([, x, z]) => !solidAt(pieces, health, i, x, p.y, z, height, clearance)) ?? exits[0]
+        p.x = out[1]
+        p.z = out[2]
       }
     } else {
       const ox = p.x - s.x
       const oz = p.z - s.z
       const min = s.r + radius
       const d2 = ox * ox + oz * oz
-      if (d2 >= min * min) continue
+      if (d2 >= min * min || (overhead && d2 <= s.r * s.r)) continue
       touched = true
       hits?.push(i)
       const d = Math.sqrt(d2)
@@ -405,6 +426,21 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
     }
   }
   return touched
+}
+
+/** Whether a body standing at (x, y, z) would have its centre inside a standing piece other than `skip`. */
+function solidAt(pieces: readonly CoverPiece[], health: readonly CoverHealth[], skip: number, x: number, y: number, z: number, height: number, clearance: number): boolean {
+  const list = candidates(pieces, x, x, z, z)
+  const n = list ? list.length : pieces.length
+  for (let k = 0; k < n; k++) {
+    const i = list ? list[k] : k
+    const piece = pieces[i]
+    if (i === skip || health[i] === 0 || y + clearance >= piece.top || y + height <= piece.base || piece.base > y) continue
+    const s = piece.shape
+    const inside = s.kind === 'block' ? Math.abs(x - s.x) <= s.hx && Math.abs(z - s.z) <= s.hz : (x - s.x) * (x - s.x) + (z - s.z) * (z - s.z) <= s.r * s.r
+    if (inside && !piece.slope) return true
+  }
+  return false
 }
 
 /**

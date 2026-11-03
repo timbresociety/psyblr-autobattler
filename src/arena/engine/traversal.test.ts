@@ -5,7 +5,9 @@ import { ENGINE } from './calibration.js'
 import { initialCoverHealth, surfaceAt, type CoverPiece, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
 import { capsule, createHero, emptyMatch, MOVES, prepareHero, type Command, type HeroSetup, type MatchState } from './state.js'
+import { keepOut } from './locomotion.js'
 import { tick } from './tick.js'
+import { tickWorld } from './world.js'
 
 /**
  * Traversal (GAME.md §7): the baseline every hero has, measured in the engine, and the moves the map is built on:
@@ -145,6 +147,31 @@ describe('ramps (§8 card ramps and stairs)', () => {
       expect(clearLine(pieces, health, { x: 0, y: 1.4, z: -4 }, { x: 0, y: 1.4, z: 11 })).toBe(false)
     })
   })
+
+  it('a body put down under its slope beside a wall (a blink, a throw) stands on the slope, not in the wall', () => {
+    const wall = block(-3.5, 6, 1.5, 5, 4)
+    const { h, m } = solo({ pieces: [ramp, wall] })
+    // its centre over the ramp's edge, its body clear of the wall: no push out of the ramp's side into the wall
+    h.position = { x: -1.4, y: 0, z: 6 }
+    keepOut(h, m)
+    expect(h.position.x).toBeCloseTo(-1.4)
+    expect(h.position.y).toBeCloseTo(2)
+  })
+
+  it('a knock-up that carries a hero up the ramp lands it on the slope, not back at the height it left', () => {
+    const { h, m } = solo({ pieces: [ramp] })
+    h.position = { x: 0, y: 0.6, z: 2.5 }
+    h.launch = { from: m.tick, until: m.tick + 30, height: 1.5, base: 0.6, push: { x: 0, z: 0.1 } }
+    let lowest = Infinity
+    for (let i = 0; i < 40; i++) {
+      m.tick++
+      tickWorld({ match: m, setups: [], events: [] } as unknown as Parameters<typeof tickWorld>[0])
+      if (!h.launch) lowest = Math.min(lowest, h.position.y - surfaceAt(ramp, h.position.x, h.position.z))
+    }
+    expect(h.position.z).toBeGreaterThan(5)
+    expect(lowest).toBeGreaterThan(-1e-6)
+    expect(h.airborne).toBe(false)
+  })
 })
 
 describe('ceilings (§8)', () => {
@@ -161,6 +188,43 @@ describe('ceilings (§8)', () => {
     expect(h.position.x).toBeCloseTo(0)
     expect(h.position.z).toBeCloseTo(0)
     expect(h.airborne).toBe(false)
+  })
+
+  it('a body risen into a deck beside a wall (a knock-up, a throw) is pushed down under it, not out through the wall', () => {
+    const deck = block(0, 0, 4, 4, 4.5, { base: 4 })
+    const wall = block(-5.5, 0, 1.5, 4, 4.5)
+    const { h, m } = solo({ pieces: [deck, wall] })
+    h.position = { x: -3.6, y: 3.2, z: 0.5 }
+    keepOut(h, m)
+    expect(h.position.x).toBeCloseTo(-3.6)
+    expect(h.position.z).toBeCloseTo(0.5)
+    expect(h.position.y + capsule(h).height).toBeLessThanOrEqual(4 + 1e-6)
+  })
+
+  it('a knock-up under a thin roof never comes out on top of it, however high it would have thrown', () => {
+    const roof = block(0, 0, 4, 4, 2.6, { base: 2.2 })
+    const { h, m } = solo({ pieces: [roof] })
+    h.launch = { from: m.tick, until: m.tick + 40, height: 4, base: 0 }
+    let top = 0
+    for (let i = 0; i < 45; i++) {
+      m.tick++
+      tickWorld({ match: m, setups: [], events: [] } as unknown as Parameters<typeof tickWorld>[0])
+      top = Math.max(top, h.position.y + capsule(h).height)
+    }
+    expect(top).toBeLessThanOrEqual(2.2 + 1e-6)
+    expect(h.position.y).toBe(0)
+  })
+
+  it('a body inside a wall leaves by the nearest face that is not inside another', () => {
+    // nearest is the left face, but the wall beside it fills that side
+    const a = block(0, 0, 2, 4, 3)
+    const b = block(-3.5, 0, 1.5, 4, 3)
+    const { h, m } = solo({ pieces: [a, b] })
+    h.position = { x: -1.6, y: 0, z: 1 }
+    keepOut(h, m)
+    expect(h.position.x).toBeGreaterThan(-5)
+    expect(Math.abs(h.position.x) > 2 || Math.abs(h.position.z) > 4).toBe(true)
+    expect(h.position.x).not.toBeLessThan(-2)
   })
 })
 
@@ -190,6 +254,15 @@ describe('mantle (§7)', () => {
     const ledge = block(0, 4, 3, 2, 1.3)
     const ceiling = block(0, 4.5, 3, 2.5, 3.5, { base: 1.6 })
     const { h, step, moves } = solo({ pieces: [ledge, ceiling] })
+    step(go(0, 1), 120)
+    expect(moves()).not.toContain('mantle')
+    expect(h.position.y).toBe(0)
+  })
+
+  it('no mantle up through a deck overhead: a hero in a tunnel walking into a step at its mouth stays under the roof', () => {
+    const ledge = block(0, 4, 3, 2, 1.3)
+    const roof = block(0, 0, 3, 2, 2.6, { base: 2.2 })
+    const { h, step, moves } = solo({ pieces: [ledge, roof] })
     step(go(0, 1), 120)
     expect(moves()).not.toContain('mantle')
     expect(h.position.y).toBe(0)

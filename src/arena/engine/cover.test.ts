@@ -92,6 +92,25 @@ describe('the ruins in a match (R25)', () => {
     expect(canSee(a.match, { x: 0, y: 1.08, z: -12 }, { x: 0, y: 1.08, z: -3 })).toBe(true)
   })
 
+  it('a blink aimed down from a deck ends standing on it, not sunk into it under the post beside it', () => {
+    const deck: CoverPiece = { shape: { kind: 'block', x: 0, z: 0, hx: 20, hz: 20 }, base: 0, top: 4.5, look: 'grey' }
+    const post: CoverPiece = { shape: { kind: 'column', x: 0, z: -3, r: 2 }, base: 4.5, top: 7, look: 'chip' }
+    const a = createMatch([{ build: defaultBuild('mage') }], [{ build: defaultBuild('tank') }], 3, { profile: LIVE_PROFILE, formations: [[{ x: 0, y: 4.5, z: -12 }], [{ x: 15, y: 4.5, z: 15 }]] })
+    a.match.cover = { pieces: [deck, post], health: initialCoverHealth([deck, post]) }
+    const mage = a.match.heroes[0]
+    mage.position = { x: 0, y: 4.5, z: -12 }
+    let released = false
+    for (let t = 0; t < 120 && !released; t++) {
+      const events = tick(a.match, a.setups, [{ ...IDLE, aimYaw: 0, aimPitch: -0.12, buttons: t < 2 ? slotBit('movement') : 0 }, IDLE], COMBAT_RULES)
+      released = events.some((e) => e.type === 'release' && e.slot === 'movement')
+    }
+    expect(released).toBe(true)
+    const p = mage.position
+    expect(p.z).toBeGreaterThan(-6)
+    expect(p.y).toBeGreaterThanOrEqual(4.5 - 1e-6)
+    expect(p.x * p.x + (p.z + 3) * (p.z + 3)).toBeGreaterThanOrEqual(4 - 1e-6)
+  })
+
   it('a 10v10 in the ruins replays exactly from the same seed, barriers included', () => {
     const run = () => {
       const a = createMatch(armyModifiers(referenceArmy()), armyModifiers(referenceArmy()), 9, { profile: LIVE_PROFILE })

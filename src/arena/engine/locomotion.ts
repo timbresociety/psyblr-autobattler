@@ -222,8 +222,12 @@ export function ledgeAhead(hero: HeroState, match: MatchState, dx: number, dz: n
   const top = floorUnder(pieces, health, spot, p.y + M.mantle.height)
   if (top <= p.y + M.step) return undefined
   spot.y = top
-  // room to stand: a body there touches nothing it can't step onto
-  if (pushOut(pieces, health, { ...spot }, bodyRadius(hero) * 0.8, capsule(hero).height, M.step)) return undefined
+  // room to rise: no deck or roof over it on the way up, or it would climb through it
+  const height = capsule(hero).height
+  if (ceilingOver(pieces, health, p, bodyRadius(hero) * 0.7, p.y + 1e-3, top + height) !== undefined) return undefined
+  // room to stand: no ceiling over the top lower than a head, and a body there touches nothing it can't step onto
+  if (ceilingOver(pieces, health, spot, bodyRadius(hero) * 0.8, top + 1e-3, top + height) !== undefined) return undefined
+  if (pushOut(pieces, health, { ...spot }, bodyRadius(hero) * 0.8, height, M.step)) return undefined
   return spot
 }
 
@@ -360,6 +364,15 @@ export function keepOut(hero: HeroState, match: MatchState | undefined, hits?: n
   clampToArena(hero)
   if (!match?.cover) return false
   const touched = pushOut(match.cover.pieces, match.cover.health, hero.position, bodyRadius(hero), capsule(hero).height, clearance, hits)
+  // a deck or roof the body has risen or drifted into from below, by a jump, a knock-up or a throw, pushes it down under
+  // it, never out sideways (pushOut leaves overhead pieces alone), and no lower than the floor under it
+  const p = hero.position
+  const height = capsule(hero).height
+  const roof = ceilingOver(match.cover.pieces, match.cover.health, p, 0, p.y + 1e-3, p.y + height)
+  if (roof !== undefined) {
+    p.y = Math.max(roof - height, floorUnder(match.cover.pieces, match.cover.health, p, p.y + M.step))
+    hero.velocity.y = Math.min(0, hero.velocity.y)
+  }
   if (touched) clampToArena(hero)
   return touched
 }

@@ -1,7 +1,7 @@
 import type { BuildSlot, Effect, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import type { CoverPiece } from './cover.js'
-import { coverHit } from './cover.js'
+import { ceilingOver, coverHit } from './cover.js'
 import { dealDamage, enemiesOf, resolve, world, type Area, type Ctx } from './effects.js'
 import { keepOut, standOn } from './locomotion.js'
 import { distance, type Vec3 } from './maths.js'
@@ -92,16 +92,21 @@ export function tickWorld(ctx: Ctx) {
     const l = h.launch
     if (!l) continue
     const t = Math.min(1, (now - l.from) / Math.max(1, l.until - l.from))
+    const was = h.position.y
     h.position.y = l.base + 4 * l.height * t * (1 - t)
-    // a melee launch carries the hero away from the blow too
+    // the head stops at the underside of anything it rises into on the way, however far this tick's rise is
+    const roof = m.cover && h.position.y > was ? ceilingOver(m.cover.pieces, m.cover.health, h.position, 0, was + 1e-3, h.position.y + capsule(h).height) : undefined
+    if (roof !== undefined) h.position.y = Math.max(was, roof - capsule(h).height)
+    // a melee launch carries the hero away from the blow too; either way a deck overhead caps the rise
     if (l.push) {
       h.position.x += l.push.x
       h.position.z += l.push.z
-      keepOut(h, m)
     }
+    keepOut(h, m)
     if (now >= l.until || !h.alive) {
-      // back where it was launched from; from there it falls if that was in the air
-      h.position.y = l.base
+      // back down where it was launched from, or on the stair it was carried up (keepOut lifted it there); from there it
+      // falls if that was in the air
+      h.position.y = now >= l.until ? Math.max(l.base, h.position.y) : l.base
       h.launch = undefined
       h.velocity.y = 0
       standOn(h, m)

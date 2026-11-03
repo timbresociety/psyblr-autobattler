@@ -267,6 +267,9 @@ export function carryOn(ctx: Ctx, index: number) {
 }
 
 /** A cast lands: mobility first, then the delivery, then its effects. */
+/** How far under a floor's top a move aimed down may end and still land on it, rather than go over its edge. */
+const LIP = 1.5
+
 function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number) {
   const { match, setups } = ctx
   const caster = match.heroes[index]
@@ -290,6 +293,12 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
           if (wall && wall.t < t) t = wall.t
         }
         if (t < 1) p = add(from, scale(sub(p, from), Math.max(0, t - 0.02)))
+      }
+      // aimed a little down, it ends on the floor under where it lands, not sunk into it; aimed steeply down past a lip
+      // (at an enemy in a trench), it goes over the edge, and the walls put it beside them
+      if (match.cover && p.y < startY) {
+        const floor = floorUnder(match.cover.pieces, match.cover.health, p, startY + ENGINE.move.step)
+        if (floor > p.y && floor - p.y <= LIP) p = { ...p, y: floor }
       }
       caster.position = p
       keepOut(caster, match)
