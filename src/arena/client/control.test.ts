@@ -4,7 +4,7 @@ import { armyModifiers } from '../../charter/traits.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { createMatch } from '../engine/match.js'
 import { AIM_STEPS, MOVES, slotBit } from '../engine/state.js'
-import { BLEND_SECONDS, Cameras, pullIn } from './camera.js'
+import { BLEND_SECONDS, Cameras, HERO_CAMERA, pullIn } from './camera.js'
 import { BINDINGS, commandFrom } from './input.js'
 import { handBack, heroForKey, releaseIfDead, take } from './takeover.js'
 
@@ -83,7 +83,7 @@ describe('takeover and controls (U17)', () => {
     const hero = { x: 0, y: 0, z: 0 }
     for (let i = 0; i < 60; i++) cams.update(1 / 60, hero, [])
     const full = camera.position.z
-    expect(full).toBeLessThan(-4)
+    expect(full).toBeCloseTo(-HERO_CAMERA.back, 1)
     const wall = new THREE.Box3(new THREE.Vector3(-5, 0, -3), new THREE.Vector3(5, 5, -2))
     cams.update(1 / 60, hero, [wall])
     expect(camera.position.z).toBeGreaterThan(-2)

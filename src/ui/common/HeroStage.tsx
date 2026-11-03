@@ -9,10 +9,9 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { animClip, animIndex, fitClip, restPose, setOf, type RestPose } from '../../arena/client/anim-library.js'
 import { characterLook, classicCharacterMaterial, V2_BODIES, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
-import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
-import { classicClothMaterial, classicPrintMaterial, dressModel, rigsOf } from '../../arena/client/wear/dress-model.js'
+import { buildModel, rigsOf } from '../../arena/client/body-model.js'
 import { isShared } from '../../arena/client/head/kit.js'
-import { loadWear } from '../../arena/client/wear/items.js'
+import { loadKit } from '../../arena/client/held.js'
 import type { Gender, HeroLook } from '../../charter/look.js'
 import { SIZE_SCALE } from '../../arena/client/procedural-hero'
 import { heightFactor } from '../../kit/body/physique.js'
@@ -48,7 +47,7 @@ export interface HeroStageProps {
   hitbox?: boolean
   /** Holds the hero at this angle (radians, 0 facing the camera) instead of turning it slowly; a drag still turns it. */
   facing?: number
-  /** Plays everything, clips and cloth, at this fraction of real time: slow motion for a dev bench. */
+  /** Plays everything at this fraction of real time: slow motion for a dev bench. */
   speed?: number
   /** The creator's studio: facing the camera, room light, framing and zoom, drawn at 60 a second. */
   studio?: boolean
@@ -176,9 +175,9 @@ function radialTexture(stops: [number, string][]): THREE.CanvasTexture {
 
 const flat = (geo: THREE.BufferGeometry, y: number) => geo.rotateX(-Math.PI / 2).translate(0, y, 0)
 
-/** A neutral figure for the empty stage: a generic body, nothing worn. */
+/** A neutral figure for the empty stage: a generic body, nothing held. */
 function standInLook(): CharacterLook {
-  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', outfit: {} }
+  return { ...characterLook({ heroName: 'Hero', roleId: 'assassin' } as Build, 0.7), build: 'm-medium', held: {} }
 }
 
 function disposeModel(model: THREE.Object3D) {
@@ -188,7 +187,7 @@ function disposeModel(model: THREE.Object3D) {
     if (!mesh.isMesh) return
     // the painted geometry is ours; its buffers are shared with the cached file, which only this renderer uploaded
     if (!isShared(mesh.geometry)) mesh.geometry.dispose()
-    // so is each clone's skeleton (the outfit's own, when its cloth hangs on bones of its own)
+    // so is each clone's skeleton
     ;(o as THREE.SkinnedMesh).skeleton?.dispose()
     for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m)
   })
@@ -232,7 +231,7 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(28, 1, 0.05, 60)
-    // the studio: a soft room lights skin and cloth from every side, so the key and rims can be gentler
+    // the studio: a soft room lights skin from every side, so the key and rims can be gentler
     let environment: THREE.Texture | undefined
     if (studioMode) {
       const pmrem = new THREE.PMREMGenerator(renderer)
@@ -435,11 +434,6 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
       // reduced motion: nothing moves on its own, so only changes are drawn
       if (calm && !state.dirty && !dragging) return
       state.dirty = false
-      // the outfit's loose cloth swings with the turntable and the idle, or holds still under reduced motion
-      if (state.model) {
-        if (calm) restClothOn(state.model)
-        else settleCloth(state.model, step)
-      }
       state.model?.updateMatrixWorld(true)
       place(calm ? 1 : 1 - Math.exp(-real * 7))
       renderer.render(scene, camera)
@@ -485,19 +479,19 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
     state.glow.material.opacity = look ? 0.5 : 0.22
     characterFile(painted.build)
       .then(async (file: Gltf) => {
-        const [atlas, wear, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadWear(painted.build, painted.outfit, modelFile) : undefined, animIndex(rigFor(painted.build))])
+        const [atlas, kit, idx] = await Promise.all([look ? heroAtlas(file, painted, pace.current.studio ? STUDIO_ATLAS : 1) : null, look ? loadKit(painted.build, painted.held, modelFile) : undefined, animIndex(rigFor(painted.build))])
         if (cancelled || live.current !== state) return undefined
         const model = cloneSkinned(file.scene)
-        // the hero in its own atlas, colours and outfit; the empty stage keeps a dark, glossy silhouette
+        // the hero in its own atlas and colours; the empty stage keeps a dark, glossy silhouette
         const empty = new THREE.MeshStandardMaterial({ color: 0x1c1230, roughness: 0.42, metalness: 0.55, emissive: 0x140a22, emissiveIntensity: 0.6 })
         const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => (look ? classicCharacterMaterial(map, normalMap) : empty)
         // the studio looks close: the coarse body's triangles split twice over, so the jaw and cheeks read round
-        dressModel(model, painted, wear, { body, cloth: (map) => (look ? classicClothMaterial(map) : empty), print: (print) => (look ? classicPrintMaterial(print) : empty), cards: !!look && pace.current.studio }, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
-        // its rest, read once it is dressed (its proportions and posture) and before anything moves it, fits the
+        buildModel(model, painted, kit, body, atlas, look && pace.current.studio ? STUDIO_REFINE : 0)
+        // its rest, read once it is built (its proportions and posture) and before anything moves it, fits the
         // library's clips to this body
         const rest = idx ? restPose(model, idx.bones) : undefined
         const clip = await libraryClip(gender, wanted.current.name, painted.build, rest, wanted.current.stance)
-        return { file, atlas, wear, model, rest, clip }
+        return { file, atlas, kit, model, rest, clip }
       })
       .then(
         (made) => {

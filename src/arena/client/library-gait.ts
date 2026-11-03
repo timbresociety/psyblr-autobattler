@@ -68,6 +68,13 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   land_roll: 'falling_to_roll',
   land_heavy: 'mid_air_falling_to_a_hard_landing',
   zip: 'hanging',
+  // a ledge (§7, owner 2026-11-04): caught from a walk off it, held with the feet braced on the face, shimmied along,
+  // climbed up from
+  catch: 'braced_hang',
+  hang: 'braced_hang',
+  hang_left: 'left_braced_hang_shimmy',
+  hang_right: 'right_braced_hang_shimmy',
+  climb: 'braced_hang_to_crouch',
   rail: 'crouch_idle',
 }
 
@@ -76,7 +83,7 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
  * the engine's move does. Seconds into the clip, from and to, and how long it plays. A Mixamo roll stands, steps and
  * crouches for half a second before it rolls; the engine's roll starts at once.
  */
-const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number]>> = {
+const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number, lift?: number]>> = {
   // take-off to the top of the rise: the push, the tuck, the reach for whatever comes next
   jump: [0.25, 0.75, 0.42],
   jump_up: [0.08, 0.54, 0.42],
@@ -101,10 +108,16 @@ const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: num
   mantle: [0.6, 2.2, ENGINE.move.mantle.time],
   land_roll: [0.05, 1.3, 0.55],
   land_heavy: [0.55, 1.6, 0.45],
+  // the braced hang clip opens with the drop into the brace (the hips fall a metre) and then holds it: the catch is the
+  // drop, the hold the rest, so the loop never drops again; both lifted to put the hands on the edge where the shimmies
+  // put them
+  catch: [0, 0.62, 0.4, 0.5],
+  hang: [0.62, 1.29, 0.67, 0.5],
+  climb: [0, 1.13, ENGINE.move.hang.climb],
 }
 
-/** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`. */
-function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number): THREE.AnimationClip {
+/** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`, the hips raised `lift` metres. */
+function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number, lift = 0): THREE.AnimationClip {
   const k = seconds / (to - from)
   const tracks = clip.tracks.map((track) => {
     const width = track.getValueSize()
@@ -113,6 +126,8 @@ function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: numbe
     const times = Float32Array.from(keep, (i) => (track.times[i] - from) * k)
     const values = new Float32Array(keep.length * width)
     keep.forEach((i, n) => values.set(track.values.subarray(i * width, (i + 1) * width), n * width))
+    // the hips are the only bone that moves
+    if (lift && track.name.endsWith('.position')) for (let n = 1; n < values.length; n += 3) values[n] += lift
     const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
     return new Track(track.name, times, values)
   })

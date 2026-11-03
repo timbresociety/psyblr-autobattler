@@ -1,5 +1,3 @@
-import { FINISHES, type Finish } from '../kit/wear/item.js'
-import { BUILT_IN_ITEMS } from '../kit/wear/library.gen.js'
 import type { Delivery } from './types.js'
 
 /**
@@ -97,9 +95,8 @@ export interface SkillLook {
 /**
  * A transformation's look. The template owns the size the hero takes (bigger, its own, or smaller), how long it lasts
  * and what it's worth; the look owns how it arrives, what surrounds the hero while it lasts, how a change of size
- * plays, what it leaves as it moves, anything it wears beyond its body, and the body's own changes. Body changes are
- * swaps from the wardrobe library, so the outfit stays bound to a surface every size shares. Titan, Ant-Man,
- * Nine-Tails and Super Saiyan differ here, and in the template each one takes.
+ * plays, what it leaves as it moves, and the body's own changes (its eyes and marks). Titan, Ant-Man, Nine-Tails and
+ * Super Saiyan differ here, and in the template each one takes.
  */
 export const FORM_ENTRIES = ['burst', 'strike', 'implode', 'swirl', 'smoke', 'flash'] as const
 export type FormEntry = (typeof FORM_ENTRIES)[number]
@@ -116,22 +113,10 @@ export type FormAvatar = (typeof FORM_AVATARS)[number]
 export const FORM_MARKS = ['whiskers'] as const
 export type FormMark = (typeof FORM_MARKS)[number]
 
-/** A built-in wardrobe item a form puts on, in its own colours and finishes per channel. */
-export interface FormItem {
-  id: string
-  colors?: (string | null)[]
-  finishes?: (Finish | null)[]
-}
-
 /** What changes about the body while the form lasts. */
 export interface FormBody {
-  /** A built-in hair item, and the colour it's dyed. */
-  hair?: string
-  hairColor?: string
   eyes?: string
   marks?: FormMark
-  /** Built-in items worn over the hero's own, one per slot; a full-body item covers the upper and lower ones. */
-  wear?: FormItem[]
 }
 
 export interface TransformationLook {
@@ -348,37 +333,12 @@ export function hydrateSkillLook(raw: unknown): SkillLook | undefined {
   }
 }
 
-/** Built-in items a form may put on, by id: hair, and anything for the six wardrobe slots. */
-const FORM_SLOTS = new Map(BUILT_IN_ITEMS.filter((i) => ['hair', 'head', 'upper', 'lower', 'full', 'back', 'feet'].includes(i.slot)).map((i) => [i.id, i.slot]))
-
-/** Up to four channels' worth of a list, each entry kept or nulled. */
-const channels = <T>(raw: unknown, keep: (v: unknown) => v is T): (T | null)[] | undefined =>
-  Array.isArray(raw) && raw.length && raw.length <= 4 ? raw.map((v) => (keep(v) ? v : null)) : undefined
-
-function hydrateFormItem(raw: unknown): FormItem | undefined {
-  const i = raw as Record<string, unknown> | undefined
-  if (!i || typeof i !== 'object' || typeof i.id !== 'string') return undefined
-  const slot = FORM_SLOTS.get(i.id)
-  if (!slot || slot === 'hair') return undefined
-  const colors = channels(i.colors, (v): v is string => typeof v === 'string' && HEX.test(v))
-  const finishes = channels(i.finishes, (v): v is Finish => includes(FINISHES, v))
-  return { id: i.id, ...(colors ? { colors: colors.map((c) => c?.toLowerCase() ?? null) } : {}), ...(finishes ? { finishes } : {}) }
-}
-
 function hydrateFormBody(raw: unknown): FormBody | undefined {
   const b = raw as Record<string, unknown> | undefined
   if (!b || typeof b !== 'object') return undefined
   const body: FormBody = {}
-  if (typeof b.hair === 'string' && FORM_SLOTS.get(b.hair) === 'hair') body.hair = b.hair
-  if (typeof b.hairColor === 'string' && HEX.test(b.hairColor)) body.hairColor = b.hairColor.toLowerCase()
   if (typeof b.eyes === 'string' && HEX.test(b.eyes)) body.eyes = b.eyes.toLowerCase()
   if (includes(FORM_MARKS, b.marks)) body.marks = b.marks
-  if (Array.isArray(b.wear)) {
-    // one item a slot: a later item in the same slot gives way to the first
-    const bySlot = new Map<string, FormItem>()
-    for (const item of b.wear.slice(0, 6).map(hydrateFormItem)) if (item && !bySlot.has(FORM_SLOTS.get(item.id)!)) bySlot.set(FORM_SLOTS.get(item.id)!, item)
-    if (bySlot.size) body.wear = [...bySlot.values()]
-  }
   return Object.keys(body).length ? body : undefined
 }
 

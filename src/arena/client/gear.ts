@@ -5,8 +5,7 @@ import type { Gltf } from './character-look.js'
 /**
  * Rigid pieces on a body: each is its own small model (public/kit/pieces/ or a player's generated one), hung on a
  * socket the Blender pipeline placed on the body's bones (tools/blender/humanlib/sockets.py). The piece follows every
- * clip through its bone, so nothing is rigged per piece, and any piece fits any body. Loading lives with the rest of
- * the wardrobe (wear/items.ts).
+ * clip through its bone, so nothing is rigged per piece, and any piece fits any body. Loading lives in held.ts.
  */
 
 type Vec3 = [number, number, number]

@@ -30,23 +30,23 @@ export type Way = 'up' | 'forward' | 'left' | 'right' | 'back'
 export const WAYED: ReadonlySet<string> = new Set(['jump', 'air_jump', 'roll'])
 
 /** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
-export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy'
+export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy' | 'catch' | 'climb'
 
 /**
  * The canon's held states, each looping its own clip while it lasts: a guard, crouched or prone (still or moving), a
  * melee launch out of control, and a heavy blow's charge.
  */
-export type HeldKind = 'block' | 'crouch' | 'crouch_move' | 'prone' | 'prone_move' | 'launched' | 'charge' | 'zip' | 'rail'
-export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move', 'prone', 'prone_move', 'launched', 'charge', 'zip', 'rail']
+export type HeldKind = 'block' | 'crouch' | 'crouch_move' | 'prone' | 'prone_move' | 'launched' | 'charge' | 'zip' | 'rail' | 'hang' | 'hang_left' | 'hang_right'
+export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move', 'prone', 'prone_move', 'launched', 'charge', 'zip', 'rail', 'hang', 'hang_left', 'hang_right']
 
 /**
  * Seconds each movement holds the body before running, hanging in the air or standing takes over: about its clip's
  * length, less the blend out. A landing gives way at once to a hero that moves on, and lasts longer the harder it was.
  */
 /** The engine's move names that the animator spells differently. */
-const MOVE_KIND: Partial<Record<string, MoveKind>> = { 'air-jump': 'air_jump', 'land-roll': 'land_roll', 'land-heavy': 'land_heavy' }
+const MOVE_KIND: Partial<Record<string, MoveKind>> = { 'air-jump': 'air_jump', 'land-roll': 'land_roll', 'land-heavy': 'land_heavy', hang: 'catch' }
 
-export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.42, air_jump: 0.4, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45 }
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.42, air_jump: 0.4, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45, catch: 0.45, climb: ENGINE.move.hang.climb }
 const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
@@ -94,7 +94,7 @@ export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[
       // the passive's toggle, on or off, is one flourish every hero shares (COMMON_MOTIONS); its effects say which
       a.state = { kind: 'toggle', seq: ++a.moves }
       a.hold = MOVE_SECONDS.toggle
-    } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide' && e.move !== 'zip-on' && e.move !== 'zip-off') {
+    } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide' && e.move !== 'zip-on' && e.move !== 'zip-off' && e.move !== 'let-go') {
       // a ride shows while it lasts (settle reads it off the hero), so catching and letting go play nothing of their own
       const kind = MOVE_KIND[e.move] ?? (e.move as MoveKind)
       a.state = { kind, seq: ++a.moves }
@@ -143,7 +143,9 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
       ? 'stunned'
       : hero.basicSince >= 0 && hero.action === undefined && now - hero.basicSince >= CHARGE_TICKS
         ? 'charge'
-        : hero.zip
+        : hero.hang
+          ? hangKind(hero)
+          : hero.zip
           ? hero.zip.hang ? 'zip' : 'rail'
           : hero.airborne
             ? 'air'
@@ -164,6 +166,16 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
     a.state = { kind, wound: a.wound }
   } else if (a.state.kind !== kind) a.state = { kind }
   return a.state
+}
+
+/**
+ * Hanging still, or shimmying to its own left or right: facing the wall (against the drop), its left lies along
+ * (-nz, nx), a quarter turn of yaw round from its facing.
+ */
+function hangKind(hero: Pick<HeroState, 'hang' | 'velocity'>): 'hang' | 'hang_left' | 'hang_right' {
+  const g = hero.hang!
+  const along = -hero.velocity.x * g.nz + hero.velocity.z * g.nx
+  return Math.abs(along) < 0.1 ? 'hang' : along > 0 ? 'hang_left' : 'hang_right'
 }
 
 const DEG = Math.PI / 180

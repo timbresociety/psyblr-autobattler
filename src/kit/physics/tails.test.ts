@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PARTICLES } from './cloth.js'
+import { MAX_PARTICLES } from './tails.js'
 import { createTails, placeTails, restPoint, stepTails, tailPoint } from './tails.js'
 
 type V3 = [number, number, number]

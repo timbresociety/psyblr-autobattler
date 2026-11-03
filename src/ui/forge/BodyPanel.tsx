@@ -72,7 +72,7 @@ interface Props {
 
 /**
  * The hero's body, all of it cosmetic: man or woman, how it's built (the size picker sets how big), its skin, eyes and
- * brows, and a photo face with how much of the photo's shape it takes. What it wears is the Wardrobe's.
+ * brows, and a photo face with how much of the photo's shape it takes. Heroes are drawn bare (2026-11-04).
  */
 export function BodyPanel({ look, canFace, onLook, onFace }: Props) {
   const physique: PhysiqueDials = { ...NEUTRAL_PHYSIQUE, ...look.physique }

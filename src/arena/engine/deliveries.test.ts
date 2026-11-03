@@ -3,7 +3,7 @@ import { BUILD_SLOTS, SLOT_KIND } from '../../charter/build.js'
 import { GEOMETRY_DEFAULTS } from '../../charter/geometry.js'
 import { SIZES, type SizeClass } from '../../charter/sizes.js'
 import { CATALOG } from '../../charter/templates/catalog.js'
-import { ai, at, form, phys, push, resize, spell, ultimate } from '../../charter/templates/dsl.js'
+import { ai, at, form, move, phys, push, resize, spell, ultimate } from '../../charter/templates/dsl.js'
 import type { BuildSlot, Template } from '../../charter/types.js'
 import { defaultBuild } from '../../sim/fixtures.js'
 import { ENGINE, ticks } from './calibration.js'
@@ -51,6 +51,44 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number;
   const hits = () => events.filter((e) => e.type === 'hit').map((e) => (e as Extract<MatchEvent, { type: 'hit' }>).target)
   return { m, setups, ctx, events, fire, strike, run, hits, aimAt }
 }
+
+describe('a dash or leap carries the hero there over time (2026-11-04)', () => {
+  it('a leap arcs across several ticks and lands its crater only when it arrives', () => {
+    const a = arena(skill({ kind: 'leap', range: 9, radius: 3 }, [move(9), phys(100)]), [{ z: 10 }])
+    a.m.heroes[0].yaw = 0
+    a.m.heroes[0].pitch = 0
+    a.fire()
+    const h = a.m.heroes[0]
+    expect(h.travel).toBeDefined()
+    expect(h.position.z).toBeLessThan(1)
+    let top = 0
+    let ticksTaken = 0
+    for (; ticksTaken < 120 && h.travel; ticksTaken++) {
+      if (!h.travel.arrived) expect(a.hits()).toEqual([])
+      a.run(1)
+      top = Math.max(top, h.position.y)
+    }
+    const T = ENGINE.move.travel.leap
+    expect(ticksTaken).toBeGreaterThanOrEqual(ticks(T.base + T.per * 9) - 1)
+    expect(top).toBeGreaterThan(2)
+    expect(h.position.z).toBeCloseTo(9, 0)
+    expect(a.hits()).toEqual([1])
+  })
+
+  it('a dash takes a few ticks rather than one, and a blink still lands at once', () => {
+    const d = arena(skill({ kind: 'dash', range: 9 }, [move(9)]), [{ x: 20, z: 0 }])
+    d.m.heroes[0].yaw = 0
+    d.fire()
+    d.run(1)
+    expect(d.m.heroes[0].position.z).toBeLessThan(5)
+    d.run(10)
+    expect(d.m.heroes[0].position.z).toBeCloseTo(9, 0)
+    const b = arena(skill({ kind: 'blink', range: 9 }, [move(9)]), [{ x: 20, z: 0 }])
+    b.m.heroes[0].yaw = 0
+    b.fire()
+    expect(b.m.heroes[0].position.z).toBeCloseTo(9, 0)
+  })
+})
 
 describe('3D deliveries (U4)', () => {
   it('a projectile at 20 m hits after its travel time, not instantly', () => {

@@ -1,6 +1,6 @@
 import type { Quaternion } from 'three'
 import type { FaceGroup } from '../body/face-basis.js'
-import type { Binding } from '../wear/bind.js'
+import type { Binding } from './bind.js'
 
 /**
  * The head as its own object (GAME.md §9.1), renderer-free: which of a body's triangles the head draws, the collar
@@ -48,7 +48,7 @@ interface PartGeometry {
   index: number[]
 }
 
-/** A brow or lash part: cards bound to the face (src/kit/wear/bind.ts), so they follow any hero's. */
+/** A brow or lash part: cards bound to the face (src/kit/head/bind.ts), so they follow any hero's. */
 export interface CardPart extends PartGeometry {
   tri: number[]
   st: number[]

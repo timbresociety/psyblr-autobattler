@@ -1,5 +1,5 @@
 import { BUILD_SLOTS, SLOT_KIND, proposeBuild, type Build } from '../charter/build.js'
-import { defaultLook, type HairStyle, type HeroLook } from '../charter/look.js'
+import { defaultLook, type HeroLook } from '../charter/look.js'
 import { ELEMENTS, type Element, type SkillLook } from '../charter/skill-look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import { poolFor } from '../charter/templates/catalog.js'
@@ -35,7 +35,9 @@ const ROLE_ORDER: readonly RoleId[] = ['tank', 'fighter', 'assassin', 'mage', 'm
 const SIZES: readonly SizeClass[] = ['tiny', 'small', 'medium', 'medium', 'medium', 'large', 'huge']
 const FIRST = ['Ash', 'Bram', 'Cinder', 'Dax', 'Echo', 'Fen', 'Gale', 'Hex', 'Iris', 'Jinx', 'Kestrel', 'Lark', 'Mire', 'Nova', 'Onyx', 'Pike', 'Quill', 'Rook', 'Sable', 'Tamsin', 'Umber', 'Vesper', 'Wren', 'Xan', 'Yara', 'Zephyr']
 const EPITHET = ['Ironhide', 'Quickstep', 'Nightglass', 'Emberfall', 'Stormcall', 'Duskmantle', 'Brightwater', 'Stonejaw', 'Hollowbranch', 'Redthorn', 'Frostvein', 'Goldspark', 'Ashwhisper', 'Highwind', 'Deeproot', 'Starling', 'Coldiron', 'Wildfire', 'Silverleaf', 'Thornwick', 'Blackmoor', 'Swiftwater', 'Sunhallow', 'Ravencrest']
-const HAIR: readonly HairStyle[] = ['buzz', 'crop', 'short', 'curly', 'swept', 'spiky', 'bob', 'long', 'volume', 'none']
+// the hair styles the starters once drew from: only their count matters now, for the draw (see generate)
+const HAIR: readonly string[] = ['buzz', 'crop', 'short', 'curly', 'swept', 'spiky', 'bob', 'long', 'volume', 'none']
+// brow colours
 const HAIR_COLORS = ['#1d1612', '#3c2819', '#5a3a22', '#8a5a33', '#c79a5b', '#d8c7a3', '#6b6b70', '#7a1f1f']
 
 /** A small seeded generator (mulberry32): the same seed always gives the same squads. */
@@ -82,16 +84,14 @@ function generate(seed: number): Starter[] {
         }),
       ) as Build['slots']
       const gender = rng() < 0.5 ? 'm' : 'f'
-      const hairColor = pick(rng, HAIR_COLORS)
-      // the role's dress in the hero's colours, every colour written down, so a remix under another name looks the same
+      const browColor = pick(rng, HAIR_COLORS)
+      // every colour written down, so a remix under another name looks the same
       const base = defaultLook(roleId, heroName, hue)
-      const look: HeroLook = {
-        ...base,
-        gender,
-        physique: { weight: round(0.3 + rng() * 0.4), muscle: round(0.3 + rng() * 0.5), age: round(rng() * 0.6) },
-        hair: pick(rng, HAIR),
-        colors: { ...base.colors, hair: hairColor, brow: hairColor },
-      }
+      const physique = { weight: round(0.3 + rng() * 0.4), muscle: round(0.3 + rng() * 0.5), age: round(rng() * 0.6) }
+      // heroes are drawn bare now (owner, 2026-11-04); the draw that picked a hair style stays, so every starter after
+      // this one keeps its skills
+      pick(rng, HAIR)
+      const look: HeroLook = { ...base, gender, physique, colors: { ...base.colors, brow: browColor } }
       // each skill's look is read once from its template and the hero's element, and kept with the hero like a forged one's
       const skills: Partial<Record<BuildSlot, SkillLook>> = {}
       for (const slot of BUILD_SLOTS) {

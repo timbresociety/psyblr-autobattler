@@ -23,7 +23,6 @@ function deps(over: Partial<ForgeDeps> = {}): ForgeDeps {
   return {
     // an AI reading, standing in for Claude: the offline reader's, as a mage
     read: vi.fn(async (input: ReadRequest) => ({ reading: { ...withRole(offlineReading(input), 'mage'), source: 'claude' as const } })),
-    outfitColours: vi.fn(async () => ({})),
     chat: vi.fn(async (build: Build, message: string) => offlineChat(build, message)),
     runGate: vi.fn(async (build: Build): Promise<GateOutcome> => ({ state: 'ready', winRate: 0.5, build: { ...build, gate: { state: 'ready', winRate: 0.5 } } })),
     prepareImage: vi.fn(async (file: Blob) => ({ ok: true as const, blob: file, width: 512, height: 512 })),
@@ -56,9 +55,8 @@ async function forge(d: ForgeDeps) {
 /** Opens a section of the creator from its rail. */
 const section = (name: string) => fireEvent.click(within(screen.getByRole('navigation', { name: 'Creator' })).getByRole('button', { name }))
 
-/** A wardrobe row, and the wardrobe tab it sits in. */
+/** A radio group of tiles, by its name: a hand, a role. */
 const row = (name: string) => within(screen.getByRole('radiogroup', { name }))
-const tab = (name: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) }))
 
 /** The role is a radio group of tiles (R10). */
 const roleNow = () => (screen.getByRole('radiogroup', { name: 'Role' }).querySelector('[aria-checked="true"]') as HTMLElement).dataset.roleId
@@ -290,44 +288,22 @@ describe('forge from a prompt and reference images', () => {
     expect(paste.defaultPrevented).toBe(true)
   })
 
-  it("the prompt's wardrobe words dress the hero from the library, and what it lacks is offered for generating", async () => {
+  it("the prompt's weapons go in the hero's hands, and nothing it names is worn", async () => {
     const d = deps()
     render(<ForgeScreen deps={d} />)
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana, a straw hat and a brown poncho' } })
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a samurai with a katana, a straw hat and a round shield' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
-    // the reading lists what it read: the kasa and the katana are in the library, a poncho isn't yet
-    const wishes = within(await screen.findByRole('region', { name: 'Wardrobe as read' }))
-    expect(wishes.getByText('Straw kasa')).toBeTruthy()
-    expect(wishes.getByText('Katana')).toBeTruthy()
-    expect(wishes.getByText(/Not in the library yet/)).toBeTruthy()
-    // the community is searched for what the library lacks, by the thing and not its colour
-    expect(d.pieces.searchItems).toHaveBeenCalledWith('poncho', 'upper')
-    // the poncho can only be generated; the kasa can be worn as made, and the rungs say what each costs
-    const poncho = within(wishes.getByRole('group', { name: 'brown poncho rungs' }))
-    expect(poncho.getByRole('button', { name: /Generate/ }).getAttribute('aria-current')).toBe('step')
-    expect((poncho.getByRole('button', { name: /Wear/ }) as HTMLButtonElement).disabled).toBe(true)
+    const gear = within(await screen.findByRole('region', { name: 'Gear' }))
+    expect(within(gear.getByRole('radiogroup', { name: 'Right hand' })).getByRole('radio', { checked: true }).textContent).toBe('Katana')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
     await screen.findByRole('heading', { name: 'Samurai' })
     section('Gear')
     expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Katana')
-    section('Outfit')
-    tab('Head')
-    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Straw kasa')
-    // the poncho waits to be generated, worn meanwhile as the top the outfit already had
-    expect(screen.getByRole('button', { name: /brown poncho/ })).toBeTruthy()
-    tab('Upper')
-    expect(row('Upper body').getByRole('radio', { checked: true }).textContent).toBe('Long-sleeve tee')
-    tab('Head')
-    await act(async () => fireEvent.click(row('Over the head').getByRole('radio', { name: 'Crown' })))
-    section('Gear')
-    await act(async () => fireEvent.click(row('Right hand').getByRole('radio', { name: 'Nothing' })))
-    expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
-    section('Outfit')
-    tab('Head')
-    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Crown')
-    // a piece that takes a colour takes the one picked beside it
-    fireEvent.change(screen.getByLabelText('Crown colour'), { target: { value: '#3366ff' } })
-    expect((screen.getByLabelText('Crown colour') as HTMLInputElement).value).toBe('#3366ff')
+    expect(row('Left hand').getByRole('radio', { checked: true }).textContent).toBe('Round shield')
+    // heroes are drawn bare: no hair or outfit section to dress them in
+    const nav = within(screen.getByRole('navigation', { name: 'Creator' }))
+    expect(nav.queryByRole('button', { name: 'Hair' })).toBeNull()
+    expect(nav.queryByRole('button', { name: 'Outfit' })).toBeNull()
   })
 
   it('picking a size changes the hero and sends the balance check back to draft', async () => {
@@ -364,7 +340,7 @@ const finding = { points: Array.from({ length: 478 }, (_, i) => [100 + (i % 20) 
 const URL_A = 'https://store.public.blob.vercel-storage.com/heroes/a.webp'
 
 describe('the look: a face from the photo, the rest from the prompt', () => {
-  it('a face on a reference image is worn by the hero it forges, with the photo’s skin and hair', async () => {
+  it('a face on a reference image is worn by the hero it forges, with the photo’s skin', async () => {
     const d = deps({ findFace: vi.fn(async () => finding) })
     render(<ForgeScreen deps={d} />)
     await addFiles([image()])
@@ -382,23 +358,17 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     expect(saved.look?.face?.points).toHaveLength(956)
   })
 
-  it('the prompt dresses the hero: a queen in gold armour with a red cape and a crown', async () => {
-    render(<ForgeScreen deps={deps()} />)
-    await readAndBuild('a queen in gold armour with a red cape and a crown')
+  it('the prompt sets the body, and never dresses it: a queen in gold armour with a red cape', async () => {
+    const d = deps()
+    render(<ForgeScreen deps={d} />)
+    await readAndBuild('a queen in gold armour with a red cape')
     section('Body')
     expect(within(screen.getByRole('radiogroup', { name: 'Body' })).getByRole('radio', { name: 'Woman' }).getAttribute('aria-checked')).toBe('true')
-    section('Outfit')
-    tab('Full')
-    expect(row('Full body').getByRole('radio', { checked: true }).textContent).toBe('Knight armour')
-    expect((screen.getByLabelText('Knight armour plate colour') as HTMLInputElement).value).toBe('#d4a531')
-    // the armour covers the whole body, so nothing is worn on top or below
-    tab('Upper')
-    expect(row('Upper body').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
-    tab('Back')
-    expect(row('Back').getByRole('radio', { checked: true }).textContent).toBe('Cape')
-    expect((screen.getByLabelText('Cape colour') as HTMLInputElement).value).toBe('#c8242c')
-    tab('Head')
-    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Crown')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
+    await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Save to loadout' })))
+    const saved = (d.createHero as ReturnType<typeof vi.fn>).mock.calls[0][0] as Build
+    expect(saved.look).not.toHaveProperty('wear')
+    expect(saved.look).not.toHaveProperty('cape')
   })
 
   it('changing the look keeps the balance check, since looks never touch a number', async () => {
@@ -406,23 +376,19 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     await forge(d)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
     await screen.findByRole('button', { name: 'Save to loadout' })
-    section('Hair')
-    await act(async () => fireEvent.click(row('Hair').getByRole('radio', { name: 'Nothing' })))
-    section('Outfit')
-    tab('Upper')
-    await act(async () => fireEvent.click(row('Upper body').getByRole('radio', { name: 'Tee' })))
-    fireEvent.change(screen.getByLabelText('Tee colour'), { target: { value: '#123456' } })
+    section('Gear')
+    await act(async () => fireEvent.click(row('Right hand').getByRole('radio', { name: 'Katana' })))
+    fireEvent.change(screen.getByLabelText('Katana colour'), { target: { value: '#123456' } })
     section('Body')
     fireEvent.change(screen.getByLabelText('Muscle'), { target: { value: '0.9' } })
     section('Kit')
     fireEvent.change(screen.getByLabelText('Active 1 element'), { target: { value: 'fire' } })
     expect(screen.getByRole('button', { name: 'Save to loadout' })).toBeTruthy()
-    section('Hair')
-    expect(row('Hair').getByRole('radio', { name: 'Nothing' }).getAttribute('aria-checked')).toBe('true')
+    section('Gear')
+    expect(row('Right hand').getByRole('radio', { name: 'Katana' }).getAttribute('aria-checked')).toBe('true')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save to loadout' })))
     const saved = (d.createHero as ReturnType<typeof vi.fn>).mock.calls[0][0] as Build
-    expect(saved.look?.wear?.hair).toBeUndefined()
-    expect(saved.look?.wear?.upper).toEqual({ id: 'tee', url: '/kit/wear/tee.glb', colors: ['#123456'] })
+    expect(saved.look?.gear?.hand_r).toEqual({ id: 'katana', url: '/kit/pieces/katana.glb', color: '#123456' })
     expect(saved.look?.physique).toEqual({ weight: 0.5, muscle: 0.9, age: 0 })
     expect(saved.look?.skills?.active1).toMatchObject({ element: 'fire', palette: ELEMENT_LOOKS.fire.palette })
   })
@@ -458,14 +424,12 @@ describe('the look: a face from the photo, the rest from the prompt', () => {
     fireEvent.click(card.getByLabelText('Change the eyes'))
     fireEvent.change(card.getByLabelText('Form eye colour'), { target: { value: '#ff2200' } })
     fireEvent.click(card.getByRole('checkbox', { name: 'Whisker marks' }))
-    fireEvent.change(card.getByLabelText('Form wears'), { target: { value: 'cape' } })
-    fireEvent.change(card.getByLabelText('Form wears colour'), { target: { value: '#ff7400' } })
     fireEvent.change(card.getByLabelText('Avatar'), { target: { value: 'tails' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ready' })))
     await act(async () => fireEvent.click(await screen.findByRole('button', { name: 'Save changes' })))
     const saved = (d.saveBuild as ReturnType<typeof vi.fn>).mock.calls[0][1] as Build
     expect(saved.slots.ultimate.templateId).toBe('fighter-avatar-form')
-    expect(saved.look?.skills?.ultimate?.transformation).toMatchObject({ aura: 'chakra', avatar: 'tails', growth: 'swell', body: { eyes: '#ff2200', marks: 'whiskers', wear: [{ id: 'cape', colors: ['#ff7400'] }] } })
+    expect(saved.look?.skills?.ultimate?.transformation).toMatchObject({ aura: 'chakra', avatar: 'tails', growth: 'swell', body: { eyes: '#ff2200', marks: 'whiskers' } })
     // keeping its size, there is no change of size to play
     await act(async () => fireEvent.click(sizes.getByRole('radio', { name: 'Keep its size' })))
     expect(card.queryByLabelText('Change of size')).toBeNull()
@@ -503,10 +467,10 @@ describe('the Forge reads before it builds', () => {
     await act(async () => fireEvent.click(pick))
     expect(screen.queryByRole('group', { name: 'What should Encore Kha Ja do?' })).toBeNull()
     // a correction reads again on top of the last reading
-    fireEvent.change(screen.getByLabelText('Correction'), { target: { value: 'give him long hair and a blue robe' } })
+    fireEvent.change(screen.getByLabelText('Correction'), { target: { value: 'give him twin daggers' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read again' })))
-    expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: ENCORE, note: 'give him long hair and a blue robe', previous: expect.objectContaining({ heroName: 'ENCORE ABJ' }) }))
-    expect(within(screen.getByRole('radiogroup', { name: 'Hair' })).getByRole('radio', { name: 'Long' }).getAttribute('aria-checked')).toBe('true')
+    expect(read).toHaveBeenLastCalledWith(expect.objectContaining({ prompt: ENCORE, note: 'give him twin daggers', previous: expect.objectContaining({ heroName: 'ENCORE ABJ' }) }))
+    expect(within(screen.getByRole('radiogroup', { name: 'Left hand' })).getByRole('radio', { name: 'Dagger' }).getAttribute('aria-checked')).toBe('true')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Build hero' })))
     expect(await screen.findByRole('heading', { name: 'ENCORE ABJ' })).toBeTruthy()
     section('Kit')
@@ -532,21 +496,18 @@ describe('the Forge reads before it builds', () => {
     expect((screen.getByLabelText('Ultimate name') as HTMLInputElement).value).toBe('Kendrick Se Bhi Upar')
   })
 
-  it('the card edits the wardrobe it read: a rung moves a wish, and a change in the wardrobe becomes one', async () => {
+  it('the card edits the hands it read, and a correction can take a piece away', async () => {
     render(<ForgeScreen deps={deps()} />)
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a queen in gold armour with a red cape' } })
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'a queen with a sword' } })
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read my hero' })))
-    const wishes = within(await screen.findByRole('region', { name: 'Wardrobe as read' }))
-    // back down to the cape as it was made
-    await act(async () => fireEvent.click(within(wishes.getByRole('group', { name: 'red cape rungs' })).getByRole('button', { name: /Wear/ })))
-    tab('Back')
-    expect((screen.getByLabelText('Cape colour') as HTMLInputElement).value).not.toBe('#c8242c')
-    // a hat picked in the wardrobe is a wish of its own
-    tab('Head')
-    await act(async () => fireEvent.click(row('Over the head').getByRole('radio', { name: 'Crown' })))
-    expect(wishes.getByText('crown')).toBeTruthy()
-    await act(async () => fireEvent.click(wishes.getByRole('button', { name: 'Remove crown' })))
-    expect(row('Over the head').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
+    await screen.findByRole('region', { name: 'Gear' })
+    expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Sword')
+    await act(async () => fireEvent.click(row('Left hand').getByRole('radio', { name: 'Round shield' })))
+    expect(row('Left hand').getByRole('radio', { checked: true }).textContent).toBe('Round shield')
+    fireEvent.change(screen.getByLabelText('Correction'), { target: { value: 'no sword' } })
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Read again' })))
+    expect(row('Right hand').getByRole('radio', { checked: true }).textContent).toBe('Nothing')
+    expect(row('Left hand').getByRole('radio', { checked: true }).textContent).toBe('Round shield')
   })
 
   it('a reading the content floor refuses says why and builds nothing', async () => {

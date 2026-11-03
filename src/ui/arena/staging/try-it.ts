@@ -3,10 +3,10 @@ import { STARTERS } from '../../../arena/starters'
 import { roleSymbol, starterEntry } from './loadout'
 import type { StagingResult } from './Staging'
 
-/** What the training dummy is: a plain tank in nothing but its base layer, the colour of a wooden mannequin. */
+/** What the training dummy is: a plain tank the colour of a wooden mannequin. */
 const DUMMY: Build = {
   ...proposeBuild({ heroName: 'Training dummy', roleId: 'tank', skills: {} }).build,
-  look: { gender: 'm', hair: 'none', armour: false, cape: false, colors: { skin: '#c9b28b', iris: '#3a2e22', brow: '#c9b28b' }, wear: {} },
+  look: { gender: 'm', colors: { skin: '#c9b28b', iris: '#3a2e22', brow: '#c9b28b' } },
 }
 
 /** A 1v1 in the lane between the ruins' fallen block and its columns: the hero being made, and the dummy to try it on. */

@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { parseFaceBasis, type FaceBasis } from '../body/face-basis.js'
 import { readBody, type BodyFile } from '../body/node.js'
 import { weldedNormals, weldValues } from '../body/surface.js'
-import { evaluate, type Binding } from '../wear/bind.js'
+import { evaluate, type Binding } from './bind.js'
 import { EYE_LIMIT } from '../rig/limits.js'
 import {
   ARKIT_SHAPES,

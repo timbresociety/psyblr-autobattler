@@ -101,8 +101,8 @@ describe('skill looks (R33)', () => {
 })
 
 describe('transformation looks (R23)', () => {
-  it('reads the famous transformations whole: how each arrives, what it wears and what it leaves behind', () => {
-    expect(lookFor('Super Saiyan')!.transformation).toEqual({ entry: 'burst', aura: 'flame', body: { hair: 'hair_spiky', hairColor: '#ffd84a', eyes: '#2fd6c8' } })
+  it('reads the famous transformations whole: how each arrives, what it changes and what it leaves behind', () => {
+    expect(lookFor('Super Saiyan')!.transformation).toEqual({ entry: 'burst', aura: 'flame', body: { eyes: '#2fd6c8' } })
     expect(lookFor('Nine-Tails Chakra Mode')!.transformation).toMatchObject({ entry: 'swirl', aura: 'chakra', avatar: 'tails', body: { eyes: '#e0301b', marks: 'whiskers' } })
     expect(lookFor('Ant-Man')!.transformation).toEqual({ entry: 'implode', growth: 'snap', trail: 'streak' })
     expect(lookFor('Titan')!.transformation).toEqual({ entry: 'strike', aura: 'steam', growth: 'swell' })
@@ -116,10 +116,10 @@ describe('transformation looks (R23)', () => {
       const look = lookFor(name)!
       expect(hydrateSkillLook(JSON.parse(JSON.stringify(look))), name).toEqual(look)
     }
-    const wear = [{ id: 'kimono', colors: ['#112233', '#445566', '#778899', '#aabbcc', '#ddeeff'] }, { id: 'long_coat' }, { id: 'nope' }, { id: 'hair_spiky' }]
-    const look = hydrateSkillLook({ element: 'fire', transformation: { entry: 'explode', aura: 'flame', growth: 'swell', avatar: 'dragon', body: { hair: 'beanie', hairColor: 'GOLD', eyes: '#FF0000', marks: 'tattoos', wear } } })!
-    // five channels is one too many, a second full-body item gives way to the first, and hair is not wear
-    expect(look.transformation).toEqual({ aura: 'flame', growth: 'swell', body: { eyes: '#ff0000', wear: [{ id: 'kimono' }] } })
+    const wear = [{ id: 'kimono', colors: ['#112233'] }]
+    const look = hydrateSkillLook({ element: 'fire', transformation: { entry: 'explode', aura: 'flame', growth: 'swell', avatar: 'dragon', body: { hair: 'hair_spiky', hairColor: '#FFD700', eyes: '#FF0000', marks: 'tattoos', wear } } })!
+    // heroes are drawn bare, so a saved form's hair and what it wore are dropped with what it doesn't know
+    expect(look.transformation).toEqual({ aura: 'flame', growth: 'swell', body: { eyes: '#ff0000' } })
     expect(hydrateSkillLook({ element: 'fire', transformation: { entry: 'explode' } })!.transformation).toBeUndefined()
   })
 

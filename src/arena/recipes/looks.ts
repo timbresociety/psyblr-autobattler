@@ -47,8 +47,8 @@ const MOVES: { words: RegExp; look: Move }[] = [
   { words: /substitution|kawarimi/i, look: { element: 'shadow', palette: ['#ffffff', '#d8d8d8', '#6a6a6a'], form: 'smoke' } },
   { words: /mjolnir|god of thunder/i, look: { element: 'lightning', palette: ['#ffffff', '#cfe8ff', '#5a8cff'], form: 'rain', pose: 'overhead', charge: 'sky' } },
   // transformations: the look only, since the size is the template's (a titan takes Titan Form, an Ant-Man Shrink Form)
-  { words: /super saiyan|super sayan|\bssj\d?\b/i, look: { element: 'light', palette: ['#fffbe0', '#ffd23d', '#ffb300'], transformation: { entry: 'burst', aura: 'flame', body: { hair: 'hair_spiky', hairColor: '#ffd84a', eyes: '#2fd6c8' } } } },
-  { words: /nine[- ]?tails|kurama|ky[uū]+bi|tailed beast/i, look: { element: 'fire', palette: ['#fff3c4', '#ff9a1a', '#ff4a00'], transformation: { entry: 'swirl', aura: 'chakra', avatar: 'tails', body: { eyes: '#e0301b', marks: 'whiskers', wear: [{ id: 'long_coat', colors: ['#ff7400', '#3a1a08'], finishes: ['glow', 'cotton'] }] } } } },
+  { words: /super saiyan|super sayan|\bssj\d?\b/i, look: { element: 'light', palette: ['#fffbe0', '#ffd23d', '#ffb300'], transformation: { entry: 'burst', aura: 'flame', body: { eyes: '#2fd6c8' } } } },
+  { words: /nine[- ]?tails|kurama|ky[uū]+bi|tailed beast/i, look: { element: 'fire', palette: ['#fff3c4', '#ff9a1a', '#ff4a00'], transformation: { entry: 'swirl', aura: 'chakra', avatar: 'tails', body: { eyes: '#e0301b', marks: 'whiskers' } } } },
   { words: /\bant[- ]?man\b|pym particle/i, look: { element: 'tech', palette: ['#ffffff', '#ff4a4a', '#8a0a0a'], transformation: { entry: 'implode', growth: 'snap', trail: 'streak' } } },
   { words: /susa?no'?o/i, look: { element: 'cosmic', palette: ['#f6e8ff', '#b46bff', '#4b1d7a'], transformation: { entry: 'swirl', aura: 'chakra', avatar: 'spirit' } } },
   { words: /\btitan\b/i, look: { element: 'lightning', palette: ['#fff6d0', '#ffcf4a', '#ff7a1a'], transformation: { entry: 'strike', aura: 'steam', growth: 'swell' } } },

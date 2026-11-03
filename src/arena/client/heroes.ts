@@ -19,7 +19,7 @@ import { WEAPON_MOVES, weaponOf } from '../../kit/anim/weapon-gait.js'
 import { animIndex } from './anim-index.js'
 import { blockMotion, carriedStyle, meleeSet, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
-import { loadWear } from './wear/items.js'
+import { loadKit } from './held.js'
 import { TEAM_COLORS } from './map.js'
 
 /**
@@ -71,7 +71,7 @@ export interface HeroView {
   strafes?: boolean
 }
 
-const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle', mantle: 'jump', land_roll: 'dive', land_heavy: 'idle', zip: 'dive', rail: 'idle' }
+const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle', mantle: 'jump', land_roll: 'dive', land_heavy: 'idle', zip: 'dive', rail: 'idle', catch: 'climb', climb: 'climb', hang: 'climb', hang_left: 'climb', hang_right: 'climb' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const hue = heroHue(build.heroName)
@@ -102,13 +102,13 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     // it moves on the motion library's gait and stands in its chosen stance, where the library loads (Forge goal, phase B)
     const rig: RigKind = V2_BODIES.has(shapeLook.build) ? 'standard' : 'legacy'
     const gender = shapeLook.build.charAt(0) as Gender
-    const [atlas, wear, gait, moves] = await Promise.all([
+    const [atlas, kit, gait, moves] = await Promise.all([
       heroAtlas(file, shapeLook),
-      loadWear(shapeLook.build, shapeLook.outfit, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
+      loadKit(shapeLook.build, shapeLook.held, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
       libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build))),
       rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) })) : undefined,
     ])
-    return characterView(file, shapeLook, color, build, atlas, wear, gait, moves)
+    return characterView(file, shapeLook, color, build, atlas, kit, gait, moves)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)

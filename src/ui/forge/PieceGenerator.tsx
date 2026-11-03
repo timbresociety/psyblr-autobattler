@@ -1,25 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { PIECE_KINDS, type PieceKind, type WearSlot } from '../../charter/look.js'
+import { PIECE_KINDS, type PieceKind } from '../../charter/look.js'
 import { PIECE_PRICE } from '../../forge/pricing.js'
 import type { PieceEntry } from '../../kit/pieces.js'
-import type { LibraryEntry } from '../../kit/wear/library.js'
 import { Credits } from '../account/Credits'
 import { SignIn } from '../account/SignIn'
 import { ApiError, type PieceDeps, type PieceJob } from '../api'
 
-export const KIND_LABEL: Record<PieceKind, string> = { head: 'Head', face: 'Face', hand: 'Hand', offhand: 'Off hand', back: 'Back' }
+export const KIND_LABEL: Record<PieceKind, string> = { hand: 'Hand', offhand: 'Off hand' }
 
 const POLL_MS = 3000
-
-/** What a player might ask for in each slot, as the prompt's placeholder. */
-const GARMENT_EXAMPLE: Record<WearSlot, string> = {
-  head: 'a samurai kabuto with gold horns',
-  upper: 'a cropped denim jacket over a white tee',
-  lower: 'baggy cargo trousers with knee pads',
-  full: 'a black kimono with red clouds',
-  back: 'a cloak of raven feathers',
-  feet: 'chunky white high-top sneakers',
-}
 
 type Step = { at: 'form' } | { at: 'signin' } | { at: 'credits'; balance: number } | { at: 'running'; job: PieceJob } | { at: 'failed'; error: string }
 
@@ -27,25 +16,21 @@ interface Props {
   deps: PieceDeps
   /** What to make, when the prompt already asked for it. */
   start?: { phrase: string; kind: PieceKind }
-  /** A wardrobe slot to make a garment for, fitted to every body, instead of a piece of gear. */
-  slot?: WearSlot
-  /** What the slot is called, for the garment's title. */
-  slotLabel?: string
   /** An uploaded reference image the piece can be modelled from. */
   referenceUrl?: string
-  /** The finished piece, or for a garment the wardrobe item. */
-  onDone: (made: PieceEntry | LibraryEntry) => void
+  /** The finished piece. */
+  onDone: (made: PieceEntry) => void
   onClose: () => void
 }
 
 /**
- * Generate a piece or a garment the repository doesn't have yet. It asks for an account only now, and for credits only
+ * Generate a piece the repository doesn't have yet. It asks for an account only now, and for credits only
  * when the balance is short; the job then runs on the server while the player keeps editing, and the finished one is
  * worn and joins the repository, free for everyone after this.
  */
-export function PieceGenerator({ deps, start, slot, slotLabel, referenceUrl, onDone, onClose }: Props) {
+export function PieceGenerator({ deps, start, referenceUrl, onDone, onClose }: Props) {
   const [prompt, setPrompt] = useState(start?.phrase ?? '')
-  const [kind, setKind] = useState<PieceKind>(start?.kind ?? 'head')
+  const [kind, setKind] = useState<PieceKind>(start?.kind ?? 'hand')
   const [fromImage, setFromImage] = useState(false)
   const [step, setStep] = useState<Step>({ at: 'form' })
   const [busy, setBusy] = useState(false)
@@ -71,7 +56,7 @@ export function PieceGenerator({ deps, start, slot, slotLabel, referenceUrl, onD
     try {
       const session = await deps.session()
       if (!session.signedIn) return setStep({ at: 'signin' })
-      const { job } = await deps.startPiece({ prompt: prompt.trim(), ...(slot ? { slot } : { kind }), ...(fromImage && referenceUrl ? { imageUrl: referenceUrl } : {}) })
+      const { job } = await deps.startPiece({ prompt: prompt.trim(), kind, ...(fromImage && referenceUrl ? { imageUrl: referenceUrl } : {}) })
       setSeconds(0)
       setStep({ at: 'running', job })
     } catch (e) {
@@ -96,7 +81,7 @@ export function PieceGenerator({ deps, start, slot, slotLabel, referenceUrl, onD
       try {
         const { job } = await deps.pollPiece(jobId)
         if (!live) return
-        const made = job.item ?? job.piece
+        const made = job.piece
         if (job.status === 'done' && made) {
           live = false
           done.current(made)
@@ -114,7 +99,7 @@ export function PieceGenerator({ deps, start, slot, slotLabel, referenceUrl, onD
     }
   }, [jobId, deps])
 
-  const title = slot ? `Generate for ${(slotLabel ?? slot).toLowerCase()}` : 'Generate a piece'
+  const title = 'Generate a piece'
   if (ready === false)
     return (
       <section className="generator" aria-label={title}>
@@ -146,20 +131,18 @@ export function PieceGenerator({ deps, start, slot, slotLabel, referenceUrl, onD
       </header>
       <label className="field">
         <span>What is it?</span>
-        <input value={prompt} maxLength={300} onChange={(e) => setPrompt(e.target.value)} placeholder={slot ? GARMENT_EXAMPLE[slot] : 'a wide straw hat with a red band'} aria-label="What is it?" />
+        <input value={prompt} maxLength={300} onChange={(e) => setPrompt(e.target.value)} placeholder="a jade glaive with a gold blade" aria-label="What is it?" />
       </label>
-      {!slot && (
-        <div className="field">
-          <span>Where it goes</span>
-          <div className="seg" role="radiogroup" aria-label="Where it goes">
-            {PIECE_KINDS.map((k) => (
-              <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>
-                {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
+      <div className="field">
+        <span>Where it goes</span>
+        <div className="seg" role="radiogroup" aria-label="Where it goes">
+          {PIECE_KINDS.map((k) => (
+            <button key={k} type="button" role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>
+              {KIND_LABEL[k]}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
       {referenceUrl && (
         <label className="gen-check">
           <input type="checkbox" checked={fromImage} onChange={(e) => setFromImage(e.target.checked)} />

@@ -157,7 +157,8 @@ export function legacyRoute(search: string): string | undefined {
     ['loadout', '/'],
     ['bench', '/dev/bench'],
     ['soak', '/dev/soak'],
-    ['wardrobe', '/dev/wardrobe'],
+    // the wardrobe went with the outfits (2026-11-04)
+    ['wardrobe', '/dev'],
     ['physique', '/dev/physique'],
   ]
   for (const [flag, to] of moves) {

@@ -5,7 +5,7 @@ import { BUILD_SLOTS, SLOT_KIND } from '../charter/build.js'
 import { MAX_RETUNE_STEPS, RETUNE_STEP, REFERENCE_SHEET, SLOT_BUDGETS } from '../charter/budget.js'
 import { FAMILIES, FAMILY_LABEL, familiesOf, primaryFamily } from '../charter/families.js'
 import { LOCOMOTION_HINT } from '../charter/locomotion.js'
-import { FACE_POINTS, GENDER_LABEL, LOOK_SLOTS, type Worn } from '../charter/look.js'
+import { FACE_POINTS, GENDER_LABEL, GEAR_SLOTS, SLOT_KINDS } from '../charter/look.js'
 import { ROLES, getRole } from '../charter/roles.js'
 import { ALL_SIZE_CLASSES, SIZES, sizeHealth } from '../charter/sizes.js'
 import {
@@ -51,20 +51,17 @@ import { ENCORE_COVER_ANSWER, ENCORE_PROMPT } from '../forge/examples.js'
 import { FORM_TEMPLATES, formChange, formFromWords, transformOf } from '../forge/form.js'
 import { FREE_GRANT, GENERATION_COST, PACKS, PIECE_PRICE } from '../forge/pricing.js'
 import { MAX_QUESTIONS, hydrateReading, offlineReading, templateBlurb, type Reading } from '../forge/reading.js'
-import { FAR_RATE, MAX_PARTICLES, RATE } from '../kit/physics/cloth.js'
-import { FINISHES, ITEM_SLOTS, KNOBS, RUNGS, type ItemSlot, type Rung } from '../kit/wear/item.js'
-import { LIBRARY, libraryItem, type LibraryEntry } from '../kit/wear/library.js'
-import { PRINTS, PRINT_LABEL, PRINT_SCALE } from '../kit/wear/prints.js'
+import { BUILT_IN, builtIn, type PieceEntry } from '../kit/pieces.js'
 import { GATE_CEILING, GATE_DEFAULTS, GATE_FLOOR, GATE_HOPELESS, GATE_MARGIN, MAX_LIFT_STEPS } from '../sim/gate.js'
 import { ARCH, CHROME_STOPS, LETTERS, SHINE, TOKEN_BOX, TOKEN_SHINE, TOKEN_SHINE_AT, WORDMARK_BOX } from '../ui/brand/marks.js'
 import { SLOT_LABEL } from '../ui/forge/labels.js'
-import { FINISH_LABEL, KNOB_LABEL, LOOK_SLOT_LABEL, RUNG_LABEL, isRigid } from '../ui/forge/wardrobe.js'
 
 /**
  * The master character charter (docs/charter/character-charter.html), written from the code itself so it can't drift.
  * It comes in two halves. What the engine owns: the roles and their synergies, how stats are bought, sizes, every
  * skill template with its numbers, transformations and the balance check. What the player owns: the body and face,
- * the wardrobe with every item in the library, skill looks and forms, the four rungs and what keeps it all fair. The
+ * what each hand holds with every built-in piece, skill looks and forms, and what keeps it all fair. Heroes are drawn
+ * bare since 2026-11-04: outfits will be generated as the character mesh itself. The
  * worked examples (Encore ABJ, three beams, four transformations, the twenty generated starters) are computed by the same code
  * the Forge runs. `npx tsx scripts/charter-doc.ts` writes it; a test fails when the committed page is stale.
  */
@@ -81,7 +78,6 @@ const table = (head: string[], rows: string[][], cls = '') =>
   `<div class="scroll"><table${cls ? ` class="${cls}"` : ''}><thead><tr>${head.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
 const swatch = (hex: string) => `<i class="sw" style="--c:${esc(hex)}" title="${esc(hex)}"></i>`
 const swatches = (list: readonly (string | null | undefined)[]) => list.filter((c): c is string => !!c).map(swatch).join('')
-const chips = (list: readonly string[]) => list.map((s) => `<span class="chip">${esc(s)}</span>`).join(' ')
 /** A library picture: from this page (docs/charter) to public/, which works opened as a file and on the dev server. */
 const picture = (thumb: string, cls = '') => `<img${cls ? ` class="${cls}"` : ''} src="../../public${esc(thumb)}" alt="" loading="lazy">`
 
@@ -117,43 +113,7 @@ const BLANK: Parameters<typeof renderTooltip>[1] = { name: '', flavour: '' }
 /** What a template does on the reference sheet, without the lines the table has columns for. */
 const atReference = (t: Template) => renderTooltip(t, BLANK, REFERENCE, 0).lines.filter((l) => !/^(Range|Radius|Cooldown) /.test(l))
 
-/** Every item slot by name: the look's own labels, and the two hands a piece can be made for. */
-const ITEM_SLOT_LABEL: Record<ItemSlot, string> = {
-  hair: LOOK_SLOT_LABEL.hair,
-  beard: LOOK_SLOT_LABEL.beard,
-  head: LOOK_SLOT_LABEL.head,
-  upper: LOOK_SLOT_LABEL.upper,
-  lower: LOOK_SLOT_LABEL.lower,
-  full: LOOK_SLOT_LABEL.full,
-  back: LOOK_SLOT_LABEL.back,
-  feet: LOOK_SLOT_LABEL.feet,
-  face: LOOK_SLOT_LABEL.face,
-  hand: 'Either hand',
-  offhand: 'The off hand',
-}
-
-const HOLDS: Record<ItemSlot, string> = {
-  hair: 'Hairstyles, each in its colour. The long ones can be cut shorter.',
-  beard: 'Beards and moustaches, in the hair colour or their own.',
-  head: 'Hats, helmets, hoods, crowns and headbands.',
-  upper: 'The torso and arms. Layered looks are one item with a channel for each layer.',
-  lower: 'The legs: trousers, skirts and greaves.',
-  full: 'Torso, arms and legs at once. It takes the place of the upper and lower items.',
-  back: 'Capes, cloaks, scarves, wings and packs.',
-  feet: 'Shoes and boots.',
-  face: 'Glasses, masks and the odd cigar.',
-  hand: 'Weapons and props, in either hand.',
-  offhand: 'Shields and bows, which only ever go in the left hand.',
-}
-
 const FAMILY_NAME: Record<FormFamily, string> = { beam: 'Beam', projectile: 'Projectile', melee: 'Melee', cone: 'Cone', zone: 'Zone', aura: 'Aura', self: 'Self', movement: 'Movement' }
-
-const RUNG_DOC: Record<Rung, [get: string, example: string]> = {
-  wear: ['A library item as it was made.', 'The straw kasa, as it comes.'],
-  recolour: ['Your colours and finishes on its channels.', 'The kimono in navy, with a gold silk obi.'],
-  restyle: ['A print over one channel, and cuts along the item.', 'The kimono in the waves print, cut shorter.'],
-  generate: ['A new item made in 3D from your words or picture, fitted to every body.', 'A raven-feather cloak.'],
-}
 
 // ------------------------------------------------------------------------------------------------ the brand
 
@@ -172,18 +132,18 @@ function makingSection(): string {
 <section id="making">
   <h2>How a hero is made</h2>
   <p>The Forge reads before it builds.</p>
-  <p>You give it words, plus up to three pictures if you have them. It says back what it understood: the body, the wardrobe slot by slot, what each of the six skills is called, what it does and how it looks, and which way the ultimate's transformation goes if it has one.</p>
+  <p>You give it words, plus up to three pictures if you have them. It says back what it understood: the body, what each hand holds, what each of the six skills is called, what it does and how it looks, and which way the ultimate's transformation goes if it has one.</p>
   <p>Where it can't tell, it asks, ${words(MAX_QUESTIONS)} questions at most.</p>
   <p>Skills come first, then whether the form grows, keeps its size or shrinks, then whether to wear the face in your picture.</p>
-  <p>Every wish in the wardrobe shows the rung it sits on and what it costs, and you can move it. You can answer a question with a tap or fix any row by hand. And if it got something wrong, type a correction and it reads again.</p>
+  <p>You can answer a question with a tap or fix any row by hand. And if it got something wrong, type a correction and it reads again.</p>
   <p>A correction about the ultimate goes to the form, so "make the ultimate shrink him" shrinks the form and leaves the hero's own size alone.</p>
   <p>Nothing exists until you press Build hero.</p>
   ${table(['Reader', 'When it reads'], [
     ['<b>Your Claude Code</b>', 'On the local dev server only. It runs claude -p with Claude Haiku 5.5, the reading\'s JSON schema, no tools, no MCP servers, no plugins, and nothing saved.'],
     ['<b>Claude Haiku 5.5</b>', 'In production, once ANTHROPIC_API_KEY or AI_GATEWAY_API_KEY is set. It costs $0.10 in and $0.50 out per million tokens.'],
-    ['<b>Offline</b>', 'Always there. It reads quoted skill names after words like Skill 1, Q, ultimate or passive, and mechanics such as a transformation and which way it goes. It matches the clothes, hair and gear the prompt names against the library\'s own words, with their colours and prints, and reads outfit colours off the picture.'],
+    ['<b>Offline</b>', 'Always there. It reads quoted skill names after words like Skill 1, Q, ultimate or passive, and mechanics such as a transformation and which way it goes. It matches the weapons the prompt names against the built-in pieces\' own words, and the body\'s colours against colour words.'],
   ])}
-  <p>Whichever reader answers, we rebuild its reading from the vocabulary on this page, so an item the library doesn't have, a colour that isn't one or a template outside the role's pool never gets through.</p>
+  <p>Whichever reader answers, we rebuild its reading from the vocabulary on this page, so a piece that isn't built in, a colour that isn't one or a template outside the role's pool never gets through.</p>
   <p>And a name you gave stays yours, whatever the reader thought.</p>
 </section>`
 }
@@ -355,50 +315,25 @@ function bodySection(): string {
 <section id="body">
   <h2>The body and the face</h2>
   <p>Every size class has a man's body and a woman's, ${bodies} in all, and they share one surface: the same vertices joined into the same triangles.</p>
-  <p>Everything a hero wears is bound to that surface. So one item fits every body, whatever its build or face, and it stays on through a transformation that changes the size.</p>
+  <p>Heroes are drawn bare: no clothes, hair or beard. Outfits will be generated as the character mesh itself, made to fit each size's skeleton, so the skeleton can play every move of traversal and combat cleanly first.</p>
   ${table(['Part', 'What you set', 'Range'], rows)}
-  <p>Under everything sits a base layer painted into the body itself: shorts, and a sports top on a woman's body. So a slot left empty never shows more than a swimmer would.</p>
+  <p>A base layer is painted into the body itself: shorts, and a sports top on a woman's body. So a hero never shows more than a swimmer would.</p>
   <p>When a picture shows a face, the Forge finds its ${FACE_POINTS} landmarks in the browser, lays the photo on the head and fits the head's shape to it by mixing MakeHuman's face targets, the same way Blender fitted the twenty starters to their portraits. The strength slider sets how much of that shape the face takes. The picture itself always goes on whole.</p>
 </section>`
 }
 
-function wardrobeSection(): string {
-  const rows = ITEM_SLOTS.map((slot) => {
-    const items = LIBRARY.filter((e) => e.slot === slot)
-    return [`<b>${ITEM_SLOT_LABEL[slot]}</b>`, esc(HOLDS[slot]), String(items.length), esc(items.slice(0, 4).map((e) => e.name).join(', '))]
+function piecesSection(): string {
+  const rows = GEAR_SLOTS.map((slot) => {
+    const fit = BUILT_IN.filter((p) => SLOT_KINDS[slot].includes(p.kind))
+    return [`<b>${slot === 'hand_r' ? 'Right hand' : 'Left hand'}</b>`, slot === 'hand_r' ? 'Weapons and props' : 'Weapons and props, or a shield or bow', String(fit.length)]
   })
+  const packs = PACKS.map((p) => [`<b>${p.credits} credits</b>`, `$${(p.amountCents / 100).toFixed(2)}`, `${Math.floor(p.credits / PIECE_PRICE)} pieces`])
   return `
-<section id="wardrobe">
-  <h2>The wardrobe: one item in each slot</h2>
-  <p>A hero wears one item per slot.</p>
-  <p>That keeps fitting simple, because a garment is only ever fitted to the body and never to another garment. So a layered look like a leather jacket over a tee is a single item with a colour channel for each layer.</p>
-  ${table(['Slot', 'Holds', 'In the library', 'For example'], rows)}
-  <p>Each slot sits at its own distance from the skin: boots outside the trouser legs, a top outside the waistband, a cape outside the top. Whatever an item covers is hidden under it, so nothing pokes through. Hair and beards are pressed in under a hat, so a cap flattens the hair, and long hair still hangs below a kasa's brim.</p>
-  <h3>Cloth that moves</h3>
-  <p>Loose cloth and long hair hang from short chains that swing and push off the body, and so do the tails of a nine-tails form, with up to ${MAX_PARTICLES} moving points a hero across everything it wears, stepped ${RATE} times a second near the camera and ${FAR_RATE} times far away.</p>
-  <p>Each moving point is a bone the cloth is skinned to, so the GPU does the bending and nothing simulates a mesh.</p>
-</section>`
-}
-
-function rungsSection(): string {
-  const rungRows = RUNGS.map((r) => [`<b>${RUNG_LABEL[r]}</b>`, esc(RUNG_DOC[r][0]), r === 'generate' ? `${PIECE_PRICE} credits, once` : 'Free', esc(RUNG_DOC[r][1])])
-  const packs = PACKS.map((p) => [`<b>${p.credits} credits</b>`, `$${(p.amountCents / 100).toFixed(2)}`, `${Math.floor(p.credits / PIECE_PRICE)} items`])
-  return `
-<section id="rungs">
-  <h2>Four rungs to any look</h2>
-  <p>Say you want a kimono. You can wear the library's as it is, put it in your own colours, give it a print and cut it shorter, or have a new one made. Those are the four rungs, cheapest first.</p>
-  ${table(['Rung', 'You get', 'Cost', 'For example'], rungRows)}
-  <p>The Forge picks the lowest rung that gets you what you asked for, and the reading shows it.</p>
-  <p>What anyone generates joins the shared library, so the next player can wear it, recolour it or restyle it for free. Generated items recolour too, because the fit finds their colour regions and turns them into channels.</p>
-  <h3>Channels and finishes</h3>
-  <p>Every item has up to four colour channels, like a kimono's cloth, obi and collar. Each channel takes a finish: ${either(FINISHES.map((f) => FINISH_LABEL[f].toLowerCase()))}.</p>
-  <h3>Prints</h3>
-  <p>Any cloth channel can wear one of ${PRINTS.length} prints, or a picture you upload. Each print is a small tile in two colours, the channel's own and an ink, that repeats without a join. So one print reads in any colours, at ${PRINT_SCALE.min} to ${PRINT_SCALE.max} repeats a metre.</p>
-  <p class="chips">${chips(PRINTS.map((p) => PRINT_LABEL[p]))}</p>
-  <h3>Cuts</h3>
-  <p>An item that allows it can be cut shorter: ${either(KNOBS.map((k) => KNOB_LABEL[k].toLowerCase()))}, each from 0, the shortest, to 1, as made. Every vertex of an item records where it sits along the body's limbs and trunk, so a cut works on any item, generated ones included.</p>
-  <h3>What's free and what costs credits</h3>
-  <p>Everything about making a hero is free, wearing anything in the library included. The one thing that costs credits is generating an item the library doesn't have yet: ${PIECE_PRICE} credits, twice the roughly ${GENERATION_COST.piece} it costs us to make. If it can't be made, or doesn't fit, the credits go back.</p>
+<section id="pieces">
+  <h2>What the hands hold</h2>
+  <p>A hero holds a piece in each hand. A piece is rigid: it hangs on the hand's socket and takes one colour.</p>
+  ${table(['Hand', 'Holds', 'Built in'], rows)}
+  <p>Everything built in is free. The one thing that costs credits is generating a piece that isn't there yet: ${PIECE_PRICE} credits, twice the roughly ${GENERATION_COST.piece} it costs us to make. If it can't be made, the credits go back, and what anyone generates is everyone's after.</p>
   <p>Every account gets ${FREE_GRANT} credits once.</p>
   ${table(['Pack', 'Price', 'Enough for'], packs)}
 </section>`
@@ -447,15 +382,15 @@ function formLookSection(): string {
     ['<b>Around it</b>', esc(FORM_AURAS.map((a) => FORM_AURA_LABEL[a]).join(', '))],
     ['<b>Size change</b>', `${esc(FORM_GROWTHS.map((g) => FORM_GROWTH_LABEL[g]).join(' or '))}: swelling into the new size, or all at once`],
     ['<b>Trail</b>', esc(FORM_TRAILS.map((t) => FORM_TRAIL_LABEL[t]).join(', '))],
-    ['<b>Avatar</b>', `${esc(FORM_AVATARS.map((a) => FORM_AVATAR_LABEL[a]).join(' or '))}: tails of energy on cloth chains, or a spirit body that fills the hitbox exactly`],
-    ['<b>Body</b>', `A hair item and its colour, eye colour, ${esc(FORM_MARKS.map((m) => FORM_MARK_LABEL[m].toLowerCase()).join(', '))}, and library items worn over the outfit`],
+    ['<b>Avatar</b>', `${esc(FORM_AVATARS.map((a) => FORM_AVATAR_LABEL[a]).join(' or '))}: tails of energy on chains, or a spirit body that fills the hitbox exactly`],
+    ['<b>Body</b>', `Eye colour and ${esc(FORM_MARKS.map((m) => FORM_MARK_LABEL[m].toLowerCase()).join(', '))}`],
   ]
   return `
 <section id="form-looks">
   <h2>Forms: the size is the template's, the rest is yours</h2>
   <p>A transformation's look says how it arrives, what surrounds the hero while it lasts, how the change of size plays, what it leaves behind as it moves, and what changes about the body.</p>
   ${table(['Part', 'Choices'], rows)}
-  <p>Body changes are items from the wardrobe, like spiky gold hair or a chakra cloak over the outfit. Everything stays bound to the shared surface, so the outfit stays on through any size, and an avatar fills exactly the hitbox its template gives.</p>
+  <p>Body changes are drawn on the body itself, so they hold through any size, and an avatar fills exactly the hitbox its template gives.</p>
 </section>`
 }
 
@@ -464,14 +399,14 @@ function fairSection(): string {
 <section id="fair">
   <h2>What keeps it fair</h2>
   <ul>
-    <li>Looks never touch a number. The balance check's key leaves them out, so editing a look, a wish or a skill's colours keeps the result the hero already has.</li>
+    <li>Looks never touch a number. The balance check's key leaves them out, so editing a look or a skill's colours keeps the result the hero already has.</li>
     <li>What you see is what can be hit. The body is its size class's own, a skill's hit layer is drawn at its true size, and an avatar fills its hitbox exactly.</li>
     <li>The engine sets every number, whatever a skill is called. A Kamehameha on a beam template hits exactly as hard as that template.</li>
-    <li>Everything in the library is free for everyone. Generating costs ${PIECE_PRICE} credits once, and the item it makes is everyone's after.</li>
+    <li>Every built-in piece is free for everyone. Generating costs ${PIECE_PRICE} credits once, and the piece it makes is everyone's after.</li>
   </ul>
   <h3>The content floor</h3>
   <p>Anything legal goes, real people and parody included.</p>
-  <p>Three things don't: anything involving children, sexual depictions of real people, and real people shown endorsing the game. The floor checks the prompt and the reading's words before you ever see a reading, and it checks generated items and their pictures again.</p>
+  <p>Three things don't: anything involving children, sexual depictions of real people, and real people shown endorsing the game. The floor checks the prompt and the reading's words before you ever see a reading, and it checks generated pieces and their pictures again.</p>
 </section>`
 }
 
@@ -484,29 +419,21 @@ const lookLine = (look: SkillLook, kind: Template['delivery']['kind']) => `${ELE
 function formExtras(look: TransformationLook): string {
   const b = look.body
   const parts = [
-    ...(b?.hair ? [`${esc(libraryItem(b.hair)?.name ?? b.hair)} hair ${b.hairColor ? swatch(b.hairColor) : ''}`] : []),
     ...(b?.eyes ? [`Eyes ${swatch(b.eyes)}`] : []),
     ...(b?.marks ? [FORM_MARK_LABEL[b.marks]] : []),
-    ...(b?.wear ?? []).map((w) => `Over the outfit: ${esc(libraryItem(w.id)?.name ?? w.id)} ${swatches(w.colors ?? [])}`),
     ...(look.avatar ? [FORM_AVATAR_LABEL[look.avatar]] : []),
     ...(look.trail ? [`${FORM_TRAIL_LABEL[look.trail]} trail`] : []),
   ]
   return parts.length ? `<ul class="bits">${parts.map((p) => `<li>${p}</li>`).join('')}</ul>` : '<small>Nothing more</small>'
 }
 
-/** Each channel's colour as this hero wears it: theirs, or the item's own where they kept it. */
-function wornColors(w: Worn): string[] {
-  const channels = libraryItem(w.id)?.channels ?? []
-  return channels.map((c, i) => w.colors?.[i] ?? c.color)
-}
-
 function encoreExample(): string {
   const offline = offlineReading({ prompt: ENCORE_PROMPT })
   const cover: Reading = hydrateReading(ENCORE_COVER_ANSWER, { prompt: ENCORE_PROMPT, heroName: 'Encore ABJ', faceFound: true }, 'claude')
   const named = BUILD_SLOTS.filter((s) => offline.kit[s].name).map((s) => offline.kit[s].name)
-  const wishRows = cover.wear.map((w) => {
-    const item = w.item ? libraryItem(w.item) : undefined
-    return [`<b>${LOOK_SLOT_LABEL[w.slot]}</b>`, esc(w.phrase), item ? `<span class="pick">${picture(item.thumb, 'mini')}${esc(item.name)}</span>` : '<small>Not in the library yet</small>', RUNG_LABEL[w.rung], swatches(w.colors ?? []) + (w.finishes?.length ? ` <small>${esc(w.finishes.filter(Boolean).map((f) => FINISH_LABEL[f!]).join(', '))}</small>` : '')]
+  const heldRows = GEAR_SLOTS.flatMap((slot) => {
+    const piece = cover.gear[slot] ? builtIn(cover.gear[slot]!) : undefined
+    return piece ? [[`<b>${slot === 'hand_r' ? 'Right hand' : 'Left hand'}</b>`, `<span class="pick">${picture(piece.thumb, 'mini')}${esc(piece.name)}</span>`]] : []
   })
   const kitRows = BUILD_SLOTS.map((s) => {
     const skill = cover.kit[s]
@@ -522,14 +449,14 @@ function encoreExample(): string {
 <h3>Encore ABJ, read off a cover</h3>
 <p>Here's the prompt a player typed, with the Lunch Break cover attached:</p>
 <blockquote>${esc(ENCORE_PROMPT)}</blockquote>
-<p>A reader that can see the cover answers with the wardrobe too. Rebuilt the way every answer is, it comes out as a ${esc(getRole(cover.roleId).name.toLowerCase())} at ${esc(SIZES[cover.look.size].label.toLowerCase())} size${cover.look.wearFace ? ', wearing the face from the cover' : ''}:</p>
-${table(['Slot', 'Wish', 'Answered by', 'Rung', 'Colours'], wishRows)}
+<p>A reader that can see the cover answers with what the hero holds too. Rebuilt the way every answer is, it comes out as a ${esc(getRole(cover.roleId).name.toLowerCase())} at ${esc(SIZES[cover.look.size].label.toLowerCase())} size${cover.look.wearFace ? ', wearing the face from the cover' : ''}:</p>
+${table(['Hand', 'Holds'], heldRows)}
 ${table(['Slot', 'Name', 'What it does', 'Engine', 'Look'], kitRows)}
 <p>The ultimate is ${esc(ult.name)}, so the hero ${esc(formChange(ult, cover.look.size))}. The form arrives in a ${form?.entry ? esc(FORM_ENTRY_LABEL[form.entry].toLowerCase()) : 'flash'}${form?.aura ? ` with a ${esc(FORM_AURA_LABEL[form.aura].toLowerCase())}` : ''}, and while it lasts the hero gets:</p>
 ${form ? formExtras(form) : ''}
 <p>Then the reader asks what it couldn't tell:</p>
 <ul>${cover.questions.map((q) => `<li><b>${esc(q.ask)}</b> ${esc(q.options.map((o) => o.label).join(' · '))}</li>`).join('')}</ul>
-<p>Offline, with no picture to look at, the Forge still gets all ${words(named.length)} names from the words (${esc(named.join(', '))}) and asks ${words(offline.questions.length)} questions. ${offline.wear.length ? '' : 'It can\'t see the hat, so the role dresses the hero until you name the clothes.'}</p>`
+<p>Offline, with no picture to look at, the Forge still gets all ${words(named.length)} names from the words (${esc(named.join(', '))}) and asks ${words(offline.questions.length)} questions. ${Object.keys(offline.gear).length ? '' : 'It can\'t see the swords, so the hands stay empty until you name them.'}</p>`
 }
 
 function beamsExample(): string {
@@ -591,29 +518,19 @@ function examplesSection(): string {
 </section>`
 }
 
-// ------------------------------------------------------------------------------------------------ the library
+// ------------------------------------------------------------------------------------------------ the pieces
 
-function itemCard(e: LibraryEntry): string {
-  const rigid = isRigid(e)
-  const channels = rigid
-    ? e.channels.map((c) => `<li>${swatch(c.color)}Takes a colour</li>`).join('') || '<li>Its own colours</li>'
-    : e.channels.map((c) => `<li>${swatch(c.color)}${esc(c.name)} <small>${FINISH_LABEL[c.finish]}</small></li>`).join('')
-  const cuts = e.knobs.length ? `<p class="cuts">Cuts: ${esc(e.knobs.map((k) => KNOB_LABEL[k].toLowerCase()).join(', '))}</p>` : ''
-  return `<figure class="item">${picture(e.thumb)}<figcaption><b>${esc(e.name)}</b><code>${esc(e.id)}</code><ul class="channels">${channels}</ul>${cuts}<p class="words">${esc(e.tags.slice(0, 3).join(', '))}</p></figcaption></figure>`
+function pieceCard(p: PieceEntry): string {
+  const colour = p.tint ? `<li>${swatch(p.tint)}Takes a colour</li>` : '<li>Its own colours</li>'
+  return `<figure class="item">${picture(p.thumb)}<figcaption><b>${esc(p.name)}</b><code>${esc(p.id)}</code><ul class="channels">${colour}</ul><p class="words">${esc(p.tags.slice(0, 3).join(', '))}</p></figcaption></figure>`
 }
 
 function librarySection(): string {
-  const groups = ITEM_SLOTS.map((slot) => {
-    const items = LIBRARY.filter((e) => e.slot === slot)
-    return items.length ? `<h3>${ITEM_SLOT_LABEL[slot]} <small>${items.length}</small></h3><div class="items">${items.map(itemCard).join('')}</div>` : ''
-  })
   return `
 <section id="library">
-  <h2>The library: ${LIBRARY.length} items, free to wear</h2>
-  <p>Every item here is free for everyone, on the first three rungs.</p>
-  <p>We built them in Blender and ran each one through the same fit a player's generated item goes through, so a kimono from the library and a kimono someone generates tomorrow sit on the body the same way. Clothes and hair are bound to the shared body, and so are most hats. Rigid pieces like a top hat or a katana hang on a socket and take one colour.</p>
-  <p>Under each item are its channels with their finish, the cuts it allows, and a few of the words a prompt can use for it.</p>
-  ${groups.join('\n  ')}
+  <h2>The pieces: ${BUILT_IN.length}, free to hold</h2>
+  <p>We built them in Blender. Each hangs on a hand's socket and takes one colour. Under each are a few of the words a prompt can use for it.</p>
+  <div class="items">${BUILT_IN.map(pieceCard).join('')}</div>
 </section>`
 }
 
@@ -732,8 +649,8 @@ export function charterDoc(): string {
   <p class="kicker">Autobattler</p>
   <h1>The character charter</h1>
   <p class="lede">Every rule a hero is made of, on one page. The engine owns every number. You own everything you see.</p>
-  <p class="meta">Written by the code itself (src/docs/charter-doc.ts), so it can't drift from the game. Catalogue v${CATALOG_VERSION}, ${CATALOG.length} skill templates, ${LIBRARY.length} wardrobe items, engine calibration v${ENGINE_CALIBRATION_VERSION}.</p>
-  <nav><a href="#making">Making a hero</a><a href="#engine">What the engine owns</a><a href="#yours">What you own</a><a href="#examples">Worked examples</a><a href="#library">The library</a></nav>
+  <p class="meta">Written by the code itself (src/docs/charter-doc.ts), so it can't drift from the game. Catalogue v${CATALOG_VERSION}, ${CATALOG.length} skill templates, ${BUILT_IN.length} pieces, engine calibration v${ENGINE_CALIBRATION_VERSION}.</p>
+  <nav><a href="#making">Making a hero</a><a href="#engine">What the engine owns</a><a href="#yours">What you own</a><a href="#examples">Worked examples</a><a href="#library">The pieces</a></nav>
 </header>
 ${makingSection()}
 <header class="part" id="engine"><span class="label">Part one</span><h2>What the engine owns</h2><p>Every number. The engine decides how a hero fights, and the balance check holds each hero to the same line. Change the role, the size, the points or a skill and the hero goes back through it.</p></header>
@@ -744,8 +661,7 @@ ${transformSection()}
 ${balanceSection()}
 <header class="part" id="yours"><span class="label">Part two</span><h2>What you own</h2><p>Everything you see. None of it is a number, so a hero can change its whole look after the balance check without going back through it.</p></header>
 ${bodySection()}
-${wardrobeSection()}
-${rungsSection()}
+${piecesSection()}
 ${skillLookSection()}
 ${formLookSection()}
 ${fairSection()}

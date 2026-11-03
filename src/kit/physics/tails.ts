@@ -1,11 +1,14 @@
-import { MAX_PARTICLES, RATE } from './cloth.js'
+/** A hero's budget of particles that move. */
+export const MAX_PARTICLES = 64
+/** Steps a second. */
+export const RATE = 60
 
 /**
  * Tails on chains: a nine-tails form's tails of energy. Each tail is a chain of particles from a root at the hero's
  * lower back. The chain swings behind the hero as it moves (Verlet), with each link held at its length and every
  * point pulled gently toward a rest shape that fans out behind and curls up. The tails keep out of the column the
  * body stands in. Renderer-free: the effect player feeds in the root and the facing each frame, then draws a ribbon
- * down every chain. Nine tails of six points is 45 moving particles, inside a hero's budget (cloth.ts).
+ * down every chain. Nine tails of six points is 45 moving particles, inside a hero's budget (MAX_PARTICLES).
  */
 
 type V3 = [number, number, number]

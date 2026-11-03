@@ -109,6 +109,13 @@ export interface HeroState {
   buffer?: { moves: number; until: number }
   /** Pulling up onto a ledge (GAME.md §7 mantle): from the start spot to the top over [from, until], out of control. */
   mantle?: { from: number; until: number; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }
+  /**
+   * Hanging from a ledge (GAME.md §7): hands on its edge at `x, y, z` (y is the top), the drop lying along `nx, nz`,
+   * since `from`. A played hero walking off a sheer edge catches it (owner, 2026-11-04).
+   */
+  hang?: { from: number; x: number; y: number; z: number; nx: number; nz: number; free?: boolean }
+  /** No ledge catches it again before this tick (it just let go of one). */
+  hangAfter?: number
   /** Riding map line `line` (a zipline or a rail, §7) at `t` along it (0 at its start), toward `dir`. */
   zip?: { line: number; t: number; dir: 1 | -1; hang: boolean }
   /** No line catches it again before this tick (it just let go of one). */
@@ -157,6 +164,29 @@ export interface HeroState {
    * `ends`. Control that lands first cuts it short, and what hasn't been released never lands.
    */
   action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number }; shot?: { share: number; rider: boolean }; target?: number }
+  /**
+   * A dash or leap carrying the hero from (x0, y0, z0) to (x1, y1, z1) over [from, until], a leap rising `arc` metres
+   * over the middle; the skill that sent it (`slot`, with its blow, shot and target) lands when it arrives
+   * (`arrived`). Until 2026-11-04 these moved the hero in one tick, which read as being thrown somewhere else.
+   */
+  travel?: {
+    from: number
+    until: number
+    x0: number
+    y0: number
+    z0: number
+    x1: number
+    y1: number
+    z1: number
+    arc: number
+    startY: number
+    arrived?: boolean
+    slot: BuildSlot
+    blow?: { step: number; heavy?: number }
+    recovery: number
+    shot?: { share: number; rider: boolean }
+    target?: number
+  }
   chosenSize: SizeClass
   /** The current class, which a transformation can change until `formUntil` (KTD14). */
   size: SizeClass

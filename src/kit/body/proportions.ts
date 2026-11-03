@@ -2,7 +2,7 @@
  * A hero's proportions beyond its physique (shape.ts), each 0 to 1 with 0.5 the body as made: how long its legs, arms,
  * torso and neck are, how wide its shoulders sit and how big its head is. Together with weight and muscle they span a
  * lanky beanpole (long legs and arms, narrow shoulders, thin) to a towering brute (broad shoulders, short neck, small
- * head on a heavy, muscled frame). The game puts them on the skeleton's rest (src/arena/client/wear/proportions.ts).
+ * head on a heavy, muscled frame). The game puts them on the skeleton's rest (src/arena/client/proportions.ts).
  */
 export interface Proportions {
   legs: number

@@ -28,7 +28,7 @@ const followProps = (id: number, { onFollow }: Follow) =>
 
 export function AllyRoster({ heroes, info, controlled, side, followed, onFollow }: { heroes: HudHero[]; info: readonly HudHeroInfo[]; controlled?: number; side: Team } & Follow) {
   return (
-    <ol className={`hud-roster side-${side}`} aria-label="Your heroes">
+    <ol className={`hud-roster side-${side}${controlled !== undefined ? ' steering' : ''}`} aria-label="Your heroes">
       {heroes.map((h, i) => {
         const me = info[h.id]
         const steering = controlled === h.id

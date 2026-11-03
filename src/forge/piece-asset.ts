@@ -12,15 +12,13 @@ import { countTriangles } from './arena-asset.js'
  * +z; see tools/blender/humanlib/sockets.py) so it hangs right on any body:
  * - a hand piece's length runs along +y with its handle (the thinner end) in the palm and its wide side along z
  * - an off-hand piece (a shield, a bow) is held at its middle, its flat side facing +x, out from the left hand
- * - a head piece sits down on the hat line, a face piece in front of the eyes, a back piece against the back
- * Generated models arrive upright, so only hand and off-hand pieces are turned.
  */
 
 /** The most triangles a piece keeps, by kind. */
-export const PIECE_BUDGET: Record<PieceKind, number> = { head: 4000, face: 2500, hand: 5000, offhand: 4000, back: 5000 }
+export const PIECE_BUDGET: Record<PieceKind, number> = { hand: 5000, offhand: 4000 }
 
-/** The size a piece is scaled to, in metres: a hand piece's length, a hat's width, glasses across, and so on. */
-export const PIECE_SIZE: Record<PieceKind, number> = { head: 0.26, face: 0.17, hand: 0.95, offhand: 0.62, back: 0.75 }
+/** The size a piece is scaled to, in metres: its longest side. */
+export const PIECE_SIZE: Record<PieceKind, number> = { hand: 0.95, offhand: 0.62 }
 
 export const PIECE_TEXTURE = 512
 
@@ -90,9 +88,7 @@ export function placement(points: Vec3[], kind: PieceKind): mat4 {
   const { min, max } = bounds(points)
   const size = [0, 1, 2].map((a) => Math.max(max[a] - min[a], 1e-4))
   const order = [0, 1, 2].sort((a, b) => size[b] - size[a])
-  let rows: [Vec3, Vec3, Vec3] = [unit(0), unit(1), unit(2)]
-  if (kind === 'hand') rows = rotationOnto(order[2], order[0], order[1])
-  if (kind === 'offhand') rows = rotationOnto(order[2], order[0], order[1])
+  let rows = rotationOnto(order[2], order[0], order[1])
   let turned = points.map((p) => apply(rows, p))
   let b = bounds(turned)
   if (kind === 'hand') {
@@ -105,34 +101,18 @@ export function placement(points: Vec3[], kind: PieceKind): mat4 {
     }
   }
   const ext = [0, 1, 2].map((a) => Math.max(b.max[a] - b.min[a], 1e-4))
-  const scale = PIECE_SIZE[kind] / (kind === 'head' ? Math.max(ext[0], ext[2]) : kind === 'face' ? ext[0] : Math.max(...ext))
+  const scale = PIECE_SIZE[kind] / Math.max(...ext)
   const mid = (a: number) => (b.min[a] + b.max[a]) / 2
   let t: Vec3
-  switch (kind) {
-    case 'hand': {
-      // grip 15% up from the handle's end, centred on the handle
-      const len = ext[1]
-      const handle = turned.filter((p) => p[1] <= b.min[1] + len * 0.3)
-      const hb = bounds(handle.length ? handle : turned)
-      t = [-(hb.min[0] + hb.max[0]) / 2, -(b.min[1] + len * 0.15), -(hb.min[2] + hb.max[2]) / 2]
-      break
-    }
-    case 'offhand':
-      // held at its middle, a hand's width out from the palm
-      t = [-mid(0) + 0.07 / scale, -mid(1), -mid(2)]
-      break
-    case 'head':
-      // sunk a little onto the head
-      t = [-mid(0), -b.min[1] - 0.03 / scale, -mid(2)]
-      break
-    case 'face':
-      // its front just ahead of the lens plane, the rest reaching back toward the ears
-      t = [-mid(0), -mid(1), -b.max[2] + 0.012 / scale]
-      break
-    case 'back':
-      // pressed against the back, reaching behind (-z)
-      t = [-mid(0), -mid(1), -b.max[2]]
-      break
+  if (kind === 'hand') {
+    // grip 15% up from the handle's end, centred on the handle
+    const len = ext[1]
+    const handle = turned.filter((p) => p[1] <= b.min[1] + len * 0.3)
+    const hb = bounds(handle.length ? handle : turned)
+    t = [-(hb.min[0] + hb.max[0]) / 2, -(b.min[1] + len * 0.15), -(hb.min[2] + hb.max[2]) / 2]
+  } else {
+    // held at its middle, a hand's width out from the palm
+    t = [-mid(0) + 0.07 / scale, -mid(1), -mid(2)]
   }
   return compose(rows, scale, t.map((v) => v * scale) as Vec3)
 }

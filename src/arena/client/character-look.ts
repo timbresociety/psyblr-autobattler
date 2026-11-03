@@ -1,16 +1,15 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import { defaultLook, outfitOf, ROLE_GENDER, WEAR_SLOTS, wearUrl, type FacePhoto, type Gender, type LookSlot, type WearSlot, type Worn } from '../../charter/look.js'
+import { defaultLook, heldOf, ROLE_GENDER, type FacePhoto, type GearPiece, type GearSlot, type Gender } from '../../charter/look.js'
 import type { FormBody, FormMark } from '../../charter/skill-look.js'
-import { libraryItem } from '../../kit/wear/library.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 import type { Sculpt } from '../../kit/body/sculpt.js'
 import { ALL_SIZE_CLASSES, type SizeClass } from '../../charter/sizes.js'
 
 /**
  * What a hero looks like in the arena's own characters (R24), without any renderer: which body it wears (its size and
- * gender), how that body is built, its skin and photo face, and its outfit from the wardrobe (wear/dress-model.ts
- * dresses the body with it). Every hero is made this way, the starters too (starters.ts). The bodies come from
+ * gender), how that body is built, its skin and photo face, and the weapons in its hands (body-model.ts builds the
+ * body with them). Heroes are drawn bare (owner, 2026-11-04). Every hero is made this way, the starters too (starters.ts). The bodies come from
  * tools/blender/human.py. The arena, the staging busts and the 3D previews all read this, so a hero looks the same in
  * its portrait as on the field, on either side.
  */
@@ -23,10 +22,10 @@ export interface CharacterLook {
   build: BodyName
   /** How the body is built. */
   physique: Physique
-  /** What it wears, slot by slot. */
-  outfit: Partial<Record<LookSlot, Worn>>
-  /** The body's own colours: its skin (baked into the hero's atlas under a photo face), the whites of its eyes, and its irises. */
-  colors: { skin: THREE.Color; eye: THREE.Color; iris: THREE.Color }
+  /** The weapons in its hands. */
+  held: Partial<Record<GearSlot, GearPiece>>
+  /** The body's own colours: its skin (baked into the hero's atlas under a photo face), the whites of its eyes, its irises and its brows. */
+  colors: { skin: THREE.Color; eye: THREE.Color; iris: THREE.Color; brow: THREE.Color }
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
   face?: FacePhoto
   /** Marks painted on the face, as a form wears them (face/composite). */
@@ -35,28 +34,13 @@ export interface CharacterLook {
   sculpt?: Sculpt
 }
 
-/**
- * The look a form wears: the hero's own, with the form's hair, eyes, marks and items put on over its outfit. A
- * full-body item covers the upper and lower ones, as in the wardrobe.
- */
+/** The look a form wears: the hero's own, with the form's eyes and marks. */
 export function formCharacterLook(look: CharacterLook, body: FormBody | undefined): CharacterLook {
   if (!body) return look
-  const outfit = { ...look.outfit }
-  if (body.hair) outfit.hair = { id: body.hair, url: wearUrl(body.hair), ...(body.hairColor ? { colors: [body.hairColor] } : {}) }
-  else if (body.hairColor && outfit.hair) outfit.hair = { ...outfit.hair, colors: [body.hairColor] }
-  for (const item of body.wear ?? []) {
-    const slot = libraryItem(item.id)?.slot as WearSlot | undefined
-    if (!slot || !WEAR_SLOTS.includes(slot)) continue
-    outfit[slot] = { id: item.id, url: wearUrl(item.id), ...(item.colors ? { colors: item.colors } : {}), ...(item.finishes ? { finishes: item.finishes } : {}) }
-    if (slot === 'full') {
-      delete outfit.upper
-      delete outfit.lower
-    } else if (slot === 'upper' || slot === 'lower') delete outfit.full
-  }
   // the eyes take the form's colour: the irises outright, and the whites a little, lifted so the iris still reads
   const eye = body.eyes ? new THREE.Color().setStyle(body.eyes, THREE.SRGBColorSpace).lerp(new THREE.Color(1, 1, 1), 0.25) : look.colors.eye
   const iris = body.eyes ? new THREE.Color().setStyle(body.eyes, THREE.SRGBColorSpace) : look.colors.iris
-  return { ...look, outfit, colors: { ...look.colors, eye, iris }, ...(body.marks ? { marks: body.marks } : {}) }
+  return { ...look, colors: { ...look.colors, eye, iris }, ...(body.marks ? { marks: body.marks } : {}) }
 }
 
 /** The body a hero wears: its size class (colossal while transformed) in its look's gender, or its role's without one. */
@@ -74,18 +58,19 @@ export function heroHue(name: string): number {
   return ((h >>> 0) % 1000) / 1000
 }
 
-/** A hero's look: its own, or what its role and hue give it before anyone dresses it. */
+/** A hero's look: its own, or what its role and hue give it before anyone changes it. */
 export function characterLook(build: Build, hue: number): CharacterLook {
   const base = defaultLook(build.roleId, build.heroName ?? build.roleId, hue)
   const look = build.look ?? base
   const out: CharacterLook = {
     build: bodyFor(build),
     physique: { ...NEUTRAL_PHYSIQUE, ...(look.physique ?? {}) },
-    outfit: outfitOf(look),
+    held: heldOf(look),
     colors: {
       skin: new THREE.Color().setStyle(look.colors.skin ?? base.colors.skin, THREE.SRGBColorSpace),
       eye: new THREE.Color().setHSL(0, 0, 0.96, THREE.SRGBColorSpace),
       iris: new THREE.Color().setStyle(look.colors.iris ?? base.colors.iris ?? '#3a2e22', THREE.SRGBColorSpace),
+      brow: new THREE.Color().setStyle(look.colors.brow ?? base.colors.brow, THREE.SRGBColorSpace),
     },
   }
   if (look.face) out.face = look.face
@@ -139,7 +124,7 @@ export function characterNormalMap(mesh: THREE.Mesh): THREE.Texture | null {
 }
 
 /**
- * The classic (WebGL) material the previews and busts draw a character with. Its skin (_skin, from dress-model.ts)
+ * The classic (WebGL) material the previews and busts draw a character with. Its skin (_skin, from body-model.ts)
  * lets light in: light scattered under the surface blurs the relief its diffuse shows, red the most, and carries on a
  * little past where the surface turns from the light, warm. Its highlights keep the full relief, at skin's own
  * reflectance (IOR 1.4), and a faint sheen at grazing angles stands for its fine hair. Up close it has pores and faint
@@ -166,9 +151,9 @@ export function classicCharacterMaterial(map: THREE.Texture | null, normalMap: T
 
 /**
  * Value noise in three dimensions, and a normal bumped by a height in metres, for relief drawn without UVs on where a
- * surface sits at rest: skin's pores here, leather's grain and hair's locks in wear/dress-model.ts.
+ * surface sits at rest: skin's pores.
  */
-export const GRAIN_GLSL = `float grainHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+const GRAIN_GLSL = `float grainHash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 // value noise in three dimensions, 0 to 1
 float grainNoise(vec3 p) {
   vec3 i = floor(p);

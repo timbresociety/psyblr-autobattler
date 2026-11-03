@@ -419,7 +419,7 @@ export interface Route {
  */
 export function followRoute(g: NavGraph, hero: HeroState, route: Route, match: MatchState, speed: number): { x: number; z: number; jump: boolean } {
   const p = hero.position
-  if (hero.zip || hero.mantle) return { x: 0, z: 0, jump: false }
+  if (hero.zip || hero.mantle || hero.travel) return { x: 0, z: 0, jump: false }
   // arrived nodes are passed; a hero standing anywhere further along skips ahead
   while (route.at < route.path.length) {
     const n = g.nodes[route.path[route.at]]

@@ -59,17 +59,17 @@ describe('gear on a body', () => {
   })
 
   it('moves a socket with the surface round it, and leaves one with no surface near it where it was', () => {
-    // a patch of face round the lens socket, which the hero's physique lowers 2 cm; the hand's socket is nowhere near
+    // a patch of palm round the left hand's socket, which the hero's physique lowers 2 cm; the right hand's is nowhere near
     const rest = [0, 1.68, 0.16, 0.03, 1.68, 0.15, -0.03, 1.68, 0.15, 0, 1.7, 0.15]
     const shaped = rest.map((v, i) => (i % 3 === 1 ? v - 0.02 : v))
-    const moved = shapedSockets({ face: { bone: 'head', pos: [0, 1.68, 0.177], scale: 1.2 }, ...sockets }, rest, shaped)
-    expect(moved.face!.pos.map((v) => +v.toFixed(5))).toEqual([0, 1.66, 0.177])
-    expect(moved.face!.scale).toBe(1.2)
+    const moved = shapedSockets({ hand_l: { bone: 'hand_L', pos: [0, 1.68, 0.177], scale: 1.2 }, ...sockets }, rest, shaped)
+    expect(moved.hand_l!.pos.map((v) => +v.toFixed(5))).toEqual([0, 1.66, 0.177])
+    expect(moved.hand_l!.scale).toBe(1.2)
     expect(moved.hand_r).toEqual(sockets.hand_r)
   })
 
   it('skips a piece whose socket the body lacks', () => {
     const { root } = body()
-    expect(hangPieces(root, [{ name: 'face', socket: 'face', file: { scene: new THREE.Group(), animations: [] } }], sockets)).toEqual([])
+    expect(hangPieces(root, [{ name: 'hand_l', socket: 'hand_l', file: { scene: new THREE.Group(), animations: [] } }], sockets)).toEqual([])
   })
 })

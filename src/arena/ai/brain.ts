@@ -290,7 +290,7 @@ function graphOf(m: MatchState): NavGraph | undefined {
  */
 function plan(m: MatchState, hero: HeroState, brain: BrainState, at: { x: number; y: number; z: number }, place = false) {
   const g = graphOf(m)
-  if (!g || hero.airborne || hero.zip || hero.mantle) return
+  if (!g || hero.airborne || hero.zip || hero.mantle || hero.travel) return
   const goal = nodeAt(g, at)
   const from = nodeAt(g, hero.position)
   if (goal < 0 || from < 0) return

@@ -244,6 +244,25 @@
 .hud-card.dead .hud-card-face::after { content: 'Down'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-8deg); padding: 2px 6px; border-radius: 2px; background: rgba(200, 40, 30, 0.85); font: 800 italic 13px/1 var(--hud-display); letter-spacing: 0.12em; text-transform: uppercase; color: #fff; }
 .hud-card.fallback .hud-card-name::after { content: ' ⚠'; color: #ffb86b; }
 
+/* steering a hero, the squad moves off the bottom to a column down the left, as the enemies run down the right: along
+   the bottom it covered the hero's legs and its rolls, which the shoulder camera puts low and left of centre (MHUR
+   study, 2026-11-04) */
+.hud-roster.steering { top: 148px; bottom: auto; width: 214px; flex-direction: column; align-items: stretch; gap: 4px; }
+.hud-roster.steering .hud-card { width: auto; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; column-gap: 7px; row-gap: 4px; height: 38px; padding: 4px 6px 4px 4px; border-radius: 4px 2px 2px 4px; background: linear-gradient(90deg, rgba(var(--team-rgb), 0.26), rgba(var(--surface-rgb), 0.64) 55%); box-shadow: inset 3px 0 0 var(--team); }
+.hud-roster.steering .hud-card-face { grid-row: 1 / 3; width: 30px; height: 30px; }
+.hud-roster.steering .hud-card-face .hud-portrait { font-size: 12px; }
+.hud-roster.steering .hud-card-key { top: auto; bottom: -2px; left: -2px; min-width: 13px; height: 13px; font-size: 10px; }
+.hud-roster.steering .hud-card-tag { display: none; }
+.hud-roster.steering .hud-card .hud-hp { height: 5px; }
+.hud-roster.steering .hud-card .hud-abs { display: none; }
+.hud-roster.steering .hud-card.controlled { transform: translateX(6px); box-shadow: inset 3px 0 0 var(--accent), inset 0 0 0 1px rgba(var(--accent-rgb), 0.8), 0 0 14px rgba(var(--accent-rgb), 0.4); }
+.hud:has(.hud-roster.steering) .hud-health, .arena:has(.hud-roster.steering) .arena-hint { bottom: var(--edge); }
+@media (max-height: 780px) {
+  .hud-roster.steering { top: 140px; }
+  .hud-roster.steering .hud-card { height: 32px; }
+  .hud-roster.steering .hud-card-face { width: 26px; height: 26px; }
+}
+
 /* ── controlling a hero ──────────────────────────────────────────────────── */
 .control-hud { position: absolute; inset: 0; pointer-events: none; }
 .hud-health { position: absolute; left: calc(var(--edge) + 6px); bottom: calc(var(--edge) + var(--roster-h) + 14px); isolation: isolate; display: flex; align-items: flex-end; gap: 12px; padding: 10px 26px 10px 12px; animation: hud-rise 0.22s ease-out; }

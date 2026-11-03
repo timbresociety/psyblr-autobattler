@@ -36,8 +36,6 @@ import { getTemplate, poolFor } from '../../charter/templates/catalog'
 import type { BuildSlot, Delivery, Template } from '../../charter/types'
 import { formLookOf } from '../../arena/recipes/looks'
 import { transformOf } from '../../forge/form'
-import { LIBRARY } from '../../kit/wear/library'
-import { isRigid } from './wardrobe'
 import { SLOT_LABEL } from './labels'
 
 /** A select over a list, with an optional first choice for "none" or "as the element has it". */
@@ -129,11 +127,6 @@ function sizeLabel(template: Template, own: keyof typeof SIZES): string {
   return `${to > from ? 'Grow' : to < from ? 'Shrink' : 'Stay'} · ${SIZES[size].label}`
 }
 
-const HAIR = LIBRARY.filter((e) => e.slot === 'hair')
-// what a form can put on over the outfit: built-in surface items for the head, the body and the back
-const FORM_WEAR = LIBRARY.filter((e) => ['head', 'upper', 'full', 'back'].includes(e.slot) && !isRigid(e) && e.source === 'built-in')
-const byId = <T extends { id: string; name: string }>(list: readonly T[]) => Object.fromEntries(list.map((e) => [e.id, e.name])) as Record<string, string>
-
 /**
  * A transformation's two halves. The template sets the size it takes (grow, keep or shrink), priced and balance-checked;
  * the look sets everything else: how it arrives, what surrounds the hero, how a size change plays, what it leaves as
@@ -150,7 +143,6 @@ export function FormCard({ build, look, onSwap, onLook }: { build: Build; look: 
   const resizes = !!transformOf(current)?.size
   const set = (patch: Partial<TransformationLook>) => onLook((l) => ({ ...l, transformation: { ...formLookOf(l), ...patch } }))
   const setBody = (patch: Partial<FormBody>) => onLook((l) => ({ ...l, transformation: { ...formLookOf(l), body: { ...formLookOf(l).body, ...patch } } }))
-  const worn = body.wear?.[0]
   return (
     <fieldset className="form-card">
       <legend>Transformation</legend>
@@ -169,20 +161,11 @@ export function FormCard({ build, look, onSwap, onLook }: { build: Build; look: 
         {resizes && <Pick label="Change of size" value={form.growth} options={FORM_GROWTHS} labels={FORM_GROWTH_LABEL} onChange={(growth) => growth && set({ growth })} />}
         <Pick label="Trail" value={form.trail} options={FORM_TRAILS} labels={FORM_TRAIL_LABEL} empty="None" onChange={(trail) => set({ trail })} />
         <Pick label="Avatar" value={form.avatar} options={FORM_AVATARS} labels={FORM_AVATAR_LABEL} empty="None" onChange={(avatar) => set({ avatar })} />
-        <Pick label="Form hair" value={body.hair} options={HAIR.map((e) => e.id)} labels={byId(HAIR)} empty="Its own hair" onChange={(hair) => setBody({ hair })} />
-        <OptionalColor label="Form hair colour" text="Dye the hair" value={body.hairColor} fallback="#ffd23a" onChange={(hairColor) => setBody({ hairColor })} />
         <OptionalColor label="Form eye colour" text="Change the eyes" value={body.eyes} fallback="#3ad2ff" onChange={(eyes) => setBody({ eyes })} />
         <label className="look-check">
           <input type="checkbox" checked={body.marks === 'whiskers'} onChange={(e) => setBody({ marks: e.target.checked ? 'whiskers' : undefined })} />
           <span>Whisker marks</span>
         </label>
-        <Pick label="Form wears" value={worn?.id} options={FORM_WEAR.map((e) => e.id)} labels={byId(FORM_WEAR)} empty="Nothing more" onChange={(id) => setBody({ wear: id ? [{ id, ...(worn?.colors ? { colors: worn.colors } : {}) }] : undefined })} />
-        {worn && (
-          <label className="swatch inline">
-            <input type="color" aria-label="Form wears colour" value={worn.colors?.[0] ?? FORM_WEAR.find((e) => e.id === worn.id)?.channels[0]?.color ?? '#ff7400'} onChange={(e) => setBody({ wear: [{ ...worn, colors: [e.target.value, ...(worn.colors?.slice(1) ?? [])] }] })} />
-            <span>Colour</span>
-          </label>
-        )}
       </div>
     </fieldset>
   )

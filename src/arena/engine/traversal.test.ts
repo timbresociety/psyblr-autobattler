@@ -277,8 +277,9 @@ describe('a press that comes a moment early waits for its moment (owner playtest
   })
 
   it('a jump a moment after walking off an edge is still the ground jump (coyote time); later, the air jump', () => {
+    // a step shorter than a ledge hang's drop, so the walk off it falls
     const late = (seconds: number, human = true) => {
-      const s = solo({ y: 2, pieces: [block(0, 0, 2, 2, 2)] })
+      const s = solo({ y: 1.5, pieces: [block(0, 0, 2, 2, 1.5)] })
       if (human) s.m.human = 0
       s.step(go(0, 0), 3)
       for (let i = 0; i < 120 && !s.h.airborne; i++) s.step(go(0, 1))
@@ -351,6 +352,121 @@ describe('mantle (§7)', () => {
     step(go(0, 1), 120)
     expect(moves()).not.toContain('mantle')
     expect(h.position.y).toBe(0)
+  })
+})
+
+describe('ledge hang (§7, owner 2026-11-04)', () => {
+  // a 4 m deck, 6 m square, the hero standing on it in the middle
+  const deck = (opts: { human?: boolean; top?: number } = {}) => {
+    const s = solo({ y: opts.top ?? 4, pieces: [block(0, 0, 3, 3, opts.top ?? 4)] })
+    if (opts.human !== false) s.m.human = 0
+    s.step(go(0, 0), 3)
+    return s
+  }
+  const walkOff = (s: ReturnType<typeof deck>, moves = 0) => {
+    for (let i = 0; i < 120 && !s.h.hang && !s.h.airborne; i++) s.step(go(0, 1, moves))
+  }
+
+  it('walking off a sheer edge, a played hero catches it and hangs, hands on the top, facing the drop', () => {
+    const s = deck()
+    walkOff(s)
+    expect(s.moves()).toContain('hang')
+    expect(s.h.hang).toBeDefined()
+    expect(s.h.hang!.y).toBe(4)
+    expect(s.h.hang!.nz).toBeCloseTo(1, 1)
+    expect(s.h.hang!.z).toBeCloseTo(3, 0)
+    expect(s.h.position.y).toBeCloseTo(4 - capsule(s.h).height * M.hang.below, 5)
+    // it stays there while nothing is pressed
+    s.step(go(0, 0), 60)
+    expect(s.h.hang).toBeDefined()
+  })
+
+  it('a sprint goes over the edge, and the AI never hangs', () => {
+    const sprint = deck()
+    walkOff(sprint, MOVES.dash)
+    sprint.step(go(0, 1, MOVES.dash), 10)
+    expect(sprint.h.hang).toBeUndefined()
+    const ai = deck({ human: false })
+    walkOff(ai)
+    ai.step(go(0, 1), 10)
+    expect(ai.h.hang).toBeUndefined()
+    expect(ai.moves()).not.toContain('hang')
+  })
+
+  it('a drop shorter than a hang is just a step down', () => {
+    const s = deck({ top: 1.5 })
+    walkOff(s)
+    expect(s.h.hang).toBeUndefined()
+  })
+
+  it('jump climbs up onto the top; so does steering into the wall', () => {
+    for (const how of [go(0, 0, MOVES.jump), go(0, -1)]) {
+      const s = deck()
+      walkOff(s)
+      s.step(go(0, 0), ticksOf(0.3))
+      s.step(how)
+      expect(s.moves()).toContain('climb')
+      s.step(go(0, 0), ticksOf(M.hang.climb) + 2)
+      expect(s.h.hang).toBeUndefined()
+      expect(s.h.airborne).toBe(false)
+      expect(s.h.position.y).toBe(4)
+      expect(s.h.position.z).toBeLessThan(3)
+    }
+  })
+
+  it('crouch lets go and it falls, and it does not catch the same edge again on the way down', () => {
+    const s = deck()
+    walkOff(s)
+    s.step(go(0, 0, MOVES.crouch))
+    expect(s.moves()).toContain('let-go')
+    for (let i = 0; i < 200 && s.h.airborne; i++) s.step(go(0, 0))
+    expect(s.h.position.y).toBe(0)
+    expect(s.moves().filter((x) => x === 'hang').length).toBe(1)
+  })
+
+  it('a stick still held from the walk off steers nothing until it is let go once', () => {
+    const s = deck()
+    walkOff(s)
+    // the camera swings round to the wall: the held stick would now be into it, and along it
+    s.step(go(0, -1), ticksOf(0.5))
+    s.step(go(1, 0), 30)
+    expect(s.h.hang).toBeDefined()
+    expect(s.moves()).not.toContain('climb')
+    expect(Math.abs(s.h.hang!.x - 0)).toBeLessThan(0.01)
+    s.step(go(0, 0))
+    s.step(go(0, -1), ticksOf(0.1))
+    expect(s.moves()).toContain('climb')
+  })
+
+  it('jump while steering away leaps off the wall with the ground jump, the second jump still in hand', () => {
+    const s = deck()
+    walkOff(s)
+    s.step(go(0, 0))
+    s.step(go(0, 1, MOVES.jump))
+    expect(s.h.hang).toBeUndefined()
+    expect(s.h.velocity.y).toBeGreaterThan(5)
+    expect(s.h.velocity.z).toBeGreaterThan(3)
+    expect(s.h.airJumps).toBe(0)
+  })
+
+  it('it shimmies along the edge and stops where the edge ends', () => {
+    const s = deck()
+    walkOff(s)
+    s.step(go(0, 0))
+    const x0 = s.h.position.x
+    s.step(go(1, 0), 30)
+    expect(Math.abs(s.h.position.x - x0)).toBeGreaterThan(0.5)
+    s.step(go(1, 0), 600)
+    expect(s.h.hang).toBeDefined()
+    expect(Math.abs(s.h.hang!.x)).toBeLessThanOrEqual(3)
+  })
+
+  it('nothing is cast from a hang', () => {
+    const s = deck()
+    walkOff(s)
+    s.step({ ...go(0, 0), buttons: 1 })
+    s.step(go(0, 0), 30)
+    expect(s.h.action).toBeUndefined()
   })
 })
 

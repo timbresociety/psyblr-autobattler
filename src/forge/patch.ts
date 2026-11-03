@@ -1,22 +1,22 @@
 import type { NumericDial } from '../kit/body/physique.js'
-import type { HeroLook, LookColor, LookSlot, Worn } from '../charter/look.js'
+import { GEAR_SLOTS, type GearPiece, type GearSlot, type HeroLook, type LookColor } from '../charter/look.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
-import type { LibraryEntry } from '../kit/wear/library.js'
-import { COLOUR_WORDS, coloursFromPrompt, partsFromPrompt } from './prompt.js'
+import { builtIn, wearing } from '../kit/pieces.js'
+import { correctGear, type HeldWish } from './gear-read.js'
+import { COLOUR_WORDS, coloursFromPrompt, physiqueFromPrompt } from './prompt.js'
 import { sculptFromPrompt } from './sculpt-read.js'
-import { physiqueFromPrompt, wearFromPrompt } from './wardrobe-read.js'
 
 /**
  * A change a player asks for in their own words, once the hero is built, as a patch to the named parts of its look
  * and nothing else (the creator goal, docs/plans/2026-10-31-canon-psyblr-human.md, phase 2): "stronger jaw", "a
- * bigger nose", "greyer hair", "blue eyes", "darker skin", "swept-back hair", "a leather jacket", "older", "slimmer".
+ * bigger nose", "darker brows", "blue eyes", "darker skin", "a katana", "no shield", "older", "slimmer".
  * Each kind of change touches only its part, so a hero sculpted by hand keeps every other slider. Nothing here needs
  * the server: the words are read the way the offline reader reads a prompt, with nudges on top for comparatives.
  */
 export interface LookPatch {
   look: HeroLook
-  /** What was changed, in words to read back: "stronger jaw", "greyer hair". */
+  /** What was changed, in words to read back: "stronger jaw", "darker skin". */
   said: string[]
 }
 
@@ -97,12 +97,11 @@ const toward = (from: string, to: string, t: number): string => {
 
 /** Where each named part's colour lives, and what it is when nothing set it. */
 const COLOUR_PARTS: { words: RegExp; key: LookColor; name: string; own: string }[] = [
-  { words: /\b(?:hair|mane|beard|stubble)\b/, key: 'hair', name: 'hair', own: '#2a1d14' },
   { words: /\bskin\b|\bcomplexion\b/, key: 'skin', name: 'skin', own: '#c99d7a' },
   { words: /\beyes?\b/, key: 'iris', name: 'eyes', own: '#4a3220' },
   { words: /\b(?:eye)?brows?\b/, key: 'brow', name: 'brows', own: '#2a1d14' },
 ]
-/** A shade asked for by comparison: "greyer hair", "lighter skin", "darker eyes", "whiter hair". */
+/** A shade asked for by comparison: "greyer brows", "lighter skin", "darker eyes". */
 const SHADES: [RegExp, (from: string) => string, string][] = [
   [/\b(?:greyer|grayer|more grey|more gray|going grey|going gray|greying|graying)\b/, (c) => toward(c, '#8a8785', 0.55), 'greyer'],
   [/\b(?:whiter|white-haired|snow white|more white)\b/, (c) => toward(c, '#e4e2de', 0.6), 'whiter'],
@@ -115,7 +114,7 @@ const SHADES: [RegExp, (from: string) => string, string][] = [
 function colourChanges(text: string, colors: Partial<Record<LookColor, string>>): { colors: Partial<Record<LookColor, string>>; said: string[] } {
   const out: Partial<Record<LookColor, string>> = {}
   const said: string[] = []
-  // named colours on named parts: "silver hair", "blue eyes", "olive skin"
+  // named colours on named parts: "silver brows", "blue eyes", "olive skin"
   const named = coloursFromPrompt(text)
   for (const part of COLOUR_PARTS) {
     const c = named[part.key]
@@ -169,75 +168,30 @@ function physiqueChanges(text: string, physique: Physique | undefined): { physiq
   return { physique: next, said }
 }
 
-// ------------------------------------------------------------------------------------------------ the wardrobe
+// ------------------------------------------------------------------------------------------------ the hands
 
-const find = (catalog: readonly LibraryEntry[], id: string | undefined) => (id ? catalog.find((e) => e.id === id) : undefined)
-
-/** "no hat", "take off the glasses", "without a beard": the slot each word empties. */
-const DROP = /\b(?:no|without|remove|lose|drop|ditch|take off|get rid of)\s+(?:the\s+|a\s+|an\s+|his\s+|her\s+|their\s+|its\s+)?([\p{L}-]+(?:\s[\p{L}-]+)?)/gu
-const DROPPED: [RegExp, LookSlot][] = [
-  [/^(?:hats?|helmets?|helm|caps?|hoods?|crowns?|headwear|headgear|beanie|headband)$/, 'head'],
-  [/^(?:capes?|cloaks?|wings|backpack)$/, 'back'],
-  [/^(?:beard|moustache|mustache|stubble|facial hair)$/, 'beard'],
-  [/^hair$/, 'hair'],
-  [/^(?:mask|glasses|shades|eyepatch|visor|goggles|spectacles)$/, 'face'],
-  [/^(?:shoes|boots|sandals|sneakers|trainers)$/, 'feet'],
-  [/^(?:shirt|top|tee|t-shirt|jacket|coat|hoodie|sweater|armou?r|plate|breastplate|robes?)$/, 'upper'],
-  [/^(?:trousers|pants|jeans|skirt|shorts)$/, 'lower'],
-]
-
-function wearChanges(text: string, wear: Partial<Record<LookSlot, Worn>>, catalog: readonly LibraryEntry[]): { wear: Partial<Record<LookSlot, Worn>>; said: string[] } {
-  const out = { ...wear }
+/** "a katana", "twin daggers", "no shield", "unarmed": the hands the message fills or empties, from the built-in pieces. */
+function gearChanges(text: string, gear: Partial<Record<GearSlot, GearPiece>>): { gear: Partial<Record<GearSlot, GearPiece>>; said: string[] } {
+  const before: HeldWish = Object.fromEntries(GEAR_SLOTS.flatMap((s) => (gear[s] ? [[s, gear[s]!.id]] : [])))
+  const after = correctGear(before, text)
+  const out = { ...gear }
   const said: string[] = []
-  for (const m of text.matchAll(DROP)) {
-    const word = m[1].trim()
-    const slot = DROPPED.find(([re]) => re.test(word) || re.test(word.split(' ').pop()!))?.[1]
-    if (slot && out[slot]) {
+  for (const slot of GEAR_SLOTS) {
+    if (after[slot] === before[slot]) continue
+    const piece = after[slot] ? builtIn(after[slot]!) : undefined
+    if (piece) {
+      out[slot] = wearing(piece)
+      said.push(piece.name.toLowerCase())
+    } else {
+      said.push(`no ${(builtIn(before[slot]!)?.name ?? 'piece').toLowerCase()}`)
       delete out[slot]
-      said.push(`no ${word}`)
     }
   }
-  const wishes = wearFromPrompt(text)
-  for (const wish of wishes) {
-    if (wish.bare) {
-      if (out[wish.slot]) {
-        delete out[wish.slot]
-        said.push(wish.phrase)
-      }
-      continue
-    }
-    const entry = find(catalog, wish.item)
-    if (!entry) continue
-    const { finishes, knobs, print } = wish
-    // hair and a beard restyled keep their colour unless the wish names one
-    const colors = wish.colors ?? ((wish.slot === 'hair' || wish.slot === 'beard') && wear[wish.slot]?.colors) ?? undefined
-    out[wish.slot] = { id: entry.id, url: entry.url, ...(colors ? { colors } : {}), ...(finishes ? { finishes } : {}), ...(knobs ? { knobs } : {}), ...(print ? { print } : {}) }
-    if (wish.slot === 'full') {
-      delete out.upper
-      delete out.lower
-    } else if (wish.slot === 'upper' || wish.slot === 'lower') delete out.full
-    said.push(entry.name.toLowerCase())
-  }
-  // a hair style by its old name ("swept back", "a quiff", "buzz cut") when no wish dressed the hair
-  if (!wishes.some((w) => w.slot === 'hair')) {
-    const { hair } = partsFromPrompt(text)
-    const entry = hair && hair !== 'none' && hair !== 'helmet' ? find(catalog, `hair_${hair}`) : undefined
-    if (entry) {
-      out.hair = { id: entry.id, url: entry.url, ...(wear.hair?.colors ? { colors: wear.hair.colors } : {}) }
-      said.push(entry.name.toLowerCase())
-    } else if (hair === 'none' && out.hair) {
-      delete out.hair
-      said.push('no hair')
-    }
-  }
-  return { wear: out, said }
+  return { gear: out, said }
 }
 
-/**
- * The look a message patches, or undefined when it names nothing the patcher reads (a stat, say). A colour on the
- * hair also goes on the hair and beard worn, the way the reading's does.
- */
-export function patchLook(look: HeroLook, message: string, catalog: readonly LibraryEntry[]): LookPatch | undefined {
+/** The look a message patches, or undefined when it names nothing the patcher reads (a stat, say). */
+export function patchLook(look: HeroLook, message: string): LookPatch | undefined {
   const text = message.toLowerCase()
   const said: string[] = []
   let next: HeroLook = { ...look }
@@ -269,19 +223,11 @@ export function patchLook(look: HeroLook, message: string, catalog: readonly Lib
     said.push(...physique.said)
   }
 
-  const wear = wearChanges(text, look.wear ?? {}, catalog)
-  if (wear.said.length) {
-    next = { ...next, wear: wear.wear }
-    said.push(...wear.said)
-  }
-  // the hair colour on what's worn as hair and beard, unless the item was just named in its own colours
-  if (colours.colors.hair && next.wear) {
-    const dressed = { ...next.wear }
-    for (const slot of ['hair', 'beard'] as const) {
-      const worn = dressed[slot]
-      if (worn && !wear.said.includes(worn.id)) dressed[slot] = { ...worn, colors: [colours.colors.hair, ...(worn.colors?.slice(1) ?? [])] }
-    }
-    next = { ...next, wear: dressed }
+  const gear = gearChanges(text, look.gear ?? {})
+  if (gear.said.length) {
+    next = Object.keys(gear.gear).length ? { ...next, gear: gear.gear } : { ...next }
+    if (!Object.keys(gear.gear).length) delete next.gear
+    said.push(...gear.said)
   }
   return said.length ? { look: next, said: [...new Set(said)] } : undefined
 }

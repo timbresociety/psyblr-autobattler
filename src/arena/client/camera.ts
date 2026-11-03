@@ -10,7 +10,13 @@ import type { Vec3 } from '../engine/maths.js'
  * eases back out, so a wall grazing past the line of sight doesn't shake it.
  */
 
-export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2, eyes: 1.62, ahead: 0.12 }
+/**
+ * The shoulder camera, measured off MHUR's (docs/reference/2026-11-04-mhur-study.md): about two hero heights behind,
+ * 0.38 of one to the right and a little over its head, level, with a 60 degree view. The hero stands left of centre
+ * at 0.4 of the width, head near the middle, feet near the bottom, and the reticle sits just above and outside its
+ * right shoulder (owner, 2026-11-04: ours sat far from the hero, and its rolls read off the line it looked along).
+ */
+export const HERO_CAMERA = { back: 3.4, right: 0.68, up: 2.0, pitchLimit: 1.2, eyes: 1.62, ahead: 0.12, fov: 60, pitch: 0 }
 /** Following a hero while watching: a little further back and higher than playing it, and how fast it turns with it. */
 export const FOLLOW_CAMERA = { back: 5.6, right: 0.7, up: 2.3, pitch: -0.22, minBack: 2.5, maxBack: 14, turn: 3, lookAround: 2.5 }
 /** How fast a camera pulled in by a wall eases back out to its full distance, in metres a second. */
@@ -27,6 +33,9 @@ export const FIRST_PERSON = 0.6
 /** The watching camera's limits: how low, high and far it goes, how steep it tilts, and the edge of the map. */
 export const WATCH = { minHeight: 1.5, maxHeight: 70, minDistance: 5, maxDistance: 95, levelDistance: 20, minPitch: -1.4, maxPitch: 0.15, bounds: 72 }
 export const BLEND_SECONDS = 0.5
+/** Hanging from a ledge, the shoulder camera swings round behind the hero, over the drop, to face the wall it hangs
+ * on and look a little down at it: how fast it turns (per second) and the pitch it settles at. */
+export const HANG_CAMERA = { turn: 5, pitch: -0.2 }
 
 /** Where a camera at `from` can sit on the way to `to` without passing through a box. */
 export function pullIn(from: THREE.Vector3, to: THREE.Vector3, proxies: THREE.Box3[]): THREE.Vector3 {
@@ -200,8 +209,13 @@ export class Cameras {
    * `hero` is the controlled hero, `followed` the hero the watching camera follows (its drawn position) and
    * `followedYaw` the way it faces, if any.
    */
-  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number) {
+  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number, wall?: number) {
     const following = this.mode === 'free' && this.followed !== undefined && followed !== undefined
+    if (this.mode === 'hero' && wall !== undefined) {
+      const k = 1 - Math.exp(-dt * HANG_CAMERA.turn)
+      this.yaw += Math.atan2(Math.sin(wall - this.yaw), Math.cos(wall - this.yaw)) * k
+      this.pitch += (HANG_CAMERA.pitch - this.pitch) * k
+    }
     if (following && followedYaw !== undefined) {
       // turn with the hero, the short way round, unless the camera was turned by hand a moment ago
       this.turnedFor += dt

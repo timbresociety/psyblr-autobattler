@@ -13,7 +13,7 @@ import { hashState } from '../engine/snapshot.js'
 import { advance, arenaFor, createRecorder, playback, type Recorder, type RecordedSetup, type Recording } from '../engine/replay.js'
 import { AIM_STEPS, capsule, type Command, type MatchState, type Team } from '../engine/state.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
-import { Cameras, FIRST_PERSON } from './camera.js'
+import { Cameras, FIRST_PERSON, HERO_CAMERA } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
@@ -500,7 +500,7 @@ async function createStage(host: HTMLElement) {
     first.renderer.setPixelRatio(pixelRatio)
     const scene = new THREE.Scene()
     // far enough to draw the sky dome and the mountains in front of it
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, VIEW_FAR)
+    const camera = new THREE.PerspectiveCamera(HERO_CAMERA.fov, 1, 0.1, VIEW_FAR)
     // live matches play the House of Instinct, inside the Game Centre hall
     const hall = LIVE_MAP === 'house' ? arenaExtent(MAPS.house.pieces) : undefined
     atmosphere(scene, !!hall)
@@ -729,6 +729,14 @@ function drawHeroes(
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
+    // hanging from a ledge, or climbing onto one, the body faces the wall it's on, whatever it aims at
+    const climb = h.mantle && Math.hypot(h.mantle.x1 - h.mantle.x0, h.mantle.z1 - h.mantle.z0) > 0.05 ? h.mantle : undefined
+    const wall = h.hang ? Math.atan2(-h.hang.nx, -h.hang.nz) : climb ? Math.atan2(climb.x1 - climb.x0, climb.z1 - climb.z0) : undefined
+    if (s && wall !== undefined) {
+      s.body = wall
+      s.twist = 0
+      s.heading = wall
+    }
     stances[i] = s
     if (ctx.poses) ctx.poses[i] = pose.kind
     if (ctx.modes) ctx.modes[i] = mode
@@ -982,7 +990,9 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: shown, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const follow = arena.match.human === undefined ? cameras.follow : undefined
-    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined)
+    // hanging from a ledge, the played hero's camera turns to face the wall it hangs on (into the wall is against the drop)
+    const hang = arena.match.human !== undefined && !feed ? arena.match.heroes[arena.match.human].hang : undefined
+    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz))
     // in first person the camera looks out of the hero's eyes, so its own body isn't drawn; nor is the body of a hero
     // played or followed when a wall has pulled the camera into its head
     const near = arena.match.human ?? follow
@@ -1052,7 +1062,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       if (!take(arena.match, setup.side, hero)) return false
       // the hero camera starts facing where the hero faces
       cameras.yaw = arena.match.heroes[hero!].yaw
-      cameras.pitch = -0.15
+      cameras.pitch = HERO_CAMERA.pitch
       cameras.set('hero')
       publish()
       return true

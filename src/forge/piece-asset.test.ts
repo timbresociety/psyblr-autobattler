@@ -40,25 +40,10 @@ describe('a generated model made into a piece', () => {
     expect(triangles).toBeLessThanOrEqual(5000)
   })
 
-  it('sits a hat down on the hat line and sizes it to a head', async () => {
-    const m = await measure((await pieceAsset(await placeholderPiece('head'), 'head')).glb)
-    expect(close(Math.max(m.size[0], m.size[2]), PIECE_SIZE.head)).toBe(true)
-    expect(close(m.min[1], -0.03)).toBe(true)
-    expect(close(m.min[0], -m.max[0])).toBe(true)
-  })
-
   it('holds a shield at its middle with its face out from the left hand', async () => {
     const m = await measure((await pieceAsset(await placeholderPiece('offhand'), 'offhand')).glb)
     expect(m.size[0]).toBeLessThan(m.size[1])
     expect(close((m.min[0] + m.max[0]) / 2, 0.07)).toBe(true)
     expect(close((m.min[1] + m.max[1]) / 2, 0)).toBe(true)
-  })
-
-  it('presses a back piece against the back and puts glasses ahead of the eyes', async () => {
-    const back = await measure((await pieceAsset(await placeholderPiece('back'), 'back')).glb)
-    expect(close(back.max[2], 0)).toBe(true)
-    const face = await measure((await pieceAsset(await placeholderPiece('face'), 'face')).glb)
-    expect(close(face.size[0], PIECE_SIZE.face)).toBe(true)
-    expect(close(face.max[2], 0.012)).toBe(true)
   })
 })

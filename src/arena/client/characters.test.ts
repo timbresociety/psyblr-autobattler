@@ -11,25 +11,16 @@ import * as THREE from 'three'
 import { castClip, gaitPlayer, groundSpeed, heldTip, leadHand, splitClip, standOn } from './characters.js'
 import { GAIT_CLIPS, PACE_LIMITS, strideTime, type Gait } from './gait.js'
 
-const ids = (outfit: ReturnType<typeof characterLook>['outfit']) => Object.fromEntries(Object.entries(outfit).map(([slot, w]) => [slot, w!.id]))
-
 describe('a hero’s look', () => {
   it('is the same wherever the hero fights: it follows the name, not the slot or side', () => {
     const a = characterLook(defaultBuild('fighter', 'Ada'), 0.3)
     const b = characterLook(defaultBuild('fighter', 'Ada'), 0.3)
-    expect(b.outfit).toEqual(a.outfit)
+    expect(b.held).toEqual(a.held)
     expect(b.colors.skin.getHex()).toBe(a.colors.skin.getHex())
   })
 
-  it('dresses by role when it has no look: tanks in a helmet and armour, fighters caped and armoured, marksmen bare-headed', () => {
-    const tank = characterLook(defaultBuild('tank', 'T'), 0)
-    expect(tank.build).toBe('m-medium')
-    expect(ids(tank.outfit)).toMatchObject({ head: 'legion_helm', upper: 'breastplate', back: 'cape' })
-    expect(ids(characterLook(defaultBuild('fighter', 'F'), 0).outfit)).toMatchObject({ upper: 'breastplate', back: 'cape' })
-    const marksman = ids(characterLook(defaultBuild('marksman', 'M'), 0).outfit)
-    expect(marksman.upper).toBe('longsleeve')
-    expect(marksman.back).toBeUndefined()
-    expect(marksman.head).toBeUndefined()
+  it('is bare when it has no look: no clothes, hair or weapon; mages are women by default', () => {
+    expect(characterLook(defaultBuild('tank', 'T'), 0)).toMatchObject({ build: 'm-medium', held: {} })
     expect(characterLook(defaultBuild('mage', 'Mi'), 0).build).toBe('f-medium')
   })
 
@@ -40,13 +31,12 @@ describe('a hero’s look', () => {
     expect(BODIES).toHaveLength(12)
   })
 
-  it('its look picks the gender, the wardrobe and the skin, and carries its photo face', () => {
+  it('its look picks the gender, the skin and the weapons in its hands, and carries its photo face', () => {
     const face = { url: '/dev-store/heroes/0f0e1d2c-3b4a-4596-8778-695a4b3c2d1e.webp', width: 512, height: 512, points: new Array(956).fill(10) }
-    const build = { ...defaultBuild('tank', 'Ada'), look: { gender: 'f' as const, hair: 'long' as const, armour: false, cape: true, colors: { suit: '#ff0000', skin: '#8a5a3c' }, face } }
+    const sword = { id: 'sword', url: '/kit/pieces/sword.glb' }
+    const build = { ...defaultBuild('tank', 'Ada'), look: { gender: 'f' as const, colors: { skin: '#8a5a3c' }, face, gear: { hand_r: sword } } }
     const look = characterLook(build, 0.2)
-    expect(look).toMatchObject({ build: 'f-medium', face })
-    expect(ids(look.outfit)).toMatchObject({ hair: 'hair_long', upper: 'longsleeve', back: 'cape' })
-    expect(look.outfit.upper!.colors![0]).toBe('#ff0000')
+    expect(look).toMatchObject({ build: 'f-medium', face, held: { hand_r: sword } })
     expect(look.colors.skin.getHexString()).toBe('8a5a3c')
   })
 })
@@ -108,28 +98,20 @@ describe('the body a form changes (R23)', () => {
   const base = characterLook(defaultBuild('fighter', 'Kit'), 0.1)
   const bodyOf = (move: string) => lookFor(move)!.transformation!.body
 
-  it('gives a Super Saiyan spiky gold hair and teal eyes, and leaves the outfit alone', () => {
+  it('gives a Super Saiyan teal eyes', () => {
     const ssj = formCharacterLook(base, bodyOf('Super Saiyan'))
-    expect(ssj.outfit.hair).toMatchObject({ id: 'hair_spiky', colors: ['#ffd84a'] })
-    expect({ ...ids(ssj.outfit), hair: undefined }).toEqual({ ...ids(base.outfit), hair: undefined })
     expect(ssj.colors.eye.g).toBeGreaterThan(ssj.colors.eye.r * 2)
     expect(ssj.colors.eye.b).toBeGreaterThan(ssj.colors.eye.r * 2)
     expect(ssj.marks).toBeUndefined()
   })
 
-  it('wraps a Nine-Tails form in a cloak over the whole body, with red eyes and whisker marks, keeping hair and cape', () => {
+  it('gives a Nine-Tails form red eyes and whisker marks', () => {
     const fox = formCharacterLook(base, bodyOf('Nine-Tails'))
-    expect(fox.outfit.full).toMatchObject({ id: 'long_coat', colors: ['#ff7400', '#3a1a08'], finishes: ['glow', 'cotton'] })
-    expect(fox.outfit.upper).toBeUndefined()
-    expect(fox.outfit.lower).toBeUndefined()
-    expect(fox.outfit.back).toEqual(base.outfit.back)
-    expect(fox.outfit.hair).toEqual(base.outfit.hair)
     expect(fox.colors.eye.r).toBeGreaterThan(fox.colors.eye.g * 2)
     expect(fox.marks).toBe('whiskers')
   })
 
-  it("recolours the hero's own hair when a form names only a colour, and changes nothing without a body", () => {
-    expect(formCharacterLook(base, { hairColor: '#ffffff' }).outfit.hair).toEqual({ ...base.outfit.hair, colors: ['#ffffff'] })
+  it('changes nothing without a body', () => {
     expect(formCharacterLook(base, undefined)).toBe(base)
   })
 })

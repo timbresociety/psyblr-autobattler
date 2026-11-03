@@ -106,6 +106,19 @@ export const ENGINE = {
      */
     mantle: { height: 1.4, time: 0.5, reach: 0.45 },
     /**
+     * Ledge hang (owner, 2026-11-04): a played hero that walks (not sprints) off an edge with at least `drop` metres
+     * of sheer fall under it catches the edge and hangs, feet `below` body heights under the top. From there it climbs
+     * up over `climb` seconds (jump, or steering into the wall), shimmies along the edge at `shimmy` m/s, lets go
+     * (crouch or roll), or jumps away from the wall (jump while steering away). It can't catch a ledge again for
+     * `regrab` seconds after letting go.
+     */
+    hang: { drop: 2, below: 1.22, climb: 0.75, shimmy: 1.6, regrab: 0.4 },
+    /**
+     * A dash skill carries the hero at `dash` m/s (at least `least` seconds); a leap takes `leap.base` seconds plus
+     * `leap.per` a metre, arcing `leap.rise` of its length overhead, up to `leap.top` metres. A blink still lands at once.
+     */
+    travel: { dash: 45, least: 0.06, leap: { base: 0.22, per: 0.022, rise: 0.3, top: 4 } },
+    /**
      * Landing at `big` m/s or more (a fall well past a jump's own height) rolls when the hero steers, keeping its
      * speed, and lands heavily, stopping, when it doesn't. Never any fall damage.
      */

@@ -92,7 +92,7 @@ export function ChatPanel({ started, reading = false, heroName, messages, busy, 
           value={draft}
           rows={3}
           maxLength={MAX_CHAT}
-          placeholder={started ? 'Ask for changes: "more agile, less armor"' : reading ? 'Tell me what I got wrong: "no hat, give him a red jacket"' : 'Describe your hero: "a time-bending samurai who rewinds fights"'}
+          placeholder={started ? 'Ask for changes: "more agile, less armor"' : reading ? 'Tell me what I got wrong: "no shield, give him blue eyes"' : 'Describe your hero: "a time-bending samurai who rewinds fights"'}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             // Enter while an input method is composing confirms the candidate; it must not send

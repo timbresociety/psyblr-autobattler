@@ -215,7 +215,8 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
   const caster = match.heroes[index]
   const setup = setups[index]
   const template = setup.kit[slot]
-  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick) || caster.roll) return false
+  // hands full: nothing is cast from a ledge hang
+  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick) || caster.roll || caster.hang || caster.travel) return false
   let interval = Infinity
   let shot: Shot | undefined
   // a cripple slows basic attacks and shots the way a slow slows feet: the strongest one counts
@@ -263,6 +264,12 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
 /** Land an action whose wind-up is over, and free a hero whose recovery is over (phase 1). */
 export function carryOn(ctx: Ctx, index: number) {
   const hero = ctx.match.heroes[index]
+  // a dash or leap that has arrived lands its skill there
+  const tr = hero.travel
+  if (tr?.arrived) {
+    hero.travel = undefined
+    deliver(ctx, index, tr.slot, tr.blow, tr.recovery, tr.shot, tr.target)
+  }
   const a = hero.action
   if (!a) return
   if (!a.released && ctx.match.tick >= a.release) {
@@ -306,12 +313,34 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
         const floor = floorUnder(match.cover.pieces, match.cover.health, p, startY + ENGINE.move.step)
         if (floor > p.y && floor - p.y <= LIP) p = { ...p, y: floor }
       }
+      // a blink lands at once; a dash or a leap carries the hero there over time, and the skill lands on arrival
+      const kind = template.delivery.kind
+      if (kind === 'dash' || kind === 'leap') {
+        const T = ENGINE.move.travel
+        const from = caster.position
+        const length = Math.sqrt((p.x - from.x) * (p.x - from.x) + (p.y - from.y) * (p.y - from.y) + (p.z - from.z) * (p.z - from.z))
+        const seconds = kind === 'leap' ? T.leap.base + T.leap.per * length : Math.max(T.least, length / T.dash)
+        const arc = kind === 'leap' ? Math.min(T.leap.top, T.leap.rise * length) : 0
+        caster.travel = { from: match.tick, until: match.tick + Math.max(1, ticks(seconds)), x0: from.x, y0: from.y, z0: from.z, x1: p.x, y1: p.y, z1: p.z, arc, startY, slot, ...(blow ? { blow } : {}), recovery, ...(shot ? { shot } : {}), ...(target !== undefined ? { target } : {}) }
+        caster.airborne = arc > 0 || caster.airborne
+        caster.roll = undefined
+        caster.slide = undefined
+        return
+      }
       caster.position = p
       keepOut(caster, match)
-      // aimed up, a leap or a blink ends in the air, and the hero falls from there
+      // aimed up, a blink ends in the air, and the hero falls from there
       standOn(caster, match, Math.max(caster.position.y, startY))
     }
   }
+  deliver(ctx, index, slot, blow, recovery, shot, target)
+}
+
+/** The rest of a released cast, where the caster now stands: the delivery, then its effects. */
+function deliver(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number) {
+  const { match, setups } = ctx
+  const caster = match.heroes[index]
+  const template = slot === 'basic' ? blowTemplate(setups[index].kit[slot], blow) : shotTemplate(setups[index].kit[slot], shot)
   if (template.delivery.kind === 'projectile') {
     const d = template.delivery
     const { speed, projectileRadius } = geometryOf(d)

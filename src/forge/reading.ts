@@ -1,5 +1,5 @@
 import { BUILD_SLOTS, SLOT_KIND, TEXT_LIMITS, inferRole, proposeBuild, setSize, type Build } from '../charter/build.js'
-import { LOOK_SLOTS, ROLE_GENDER, type Gender } from '../charter/look.js'
+import { GEAR_SLOTS, ROLE_GENDER, type Gender } from '../charter/look.js'
 import { matchTemplate } from '../charter/match.js'
 import { ROLES, ROLE_IDS, getRole, isRoleId } from '../charter/roles.js'
 import {
@@ -28,23 +28,20 @@ import { CATALOG, poolFor, fitsSlot } from '../charter/templates/catalog.js'
 import type { BuildSlot, Effect, RoleId, Template } from '../charter/types.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
 import { SCULPT_IDS, hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
-import { FINISHES, KNOBS, RUNGS } from '../kit/wear/item.js'
-import { LIBRARY } from '../kit/wear/library.js'
-import { BUILT_IN_ITEMS } from '../kit/wear/library.gen.js'
-import { PRINTS } from '../kit/wear/prints.js'
+import { BUILT_IN, fits } from '../kit/pieces.js'
 import { FORM_TEMPLATES, formChange, formFromWords, transformOf } from './form.js'
 import { keywordFlags } from './keywords.js'
-import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
-import { correctWear, physiqueFromPrompt, readWear, wearAnswer, wearFromPrompt, type WearWish } from './wardrobe-read.js'
+import { correctGear, gearFromPrompt, gearPhrase, readGear, type HeldWish } from './gear-read.js'
+import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, physiqueFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
 import { sculptFromPrompt } from './sculpt-read.js'
 
 /**
  * The Forge reads before it builds. A reading is what the Forge understood from a prompt and its reference images: the
- * hero's body, what it wears slot by slot in the library's words, a name, a "does" and a look for each kit slot, how
- * its transformation looks, a role, and the questions it couldn't settle. The player checks it, answers, corrects, and
+ * hero's body, what each hand holds, a name, a "does" and a look for each kit slot, how its transformation looks, a
+ * role, and the questions it couldn't settle. Heroes are drawn bare (2026-11-04): a reading never dresses one. The player checks it, answers, corrects, and
  * only then builds. An AI reader (the player's own Claude Code locally, Claude Haiku in production) or the offline
  * parser here produces it; either way the engine still owns every mechanic and number, so a reading only picks
- * templates from the catalogue and items from the library.
+ * templates from the catalogue and pieces from the built-ins.
  */
 
 export type ReadingSource = 'claude-code' | 'claude' | 'offline'
@@ -77,8 +74,8 @@ export interface ReadingQuestion {
   options: ReadingOption[]
 }
 
-/** The colours a reading gives the body. What the hero wears takes its colours on its own channels. */
-export const BODY_COLORS = ['skin', 'hair', 'iris', 'brow'] as const
+/** The colours a reading gives the body. */
+export const BODY_COLORS = ['skin', 'iris', 'brow'] as const
 export type BodyColor = (typeof BODY_COLORS)[number]
 
 export interface ReadingLook {
@@ -86,7 +83,6 @@ export interface ReadingLook {
   size: SizeClass
   /** Weight, muscle and age; the body as made when absent. */
   physique?: Physique
-  /** Hair colours the beard too. */
   colors: Partial<Record<BodyColor, string>>
   /** Wear the face the Forge found on a reference image. */
   wearFace: boolean
@@ -103,8 +99,8 @@ export interface Reading {
   realPerson: boolean
   roleId: RoleId
   look: ReadingLook
-  /** What the hero wears, a wish a slot; a slot without one is dressed by the role. */
-  wear: WearWish[]
+  /** What each hand holds, a built-in piece's id; an empty hand holds nothing. */
+  gear: HeldWish
   kit: Record<BuildSlot, ReadingSkill>
   /** How the ultimate's transformation looks, when it is one. The size it takes is its template's. */
   form?: TransformationLook
@@ -118,7 +114,7 @@ export interface ReadInput {
   heroName?: string
   /** True when the Forge found a face on one of the reference images. */
   faceFound?: boolean
-  /** A correction to the last reading, such as "no hat, give him a red jacket". */
+  /** A correction to the last reading, such as "no shield, give him blue eyes". */
   note?: string
   previous?: Reading
 }
@@ -129,9 +125,6 @@ const HEX = /^#[0-9a-f]{6}$/
 const TOPICS: readonly QuestionTopic[] = [...BUILD_SLOTS, 'face', 'size', 'role', 'form']
 const BY_ID = new Map(CATALOG.map((t) => [t.id, t]))
 const ALL_FORMS = [...new Set(Object.values(FORMS).flat())]
-// what a form can change the body to: a built-in hair item, and built-in surface items over the outfit
-const HAIR_IDS = BUILT_IN_ITEMS.filter((i) => i.slot === 'hair').map((i) => i.id)
-const FORM_WEAR_IDS = BUILT_IN_ITEMS.filter((i) => ['head', 'upper', 'lower', 'full', 'back', 'feet'].includes(i.slot)).map((i) => i.id)
 
 /**
  * The transformation each role takes when the words don't say which. A transformation's template sets the size it
@@ -177,18 +170,7 @@ export function readingSchema(): Record<string, unknown> {
       wearFace: bool,
       sculpt: list(object({ feature: choice(SCULPT_IDS, false), value: num })),
     }),
-    wear: list(
-      object({
-        slot: choice(LOOK_SLOTS, false),
-        phrase: str,
-        item: choice(['none', ...LIBRARY.map((e) => e.id)]),
-        rung: choice(RUNGS, false),
-        colors: list(str),
-        finishes: list(choice(FINISHES)),
-        print: choice(PRINTS),
-        knobs: list(object({ knob: choice(KNOBS, false), value: num })),
-      }),
-    ),
+    gear: object(Object.fromEntries(GEAR_SLOTS.map((s) => [s, choice(BUILT_IN.filter((p) => fits(p.kind, s)).map((p) => p.id))]))),
     kit: object(Object.fromEntries(BUILD_SLOTS.map((s) => [s, skill(s)]))),
     form: object({
       entry: choice(FORM_ENTRIES),
@@ -196,11 +178,8 @@ export function readingSchema(): Record<string, unknown> {
       growth: choice(FORM_GROWTHS),
       trail: choice(FORM_TRAILS),
       avatar: choice(FORM_AVATARS),
-      hair: choice(HAIR_IDS),
-      hairColor: str,
       eyes: str,
       marks: choice(FORM_MARKS),
-      wear: list(object({ item: choice(FORM_WEAR_IDS), color: str })),
     }),
     questions: list(object({ about: choice(TOPICS, false), ask: str, options: list(str) })),
   })
@@ -212,30 +191,25 @@ let system: string | undefined
 export function readingSystem(): string {
   if (system) return system
   const catalog = CATALOG.map((t) => `${t.id} | ${t.slot} | ${FAMILY_OF[t.delivery.kind]} | ${t.roles.join(',')} | ${t.name}: ${t.tags.join(', ')}`).join('\n')
-  const library = LIBRARY.map((e) => `${e.id} | ${e.slot} | ${e.name} | ${e.channels.map((c) => c.name).join(',') || '-'} | ${e.knobs.join(',') || '-'} | ${e.tags.join(', ')}`).join('\n')
+  const pieces = BUILT_IN.map((p) => `${p.id} | ${p.kind} | ${p.name} | ${p.tags.join(', ')}`).join('\n')
   const forms = Object.entries(FORMS).map(([family, list]) => `${family}: ${list.join(', ')}`).join('; ')
   const transformations = FORM_TEMPLATES.map((t) => `- ${t.id} ${formChange(t, 'medium')} (${t.roles.join(', ')}).`).join('\n')
   return (system = `You read how a player imagines a hero for psyblr autobattler, a 3D arena brawler, from their words and any reference images, and say back how you will build it. The player owns the look and the names. The engine owns every number, so you never invent stats or power.
 
 How to read:
 - The player's words win. Keep every name they give exactly as they wrote it, in title case. A skill they name without saying what it does may be slang or another language: translate it if you can, give your best reading of what it does, and ask.
-- A reference image shows how the hero looks. Read what they wear in every slot it shows and each item's colours, the hair and facial hair, and what they hold or carry. When the player says the hero looks the way they appear somewhere (a cover, a film, a scene), the image is that appearance.
+- A reference image shows how the hero looks. Read the body and what they hold. Heroes are drawn bare: never describe clothes, hair or a beard. When the player says the hero looks the way they appear somewhere (a cover, a film, a scene), the image is that appearance.
 - Ask at most ${MAX_QUESTIONS} questions, only where the answer changes the hero and you can't tell. Each has two to four short options, your best guess first. Don't ask what the player already said.
 
 The body:
 - gender: m or f.
 - size: tiny, small, medium, large or huge. Colossal is reached only by a transformation ultimate, never as a size.
 - physique: weight, muscle and age, each 0 to 1. The body as made is weight 0.5, muscle 0.5 and age 0; age 1 is 75.
-- colors: a '#rrggbb' for each of skin, hair (it colours the beard too), iris and brow that you can see or the player asks for. Leave out what you can't tell.
+- colors: a '#rrggbb' for each of skin, iris and brow that you can see or the player asks for. Leave out what you can't tell.
 - wearFace: true when an image is a photo of a real face the hero should wear; false for an illustration, a mask, or when the player wants a stylised hero.
 - sculpt: the head and face as a player creator's sliders. List only the features that stand out, each from -1 to 1 with 0 an average face; a head shape (shape_*) runs from 0 to 1. Head: head_width, head_length, head_fullness, forehead. Eyes: eye_spacing, eye_height, eye_size, eye_opening, eye_inner and eye_outer (corners up or down). Nose: nose_width, nose_length, nose_height, nose_flare. Mouth: mouth_width, mouth_fullness, mouth_height, lip_upper, lip_lower. Cheeks: cheekbones, cheek_volume. Jaw: chin_width, chin_height, chin_prominence. Shapes: shape_oval, shape_round, shape_square, shape_rectangular (long), shape_triangular (pear), shape_invertedtriangular (heart), shape_diamond. A worn photo face already has the photo's shape, so then sculpt only what the player asks to change. An illustrated or anime character is sculpted to its look (anime eyes are large: eye_size 0.6 to 0.9). Leave the list empty when nothing stands out.
 
-The wardrobe. A hero wears one item a slot: hair, beard, head (hats, helmets, hoods, crowns), upper (torso and arms), lower (legs), full (torso, arms and legs, in place of upper and lower), back (capes, cloaks, scarves, wings, what's slung on the back), feet, face (glasses, masks), and hand_r and hand_l (what they hold). Give a wish for each slot you can see or the player names, and leave the rest out for the role to dress:
-- phrase: the thing in one to five words, the way the player or the image would put it ("wide straw hat").
-- item: the library item that answers it best. none when the slot is empty on purpose (bald, clean-shaven, shirtless, barefoot). '' when nothing in the library is close.
-- rung: the cheapest that gets there. wear is the item as made. recolour puts your colours and finishes on its channels. restyle adds a print or a cut. generate makes a new item in 3D for credits, so pick it only when no item is close, and give the closest item as a stand-in when there is one.
-- colors: a '#rrggbb' per channel, in the item's channel order, '' to keep a channel's own. finishes the same way: cotton, silk, denim, knit, leather, metal or glow.
-- print: one of the prints, on the item's first channel, or ''. knobs: cuts the item allows, each 0 (shortest) to 1 (as made).
+gear: what each hand holds, a built-in piece's id, '' for an empty hand. hand_r holds a hand piece (a sword, a staff, a gun); hand_l holds a hand piece or an off-hand one (a shield, a bow). A pair (twin daggers) fills both hands.
 
 The kit has six slots: basic (the basic attack, left click), active1 (Q), active2 (E), passive, ultimate (R) and movement (F). For each slot give:
 - name: the player's, or two or three evocative words that fit the hero. Never a number.
@@ -246,7 +220,7 @@ The kit has six slots: basic (the basic attack, left click), active1 (Q), active
 Transformations. A transformation ultimate's template sets the size the hero takes, and so its role:
 ${transformations}
 Titan is the colossal one, Nine-Tails an avatar, Super Saiyan keeps its size, Ant-Man shrinks. Pick a role that holds the template. When the player doesn't say how the form changes size, guess, and ask (about: form) with sizes as the options.
-form: how the transformation looks, '' everywhere when the ultimate isn't one. entry, aura, growth (only when the size changes), trail and avatar from their lists. hair: a hair item it changes to; hairColor and eyes as '#rrggbb'; marks; and wear: built-in items it puts on over the outfit, each with a colour.
+form: how the transformation looks, '' everywhere when the ultimate isn't one. entry, aura, growth (only when the size changes), trail and avatar from their lists; eyes as '#rrggbb'; and marks.
 
 Roles:
 ${ROLES.map((r) => `- ${r.id}: ${r.description}`).join('\n')}
@@ -257,10 +231,9 @@ summary: one sentence that shows the player you understood the character, naming
 Catalogue (id | slot | delivery | roles | name: tags):
 ${catalog}
 
-Library (id | slot | name | channels | knobs | tags):
-${library}
+Pieces (id | kind | name | tags):
+${pieces}
 
-Prints: ${PRINTS.join(', ')}.
 Elements: ${ELEMENTS.join(', ')}.
 Forms by delivery: ${forms}.
 Cast poses: ${CAST_POSES.join(', ')}. Charges: ${CHARGES.join(', ')}. Impacts: ${IMPACTS.join(', ')}. Trails: ${TRAILS.join(', ')}. Motifs: ${MOTIFS.join(', ')}.
@@ -282,11 +255,11 @@ export function readingRequest(input: ReadInput): string {
 
 /** A reading in an AI reader's own words, for showing it the last one it gave. */
 function answerOf(reading: Reading) {
-  const { source: _source, look, wear, questions, ...rest } = reading
+  const { source: _source, look, gear, questions, ...rest } = reading
   return {
     ...rest,
     look: { ...look, physique: look.physique ?? NEUTRAL_PHYSIQUE, colors: Object.entries(look.colors).map(([region, hex]) => ({ region, hex })), sculpt: Object.entries(look.sculpt ?? {}).map(([feature, value]) => ({ feature, value })) },
-    wear: wearAnswer(wear),
+    gear: Object.fromEntries(GEAR_SLOTS.map((s) => [s, gear[s] ?? ''])),
     questions: questions.map((q) => ({ ...q, options: q.options.map((o) => o.label) })),
   }
 }
@@ -391,18 +364,17 @@ function readSculpt(raw: unknown): Sculpt | undefined {
   return hydrateSculpt(out)
 }
 
-/** A form look as a reader flattens it (hair, eyes and wear beside the entry) or as a reading keeps it. */
+/** A form look as a reader flattens it (eyes and marks beside the entry) or as a reading keeps it. */
 function readForm(raw: unknown): TransformationLook | undefined {
   const f = record(raw)
   if ('body' in f) return hydrateTransformation(f)
-  const wear = Array.isArray(f.wear) ? f.wear.map((w) => record(w)).map((w) => ({ id: w.item ?? w.id, ...(typeof w.color === 'string' && w.color ? { colors: [w.color.toLowerCase()] } : {}) })) : undefined
   const lower = (v: unknown) => (typeof v === 'string' ? v.toLowerCase() : v)
-  return hydrateTransformation({ entry: f.entry, aura: f.aura, growth: f.growth, trail: f.trail, avatar: f.avatar, body: { hair: f.hair, hairColor: lower(f.hairColor), eyes: lower(f.eyes), marks: f.marks, wear } })
+  return hydrateTransformation({ entry: f.entry, aura: f.aura, growth: f.growth, trail: f.trail, avatar: f.avatar, body: { eyes: lower(f.eyes), marks: f.marks } })
 }
 
 /**
  * Rebuild a reading from an AI reader's answer, keeping only what the vocabulary allows: names trimmed, colours checked,
- * templates from the role's pool, items from the library, looks that fit their templates. Anything missing comes from
+ * templates from the role's pool, pieces from the built-ins, looks that fit their templates. Anything missing comes from
  * the offline reading of the same request.
  */
 export function hydrateReading(raw: unknown, input: ReadInput, source: ReadingSource): Reading {
@@ -449,7 +421,7 @@ export function hydrateReading(raw: unknown, input: ReadInput, source: ReadingSo
     realPerson: value.realPerson === true,
     roleId,
     look,
-    wear: readWear(value.wear),
+    gear: 'gear' in value ? readGear(value.gear) : fallback.gear,
     kit: settled,
     ...(form ? { form } : {}),
     questions: readQuestions(value.questions).filter((q) => (q.about !== 'face' || input.faceFound) && (q.about !== 'form' || transforming)),
@@ -612,18 +584,18 @@ function summaryOf(reading: Omit<Reading, 'summary' | 'questions'>): string {
   const size = reading.look.size === 'medium' ? '' : `${SIZES[reading.look.size].label.toLowerCase()} `
   const named = BUILD_SLOTS.filter((s) => reading.kit[s].name)
   const skills = named.map((s) => (s === 'ultimate' && transforms(reading.kit[s].template) ? `the transformation ${reading.kit[s].name}` : reading.kit[s].name))
-  const worn = reading.wear.filter((w) => !w.bare).map((w) => w.phrase).slice(0, 4)
-  return `${reading.heroName}, a ${size}${role}${worn.length ? `, with ${listed(worn)}` : ''}${skills.length ? `. Skills: ${listed(skills)}` : ''}.`
+  const held = gearPhrase(reading.gear)
+  return `${reading.heroName}, a ${size}${role}${held ? `, with ${held}` : ''}${skills.length ? `. Skills: ${listed(skills)}` : ''}.`
 }
 
-/** The colours a prompt gives the body: "red hair", "blue eyes". */
+/** The colours a prompt gives the body: "blue eyes", "green skin". */
 function bodyColours(prompt: string): Partial<Record<BodyColor, string>> {
   const all = coloursFromPrompt(prompt)
   return Object.fromEntries(BODY_COLORS.flatMap((c) => (all[c] ? [[c, all[c]]] : [])))
 }
 
 /**
- * The offline reading: the prompt's names, size, build, colours and wardrobe words, the skills it names by slot, and a
+ * The offline reading: the prompt's names, size, build, colours and what it holds, the skills it names by slot, and a
  * role that suits them. It asks what any skill named without a description does, which way a transformation changes
  * size when the words don't say, and whether to wear a face it found.
  */
@@ -657,7 +629,7 @@ export function offlineReading(input: ReadInput): Reading {
     const template = slot === 'ultimate' && transform ? (sized && holds(roleId, sized) ? sized : TRANSFORMS[roleId]) : undefined
     kit[slot] = { name: skill?.name ?? '', does: skill?.does ?? '', template: template ?? '' }
   }
-  const reading = { heroName, realPerson: false, roleId, look, wear: wearFromPrompt(prompt), kit: settleKit(roleId, kit), source: 'offline' as const }
+  const reading = { heroName, realPerson: false, roleId, look, gear: gearFromPrompt(prompt), kit: settleKit(roleId, kit), source: 'offline' as const }
   return { ...reading, summary: summaryOf(reading), questions: offlineQuestions(reading, !!input.faceFound, transform && !sized) }
 }
 
@@ -674,7 +646,7 @@ function offlineQuestions(reading: Omit<Reading, 'summary' | 'questions'>, faceF
   return out.slice(0, MAX_QUESTIONS)
 }
 
-/** An offline correction on top of the last reading: what the note says about the body, the wardrobe and the skills. */
+/** An offline correction on top of the last reading: what the note says about the body, the hands and the skills. */
 function correctOffline(previous: Reading, note: string, input: ReadInput): Reading {
   // size words about the ultimate size its form, not the hero: "make the ultimate shrink him to tiny"
   const aboutForm = /\b(?:ult\w*|transform\w*|form)\b/i.test(note)
@@ -695,7 +667,7 @@ function correctOffline(previous: Reading, note: string, input: ReadInput): Read
   for (const [slot, skill] of Object.entries(named) as [BuildSlot, Named][]) kit[slot] = { ...kit[slot], name: skill.name, does: skill.does || kit[slot].does, template: '' }
   const roleId = ROLE_IDS.find((r) => new RegExp(`\\b(?:a|as|make (?:him|her|it)(?: a)?)\\s+${r}\\b`, 'i').test(note)) ?? previous.roleId
   const fresh = roleId === previous.roleId ? kit : (Object.fromEntries(BUILD_SLOTS.map((s) => [s, { ...kit[s], template: '' }])) as Record<BuildSlot, ReadingSkill>)
-  const base: Reading = { ...previous, heroName: input.heroName?.trim() || previous.heroName, roleId, look, wear: correctWear(previous.wear, note), kit: settleKit(roleId, fresh), source: 'offline' }
+  const base: Reading = { ...previous, heroName: input.heroName?.trim() || previous.heroName, roleId, look, gear: correctGear(previous.gear, note), kit: settleKit(roleId, fresh), source: 'offline' }
   // "make the ultimate shrink him" picks the form that does
   const said = aboutForm && (transforms(base.kit.ultimate.template) || isTransform(base.kit.ultimate.does)) ? formFromWords(note) : undefined
   const reading = said ? withForm(base, said) : base
@@ -714,7 +686,7 @@ export function floorBreach(text: string, realPerson: boolean): string | undefin
 }
 
 /** Every word a reading puts on a hero, for the floor. */
-export const readingText = (r: Reading) => [r.heroName, r.summary, ...r.wear.map((w) => w.phrase), ...BUILD_SLOTS.flatMap((s) => [r.kit[s].name, r.kit[s].does])].join('\n')
+export const readingText = (r: Reading) => [r.heroName, r.summary, ...BUILD_SLOTS.flatMap((s) => [r.kit[s].name, r.kit[s].does])].join('\n')
 
 // ------------------------------------------------------------------------------------------------ answering and building
 

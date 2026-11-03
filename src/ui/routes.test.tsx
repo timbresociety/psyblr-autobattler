@@ -15,7 +15,7 @@ describe('routes (GAME.md §11)', () => {
     expect(legacyRoute('?loadout')).toBe('/')
     expect(legacyRoute('?bench&webgl')).toBe('/dev/bench?webgl')
     expect(legacyRoute('?soak&minutes=2')).toBe('/dev/soak?minutes=2')
-    expect(legacyRoute('?wardrobe')).toBe('/dev/wardrobe')
+    expect(legacyRoute('?wardrobe')).toBe('/dev')
     expect(legacyRoute('?physique&body=f')).toBe('/dev/physique?body=f')
     expect(legacyRoute('')).toBeUndefined()
     expect(legacyRoute('?style=rifle')).toBeUndefined()

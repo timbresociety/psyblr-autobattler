@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import type { BodySurface } from '../../../kit/body/surface.js'
 import { refineGeometry } from '../../../kit/body/refine.js'
 import { ARKIT_SHAPES, boundDeltas, eyeIds, headShare, jawFit, LITE_SHAPES, sphereOf, type ArkitShape, type CardPart, type RigidPart } from '../../../kit/head/head.js'
-import { evaluate, type Binding } from '../../../kit/wear/bind.js'
+import { evaluate, type Binding } from '../../../kit/head/bind.js'
 import { makeEye } from './eyes.js'
 import type { HeadKit } from './kit.js'
 

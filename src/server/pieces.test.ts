@@ -2,15 +2,12 @@ import { existsSync, readFileSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PIECE_PRICE } from '../forge/pricing.js'
-import { GARMENT_FROM, placeholderPiece } from '../forge/providers/fakes/piece-model.js'
 import { createRegistry } from '../forge/providers/registry.js'
 import type { PieceProvider, PieceRequest } from '../forge/providers/types.js'
-import { BUDGET } from '../kit/fit/fit.js'
-import { REFERENCE_BODY } from '../kit/fit/reference.js'
-import { searchAssets, searchItems, visibleAssets } from './assets.js'
+import { searchAssets, visibleAssets } from './assets.js'
 import { balance, grantPurchase } from './credits.js'
 import { SCHEMA_SQL, type Db } from './db.js'
-import { gearProblem, wearProblem } from './gear.js'
+import { gearProblem } from './gear.js'
 import { generationReady, pieceName, pollPiece, startPiece, type PieceDeps } from './pieces.js'
 
 let db: Db
@@ -36,16 +33,16 @@ beforeEach(async () => {
 describe('generating a piece into the repository', () => {
   it('holds the price, then publishes the piece for everyone and charges the hold', async () => {
     await grantPurchase(db, 'a1', 100, 'test-grant')
-    const job = await startPiece(deps, 'a1', { prompt: 'a wide straw hat', kind: 'head' })
-    expect(job).toMatchObject({ status: 'running', name: 'Wide Straw Hat', kind: 'head' })
+    const job = await startPiece(deps, 'a1', { prompt: 'a wide jade glaive', kind: 'hand' })
+    expect(job).toMatchObject({ status: 'running', name: 'Wide Jade Glaive', kind: 'hand' })
     expect(await balance(db, 'a1')).toBe(100 - PIECE_PRICE)
     const done = await pollPiece(deps, 'a1', job.id)
     expect(done.status).toBe('done')
-    expect(done.piece).toMatchObject({ id: job.id, kind: 'head', source: 'community', url: `https://store.public.blob.vercel-storage.com/pieces/${job.id}.glb` })
+    expect(done.piece).toMatchObject({ id: job.id, kind: 'hand', source: 'community', url: `https://store.public.blob.vercel-storage.com/pieces/${job.id}.glb` })
     expect(stored.has(`pieces/${job.id}.glb`)).toBe(true)
     expect(stored.has(`pieces/${job.id}.webp`)).toBe(true)
     // it's in the repository, free to find, and the hold became a charge
-    expect((await searchAssets(db, 'straw')).map((p) => p.id)).toEqual([job.id])
+    expect((await searchAssets(db, 'glaive')).map((p) => p.id)).toEqual([job.id])
     expect(await balance(db, 'a1')).toBe(100 - PIECE_PRICE)
     const { rows } = await db.query<{ kind: string }>("select kind from credit_ledger where ref = $1 order by created_at", [`piece:${job.id}`])
     expect(rows.map((r) => r.kind)).toEqual(['hold', 'charge'])
@@ -92,60 +89,33 @@ describe('generating a piece into the repository', () => {
   })
 })
 
-describe('generating a garment into the wardrobe', () => {
-  it('fits it as a wardrobe item, publishes it for everyone and charges the hold', async () => {
+describe('a generated piece in the repository', () => {
+  it('can be held in a hand its kind fits, and only there', async () => {
     await grantPurchase(db, 'a1', 100, 'test-grant')
-    const job = await startPiece(deps, 'a1', { prompt: 'a navy silk kimono', slot: 'full' })
-    expect(job).toMatchObject({ status: 'running', name: 'Navy Silk Kimono', kind: 'full', slot: 'full' })
-    expect(await balance(db, 'a1')).toBe(100 - PIECE_PRICE)
+    const job = await startPiece(deps, 'a1', { prompt: 'a bronze buckler', kind: 'offhand' })
     const done = await pollPiece(deps, 'a1', job.id)
-    expect(done.status).toBe('done')
-    const url = `https://store.public.blob.vercel-storage.com/wear/${job.id}.glb`
-    expect(done.item).toMatchObject({ id: job.id, slot: 'full', source: 'community', url, thumb: `https://store.public.blob.vercel-storage.com/wear/${job.id}.webp` })
-    expect(done.item!.channels.length).toBeGreaterThan(0)
-    expect(stored.has(`wear/${job.id}.glb`)).toBe(true)
-    // the wardrobe finds it and gear search doesn't, and the hold became a charge
-    expect((await searchItems(db, 'kimono')).map((i) => i.id)).toEqual([job.id])
-    expect(await searchAssets(db, 'kimono')).toEqual([])
-    expect(await balance(db, 'a1')).toBe(100 - PIECE_PRICE)
-    // a saved hero can wear it in its slot, and only there
+    const url = done.piece!.url
     const community = await visibleAssets(db, [job.id])
-    const hero = { gender: 'm' as const, hair: 'crop' as const, armour: false, cape: false, colors: {} }
-    expect(wearProblem({ ...hero, wear: { full: { id: job.id, url } } }, community)).toBeUndefined()
-    expect(wearProblem({ ...hero, wear: { upper: { id: job.id, url } } }, community)).toMatch(/can't go in upper/)
-    expect(gearProblem({ ...hero, gear: { back: { id: job.id, url } } }, community)).toMatch(/no piece/)
-    // polling again just reports it
-    expect((await pollPiece(deps, 'a1', job.id)).item?.id).toBe(job.id)
+    const hero = { gender: 'm' as const, colors: {} }
+    expect(gearProblem({ ...hero, gear: { hand_l: { id: job.id, url } } }, community)).toBeUndefined()
+    expect(gearProblem({ ...hero, gear: { hand_r: { id: job.id, url } } }, community)).toMatch(/can't go in hand_r/)
   })
 
-  it("costs nothing when the model won't fit the slot", async () => {
-    await grantPurchase(db, 'a1', 100, 'test-grant')
-    const disc = await placeholderPiece('offhand')
-    const misfit = { ...deps, read: async () => disc }
-    const job = await startPiece(misfit, 'a1', { prompt: 'a paper lantern robe', slot: 'full' })
-    const done = await pollPiece(misfit, 'a1', job.id)
-    expect(done).toMatchObject({ status: 'failed', slot: 'full' })
-    expect(done.error).toMatch(/couldn't be made into a garment \(it doesn't fit: covers \d+% of the torso/)
-    expect(await balance(db, 'a1')).toBe(100)
-    expect(await searchItems(db, '')).toEqual([])
-  })
-
-  it("asks the provider for a garment at its slot's budget, and for a piece at the usual limit", async () => {
+  it('asks the provider for a piece at the usual limit', async () => {
     await grantPurchase(db, 'a1', 100, 'test-grant')
     const asked: (number | undefined)[] = []
     const providers = deps.registry.providers.map((p) =>
       p.capability === 'piece' ? { ...p, start: (r: PieceRequest) => (asked.push(r.faceLimit), (p as PieceProvider).start(r)) } : p,
     )
     const spy = { ...deps, registry: { ...deps.registry, providers } }
-    await startPiece(spy, 'a1', { prompt: 'a pair of geta', slot: 'feet' })
     await startPiece(spy, 'a1', { prompt: 'a jade dagger', kind: 'hand' })
-    expect(asked).toEqual([BUDGET.feet, 20000])
+    expect(asked).toEqual([20000])
   })
 
-  it('asks for a wardrobe slot it knows', async () => {
-    await grantPurchase(db, 'a1', 100, 'test-grant')
-    await expect(startPiece(deps, 'a1', { prompt: 'a long tail', slot: 'tail' as never })).rejects.toMatchObject({ status: 400 })
-    expect(await balance(db, 'a1')).toBe(100)
+  it('never lists a garment left from before heroes were drawn bare', async () => {
+    await db.query("insert into assets (id, kind, name, name_lower, url, meta) values ('robe', 'full', 'Robe', 'robe', 'https://x/wear/robe.glb', $1)", [JSON.stringify({ channels: [], knobs: [] })])
+    expect(await searchAssets(db, '')).toEqual([])
+    expect((await visibleAssets(db, ['robe'])).size).toBe(0)
   })
 
   it("widens an older database's asset kinds in place, and runs again harmlessly", async () => {
@@ -166,9 +136,9 @@ describe('generating a garment into the wardrobe', () => {
 
   it('ships with the functions every file a job reads from disk', () => {
     const config = JSON.parse(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'))
-    const files = /^\{(.*)\}$/.exec(config.functions['api/**/*.ts'].includeFiles as string)![1].split(',')
-    const read = ['db/schema.sql', `public/heroes/${REFERENCE_BODY}.glb`, `public/heroes/${REFERENCE_BODY}.kit.json`, ...Object.values(GARMENT_FROM).map((id) => `public/kit/wear/${id}.glb`)]
-    expect(files).toEqual(expect.arrayContaining(read))
+    const include = config.functions['api/**/*.ts'].includeFiles as string
+    const files = (/^\{(.*)\}$/.exec(include)?.[1] ?? include).split(',')
+    expect(files).toEqual(expect.arrayContaining(['db/schema.sql']))
     for (const file of files) expect(existsSync(new URL(`../../${file}`, import.meta.url)), file).toBe(true)
   })
 })

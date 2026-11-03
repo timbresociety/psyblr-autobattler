@@ -5,7 +5,6 @@ import type { PieceDeps } from '../api'
 export function pieceDeps(over: Partial<PieceDeps> = {}): PieceDeps {
   return {
     searchPieces: vi.fn(async () => []),
-    searchItems: vi.fn(async () => []),
     generationReady: vi.fn(async () => true),
     session: vi.fn(async () => ({ signedIn: false })),
     startSignIn: vi.fn(async () => ({})),

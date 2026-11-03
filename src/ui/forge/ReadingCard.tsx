@@ -6,17 +6,13 @@ import { SIZE_CLASSES, SIZES } from '../../charter/sizes'
 import { getTemplate } from '../../charter/templates/catalog'
 import { lookFromWords, templateWords } from '../../arena/recipes/looks'
 import { FORM_TEMPLATES, formChange, transformOf } from '../../forge/form'
-import { PIECE_PRICE } from '../../forge/pricing'
 import { answerQuestion, editReadingSkill, formAnswer, templateBlurb, withForm, withRole, type Reading, type ReadingSource } from '../../forge/reading'
-import { atRung, canReach, type WearWish } from '../../forge/wardrobe-read'
-import type { LibraryEntry } from '../../kit/wear/library'
 import { SkillIcon } from '../common/SkillIcon'
 import { BodyPanel } from './BodyPanel'
 import { SLOT_LABEL } from './labels'
-import { bodyAfter, isGap, wishesAfter } from './look'
+import { GearPanel } from './GearPanel'
+import { bodyAfter, gearAfter } from './look'
 import { RoleSwitcher } from './RoleSwitcher'
-import { LOOK_SLOT_LABEL, RUNGS, RUNG_LABEL } from './wardrobe'
-import { WardrobePanel } from './WardrobePanel'
 
 const SOURCE_LABEL: Record<ReadingSource, string> = { 'claude-code': 'Read by your Claude Code', claude: 'Read by Claude', offline: 'Read offline' }
 const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -27,21 +23,18 @@ interface Props {
   stage: ReactNode
   /** The look the reading dresses the hero in, as drawn: every colour filled in. */
   look: HeroLook & { colors: Record<LookColor, string> }
-  /** Every item the card can offer: the library, then the community's items seen so far. */
-  catalog: readonly LibraryEntry[]
   canFace: boolean
   onChange: (reading: Reading) => void
 }
 
 /**
  * The Forge's reading of a hero, before anything is built: what it understood, what it couldn't tell, and every part
- * of it to change. The body and wardrobe are the editor's own panels, writing back into the reading; the wishes show
- * what each answers and the rung it sits on; the kit shows each slot's name, what it does in the player's words, how
- * it looks, and the engine mechanic that will carry it. The plinth shows the look as it changes.
+ * of it to change. The body and the hands are the editor's own panels, writing back into the reading; the kit shows
+ * each slot's name, what it does in the player's words, how it looks, and the engine mechanic that will carry it. The
+ * plinth shows the look as it changes. Heroes are drawn bare (2026-11-04), so nothing is worn.
  */
-export function ReadingCard({ reading, stage, look, catalog, canFace, onChange }: Props) {
+export function ReadingCard({ reading, stage, look, canFace, onChange }: Props) {
   const asks = reading.questions.length
-  const setWish = (wish: WearWish, next: WearWish | undefined) => onChange({ ...reading, wear: next ? reading.wear.map((w) => (w === wish ? next : w)) : reading.wear.filter((w) => w !== wish) })
   return (
     <>
       <section className="showcase reading" aria-label="Reading">
@@ -85,22 +78,7 @@ export function ReadingCard({ reading, stage, look, catalog, canFace, onChange }
         </div>
       </section>
       <BodyPanel look={look} canFace={canFace} onLook={(change) => onChange(bodyAfter(reading, look, change(look)))} onFace={(on) => onChange({ ...reading, look: { ...reading.look, wearFace: on } })} />
-      <section className="look-panel reading-wear" aria-label="Wardrobe as read">
-        <header className="look-head">
-          <h2 className="section-title">Wardrobe as read</h2>
-          <p className="muted">Anything in the library is free to wear, recolour and restyle. What it lacks, you generate once the hero is built, {PIECE_PRICE} credits each.</p>
-        </header>
-        {reading.wear.length === 0 ? (
-          <p className="muted">Nothing named, so the role dresses the hero. Name a kimono, a hat or a sword in a correction, or pick below.</p>
-        ) : (
-          <ul className="wishes">
-            {reading.wear.map((wish) => (
-              <WishRow key={wish.slot} wish={wish} entry={wish.item ? catalog.find((e) => e.id === wish.item) : undefined} gap={isGap(wish, catalog)} onChange={(next) => setWish(wish, next)} />
-            ))}
-          </ul>
-        )}
-      </section>
-      <WardrobePanel look={look} catalog={catalog} onLook={(change) => onChange({ ...reading, wear: wishesAfter(reading, look, change(look), catalog) })} />
+      <GearPanel look={look} onLook={(change) => onChange(gearAfter(reading, change(look)))} />
       <section className="look-panel reading-kit" aria-label="Kit as read">
         <header className="look-head">
           <h2 className="section-title">Kit</h2>
@@ -144,39 +122,6 @@ export function ReadingCard({ reading, stage, look, catalog, canFace, onChange }
   )
 }
 
-/** One wish as read: where it goes, its words, what answers it, the rungs it can sit on, and a way to drop it. */
-function WishRow({ wish, entry, gap, onChange }: { wish: WearWish; entry?: LibraryEntry; gap: boolean; onChange: (next: WearWish | undefined) => void }) {
-  const status = wish.bare
-    ? 'Nothing here, on purpose'
-    : gap
-      ? `Not in the library yet. Generate it once the hero is built.${entry ? ` ${entry.name} stands in until then.` : ''}`
-      : `${entry!.name}${entry!.source === 'community' ? ', from the community' : ''}`
-  return (
-    <li className={`wish${wish.bare ? ' bare' : gap ? ' missing' : ' found'}`}>
-      <span className="wish-kind">{LOOK_SLOT_LABEL[wish.slot]}</span>
-      <span className="wish-words">
-        <b className="wish-phrase">{wish.phrase}</b>
-        <span className="wish-status">{status}</span>
-      </span>
-      {!wish.bare && (
-        <div className="rungs" role="group" aria-label={`${wish.phrase} rungs`}>
-          {RUNGS.map((r) => (
-            <button key={r} type="button" aria-current={r === wish.rung ? 'step' : undefined} className={`rung${r === wish.rung ? ' on here' : ''}`} disabled={r !== wish.rung && !canReach(wish, r)} onClick={() => r !== wish.rung && onChange(atRung(wish, r))}>
-              {RUNG_LABEL[r]}
-              <small>{r === 'generate' ? `${PIECE_PRICE} credits` : 'Free'}</small>
-            </button>
-          ))}
-        </div>
-      )}
-      <button type="button" className="wish-remove" aria-label={`Remove ${wish.phrase}`} title="Let the role dress this slot" onClick={() => onChange(undefined)}>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      </button>
-    </li>
-  )
-}
-
 /** The reading's bar, where the balance check sits once a hero exists: a correction to read again with, and Build. */
 export function ReadingBar({ busy, questions, onCorrect, onBuild }: { busy: boolean; questions: number; onCorrect: (note: string) => void; onBuild: () => void }) {
   const [note, setNote] = useState('')
@@ -189,7 +134,7 @@ export function ReadingBar({ busy, questions, onCorrect, onBuild }: { busy: bool
   return (
     <section className="gate reading-bar" aria-label="Build">
       <form className="correct" onSubmit={submit}>
-        <input aria-label="Correction" value={note} maxLength={MAX_CHAT} placeholder="Anything I got wrong? “no hat, give him a red jacket”" onChange={(e) => setNote(e.target.value)} />
+        <input aria-label="Correction" value={note} maxLength={MAX_CHAT} placeholder="Anything I got wrong? “no shield, give him blue eyes”" onChange={(e) => setNote(e.target.value)} />
         <button type="submit" className="btn ghost" disabled={busy || !note.trim()}>
           Read again
         </button>

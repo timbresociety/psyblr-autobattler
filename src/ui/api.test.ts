@@ -42,14 +42,13 @@ describe('device IDs on the client', () => {
     localStorage.setItem('psyblr.deviceId', OLD)
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<!doctype html><div id="root"></div>', { headers: { 'content-type': 'text/html' } })))
     const { livePieceDeps } = await import('./api.js')
-    await expect(livePieceDeps.searchItems('')).rejects.toThrow('not answering')
+    await expect(livePieceDeps.searchPieces('')).rejects.toThrow('not answering')
   })
 
   it('a library answer without its list reads as an empty list', async () => {
     localStorage.setItem('psyblr.deviceId', OLD)
     vi.stubGlobal('fetch', vi.fn(async () => Response.json({})))
     const { livePieceDeps } = await import('./api.js')
-    expect(await livePieceDeps.searchItems('')).toEqual([])
     expect(await livePieceDeps.searchPieces('')).toEqual([])
   })
 })

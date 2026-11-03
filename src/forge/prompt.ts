@@ -1,7 +1,8 @@
 import { TEXT_LIMITS } from '../charter/build.js'
-import type { BeardStyle, Gender, HairStyle, LookColor } from '../charter/look.js'
+import type { Gender, LookColor } from '../charter/look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import type { BuildSlot } from '../charter/types.js'
+import { NEUTRAL_PHYSIQUE, type Physique } from '../kit/body/shape.js'
 import { findCulture } from './director/culture.js'
 import { namedThemes } from './director/fake.js'
 
@@ -103,7 +104,7 @@ export function skillsFromPrompt(prompt: string): Partial<Record<BuildSlot, { na
 
 // ------------------------------------------------------------------------------------------------ the look a prompt asks for
 
-/** Colour words and the '#rrggbb' each reads as: the reader's for the body and the wardrobe's channels. */
+/** Colour words and the '#rrggbb' each reads as. */
 export const COLOUR_WORDS: Record<string, string> = {
   red: '#c8242c', crimson: '#a3122a', scarlet: '#d4231e', maroon: '#6e1423', orange: '#e8741c', amber: '#f0a020',
   gold: '#d4a531', golden: '#d4a531', yellow: '#f2cf2e', lime: '#9ccf2c', green: '#2f9a48', emerald: '#18905e', jade: '#3a9a7a',
@@ -120,22 +121,24 @@ const COLOUR_PHRASES: [RegExp, string][] = [
   [/electric blue/i, '#2c7bff'],
   [/blood red/i, '#8a0a12'],
 ]
+// heroes are drawn bare (2026-11-04), so a colour only lands on the body itself
 const COLOUR_NOUNS: [RegExp, LookColor][] = [
-  [/^(cape|cloak|mantle)s?$/, 'cape'],
-  [/^(armou?r|plate|plates|helmet|pauldrons?|metal)$/, 'metal'],
-  [/^(jacket|suit|coat|robes?|shirt|tee|outfit|uniform|gi|tunic|hoodie|top|costume|clothes)$/, 'suit'],
-  [/^(trim|accents?|stripes?|belt|sash)$/, 'trim'],
-  [/^(pants|trousers|jeans|legs|shorts)$/, 'pants'],
-  [/^(boots?|shoes?)$/, 'boot'],
-  [/^(gloves?|gauntlets?)$/, 'glove'],
-  [/^(hair|mane|beard)$/, 'hair'],
   [/^(eyes?)$/, 'iris'],
+  [/^(brows?|eyebrows?)$/, 'brow'],
   [/^(skin)$/, 'skin'],
 ]
 
-/** Colours the prompt asks for by name and noun: "a red cape", "gold armour", "a black leather jacket", "NVIDIA green". */
+/** Colours the prompt asks for on the body by name and noun: "blue eyes", "green skin", "NVIDIA green eyes". */
 export function coloursFromPrompt(prompt: string): Partial<Record<LookColor, string>> {
   const out: Partial<Record<LookColor, string>> = {}
+  // a phrase is read before its words, so "NVIDIA green eyes" are NVIDIA's green, not plain green
+  for (const [re, hex] of COLOUR_PHRASES) {
+    const at = prompt.search(re)
+    if (at < 0) continue
+    const after = prompt.slice(at).toLowerCase().split(/\s+/).slice(2, 5)
+    const region = after.map((w) => COLOUR_NOUNS.find(([r]) => r.test(w.replace(/[^\p{L}]/gu, '')))?.[1]).find(Boolean)
+    if (region) out[region] ??= hex
+  }
   const words = prompt.toLowerCase().replace(/[^\p{L}\s-]/gu, ' ').split(/\s+/).filter(Boolean)
   for (let i = 0; i < words.length; i++) {
     const hex = COLOUR_WORDS[words[i]]
@@ -149,13 +152,6 @@ export function coloursFromPrompt(prompt: string): Partial<Record<LookColor, str
       }
     }
   }
-  for (const [re, hex] of COLOUR_PHRASES) {
-    const at = prompt.search(re)
-    if (at < 0) continue
-    const after = prompt.slice(at).toLowerCase().split(/\s+/).slice(2, 5)
-    const region = after.map((w) => COLOUR_NOUNS.find(([r]) => r.test(w.replace(/[^\p{L}]/gu, '')))?.[1]).find(Boolean)
-    out[region ?? 'suit'] ??= hex
-  }
   return out
 }
 
@@ -166,26 +162,16 @@ export function genderFromPrompt(prompt: string): Gender | undefined {
   return undefined
 }
 
-/** The hair, armour and cape a prompt asks for, where it asks. */
-export function partsFromPrompt(prompt: string): { hair?: HairStyle; beard?: BeardStyle; armour?: boolean; cape?: boolean } {
-  const out: { hair?: HairStyle; beard?: BeardStyle; armour?: boolean; cape?: boolean } = {}
-  if (/\b(bald|shaved head|shaven head|hairless)\b/i.test(prompt)) out.hair = 'none'
-  else if (/\b(helmet|helm|knight|spartan|centurion|legionnaire)\b/i.test(prompt)) out.hair = 'helmet'
-  else if (/\b(afro|big hair|voluminous hair|huge hair)\b/i.test(prompt)) out.hair = 'volume'
-  else if (/\b(curly|curls|ringlets)\b/i.test(prompt)) out.hair = 'curly'
-  else if (/\b(long hair|ponytail|braids?|flowing hair|mane)\b/i.test(prompt)) out.hair = 'long'
-  else if (/\b(bob cut|bobbed|bob hair|a bob)\b/i.test(prompt)) out.hair = 'bob'
-  else if (/\b(spiky|spiked hair|super saiyan|anime hair|mohawk)\b/i.test(prompt)) out.hair = 'spiky'
-  else if (/\b(slicked back|slicked-back|swept back|swept-back|pompadour|quiff)\b/i.test(prompt)) out.hair = 'swept'
-  else if (/\b(buzz cut|buzzcut|buzzed|crew cut|military cut)\b/i.test(prompt)) out.hair = 'buzz'
-  else if (/\bshort hair\b/i.test(prompt)) out.hair = 'short'
-  else if (/\b(crop|cropped hair)\b/i.test(prompt)) out.hair = 'crop'
-  if (/\b(clean[- ]shaven|beardless|no beard)\b/i.test(prompt)) out.beard = 'none'
-  else if (/\bgoatee\b/i.test(prompt)) out.beard = 'goatee'
-  else if (/\b(chin curtain|chinstrap|chin strap|amish beard)\b/i.test(prompt)) out.beard = 'chin_curtain'
-  else if (/\b(beard|bearded|full beard|stubble)\b/i.test(prompt)) out.beard = 'full'
-  if (/\b(armou?r|armou?red|plate|knight|paladin|spartan|mech|cyborg|power suit)\b/i.test(prompt)) out.armour = true
-  if (/\b(no armou?r|unarmou?red|light clothes)\b/i.test(prompt)) out.armour = false
-  if (/\b(cape|cloak|caped|mantle)\b/i.test(prompt)) out.cape = true
-  return out
+/** Words for a build, and the physique each gives. */
+const PHYSIQUE_WORDS: [RegExp, Partial<Physique>][] = [
+  [/\b(?:muscular|muscled|muscle-bound|ripped|buff|jacked|brawny|beefy|burly|bodybuilder|hulking)\b/i, { muscle: 0.9 }],
+  [/\b(?:slim|slender|lean|skinny|wiry|lanky|scrawny)\b/i, { weight: 0.2 }],
+  [/\b(?:heavyset|fat|stout|chubby|portly|rotund|plump|overweight|pot-bellied)\b/i, { weight: 0.85 }],
+  [/\bold\s+(?:[\p{L}-]+\s+)?(?:man|woman|lady|master|sage|hermit|wizard|witch|monk|king|queen|warrior|samurai|soldier|general|veteran)\b|\b(?:elderly|wrinkled|grey-haired|gray-haired|white-haired|grandpa|grandma|grandfather|grandmother|granny)\b/iu, { age: 0.7 }],
+]
+
+/** The build a prompt describes (muscular, slim, heavyset, old), or undefined when it says nothing about one. */
+export function physiqueFromPrompt(prompt: string): Physique | undefined {
+  const said = PHYSIQUE_WORDS.filter(([re]) => re.test(prompt))
+  return said.length ? Object.assign({ ...NEUTRAL_PHYSIQUE }, ...said.map(([, p]) => p)) : undefined
 }

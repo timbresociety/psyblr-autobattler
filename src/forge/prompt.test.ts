@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, partsFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
+import { coloursFromPrompt, genderFromPrompt, nameFromPrompt, physiqueFromPrompt, sizeFromPrompt, skillsFromPrompt } from './prompt.js'
 
 describe('reading a Forge prompt', () => {
   it('takes the name from capitalised words, the culture table, or the words that describe the hero', () => {
@@ -44,10 +44,10 @@ describe('reading a Forge prompt', () => {
 })
 
 describe('the look a prompt asks for', () => {
-  it('reads colours by noun, brand colours included', () => {
-    expect(coloursFromPrompt('a knight in gold armour with a red cape')).toEqual({ metal: '#d4a531', cape: '#c8242c' })
-    expect(coloursFromPrompt('Jensen in a black leather jacket')).toEqual({ suit: '#1a1a1e' })
-    expect(coloursFromPrompt('a GPU god glowing NVIDIA green')).toEqual({ suit: '#76b900' })
+  it('reads colours on the body by noun, brand colours included, and nothing worn', () => {
+    expect(coloursFromPrompt('a knight with blue eyes and green skin')).toEqual({ iris: '#2a5bd7', skin: '#2f9a48' })
+    expect(coloursFromPrompt('a GPU god with NVIDIA green eyes')).toEqual({ iris: '#76b900' })
+    expect(coloursFromPrompt('a knight in gold armour with a red cape')).toEqual({})
     expect(coloursFromPrompt('a red-haired witch with long hair')).toEqual({})
   })
 
@@ -57,15 +57,8 @@ describe('the look a prompt asks for', () => {
     expect(genderFromPrompt('a robot made of tensors')).toBeUndefined()
   })
 
-  it('reads hair, armour and a cape', () => {
-    expect(partsFromPrompt('a bald monk with a cape')).toEqual({ hair: 'none', cape: true })
-    expect(partsFromPrompt('an armoured knight')).toEqual({ hair: 'helmet', armour: true })
-    expect(partsFromPrompt('a samurai with long hair')).toEqual({ hair: 'long' })
-    expect(partsFromPrompt('a bearded viking with an afro')).toEqual({ hair: 'volume', beard: 'full' })
-    expect(partsFromPrompt('a curly haired wizard with a goatee')).toEqual({ hair: 'curly', beard: 'goatee' })
-    expect(partsFromPrompt('a clean-shaven sergeant with a buzz cut')).toEqual({ hair: 'buzz', beard: 'none' })
-    expect(partsFromPrompt('a crooner with a pompadour and a chin strap')).toEqual({ hair: 'swept', beard: 'chin_curtain' })
-    expect(partsFromPrompt('a spy with a bob cut')).toEqual({ hair: 'bob' })
-    expect(partsFromPrompt('a pilot with short hair')).toEqual({ hair: 'short' })
+  it('reads a build', () => {
+    expect(physiqueFromPrompt('a muscular old man')).toEqual({ weight: 0.5, muscle: 0.9, age: 0.7 })
+    expect(physiqueFromPrompt('a hero')).toBeUndefined()
   })
 })

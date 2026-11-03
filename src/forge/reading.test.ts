@@ -4,11 +4,10 @@ import { poolFor } from '../charter/templates/catalog'
 import type { BuildSlot } from '../charter/types'
 import { ENCORE_COVER_ANSWER, ENCORE_PROMPT } from './examples'
 import { answerQuestion, buildFromReading, hydrateReading, namedSkills, offlineReading, readingSchema, withForm, withRole } from './reading'
-import { atRung, canReach, physiqueFromPrompt, wearFromPrompt } from './wardrobe-read'
+import { gearFromPrompt } from './gear-read'
 import { sculptFromPrompt } from './sculpt-read'
 
 const ENCORE = ENCORE_PROMPT
-const none = { colors: [], finishes: [], print: '', knobs: [] }
 
 describe('the offline reader', () => {
   it('recovers all three of Encore ABJ’s skill names, by slot, and reads the ultimate as a transformation', () => {
@@ -91,16 +90,14 @@ describe('the offline reader', () => {
   })
 
   it('a correction changes what it names and keeps the rest', () => {
-    const first = offlineReading({ prompt: 'a samurai with a katana and a straw hat, Q "Moon Slash"' })
-    expect(first.wear.map((w) => w.item)).toEqual(['kasa', 'samurai_armour', 'katana'])
-    const again = offlineReading({ prompt: first.summary, previous: first, note: 'no hat, give him a red jacket and long hair' })
-    expect(again.wear.find((w) => w.slot === 'head')).toMatchObject({ bare: true })
-    expect(again.wear.find((w) => w.slot === 'upper')).toMatchObject({ item: 'bomber', colors: ['#c8242c'], rung: 'recolour' })
-    // the jacket is a top, so the samurai armour over the whole body comes off
-    expect(again.wear.some((w) => w.slot === 'full')).toBe(false)
-    expect(again.wear.find((w) => w.slot === 'hair')?.item).toBe('hair_long')
-    expect(again.wear.find((w) => w.slot === 'hand_r')?.item).toBe('katana')
+    const first = offlineReading({ prompt: 'a samurai with a katana and a round shield, Q "Moon Slash"' })
+    expect(first.gear).toEqual({ hand_r: 'katana', hand_l: 'shield' })
+    const again = offlineReading({ prompt: first.summary, previous: first, note: 'no shield, give him blue eyes' })
+    expect(again.gear).toEqual({ hand_r: 'katana' })
+    expect(again.look.colors.iris).toBe('#2a5bd7')
     expect(again.kit.active1.name).toBe('Moon Slash')
+    // a reading never dresses a hero: what's worn isn't read at all
+    expect(offlineReading({ prompt: 'a queen in gold armour with a red cape and a crown' }).gear).toEqual({})
   })
 })
 
@@ -135,72 +132,31 @@ describe('a face from words', () => {
   })
 })
 
-describe('the offline wardrobe', () => {
-  it('reads each thing worn into a library item, its colours onto the item’s channels', () => {
-    expect(wearFromPrompt('a queen in gold armour with a red cape and a crown')).toEqual([
-      { slot: 'head', phrase: 'crown', item: 'crown', rung: 'wear' },
-      { slot: 'full', phrase: 'gold armour', item: 'knight_armour', colors: ['#d4a531'], rung: 'recolour' },
-      { slot: 'back', phrase: 'red cape', item: 'cape', colors: ['#c8242c'], rung: 'recolour' },
-    ])
+describe('the offline hands', () => {
+  it('arms a kind of hero only where the words leave room', () => {
+    // a samurai carries a katana, but the spear named stays a spear
+    expect(gearFromPrompt('a samurai with a spear')).toEqual({ hand_r: 'spear' })
+    expect(gearFromPrompt('a samurai')).toEqual({ hand_r: 'katana' })
   })
 
-  it('dresses a kind of hero only where the words leave room', () => {
-    // a samurai carries a katana, but the hoodie named stays a hoodie
-    expect(wearFromPrompt('a samurai in a red hoodie').map((w) => [w.slot, w.item])).toEqual([
-      ['upper', 'hoodie'],
-      ['hand_r', 'katana'],
-    ])
-  })
-
-  it('a pair fills both hands, and what’s left empty on purpose stays empty', () => {
-    expect(wearFromPrompt('an assassin with twin daggers').map((w) => [w.slot, w.item])).toEqual([
-      ['hand_r', 'dagger'],
-      ['hand_l', 'dagger'],
-    ])
-    const wizard = wearFromPrompt('a bald old wizard in a blue robe, barefoot')
-    expect(wizard.filter((w) => w.bare).map((w) => [w.slot, w.phrase])).toEqual([
-      ['hair', 'bald'],
-      ['feet', 'barefoot'],
-    ])
-    expect(wizard.find((w) => w.slot === 'full')).toMatchObject({ item: 'wizard_robe', colors: ['#2a5bd7'] })
-  })
-
-  it('a garment the library lacks is a wish to generate, still in its colours', () => {
-    const poncho = wearFromPrompt('a cowboy in a brown poncho').find((w) => w.slot === 'upper')
-    expect(poncho).toEqual({ slot: 'upper', phrase: 'brown poncho', colors: ['#6a4228'], rung: 'generate' })
-    expect(canReach(poncho!, 'wear')).toBe(false)
-  })
-
-  it('a wish moves down its rungs to the item as made, and up to generating', () => {
-    const [, armour] = wearFromPrompt('a queen in gold armour')
-    expect(atRung(armour, 'wear')).toEqual({ slot: 'full', phrase: 'gold armour', item: 'knight_armour', rung: 'wear' })
-    expect(atRung(armour, 'generate')).toMatchObject({ item: 'knight_armour', colors: ['#d4a531'], rung: 'generate' })
-    // restyling needs a print or a cut to show
-    expect(canReach(armour, 'restyle')).toBe(false)
-  })
-
-  it('reads a build off the words', () => {
-    expect(physiqueFromPrompt('a muscular old man')).toEqual({ weight: 0.5, muscle: 0.9, age: 0.7 })
-    expect(physiqueFromPrompt('a hero')).toBeUndefined()
+  it('a pair fills both hands, an off-hand piece the left, and a skill’s quoted name nothing', () => {
+    expect(gearFromPrompt('an assassin with twin daggers')).toEqual({ hand_r: 'dagger', hand_l: 'dagger' })
+    expect(gearFromPrompt('a knight with a sword and a round shield')).toEqual({ hand_r: 'sword', hand_l: 'shield' })
+    expect(gearFromPrompt('a wizard, Q "Axe of Ages"')).toEqual({ hand_r: 'staff' })
   })
 })
 
 describe('an AI reader’s answer', () => {
-  it('reads Encore ABJ off the cover: the kasa as made, the kimono recoloured, twin swords, a full beard, and what it couldn’t tell', () => {
+  it('reads Encore ABJ off the cover: twin katanas, the body, and what it couldn’t tell', () => {
     const raw = structuredClone(ENCORE_COVER_ANSWER)
     const reading = hydrateReading(raw, { prompt: ENCORE, heroName: 'Encore ABJ', faceFound: true }, 'claude')
-    expect(reading.wear).toEqual([
-      { slot: 'head', phrase: 'wide straw hat', item: 'kasa', rung: 'wear' },
-      { slot: 'full', phrase: 'blue kimono, gold obi', item: 'kimono', colors: ['#2a4b8d', '#d4a531'], finishes: ['silk'], rung: 'recolour' },
-      { slot: 'back', phrase: 'twin swords', item: 'twin_swords', rung: 'wear' },
-      { slot: 'beard', phrase: 'full beard', item: 'beard_full', rung: 'wear' },
-    ])
-    expect(reading.look).toMatchObject({ physique: { weight: 0.45, muscle: 0.6, age: 0.1 }, colors: { hair: '#1a1a1a' }, wearFace: true })
+    expect(reading.gear).toEqual({ hand_r: 'katana', hand_l: 'katana' })
+    expect(reading.look).toMatchObject({ physique: { weight: 0.45, muscle: 0.6, age: 0.1 }, colors: { brow: '#1a1a1a' }, wearFace: true })
     expect(reading.questions.map((q) => q.about)).toEqual(['active1', 'active2', 'form'])
     expect(reading.questions[2].options.map((o) => o.template)).toEqual(['fighter-super-form', 'fighter-ascended-form', 'assassin-shrink-form'])
     expect(reading.kit.ultimate.template).toBe('fighter-super-form')
     expect(reading.kit.ultimate.look).toMatchObject({ element: 'energy', palette: ['#ffffff', '#ffd23a', '#ff7400'], charge: 'gather', callout: true })
-    expect(reading.form).toMatchObject({ entry: 'burst', aura: 'flame', growth: 'swell', body: { hair: 'hair_spiky', hairColor: '#ffd23a', eyes: '#3ad2ff' } })
+    expect(reading.form).toMatchObject({ entry: 'burst', aura: 'flame', growth: 'swell', body: { eyes: '#3ad2ff' } })
     // the player's own names stand
     expect(reading.kit.active1.name).toBe('Encore Kha Ja')
   })
@@ -212,22 +168,14 @@ describe('an AI reader’s answer', () => {
       realPerson: true,
       roleId: 'fighter',
       look: { gender: 'm', size: 'colossal', physique: { weight: 2, muscle: 0.5, age: 0.5 }, colors: [{ region: 'suit', hex: '#4A6FB5' }, { region: 'skin', hex: 'brown' }, { region: 'iris', hex: '#2E5E3A' }], wearFace: true },
-      wear: [
-        { slot: 'upper', phrase: 'tee', item: 'tee', rung: 'wear', ...none },
-        // a full-body item can't go over a top the reader already gave
-        { slot: 'full', phrase: 'kimono', item: 'kimono', rung: 'wear', ...none },
-        { slot: 'eyes', phrase: 'laser eyes', item: '', rung: 'generate', ...none },
-        // an item named in the wrong slot goes where it's worn
-        { slot: 'head', phrase: 'katana', item: 'katana', rung: 'wear', ...none },
-        { slot: 'hand_r', phrase: 'laser sword', item: '', rung: 'generate', ...none, colors: ['#FF0000', 'red'], knobs: [{ knob: 'sleeve', value: 0.5 }] },
-        { slot: 'hair', phrase: '', item: 'none', rung: 'wear', ...none },
-      ],
+      // a shield can't go in the right hand, and a lightsaber isn't a built-in
+      gear: { hand_r: 'shield', hand_l: 'lightsaber', head: 'katana' },
       kit: {
         ...Object.fromEntries(BUILD_SLOTS.map((s) => [s, { name: `Model Name 42 ${s}`, does: 'Something cool', template: 'not-a-template' }])),
         active1: { name: 'x', does: 'An uppercut', template: 'fighter-rising-uppercut', look: { element: 'sound', form: 'wave', palette: ['#ffffff', '#88ccff', '#2255aa'], pose: '', charge: '', impact: '', trail: '', motif: '', callout: false } },
         ultimate: { name: 'x', does: 'A combo from the sky', template: 'fighter-meteor-combo' },
       },
-      form: { entry: 'burst', aura: '', growth: '', trail: '', avatar: '', hair: '', hairColor: '', eyes: '', marks: '', wear: [] },
+      form: { entry: 'burst', aura: '', growth: '', trail: '', avatar: '', eyes: '', marks: '' },
       questions: [{ about: 'active1', ask: 'What should Encore Kha Ja do?', options: ['A devouring combo', 'A sound blast'] }, { about: 'face', ask: 'Wear the face?', options: ['Yes', 'No'] }, { about: 'nope', ask: 'x', options: ['a', 'b'] }],
     }
     const reading = hydrateReading(raw, { prompt: ENCORE, heroName: 'Encore ABJ', faceFound: false }, 'claude')
@@ -239,12 +187,7 @@ describe('an AI reader’s answer', () => {
     // no face was found, so there is nothing to wear and nothing to ask
     expect(reading.look.wearFace).toBe(false)
     expect(reading.questions.map((q) => q.about)).toEqual(['active1'])
-    expect(reading.wear).toEqual([
-      { slot: 'upper', phrase: 'tee', item: 'tee', rung: 'wear' },
-      { slot: 'hand_r', phrase: 'katana', item: 'katana', rung: 'wear' },
-      { slot: 'hand_l', phrase: 'laser sword', colors: ['#ff0000'], knobs: { sleeve: 0.5 }, rung: 'generate' },
-      { slot: 'hair', phrase: 'bald', bare: true, rung: 'wear' },
-    ])
+    expect(reading.gear).toEqual({})
     expect(reading.kit.active1.name).toBe('Encore Kha Ja')
     expect(reading.kit.basic.name).toBe('Model Name basic')
     // an uppercut is no beam: the look keeps its element and palette and loses the beam's form
@@ -256,12 +199,14 @@ describe('an AI reader’s answer', () => {
   })
 
   it('the schema asks for every field, so a reader can’t leave one out, and uses nothing structured outputs reject', () => {
-    const schema = readingSchema() as { required: string[]; properties: Record<string, { required?: string[]; items?: { required?: string[]; properties: Record<string, { enum?: string[] }> } }> }
-    expect(schema.required).toEqual(['heroName', 'summary', 'realPerson', 'roleId', 'look', 'wear', 'kit', 'form', 'questions'])
+    const schema = readingSchema() as { required: string[]; properties: Record<string, { required?: string[]; properties?: Record<string, { enum?: string[] }> }> }
+    expect(schema.required).toEqual(['heroName', 'summary', 'realPerson', 'roleId', 'look', 'gear', 'kit', 'form', 'questions'])
     expect(schema.properties.kit.required).toEqual([...BUILD_SLOTS])
-    const wish = schema.properties.wear.items!
-    expect(wish.required).toEqual(['slot', 'phrase', 'item', 'rung', 'colors', 'finishes', 'print', 'knobs'])
-    expect(wish.properties.item.enum).toEqual(expect.arrayContaining(['', 'none', 'kasa', 'kimono', 'twin_swords']))
+    const gear = schema.properties.gear
+    expect(gear.required).toEqual(['hand_r', 'hand_l'])
+    expect(gear.properties!.hand_r.enum).toEqual(expect.arrayContaining(['', 'katana', 'staff']))
+    expect(gear.properties!.hand_r.enum).not.toContain('shield')
+    expect(gear.properties!.hand_l.enum).toContain('shield')
     const walk = (node: unknown): void => {
       if (!node || typeof node !== 'object') return
       const n = node as Record<string, unknown>

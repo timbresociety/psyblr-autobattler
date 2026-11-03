@@ -9,13 +9,13 @@ const ENCORE = 'ENCORE ABJ from Seedhe Maut as he appears on lunch break cover. 
 
 const answer = {
   heroName: 'Encore ABJ',
-  summary: 'Encore ABJ as on the Lunch Break cover: a wandering swordsman in a wide straw hat and an open blue robe, blades on his back.',
+  summary: 'Encore ABJ as on the Lunch Break cover: a wandering swordsman with a katana.',
   realPerson: true,
   roleId: 'fighter',
-  look: { gender: 'm', size: 'medium', physique: { weight: 0.5, muscle: 0.5, age: 0 }, colors: [{ region: 'hair', hex: '#1a1a1a' }], wearFace: false },
-  wear: [{ slot: 'head', phrase: 'wide straw hat', item: 'kasa', rung: 'wear', colors: [], finishes: [], print: '', knobs: [] }],
+  look: { gender: 'm', size: 'medium', physique: { weight: 0.5, muscle: 0.5, age: 0 }, colors: [{ region: 'brow', hex: '#1a1a1a' }], wearFace: false },
+  gear: { hand_r: 'katana', hand_l: '' },
   kit: Object.fromEntries(BUILD_SLOTS.map((s) => [s, { name: 'Ronin Step', does: 'Moves fast', template: 'fighter-super-form' }])),
-  form: { entry: 'burst', aura: 'flame', growth: '', trail: '', avatar: '', hair: '', hairColor: '', eyes: '', marks: '', wear: [] },
+  form: { entry: 'burst', aura: 'flame', growth: '', trail: '', avatar: '', eyes: '', marks: '' },
   questions: [],
 }
 
@@ -30,7 +30,7 @@ describe('reading a hero (the Forge reads before it builds)', () => {
     const result = await readHero({ prompt: ENCORE }, { claudeCode, claude })
     expect(result.reading?.source).toBe('claude')
     expect(result.reading?.kit.active1.name).toBe('Encore Kha Ja')
-    expect(result.reading?.wear).toEqual([{ slot: 'head', phrase: 'wide straw hat', item: 'kasa', rung: 'wear' }])
+    expect(result.reading?.gear).toEqual({ hand_r: 'katana' })
     expect(result.reading?.form).toEqual({ entry: 'burst', aura: 'flame' })
     // the reader gets the reading's own system prompt, the request in words, and the schema
     const call = claude.mock.calls[0][0]
@@ -66,13 +66,9 @@ describe('reading a hero (the Forge reads before it builds)', () => {
   })
 
   it('a correction sends the last reading back, rebuilt like any untrusted answer', async () => {
-    const first = (await readHero({ prompt: 'a samurai with a katana and a straw hat' }, none)).reading!
-    const again = (await readHero({ prompt: 'a samurai with a katana and a straw hat', previous: { ...first, roleId: 'nonsense' }, note: 'no hat' }, none)).reading!
-    expect(again.wear.map((w) => [w.slot, w.bare ? 'nothing' : w.item])).toEqual([
-      ['head', 'nothing'],
-      ['full', 'samurai_armour'],
-      ['hand_r', 'katana'],
-    ])
+    const first = (await readHero({ prompt: 'a samurai with a katana and a round shield' }, none)).reading!
+    const again = (await readHero({ prompt: 'a samurai with a katana and a round shield', previous: { ...first, roleId: 'nonsense' }, note: 'no shield' }, none)).reading!
+    expect(again.gear).toEqual({ hand_r: 'katana' })
     expect(again.roleId).toBe(first.roleId)
   })
 })

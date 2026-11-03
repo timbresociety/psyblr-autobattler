@@ -15,7 +15,7 @@ function nodeNames(path: URL): string[] {
 
 describe('the kit', () => {
   it('ships every built-in piece with its model and thumbnail', () => {
-    expect(BUILT_IN.length).toBeGreaterThanOrEqual(20)
+    expect(BUILT_IN.length).toBeGreaterThanOrEqual(16)
     for (const p of BUILT_IN) {
       expect(existsSync(pub(p.url)), p.url).toBe(true)
       expect(existsSync(pub(p.thumb)), p.thumb).toBe(true)
@@ -24,10 +24,11 @@ describe('the kit', () => {
     expect(new Set(BUILT_IN.map((p) => p.id)).size).toBe(BUILT_IN.length)
   })
 
-  it('gives every body all five sockets, each on a bone the body has', () => {
+  it('gives every body both hand sockets, each on a bone the body has', () => {
     for (const body of BODIES) {
       const kit = JSON.parse(readFileSync(pub(`/heroes/${body}.kit.json`), 'utf8')) as { sockets: Record<string, { bone: string; pos: number[] }>; landmarks: unknown[] }
-      expect(Object.keys(kit.sockets).sort(), body).toEqual([...GEAR_SLOTS].sort())
+      // the body kits still carry the old head, face and back sockets until they are rebuilt; only the hands are used
+      expect(Object.keys(kit.sockets), body).toEqual(expect.arrayContaining([...GEAR_SLOTS]))
       const bones = new Set(nodeNames(pub(`/heroes/${body}.glb`)))
       for (const s of Object.values(kit.sockets)) {
         expect(bones.has(s.bone), `${body} ${s.bone}`).toBe(true)

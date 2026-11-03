@@ -1,4 +1,4 @@
-import type { PieceKind, WearSlot } from '../../charter/look.js'
+import type { PieceKind } from '../../charter/look.js'
 import type { ContentFlags } from '../types.js'
 
 /**
@@ -77,13 +77,11 @@ export interface RetargetRequest {
 /** One piece of gear for the asset repository, from words or from a picture of it. */
 export interface PieceRequest {
   prompt: string
-  /** The kind of piece; absent for a garment. */
+  /** The kind of piece. */
   kind?: PieceKind
-  /** For a garment, the wardrobe slot it's made for. The prompt already says so (src/forge/garment.ts); the fakes need it. */
-  slot?: WearSlot
   /** A public image of the piece; without one the piece comes from the prompt alone. */
   imageUrl?: string
-  /** The most triangles worth asking for; the server cuts the result to the slot's budget anyway. */
+  /** The most triangles worth asking for; the server cuts the result to the kind's budget anyway. */
   faceLimit: number
 }
 

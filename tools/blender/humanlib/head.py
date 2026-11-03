@@ -6,7 +6,7 @@ The head object's parts (docs/GAME.md §9.1) for the Psyblr Human bodies, built 
   directly (cheek puff, jaw and mouth sideways, jaw forward). Written in the face basis's layout (face-basis.ts:
   'PFB1', per shape the welded vertices it moves and their deltas), so the game reads them the same way;
 - the teeth (upper and lower), the tongue, the brows and the lashes, fitted by MPFB to the same body. Brows and lashes
-  are cards bound to the body's surface (a welded triangle, s, t and a lift, as src/kit/wear/bind.ts evaluates), so
+  are cards bound to the body's surface (a welded triangle, s, t and a lift, as src/kit/head/bind.ts evaluates), so
   they follow any hero's face; the teeth and tongue are rigid, each placed by a point bound the same way.
 
 The eyeballs are not here: the game builds them (sclera, iris, pupil, cornea) at each hero's own eye sockets.
