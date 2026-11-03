@@ -1,0 +1,46 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.home-hero {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 788px;
+  margin: 0 auto;
+  padding: 32px 24px 8px;
+}
+.home-hero h1 {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-style: italic;
+  font-size: clamp(30px, 5vw, 48px);
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.home-hero p {
+  margin: 0 0 18px;
+  color: var(--ink-dim);
+  max-width: 60ch;
+}
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.home-actions a.btn {
+  text-decoration: none;
+}
+.home-foot {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 788px;
+  margin: 0 auto;
+  padding: 16px 24px 32px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+.home-foot a {
+  color: inherit;
+}

@@ -5,7 +5,7 @@ import type { StageFraming } from '../../common/HeroStage'
  * then how it looks part by part, then how it plays. Each frames the hero its own way on the stage.
  */
 
-export const SECTION_IDS = ['hero', 'ask', 'face', 'skin', 'hair', 'body', 'outfit', 'gear', 'moves', 'kit', 'stats'] as const
+export const SECTION_IDS = ['hero', 'ask', 'face', 'skin', 'hair', 'body', 'outfit', 'gear', 'kit', 'stats'] as const
 export type SectionId = (typeof SECTION_IDS)[number]
 
 export interface Section {
@@ -26,8 +26,7 @@ export const SECTIONS: readonly Section[] = [
   { id: 'body', label: 'Body', blurb: 'Build and age. Cosmetic: the size picker sets how big the hero is.', framing: 'body', group: 'look' },
   { id: 'outfit', label: 'Outfit', blurb: 'What the hero wears, slot by slot. Wear, recolour and restyle free.', framing: 'body', group: 'look' },
   { id: 'gear', label: 'Gear', blurb: 'Glasses and masks, and what each hand holds.', framing: 'bust', group: 'look' },
-  { id: 'moves', label: 'Moves', blurb: 'How the hero stands, and how it moves, dances and talks.', framing: 'body', group: 'look' },
-  { id: 'kit', label: 'Kit', blurb: 'Your names and looks on the engine’s mechanics.', framing: 'body', group: 'play' },
+  { id: 'kit', label: 'Kit', blurb: 'Every button in one place: its skill, how it moves, how its effect looks. Play any of them on the dummy.', framing: 'body', group: 'play' },
   { id: 'stats', label: 'Stats', blurb: 'Where the points go. The engine keeps every fight fair.', framing: 'body', group: 'play' },
 ]
 
@@ -42,7 +41,6 @@ const PATHS: Record<SectionId, string> = {
   body: 'M12 6.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 9l6 1.2L18 9M12 10.2V15M9 21l3-6 3 6',
   outfit: 'M9 4l3 2 3-2 5 3-2 4-2-1v10H8V10l-2 1-2-4z',
   gear: 'M14.5 4l5.5 5.5-9 9H5.5V13zM12 6.5l5.5 5.5M4 20l2.5-2.5',
-  moves: 'M14 5.5a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6zM9 21l2.5-5.5L14 17v4M7 11.5l3-3.5 4.5 1 2.5 3.5M11.5 15.5l1.5-6.5',
   kit: 'M13 2L5 13.5h6L10 22l8-11.5h-6z',
   stats: 'M5 20V12M10 20V5M15 20v-9M20 20V8',
 }

@@ -56,6 +56,14 @@ const HARD = {
   /** A route is kept this many ticks while its target stays near the node it was planned to. */
   replanTicks: 60,
   /**
+   * The crowd path (GAME.md §10): a hero thinks less often the further it is from the player (from its target when
+   * nobody plays): every decision `think[k].every` times as far apart beyond `think[k].from` metres.
+   */
+  think: [
+    { from: 40, every: 2 },
+    { from: 80, every: 3 },
+  ],
+  /**
    * Moving like Deadlock (Forge goal, phase 2). A dodge dashes this often, while it has more than `staminaKeep` pips;
    * a melee hero dashes at a target between `dashGap` metres off, at most every `dashEvery` ticks; a hero falling
    * back dashes away from an enemy this close (`nearRadius`) with any pip; and one with `slideGap` metres to cover

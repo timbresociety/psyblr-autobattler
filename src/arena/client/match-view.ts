@@ -145,7 +145,87 @@ export interface ArenaController {
   quality: () => QualityLevel
   /** Show the hit feel on screen this frame (radial blur, speed lines, impact frame); nothing without the post pass. */
   screen: (feel: ScreenFeel) => void
+  /**
+   * More views drawn over the main one each frame (the kit reel's three points of view, GAME.md §11): each camera into
+   * its own rectangle, `[x, y, width, height]` as fractions of the screen from the top left. An empty list clears them.
+   */
+  insets: (views: readonly Inset[]) => void
   stop: () => void
+}
+
+export interface Inset {
+  camera: THREE.PerspectiveCamera
+  rect: readonly [x: number, y: number, width: number, height: number]
+}
+
+/**
+ * The insets' drawing: each camera renders into a target of its rectangle's size (linear: the frame's own post pass
+ * tone-maps it once), shown on a quad held just in front of the main camera so it goes through the same frame (a
+ * second render to the canvas would replace the post-processed picture with three's own output pass).
+ */
+function createInsets(scene: THREE.Scene, main: THREE.PerspectiveCamera, backend: Backend) {
+  const size = new THREE.Vector2()
+  const offset = new THREE.Vector3()
+  let live: { inset: Inset; target: THREE.RenderTarget; quad: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> }[] = []
+  const clear = () => {
+    for (const v of live) {
+      v.target.dispose()
+      v.quad.material.dispose()
+      v.quad.geometry.dispose()
+      scene.remove(v.quad)
+    }
+    live = []
+  }
+  return {
+    set(views: readonly Inset[]) {
+      clear()
+      live = views.map((inset) => {
+        const target = new THREE.RenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 })
+        const plane = new THREE.PlaneGeometry(1, 1)
+        // WebGPU's render targets come out with v running the other way to WebGL's
+        if (backend === 'webgpu') {
+          const uv = plane.attributes.uv
+          for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i))
+        }
+        const quad = new THREE.Mesh(plane, new THREE.MeshBasicMaterial({ map: target.texture, depthTest: false, depthWrite: false, fog: false }))
+        quad.renderOrder = 10_000
+        quad.frustumCulled = false
+        quad.name = 'inset'
+        scene.add(quad)
+        return { inset, target, quad }
+      })
+    },
+    /** Render each inset's view into its target and hold its quad over its rectangle; before the main frame. */
+    render(renderer: Renderer) {
+      if (!live.length) return
+      renderer.getDrawingBufferSize(size)
+      for (const v of live) v.quad.visible = false
+      for (const v of live) {
+        const w = Math.max(1, Math.round(size.x * v.inset.rect[2]))
+        const h = Math.max(1, Math.round(size.y * v.inset.rect[3]))
+        if (v.target.width !== w || v.target.height !== h) v.target.setSize(w, h)
+        v.inset.camera.aspect = w / h
+        v.inset.camera.updateProjectionMatrix()
+        renderer.setRenderTarget(v.target)
+        renderer.render(scene, v.inset.camera)
+      }
+      renderer.setRenderTarget(null)
+      // a plane just past the near plane, sized to the main view there
+      const d = main.near * 1.5
+      const high = 2 * d * Math.tan(THREE.MathUtils.degToRad(main.fov) / 2)
+      const wide = high * main.aspect
+      main.updateMatrixWorld()
+      for (const v of live) {
+        const [x, y, w, h] = v.inset.rect
+        offset.set((x + w / 2 - 0.5) * wide, (0.5 - y - h / 2) * high, -d).applyMatrix4(main.matrixWorld)
+        v.quad.position.copy(offset)
+        v.quad.quaternion.copy(main.quaternion)
+        v.quad.scale.set(w * wide, h * high, 1)
+        v.quad.visible = true
+      }
+    },
+    dispose: clear,
+  }
 }
 
 /** Is any 3D backend available at all? Neither WebGPU nor WebGL2 means the game cannot run here (R40). */
@@ -554,12 +634,17 @@ function drawRings(rings: THREE.InstancedMesh, arena: Arena, drawn: Vec3[]) {
 }
 const right = new THREE.Vector3(1, 0, 0)
 
-/** Load everything a match needs, reporting progress, then run it until `stop` (U13). */
-export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}): Promise<ArenaController> {
+/**
+ * Load everything a match needs, reporting progress, then run it until `stop` (U13). An aborted `signal` (the player
+ * left the route while it loaded) stops the load at its next step and frees what it had built.
+ */
+export async function startArena(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void = () => {}, signal?: AbortSignal): Promise<ArenaController> {
+  signal?.throwIfAborted()
   const stage = await createStage(host)
   let physics: CosmeticPhysics | undefined
   try {
-    return await run(stage, setup, onProgress, (p) => (physics = p))
+    signal?.throwIfAborted()
+    return await run(stage, setup, onProgress, (p) => (physics = p), signal)
   } catch (e) {
     // a failed load must not leave a live renderer or a physics world behind
     physics?.dispose()
@@ -568,7 +653,7 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
   }
 }
 
-async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void): Promise<ArenaController> {
+async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void, signal?: AbortSignal): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
   const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: LIVE_PROFILE, formations: setup.formations, map: LIVE_MAP })
   if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
@@ -586,11 +671,13 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
   const views = await Promise.all(
     builds.map(async (build, i) => {
+      signal?.throwIfAborted()
       const view = await loadHeroView(build, setup.packages?.[i], i, arena.match.heroes[i].team === setup.side && i < 2, renderer, arena.match.heroes[i].team)
       onProgress(++loaded, total)
       return view
     }),
   )
+  signal?.throwIfAborted()
   views.forEach((v) => scene.add(v.root))
   // the arena comes from the engine's own cover, so what is drawn is exactly what blocks (R25): the House of
   // Instinct in grey boxes (GAME.md §8), or the ruins
@@ -601,6 +688,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     map.proxies.push(...ruins.proxies)
   }
   const physics = await physicsReady
+  signal?.throwIfAborted()
   const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
   // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
   arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
@@ -610,12 +698,14 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const range = createRangeIndicator(scene)
   // compile every material before the fight so the first frames do not stutter (U1 found WebGL2 compiles lazily)
   await (renderer as unknown as { compileAsync?: (s: THREE.Object3D, c: THREE.Camera) => Promise<void> }).compileAsync?.(scene, camera)
+  signal?.throwIfAborted()
 
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
   const rules = matchRules(arena)
   const clock = createClock()
   const quality = qualityControl(stage)
+  const insets = createInsets(scene, camera, stage.backend)
   const store = createStore<HudState>(hud(arena, views, false, stage.backend, 'full'))
   const hooks = createHooks()
   const cameras = new Cameras(camera)
@@ -694,6 +784,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     if (arena.match.human !== undefined) views[arena.match.human].root.visible = cameras.scope < FIRST_PERSON
     range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt * speed, alpha)
+    if (!stage.recovering) insets.render(stage.renderer)
     stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
     if (store.due()) store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
@@ -747,6 +838,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     quality: quality.current,
+    insets: (views) => insets.set(views),
     screen: (f) => {
       const u = stage.glow?.enabled ? stage.glow.feel : undefined
       if (!u) return
@@ -760,6 +852,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       stopped = true
       unprobe?.()
       physics?.dispose()
+      insets.dispose()
       stage.dispose()
       // a stopped match must not stay reachable as the dev handle (a Vite reload or a double mount left one behind)
       if (import.meta.env.DEV && (window as unknown as { __arena?: ArenaController }).__arena === controller) (window as unknown as { __arena?: ArenaController }).__arena = undefined

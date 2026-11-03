@@ -9,7 +9,7 @@ import { ControlHud, MatchHud } from './MatchHud'
 import { canRender, startArena, type ArenaController, type HudState, type MatchSetup } from '../../arena/client/match-view'
 import { Staging, type StagingResult } from './staging/Staging'
 import { arenaStaging, tryItStaging } from './staging/try-it'
-import { POVS, TAKES, takeCommand, type Pov } from '../forge/reel/takes'
+import { POVS, TAKES, takeCommand } from '../forge/reel/takes'
 import { ENGINE, ticks } from '../../arena/engine/calibration'
 import { DEFAULT_AI_LEVEL } from '../../arena/ai/calibration'
 import { noControl, type HeroState } from '../../arena/engine/state'
@@ -33,6 +33,18 @@ export function ArenaScreen() {
   ) : (
     <Staging initial={last} onStart={setStaged} />
   )
+}
+
+/**
+ * Start the arena a moment after the screen mounts. StrictMode (development) mounts every screen twice, the first
+ * time only to unmount it again at once; starting on the next task means that discarded mount aborts before it has
+ * built a renderer or fetched a hero, instead of loading a whole second match alongside the real one.
+ */
+function startDeferred(host: HTMLElement, setup: MatchSetup, onProgress: (done: number, total: number) => void, signal: AbortSignal): Promise<ArenaController> {
+  return new Promise<void>((go, stop) => {
+    const t = window.setTimeout(go, 0)
+    signal.addEventListener('abort', () => (window.clearTimeout(t), stop(signal.reason)), { once: true })
+  }).then(() => startArena(host, setup, onProgress, signal))
 }
 
 /** A training dummy's health against an ordinary tank's: enough to try every skill on it more than once. */
@@ -68,24 +80,24 @@ export function TryIt({ build, onClose, against = 'dummy', back = 'Back to the F
 /** Headings a kit reel's take may run along, the lane's own first. */
 const HEADINGS = [0, Math.PI / 4, -Math.PI / 4, Math.PI / 2, -Math.PI / 2, (3 * Math.PI) / 4, (-3 * Math.PI) / 4, Math.PI]
 
-export function KitReel({ build, onClose }: { build: Build; onClose: () => void }) {
+export function KitReel({ build, onClose, start }: { build: Build; onClose: () => void; start?: string }) {
   const host = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState<string>()
-  const [take, setTake] = useState(0)
-  const [pov, setPov] = useState<Pov>('shoulder')
-  const now = useRef({ take: TAKES[0], pov: 'shoulder' as Pov, start: -1 })
+  // the take the Forge's kit row asked for, else the first
+  const [take, setTake] = useState(() => Math.max(0, TAKES.findIndex((t) => t.key === start)))
+  const now = useRef({ take: TAKES[0], start: -1 })
   now.current.take = TAKES[take]
-  now.current.pov = pov
   const staged = useMemo(() => tryItStaging(build), [build])
 
   useEffect(() => {
     if (!host.current) return
     let cancelled = false
+    const abort = new AbortController()
     let live: ArenaController | undefined
     const setup = matchSetup(staged)
-    startArena(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }))
+    startDeferred(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }), abort.signal)
       .then((c) => {
         live = c
         if (cancelled) return c.stop()
@@ -129,23 +141,23 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
         const mid = new THREE.Vector3()
         const hit = new THREE.Vector3()
         const ray = new THREE.Ray()
-        // the camera for the take's point of view, then the effects' shake on top
-        c.hooks.on('frame', () => {
-          // the hero and the dummy as the engine has them
+        // all three points of view at once (GAME.md §11): over the shoulder fills the screen, side on and the dummy's
+        // view sit in the corners
+        const side = new THREE.PerspectiveCamera(50, 1, 0.1, 400)
+        const facing = new THREE.PerspectiveCamera(50, 1, 0.1, 400)
+        c.insets([
+          { camera: side, rect: [0.66, 0.08, 0.32, 0.3] },
+          { camera: facing, rect: [0.66, 0.4, 0.32, 0.3] },
+        ])
+        /** Put a camera where a point of view watches the take from, looking at the action. */
+        const place = (pov: 'side' | 'facing', cam: THREE.PerspectiveCamera) => {
           const a = me.position
           const b = dummy.position
-          if (now.current.pov === 'shoulder') {
-            c.cameras.set('hero')
-            c.cameras.yaw = Math.atan2(b.x - a.x, b.z - a.z)
-            c.cameras.pitch = -0.12
-            return
-          }
-          c.cameras.set('free')
           const dx = b.x - a.x
           const dz = b.z - a.z
           const d = Math.hypot(dx, dz) || 1
-          if (now.current.pov === 'side') {
-            // side on from whichever side the ruins leave open
+          if (pov === 'side') {
+            // side on from whichever side the map leaves open
             const far = Math.max(6, d * 0.8 + 3)
             mid.set((a.x + b.x) / 2, Math.max(a.y, b.y) + 1.4, (a.z + b.z) / 2)
             const clear = (sign: number) => {
@@ -154,15 +166,23 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
               return !c.map.proxies.some((box) => (ray.intersectBox(box, hit) ? hit.distanceTo(mid) < far : false))
             }
             if (!clear(1) && !clear(-1)) clear(1)
+            mid.set((a.x + b.x) / 2, a.y + 1.1, (a.z + b.z) / 2)
+          } else {
+            // behind the dummy and over its shoulder, so its own head never hides the hero
+            eye.set(b.x + (dx / d) * 3.4 - (dz / d) * 1.3, b.y + 2.1, b.z + (dz / d) * 3.4 + (dx / d) * 1.3)
+            mid.set(a.x, a.y + 1.1, a.z)
           }
-          // behind the dummy and over its shoulder, so its own head never hides the hero
-          else eye.set(b.x + (dx / d) * 3.4 - (dz / d) * 1.3, b.y + 2.1, b.z + (dz / d) * 3.4 + (dx / d) * 1.3)
-          // the watching camera's own spot and aim, so its update frames the shot (and blends between them)
-          const side = now.current.pov === 'side'
-          mid.set(side ? (a.x + b.x) / 2 : a.x, a.y + 1.1, side ? (a.z + b.z) / 2 : a.z)
-          c.cameras.free.copy(eye)
-          c.cameras.yaw = Math.atan2(mid.x - eye.x, mid.z - eye.z)
-          c.cameras.pitch = Math.atan2(mid.y - eye.y, Math.hypot(mid.x - eye.x, mid.z - eye.z))
+          cam.position.copy(eye)
+          cam.lookAt(mid)
+        }
+        c.hooks.on('frame', () => {
+          const a = me.position
+          const b = dummy.position
+          c.cameras.set('hero')
+          c.cameras.yaw = Math.atan2(b.x - a.x, b.z - a.z)
+          c.cameras.pitch = -0.12
+          place('side', side)
+          place('facing', facing)
         })
         c.hooks.on('events', effects.events)
         c.hooks.timeScale = effects.timeScale
@@ -173,9 +193,10 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
         })
         setController(c)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
     return () => {
       cancelled = true
+      abort.abort()
       live?.stop()
     }
   }, [staged])
@@ -207,13 +228,13 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
               </button>
             ))}
           </nav>
-          <div className="reel-povs" role="radiogroup" aria-label="Point of view">
-            {POVS.map((p) => (
-              <button key={p.key} type="button" role="radio" aria-checked={p.key === pov} className={`hud-btn${p.key === pov ? ' on' : ''}`} onClick={() => setPov(p.key)}>
+          <ul className="reel-povs" aria-label="Points of view">
+            {POVS.map((p, i) => (
+              <li key={p.key} className={`reel-pov reel-pov-${i}`}>
                 {p.label}
-              </button>
+              </li>
             ))}
-          </div>
+          </ul>
           <p className="reel-caption" role="status">
             {shown.label}: <kbd>{shown.keys}</kbd>
           </p>
@@ -228,7 +249,7 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
   )
 }
 
-function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string }) {
+export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string }) {
   const host = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -245,10 +266,11 @@ function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged
   useEffect(() => {
     if (!host.current) return
     let cancelled = false
+    const abort = new AbortController()
     let live: ArenaController | undefined
     let detach: (() => void) | undefined
     const setup = matchSetup(staged)
-    startArena(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }))
+    startDeferred(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }), abort.signal)
       .then((c) => {
         live = c
         if (cancelled) return c.stop()
@@ -279,9 +301,10 @@ function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged
         )
         setController(c)
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
     return () => {
       cancelled = true
+      abort.abort()
       detach?.()
       live?.stop()
     }

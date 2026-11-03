@@ -266,17 +266,24 @@ export function buildHead(input: HeadInput): HeadRig | undefined {
   const skinMaterial = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
   const card = (part: CardPart, color: THREE.Color) =>
     new THREE.MeshStandardMaterial({ map: part.texture ? (kit.textures.get(part.texture) ?? null) : null, color, roughness: 0.85, metalness: 0, alphaTest: 0.2, alphaToCoverage: true, side: THREE.DoubleSide })
-  const headMesh = new THREE.SkinnedMesh(geo, [skinMaterial, card(kit.brows, input.brow), card(kit.lashes, LASH)])
+  // the skin casts the shadow; the brow and lash cards draw from a twin on the same geometry, skeleton and morphs that
+  // casts none. One mesh for both made the shadow pass, which shares one material across every draw, flip its alpha
+  // test between the skin and the cards each frame and rebuild the head's shadow shader every time.
+  const headMesh = new THREE.SkinnedMesh(geo, [skinMaterial])
+  const cardMesh = new THREE.SkinnedMesh(geo, [new THREE.MeshBasicMaterial({ visible: false }), card(kit.brows, input.brow), card(kit.lashes, LASH)])
   headMesh.name = 'head'
-  headMesh.position.copy(mesh.position)
-  headMesh.quaternion.copy(mesh.quaternion)
-  headMesh.scale.copy(mesh.scale)
-  headMesh.bind(mesh.skeleton, mesh.bindMatrix)
-  headMesh.frustumCulled = false
+  cardMesh.name = 'head:cards'
+  for (const m of [headMesh, cardMesh]) {
+    m.position.copy(mesh.position)
+    m.quaternion.copy(mesh.quaternion)
+    m.scale.copy(mesh.scale)
+    m.bind(mesh.skeleton, mesh.bindMatrix)
+    m.frustumCulled = false
+  }
   headMesh.castShadow = true
-  headMesh.morphTargetDictionary = Object.fromEntries(shapes.map((s, k) => [s, k]))
-  headMesh.morphTargetInfluences = shapes.map(() => 0)
-  mesh.parent!.add(headMesh)
+  headMesh.morphTargetDictionary = cardMesh.morphTargetDictionary = Object.fromEntries(shapes.map((s, k) => [s, k]))
+  headMesh.morphTargetInfluences = cardMesh.morphTargetInfluences = shapes.map(() => 0)
+  mesh.parent!.add(headMesh, cardMesh)
   // the eyes, in the sockets the hero's face has
   const eyes: HeadEye[] = []
   const sockets = eyeIds(body.surface.triangles, body.positions, body.surface.count)

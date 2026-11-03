@@ -7,6 +7,7 @@ import { DT, ENGINE, ticks } from './calibration.js'
 import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
 import { next } from './rng.js'
 import { tickWorld } from './world.js'
+import { GRIDS, HeroGrid } from './grid.js'
 import { afterBlow, blowTemplate, guarded, meleeButtons, regain, shotSeconds, shotTemplate, SKILL_SLOTS, type MeleeBlow, type Shot } from './combat.js'
 import { coverHit, coverInDisc, floorUnder } from './cover.js'
 import { keepOut, standOn } from './locomotion.js'
@@ -482,12 +483,17 @@ function afterBasic(ctx: Ctx, hero: HeroState, target: HeroState | undefined) {
 function flyProjectiles(ctx: Ctx) {
   const { match, setups } = ctx
   const left: MatchState['projectiles'] = []
+  const grid = GRIDS.on && match.projectiles.length > 4 ? new HeroGrid(match.heroes) : undefined
+  // the widest body on the field: a shot's path is widened by it to find whom it might touch
+  const widest = grid ? Math.max(...match.heroes.map((h) => capsule(h).radius)) : 0
   for (const p of match.projectiles) {
     const owner = match.heroes[p.owner]
     const template = shotTemplate(setups[p.source ?? p.owner].kit[p.slot], p.shot)
     const size = geometryOf(template.delivery).projectileRadius
     const end = add(p.position, p.step)
-    const struck = enemiesOf(match, owner).filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
+    const r = widest + size
+    const near = grid ? grid.within(Math.min(p.position.x, end.x) - r, Math.max(p.position.x, end.x) + r, Math.min(p.position.z, end.z) - r, Math.max(p.position.z, end.z) + r).filter((o) => o.team !== owner.team) : enemiesOf(match, owner)
+    const struck = near.filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
     const first = struck.length ? struck.reduce((a, b) => (distance(p.position, chest(b)) < distance(p.position, chest(a)) ? b : a)) : undefined
     const wall = firstCover(match, p.position, end, size)
     // the shot meets whichever comes first along its path: a hero (its chest projected onto the path), or the cover

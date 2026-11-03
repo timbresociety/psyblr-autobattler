@@ -276,12 +276,13 @@ button:disabled { cursor: not-allowed; }
 .tab { position: relative; display: flex; align-items: center; gap: 10px; padding: 0 18px; border: 0; background: none; color: var(--ink-faint); transition: color 0.15s; }
 .tab::after { content: ''; position: absolute; left: 14px; right: 14px; bottom: 0; height: 3px; transform: skewX(-20deg) scaleX(0); transform-origin: 50% 50%; background: var(--tab-line); box-shadow: 0 0 12px rgba(var(--glow-rgb), 0.55); transition: transform 0.2s ease-out; }
 .tab:hover { color: var(--ink-dim); }
-.tab[aria-selected='true'] { color: var(--ink); }
-.tab[aria-selected='true']::after { transform: skewX(-20deg) scaleX(1); }
+.tab { text-decoration: none; }
+.tab[aria-selected='true'], .tab[aria-current='page'] { color: var(--ink); }
+.tab[aria-selected='true']::after, .tab[aria-current='page']::after { transform: skewX(-20deg) scaleX(1); }
 .tab:focus-visible { outline: none; }
 .tab:focus-visible .tab-label { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
 .tab svg { width: 20px; height: 20px; flex: none; opacity: 0.8; }
-.tab[aria-selected='true'] svg { color: var(--accent); opacity: 1; filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.6)); }
+.tab[aria-selected='true'] svg, .tab[aria-current='page'] svg { color: var(--accent); opacity: 1; filter: drop-shadow(0 0 6px rgba(var(--accent-rgb), 0.6)); }
 .tab-text { display: grid; text-align: left; line-height: 1; }
 .tab-label { font: 800 italic 23px/1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
 .tab-hint { margin-top: 3px; font: 500 11px/1 var(--font); color: var(--ink-faint); }
@@ -523,4 +524,27 @@ button:disabled { cursor: not-allowed; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Plain reading pages: credits, the dev tools, the range */
+.credits {
+  max-width: 760px;
+  padding: 32px 24px;
+  color: var(--ink-dim);
+}
+.credits h1 {
+  font-family: var(--display);
+  font-style: italic;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.credits h2 {
+  margin: 18px 0 4px;
+  font-size: 18px;
+}
+.credits a {
+  color: var(--ink);
+}
+.credits ul {
+  padding-left: 18px;
 }

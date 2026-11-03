@@ -1,0 +1,168 @@
+/* The gacha reveal: arcade yellow and capsule white (GAME.md §1 palette), over a dimmed page. */
+.gacha {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 45%, rgba(234, 187, 67, 0.22), rgba(var(--shade-rgb), 0.86) 60%);
+  backdrop-filter: var(--blur);
+  cursor: pointer;
+}
+.gacha-card .btn {
+  cursor: pointer;
+}
+.gacha-stage {
+  position: relative;
+  width: min(360px, calc(100vw - 32px));
+  height: 420px;
+  display: grid;
+  place-items: center;
+}
+.gacha-capsule {
+  position: absolute;
+  top: 120px;
+  width: 140px;
+  height: 140px;
+}
+.gacha-half {
+  position: absolute;
+  left: 0;
+  width: 140px;
+  height: 70px;
+  border: 3px solid rgba(0, 0, 0, 0.35);
+}
+.gacha-top {
+  top: 0;
+  border-radius: 70px 70px 0 0;
+  border-bottom-width: 1.5px;
+  background: radial-gradient(circle at 35% 30%, #fff8dd, #eabb43 55%, #b88a1c);
+}
+.gacha-bottom {
+  bottom: 0;
+  border-radius: 0 0 70px 70px;
+  border-top-width: 1.5px;
+  background: radial-gradient(circle at 35% 0%, #ffffff, #e9e7f0 60%, #b6b3c4);
+}
+.gacha.is-drop .gacha-capsule {
+  animation: gacha-drop 1.3s cubic-bezier(0.3, 0, 0.5, 1) both;
+}
+.gacha.is-pop .gacha-top {
+  animation: gacha-lift 0.7s ease-out both;
+}
+.gacha.is-pop .gacha-bottom {
+  animation: gacha-sink 0.7s ease-out both;
+}
+.gacha.is-card .gacha-capsule {
+  display: none;
+}
+.gacha-burst {
+  position: absolute;
+  top: 190px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0;
+}
+.gacha.is-pop .gacha-burst {
+  animation: gacha-burst 0.7s ease-out both;
+  background: radial-gradient(circle, #fff8dd, rgba(234, 187, 67, 0.6) 40%, transparent 70%);
+}
+.gacha-card {
+  position: relative;
+  width: 100%;
+  padding: 28px 24px 24px;
+  border-radius: var(--r-lg);
+  background: rgb(var(--surface-rgb));
+  border: 2px solid #eabb43;
+  box-shadow: 0 0 0 6px rgba(234, 187, 67, 0.18), 0 24px 60px rgba(var(--shade-rgb), 0.6);
+  text-align: center;
+  cursor: default;
+  animation: gacha-card 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+.gacha-card h2 {
+  margin: 4px 0 6px;
+  font-family: var(--display);
+  font-size: 40px;
+  font-style: italic;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.gacha-kicker {
+  margin: 0;
+  color: #eabb43;
+  font-family: var(--display);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.gacha-role {
+  margin: 0 0 10px;
+  color: var(--ink-dim);
+  text-transform: capitalize;
+}
+.gacha-line {
+  margin: 0 0 18px;
+  color: var(--ink-faint);
+  font-size: 14px;
+}
+.gacha-skip {
+  position: absolute;
+  bottom: 32px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+@keyframes gacha-drop {
+  0% {
+    transform: translateY(-70vh) rotate(-30deg);
+  }
+  55% {
+    transform: translateY(0) rotate(8deg);
+  }
+  65% {
+    transform: translateY(-24px) rotate(-6deg);
+  }
+  75% {
+    transform: translateY(0) rotate(4deg);
+  }
+  85%,
+  95% {
+    transform: translateY(0) rotate(-3deg);
+  }
+  90%,
+  100% {
+    transform: translateY(0) rotate(3deg);
+  }
+}
+@keyframes gacha-lift {
+  to {
+    transform: translate(-40px, -120px) rotate(-35deg);
+    opacity: 0;
+  }
+}
+@keyframes gacha-sink {
+  to {
+    transform: translate(40px, 90px) rotate(25deg);
+    opacity: 0;
+  }
+}
+@keyframes gacha-burst {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(40);
+  }
+}
+@keyframes gacha-card {
+  from {
+    transform: translateY(40px) scale(0.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gacha * {
+    animation: none !important;
+  }
+}

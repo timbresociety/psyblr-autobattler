@@ -38,3 +38,12 @@ export const arenaStaging = (build: Build): StagingResult => {
     loadout: [{ key: 'try', build, symbol: roleSymbol(build.roleId) }, ...allies, ...enemies],
   }
 }
+
+/**
+ * The range's traversal course (GAME.md §11): the hero alone at the blue muster and the dummy at the red one, the
+ * whole House of Instinct between them to cross by its ramps, stairs, ledges and zip lines.
+ */
+export const courseStaging = (build: Build): StagingResult => ({
+  ...tryItStaging(build),
+  formation: [[{ hero: 0, x: 0, z: -36 }], [{ hero: 1, x: 0, z: 36 }]],
+})

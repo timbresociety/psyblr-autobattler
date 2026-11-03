@@ -1,3 +1,4 @@
+import { GRIDS } from './grid.js'
 import { cos, sin, type Vec3 } from './maths.js'
 
 /**
@@ -152,6 +153,71 @@ function boundsOf(pieces: readonly CoverPiece[]): Bounds {
   return b
 }
 
+/**
+ * The spatial grid for hit queries (GAME.md §10): the pieces filed by footprint in square cells, built once per layout.
+ * A query takes the pieces in the cells its box covers, in index order, so it finds exactly what a full scan would.
+ */
+const CELL = 6
+interface Grid {
+  x0: number
+  z0: number
+  nx: number
+  nz: number
+  cells: Int32Array[]
+  seen: Uint32Array
+  stamp: number
+}
+const gridCache = new WeakMap<readonly CoverPiece[], Grid>()
+function gridOf(pieces: readonly CoverPiece[]): Grid {
+  let g = gridCache.get(pieces)
+  if (g) return g
+  const b = boundsOf(pieces)
+  let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity
+  for (let i = 0; i < pieces.length; i++) {
+    x0 = Math.min(x0, b.minX[i])
+    z0 = Math.min(z0, b.minZ[i])
+    x1 = Math.max(x1, b.maxX[i])
+    z1 = Math.max(z1, b.maxZ[i])
+  }
+  if (!pieces.length) x0 = z0 = x1 = z1 = 0
+  const nx = Math.max(1, Math.ceil((x1 - x0) / CELL))
+  const nz = Math.max(1, Math.ceil((z1 - z0) / CELL))
+  const lists: number[][] = Array.from({ length: nx * nz }, () => [])
+  const cx = (x: number) => Math.min(nx - 1, Math.max(0, Math.floor((x - x0) / CELL)))
+  const cz = (z: number) => Math.min(nz - 1, Math.max(0, Math.floor((z - z0) / CELL)))
+  for (let i = 0; i < pieces.length; i++)
+    for (let ix = cx(b.minX[i]); ix <= cx(b.maxX[i]); ix++) for (let iz = cz(b.minZ[i]); iz <= cz(b.maxZ[i]); iz++) lists[iz * nx + ix].push(i)
+  g = { x0, z0, nx, nz, cells: lists.map((l) => Int32Array.from(l)), seen: new Uint32Array(pieces.length), stamp: 0 }
+  gridCache.set(pieces, g)
+  return g
+}
+const scratch: number[] = []
+/** The pieces whose cells a box overlaps, ascending; undefined means "all of them" (no grid, or a box so wide a scan is as quick). */
+function candidates(pieces: readonly CoverPiece[], minX: number, maxX: number, minZ: number, maxZ: number): ArrayLike<number> | undefined {
+  if (!GRIDS.on || pieces.length < 32) return undefined
+  const g = gridOf(pieces)
+  const ax = Math.min(g.nx - 1, Math.max(0, Math.floor((minX - g.x0) / CELL)))
+  const bx = Math.min(g.nx - 1, Math.max(0, Math.floor((maxX - g.x0) / CELL)))
+  const az = Math.min(g.nz - 1, Math.max(0, Math.floor((minZ - g.z0) / CELL)))
+  const bz = Math.min(g.nz - 1, Math.max(0, Math.floor((maxZ - g.z0) / CELL)))
+  if (ax === bx && az === bz) return g.cells[az * g.nx + ax]
+  if ((bx - ax + 1) * (bz - az + 1) > 24) return undefined
+  if (++g.stamp === 0xffffffff) (g.seen.fill(0), (g.stamp = 1))
+  scratch.length = 0
+  for (let iz = az; iz <= bz; iz++)
+    for (let ix = ax; ix <= bx; ix++) {
+      const cell = g.cells[iz * g.nx + ix]
+      for (let k = 0; k < cell.length; k++) {
+        const i = cell[k]
+        if (g.seen[i] !== g.stamp) {
+          g.seen[i] = g.stamp
+          scratch.push(i)
+        }
+      }
+    }
+  return scratch.sort((a, b) => a - b)
+}
+
 /** Clip the fraction window [t0, t1] to where `start + t·d` lies within [lo, hi]; returns the new window or false. */
 function clip(start: number, d: number, lo: number, hi: number, w: [number, number]): boolean {
   if (d === 0) return start >= lo && start <= hi
@@ -244,7 +310,10 @@ export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHe
   const minY = (dy < 0 ? b.y : a.y) - radius
   const maxY = (dy < 0 ? a.y : b.y) + radius
   const w: [number, number] = [0, 1]
-  for (let i = 0; i < pieces.length; i++) {
+  const list = candidates(pieces, minX, maxX, minZ, maxZ)
+  const n = list ? list.length : pieces.length
+  for (let k = 0; k < n; k++) {
+    const i = list ? list[k] : k
     if (health[i] === 0) continue
     if (maxX < bounds.minX[i] || minX > bounds.maxX[i] || maxZ < bounds.minZ[i] || minZ > bounds.maxZ[i]) continue
     const p = pieces[i]
@@ -275,7 +344,22 @@ export const clearLine = (pieces: readonly CoverPiece[], health: readonly CoverH
 export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, height: number, clearance = 0, hits?: number[]): boolean {
   const bounds = boundsOf(pieces)
   let touched = false
-  for (let i = 0; i < pieces.length; i++) {
+  // the body moves as each piece pushes it, so the cells are taken a metre wider than it; a push that carries it out
+  // of that box (out through the far side of a block) finishes the loop as a full scan
+  const [x0, x1, z0, z1] = [p.x - 1, p.x + 1, p.z - 1, p.z + 1]
+  let list = candidates(pieces, x0 - radius, x1 + radius, z0 - radius, z1 + radius)
+  let n = list ? list.length : pieces.length
+  let last = -1
+  for (let k = 0; k < n; k++) {
+    const i = list ? list[k] : k
+    if (list && (p.x < x0 || p.x > x1 || p.z < z0 || p.z > z1)) {
+      // on from just after the last piece looked at, as a scan would have gone
+      list = undefined
+      n = pieces.length
+      k = last
+      continue
+    }
+    last = i
     if (health[i] === 0) continue
     if (p.x + radius < bounds.minX[i] || p.x - radius > bounds.maxX[i] || p.z + radius < bounds.minZ[i] || p.z - radius > bounds.maxZ[i]) continue
     const piece = pieces[i]
@@ -330,7 +414,10 @@ export function pushOut(pieces: readonly CoverPiece[], health: readonly CoverHea
 export function floorUnder(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, reach: number): number {
   const bounds = boundsOf(pieces)
   let floor = 0
-  for (let i = 0; i < pieces.length; i++) {
+  const list = candidates(pieces, p.x, p.x, p.z, p.z)
+  const n = list ? list.length : pieces.length
+  for (let k = 0; k < n; k++) {
+    const i = list ? list[k] : k
     const piece = pieces[i]
     if (health[i] === 0 || piece.top <= floor || (piece.slope ? piece.slope.low > reach : piece.top > reach)) continue
     if (p.x < bounds.minX[i] || p.x > bounds.maxX[i] || p.z < bounds.minZ[i] || p.z > bounds.maxZ[i]) continue
@@ -350,7 +437,10 @@ export function floorUnder(pieces: readonly CoverPiece[], health: readonly Cover
 export function ceilingOver(pieces: readonly CoverPiece[], health: readonly CoverHealth[], p: Vec3, radius: number, from: number, to: number): number | undefined {
   const bounds = boundsOf(pieces)
   let roof: number | undefined
-  for (let i = 0; i < pieces.length; i++) {
+  const list = candidates(pieces, p.x - radius, p.x + radius, p.z - radius, p.z + radius)
+  const n = list ? list.length : pieces.length
+  for (let k = 0; k < n; k++) {
+    const i = list ? list[k] : k
     const piece = pieces[i]
     if (health[i] === 0 || piece.base <= 0 || piece.base < from - 1e-6 || piece.base > to) continue
     if (p.x + radius < bounds.minX[i] || p.x - radius > bounds.maxX[i] || p.z + radius < bounds.minZ[i] || p.z - radius > bounds.maxZ[i]) continue

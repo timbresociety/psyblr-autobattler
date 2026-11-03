@@ -148,13 +148,42 @@ const progressOf = (h: HeroState) => (h.team === 0 ? h.position.z : -h.position.
  * whether it has met the enemy yet. Undefined for a hero fighting alone or leading itself, so a duel is never held.
  */
 function frontOf(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): { progress: number; clashing: boolean } | undefined {
-  for (const role of ['tank', 'fighter'] as const) {
-    let best: HeroState | undefined
-    for (const a of m.heroes)
-      if (a.alive && a.team === hero.team && a.id !== hero.id && setups[a.id].build.roleId === role && (!best || progressOf(a) > progressOf(best))) best = a
-    if (best) return { progress: progressOf(best), clashing: nearestGap(m, best) <= AI.clashGap }
+  const lines = frontLines(m, hero.team, setups)
+  for (const [first, second] of lines) {
+    const best = first && first.id !== hero.id ? first : second
+    if (best) return { progress: progressOf(best), clashing: clashing(m, best) }
   }
   return undefined
+}
+
+/**
+ * Each team's two most advanced living tanks and fighters, worked out once a tick (with a hundred heroes, every hero
+ * looking for its own front line was a scan of everyone by everyone).
+ */
+const fronts = new WeakMap<MatchState, { tick: number; teams: Map<number, [HeroState?, HeroState?][]>; clash: Map<number, boolean> }>()
+function frontLines(m: MatchState, team: number, setups: readonly HeroSetup[]): [HeroState?, HeroState?][] {
+  let f = fronts.get(m)
+  if (!f || f.tick !== m.tick) fronts.set(m, (f = { tick: m.tick, teams: new Map(), clash: new Map() }))
+  let lines = f.teams.get(team)
+  if (lines) return lines
+  lines = (['tank', 'fighter'] as const).map((role) => {
+    let first: HeroState | undefined
+    let second: HeroState | undefined
+    for (const a of m.heroes) {
+      if (!a.alive || a.team !== team || setups[a.id].build.roleId !== role) continue
+      if (!first || progressOf(a) > progressOf(first)) (second = first), (first = a)
+      else if (!second || progressOf(a) > progressOf(second)) second = a
+    }
+    return [first, second]
+  })
+  f.teams.set(team, lines)
+  return lines
+}
+function clashing(m: MatchState, h: HeroState): boolean {
+  const c = fronts.get(m)!.clash
+  let v = c.get(h.id)
+  if (v === undefined) c.set(h.id, (v = nearestGap(m, h) <= AI.clashGap))
+  return v
 }
 
 function newBrain(hero: HeroState): BrainState {
@@ -273,7 +302,8 @@ function plan(m: MatchState, hero: HeroState, brain: BrainState, target: HeroSta
   const r = brain.route
   // a route over a bridge that has just fallen is planned again at once
   const fallen = (i: number) => g.nodes[i].on !== undefined && m.cover?.health[g.nodes[i].on!] === 0
-  if (r && r.at < r.path.length && m.tick - r.planned < AI.replanTicks && !r.path.slice(r.at).some(fallen)) {
+  // in a crowd, routes age out a few ticks apart hero by hero, so heroes that planned together do not replan in one tick
+  if (r && r.at < r.path.length && m.tick - r.planned < AI.replanTicks + (m.heroes.length > CROWD ? hero.id % 16 : 0) && !r.path.slice(r.at).some(fallen)) {
     const was = g.nodes[r.goal]
     const now = g.nodes[goal]
     if (was.region === now.region && (was.x - now.x) * (was.x - now.x) + (was.z - now.z) * (was.z - now.z) < 16) return
@@ -282,8 +312,28 @@ function plan(m: MatchState, hero: HeroState, brain: BrainState, target: HeroSta
   brain.route = path ? { path, at: 0, goal, planned: m.tick } : undefined
 }
 
+/** More heroes than a 10 v 10: the crowd path's habits switch on. */
+const CROWD = 20
+
+/**
+ * How many decisions' worth of ticks pass before this hero decides again: more, the further it is from the player.
+ * With nobody playing (the balance gate, a watched AI match) every hero thinks at the full rate.
+ */
+export function thinkEvery(m: MatchState, hero: HeroState): number {
+  const player = m.human !== undefined ? m.heroes[m.human] : undefined
+  if (!player?.alive) return 1
+  const dx = player.position.x - hero.position.x
+  const dz = player.position.z - hero.position.z
+  const d2 = dx * dx + dz * dz
+  let every = 1
+  for (const t of AI.think) if (d2 > t.from * t.from) every = t.every
+  return every
+}
+
 function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainState, setups: readonly HeroSetup[]) {
-  brain.nextDecision = m.tick + AI.decisionTicks
+  // in a crowd the first decision sets each hero's beat a few ticks apart, so they do not all think on the same tick
+  const stagger = brain.nextDecision === 0 && m.heroes.length > CROWD ? hero.id % AI.decisionTicks : 0
+  brain.nextDecision = m.tick + AI.decisionTicks + stagger
   const want = chooseTarget(m, hero, setup)
   if (want && want.id !== brain.target && brain.pending?.target !== want.id) {
     const delay = AI.reaction.min + Math.floor(next(m.ai) * (AI.reaction.max - AI.reaction.min + 1))
@@ -295,6 +345,7 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
   brain.cast = undefined
   if (!target || !target.alive) return
+  brain.nextDecision = m.tick + AI.decisionTicks * thinkEvery(m, hero) + stagger
   plan(m, hero, brain, target)
   let best: { slot: NonNullable<BrainState['cast']>['slot']; escape: boolean; priority: number } | undefined
   // a weaker bot often lets its skills sit ready (§2)

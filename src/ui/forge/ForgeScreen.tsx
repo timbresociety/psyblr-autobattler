@@ -41,7 +41,7 @@ import { ChatPanel, type ChatMessage } from './ChatPanel'
 import { GateStatus } from './GateStatus'
 import { ImageDrop, imageFiles, type RefImage } from './ImageDrop'
 import { WardrobePanel } from './WardrobePanel'
-import { MovesPanel } from './creator/MovesPanel'
+import { KitPanel } from './creator/KitPanel'
 import { BuildPanel, SkinPanel } from './creator/LookPanels'
 import { SculptPanel } from './creator/SculptPanel'
 import { SECTIONS, SectionIcon, sectionOf, type SectionId } from './creator/sections'
@@ -129,7 +129,7 @@ const dragsFiles = (e: { dataTransfer: DataTransfer }) => [...e.dataTransfer.typ
  * hand. Chat on the left, the hero on its plinth with its size, stats, kit and balance check. `record` opens a hero
  * from the Loadout for editing; `initial` starts from a build that isn't saved yet, such as a remix.
  */
-export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: ForgeDeps; initial?: Build; record?: BuildRecord }) {
+export function ForgeScreen({ deps = liveDeps, initial, record, onCreated }: { deps?: ForgeDeps; initial?: Build; record?: BuildRecord; onCreated?: (created: { heroId: string; buildId: string; build: Build }) => void }) {
   const start = record?.build ?? initial
   const [heroName, setHeroName] = useState(start?.heroName ?? '')
   const [images, setImages] = useState<RefImage[]>([])
@@ -147,6 +147,8 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   // asked for that the library lacks
   const [items, setItems] = useState<LibraryEntry[]>([])
   const [trying, setTrying] = useState<false | 'dummy' | 'arena' | 'reel'>(false)
+  // the take the reel opens on: the kit row whose play button opened it
+  const [reelTake, setReelTake] = useState<string>()
   const [gaps, setGaps] = useState<WearGap[]>([])
   const [cue, setCue] = useState<{ clip: StageClip | string; at: number }>()
   // the Forge reads before it builds: the reading of the first prompt, and that prompt
@@ -299,7 +301,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
   const open = (id: SectionId) => {
     setSection(id)
     setFramed(undefined)
-    if (id !== 'moves') setPlaying(undefined)
+    if (id !== 'kit') setPlaying(undefined)
   }
 
   async function save() {
@@ -312,8 +314,10 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
       } else {
         const created = await deps.createHero(build, photoUrls)
         setBuildId(created.buildId)
+        // a new hero pops out of the gacha machine (GAME.md §2, the core loop)
+        onCreated?.({ ...created, build })
       }
-      say('Saved to your loadout. Find it in the Loadout tab, or place it in the Arena.')
+      say('Saved to your heroes. Find it on the home page, or take it to the lobby.')
     } catch {
       say("Couldn't save right now. Your hero stays here; try again in a moment.")
     } finally {
@@ -638,51 +642,42 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
         return <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} tabs={['head', 'upper', 'lower', 'full', 'back', 'feet']} titled={false} />
       case 'gear':
         return <WardrobePanel look={drawn!} catalog={wardrobe} onLook={onLook} pieces={deps.pieces} gaps={gaps} referenceUrl={images.find((i) => i.status === 'ready' && i.url)?.url} onFound={addItems} tabs={['gear']} titled={false} />
-      case 'moves':
+      case 'kit':
         return (
-          <MovesPanel
+          <KitPanel
+            build={build}
             gender={drawn!.gender}
             idle={drawn!.idle}
             playing={playing}
             onIdle={(clip) => onLook((l) => ({ ...l, idle: clip }))}
             onPlay={setPlaying}
+            onOnce={(clip) => setCue({ clip, at: performance.now() })}
             fits={Object.fromEntries(MOTION_SLOTS.map((own) => {
               const slot = MOTION_SKILL[own]
               const skill = slot && skills.find((k) => k.slot === slot)
               return [own, skill ? { name: skill.name, ...skill.fit, kinds: own === 'combo1' ? MOTION_SLOT_KINDS.combo1 : skill.fit.kinds } : { clips: [], kinds: MOTION_SLOT_KINDS[own] }]
             }))}
-            onOnce={(clip) => setCue({ clip, at: performance.now() })}
             motions={kitMotions(build)}
             onMotion={(slot, clip) => onLook((l) => ({ ...l, motions: { ...l.motions, [slot]: clip } }))}
-            onReel={() => setTrying('reel')}
+            onReel={(take) => (setReelTake(take), setTrying('reel'))}
+            glance={
+              <ul className="kit-glance" aria-label="Kit at a glance">
+                {BUILD_SLOTS.map((slot) => {
+                  const spec = build.slots[slot]
+                  const template = getTemplate(spec.templateId)
+                  return (
+                    <li key={slot}>
+                      <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
+                        <SkillIcon template={template} slot={slot} />
+                        <span>{spec.name.trim() || template.name}</span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            }
+            card={(slot) => <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} onLook={onSkillLook} />}
           />
-        )
-      case 'kit':
-        return (
-          <section className="kit" aria-label="Kit">
-            <button className="btn ghost try-it-open" onClick={() => setTrying('reel')}>
-              Watch the kit on a dummy
-            </button>
-            <ul className="kit-glance" aria-label="Kit at a glance">
-              {BUILD_SLOTS.map((slot) => {
-                const spec = build.slots[slot]
-                const template = getTemplate(spec.templateId)
-                return (
-                  <li key={slot}>
-                    <button className="glance" title={`${spec.name.trim() || template.name}: ${template.name}`} onClick={() => showSkill(slot)} onPointerEnter={() => preview(slot)}>
-                      <SkillIcon template={template} slot={slot} />
-                      <span>{spec.name.trim() || template.name}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-            <div className="skills">
-              {BUILD_SLOTS.map((slot) => (
-                <SkillCard key={slot} build={build} slot={slot} onEdit={onEdit} onSwap={(s, id) => apply(swapTemplate(build, s, id))} onPreview={preview} onLook={onSkillLook} />
-              ))}
-            </div>
-          </section>
         )
       case 'stats':
         return <StatSplit build={build} onTarget={(stat: SecondaryStat, value: number) => apply(setStatTarget(build, stat, value))} />
@@ -761,7 +756,7 @@ export function ForgeScreen({ deps = liveDeps, initial, record }: { deps?: Forge
       {trying && (
         <div className="try-it">
           <Suspense fallback={null}>
-            {trying === 'reel' ? <KitReel build={build} onClose={() => setTrying(false)} /> : <TryIt build={build} against={trying} onClose={() => setTrying(false)} />}
+            {trying === 'reel' ? <KitReel build={build} start={reelTake} onClose={() => setTrying(false)} /> : <TryIt build={build} against={trying} onClose={() => setTrying(false)} />}
           </Suspense>
         </div>
       )}

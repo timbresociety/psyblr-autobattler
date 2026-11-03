@@ -365,14 +365,19 @@
 .reel-takes { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; max-height: calc(100% - 140px); overflow-y: auto; }
 .reel-takes .hud-btn { display: grid; justify-items: start; gap: 2px; text-align: left; min-width: 180px; }
 .reel-takes kbd, .reel-caption kbd { font-size: 11px; opacity: 0.8; }
-.reel-takes .hud-btn.on, .reel-povs .hud-btn.on { box-shadow: inset 0 0 0 2px var(--accent); }
-.reel-povs { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.reel-takes .hud-btn.on { box-shadow: inset 0 0 0 2px var(--accent); }
+/* the three points of view: the main view's label, and a frame over each inset the arena draws in its corner */
+.reel-povs { list-style: none; margin: 0; padding: 0; position: absolute; inset: 0; pointer-events: none; }
+.reel-pov { position: absolute; padding: 4px 8px; font-size: 12px; font-weight: 600; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+.reel-pov-0 { top: 16px; left: 50%; transform: translateX(-50%); }
+.reel-pov-1, .reel-pov-2 { left: 66%; width: 32%; height: 30%; border: 2px solid rgba(255, 255, 255, 0.7); border-radius: 4px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); }
+.reel-pov-1 { top: 8%; }
+.reel-pov-2 { top: 40%; }
 .reel-caption { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; border-radius: 8px; background: rgba(0, 0, 0, 0.55); color: #fff; font-weight: 600; }
 .reel-close { position: absolute; top: 16px; right: 16px; }
 @media (max-width: 640px) {
   .reel-takes { top: auto; bottom: 72px; transform: none; left: 16px; right: 16px; display: flex; overflow-x: auto; }
   .reel-takes .hud-btn { min-width: 140px; }
-  .reel-povs { top: 64px; }
 }
 
 /* ── generating a piece ────────────────────────────────────────────────────── */
@@ -449,3 +454,17 @@
   .read-skill { grid-template-columns: 30px minmax(0, 1fr); grid-template-areas: 'icon slot' 'icon name' 'icon does' 'icon mech'; }
   .reading-bar { grid-template-columns: 1fr; }
 }
+
+/* ── the kit as one element: a row per button (GAME.md §11) ──────────────────── */
+.kit-rows { display: grid; gap: 12px; margin-top: 12px; }
+.kit-row { border: 1px solid var(--ink-ghost); border-radius: var(--r-lg); padding: 10px 12px; }
+.kit-row-head { display: flex; align-items: center; gap: 10px; }
+.kit-row-head kbd { min-width: 34px; padding: 3px 6px; border-radius: var(--r); background: rgba(var(--ink-rgb), 0.1); text-align: center; font-weight: 700; color: var(--ink); }
+.kit-row-title { flex: 1; font-weight: 600; color: var(--ink); }
+.kit-swatch { display: inline-flex; border-radius: var(--r-sm); overflow: hidden; box-shadow: 0 0 0 1px var(--ink-ghost); }
+.kit-swatch span { width: 14px; height: 18px; }
+.kit-row-moves { display: grid; gap: 6px; margin: 8px 0; }
+.kit-motion { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.kit-motion select { min-width: 0; }
+p.kit-motion { display: block; margin: 0; }
+.kit-row .skill-card { margin-top: 6px; }

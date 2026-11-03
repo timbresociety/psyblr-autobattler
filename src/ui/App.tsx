@@ -1,21 +1,20 @@
-import { lazy, Suspense, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router'
 import { remixBuild, type Build } from '../charter/build'
-import type { BuildRecord } from './api'
+import { liveDeps, type BuildRecord } from './api'
 import { BrandMark } from './brand/BrandMark'
 import { ForgeScreen } from './forge/ForgeScreen'
-import { LoadoutScreen } from './loadout/LoadoutScreen'
+import { GachaReveal } from './create/GachaReveal'
 import './theme.css'
 
-// the arena bench (U1) opens on its own with `?bench` and loads three's WebGPU build only there
-const BenchScreen = lazy(() => import('./arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
-// so does the soak test, with `?soak`: real 10v10s back to back for ten minutes, graded on frame time and memory
-const SoakScreen = lazy(() => import('./arena/SoakScreen').then((m) => ({ default: m.SoakScreen })))
-const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./dev/WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
-const PhysiqueBench = import.meta.env.DEV ? lazy(() => import('./dev/PhysiqueBench').then((m) => ({ default: m.PhysiqueBench }))) : undefined
-// the Arena loads three's WebGPU build, the engine and the AI only when its tab opens
-const ArenaScreen = lazy(() => import('./arena/ArenaScreen').then((m) => ({ default: m.ArenaScreen })))
+// every route loads only when it opens (GAME.md §11); the 3D ones bring three's WebGPU build, the engine and the AI
+const HomeScreen = lazy(() => import('./home/HomeScreen').then((m) => ({ default: m.HomeScreen })))
+const LobbyScreen = lazy(() => import('./arena/routes').then((m) => ({ default: m.LobbyScreen })))
+const MatchScreen = lazy(() => import('./arena/routes').then((m) => ({ default: m.MatchScreen })))
+const RangeScreen = lazy(() => import('./arena/routes').then((m) => ({ default: m.RangeScreen })))
+const CreditsScreen = lazy(() => import('./credits/CreditsScreen').then((m) => ({ default: m.CreditsScreen })))
+const DevRoutes = lazy(() => import('./dev/DevRoutes').then((m) => ({ default: m.DevRoutes })))
 
-type Tab = 'arena' | 'forge' | 'loadout'
 type Theme = 'light' | 'dark'
 
 const THEME_KEY = 'psyblr.theme'
@@ -57,7 +56,7 @@ function useTheme(): [Theme, () => void] {
   return [theme, toggle]
 }
 
-const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[] = [
+const TABS: readonly { id: string; label: string; hint: string; icon: ReactNode }[] = [
   {
     id: 'arena',
     label: 'Arena',
@@ -96,90 +95,154 @@ const TABS: readonly { id: Tab; label: string; hint: string; icon: ReactNode }[]
   },
 ]
 
+const NAV: readonly { to: string; label: string; hint: string; icon: ReactNode; match: (path: string) => boolean }[] = [
+  { to: '/', label: 'Heroes', hint: 'Your heroes', icon: TABS[2].icon, match: (p) => p === '/' },
+  { to: '/create', label: 'Forge', hint: 'Make a hero', icon: TABS[1].icon, match: (p) => p.startsWith('/create') || p.startsWith('/forge') },
+  { to: '/lobby', label: 'Arena', hint: 'Stage a battle', icon: TABS[0].icon, match: (p) => p.startsWith('/lobby') || p.startsWith('/match') },
+  {
+    to: '/range',
+    label: 'Range',
+    hint: 'Train a hero',
+    icon: (
+      <g fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
+        <circle cx="12" cy="12" r="8" />
+        <circle cx="12" cy="12" r="4" />
+        <circle cx="12" cy="12" r="0.8" fill="currentColor" />
+      </g>
+    ),
+    match: (p) => p.startsWith('/range'),
+  },
+]
+
+const loading = (what: string) => <p className="screen-loading">Loading {what}…</p>
+
+/** The routes of GAME.md §11. */
 export function App() {
-  if (WardrobeScreen && new URLSearchParams(window.location.search).has('wardrobe')) {
-    return (
-      <Suspense fallback={<p className="screen-loading">Loading the wardrobe…</p>}>
-        <WardrobeScreen />
-      </Suspense>
-    )
-  }
-  if (PhysiqueBench && new URLSearchParams(window.location.search).has('physique')) {
-    return (
-      <Suspense fallback={<p className="screen-loading">Loading the physique bench…</p>}>
-        <PhysiqueBench />
-      </Suspense>
-    )
-  }
-  if (new URLSearchParams(window.location.search).has('soak')) {
-    return (
-      <Suspense fallback={<p className="screen-loading">Loading the soak test…</p>}>
-        <SoakScreen />
-      </Suspense>
-    )
-  }
-  if (new URLSearchParams(window.location.search).has('bench')) {
-    return (
-      <Suspense fallback={<p className="screen-loading">Loading the bench…</p>}>
-        <BenchScreen />
-      </Suspense>
-    )
-  }
-  return <Screens />
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/dev/*"
+          element={
+            <Suspense fallback={loading('the dev tools')}>
+              <DevRoutes />
+            </Suspense>
+          }
+        />
+        <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="create" element={null} />
+          <Route path="forge" element={<Navigate to="/create" replace />} />
+          {/* the Layout keeps the Forge itself mounted, so these two routes draw nothing of their own */}
+          <Route path="forge/:heroId" element={null} />
+          <Route path="lobby" element={<Suspense fallback={loading('the lobby')}>{<LobbyScreen />}</Suspense>} />
+          <Route path="match/:id" element={<Suspense fallback={loading('the match')}>{<MatchScreen />}</Suspense>} />
+          <Route path="range" element={<Suspense fallback={loading('the range')}>{<RangeScreen />}</Suspense>} />
+          <Route path="credits" element={<Suspense fallback={loading('the credits')}>{<CreditsScreen />}</Suspense>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
 }
 
-function initialTab(): Tab {
-  const q = new URLSearchParams(window.location.search)
-  return q.has('arena') ? 'arena' : q.has('loadout') ? 'loadout' : 'forge'
+/**
+ * The old addresses were query flags on one page (`?arena`, `?loadout`, `?bench`, `?soak`, `?wardrobe`, `?physique`);
+ * they still work, by sending the visitor to the route that replaced them with the rest of the query kept.
+ */
+export function legacyRoute(search: string): string | undefined {
+  const q = new URLSearchParams(search)
+  const moves: [string, string][] = [
+    ['arena', '/lobby'],
+    ['loadout', '/'],
+    ['bench', '/dev/bench'],
+    ['soak', '/dev/soak'],
+    ['wardrobe', '/dev/wardrobe'],
+    ['physique', '/dev/physique'],
+  ]
+  for (const [flag, to] of moves) {
+    if (!q.has(flag)) continue
+    q.delete(flag)
+    const rest = q.toString().replace(/=(?=&|$)/g, '')
+    return rest ? `${to}?${rest}` : to
+  }
+  return undefined
 }
 
-/** The tab lives in the address bar, so a reload comes back to the same screen. */
-function rememberTab(tab: Tab) {
-  const q = new URLSearchParams(window.location.search)
-  for (const t of TABS) q.delete(t.id)
-  if (tab !== 'forge') q.set(tab, '')
-  const search = q.toString().replace(/=(?=&|$)/g, '')
-  window.history.replaceState(window.history.state, '', `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`)
+function Home() {
+  const [params] = useSearchParams()
+  const navigate = useNavigate()
+  const legacy = legacyRoute(params.toString() ? `?${params}` : '')
+  if (legacy && legacy !== '/') return <Navigate to={legacy} replace />
+  return (
+    <Suspense fallback={loading('your heroes')}>
+      <HomeScreen onEdit={(record) => navigate(`/forge/${record.id}`, { state: { record } })} onRemix={(build) => navigate('/create', { state: { initial: remixBuild(build) } })} onForge={() => navigate('/create', { state: { fresh: true } })} />
+    </Suspense>
+  )
 }
 
-/** What the Forge opens with: a hero from the Loadout, a copy to remix, or a blank slate. A new key starts it over. */
+/** What the Forge has open: a saved hero, a copy to remix, or a blank slate. A new key starts it over. */
 interface ForgeOpen {
   key: number
+  mode: 'create' | 'edit'
   record?: BuildRecord
   initial?: Build
 }
 
-function Screens() {
-  const [tab, setTab] = useState<Tab>(initialTab)
+/**
+ * The page around every route: the bar along the top and the Forge, which stays mounted once opened, so leaving it for
+ * the lobby or the range never loses an unsaved hero.
+ */
+function Layout() {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [theme, toggleTheme] = useTheme()
-  const [forge, setForge] = useState<ForgeOpen>({ key: 0 })
-  // the Forge stays mounted once opened, so leaving it for the Arena or the Loadout never loses an unsaved hero
-  const [forgeKept, setForgeKept] = useState(tab === 'forge')
-  const open = (next: Tab) => {
-    setTab(next)
-    rememberTab(next)
-    if (next === 'forge') setForgeKept(true)
-  }
-  const openInForge = (next: Omit<ForgeOpen, 'key'>) => {
-    setForge((f) => ({ key: f.key + 1, ...next }))
-    open('forge')
-  }
-  // arrow keys move along the tabs (the ARIA tabs pattern); Home and End jump to either end
-  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
-    const i = TABS.findIndex((t) => t.id === tab)
-    const to = e.key === 'ArrowRight' ? (i + 1) % TABS.length : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : -1
-    if (to < 0) return
-    e.preventDefault()
-    open(TABS[to].id)
-    document.getElementById(`tab-${TABS[to].id}`)?.focus()
-  }
+  const path = location.pathname
+  const inForge = path === '/create' || path.startsWith('/forge/')
+  const [forge, setForge] = useState<ForgeOpen>()
+  const [missing, setMissing] = useState<string>()
+  const [reveal, setReveal] = useState<{ buildId: string; build: Build }>()
+  const keys = useRef(0)
+  const state = location.state as { initial?: Build; record?: BuildRecord; fresh?: boolean } | null
+  const heroId = path.startsWith('/forge/') ? decodeURIComponent(path.slice('/forge/'.length)) : undefined
+
+  // keep the Forge in step with the address: a new hero on /create, the saved one on /forge/:heroId
+  useEffect(() => {
+    if (path === '/create') {
+      if (state?.initial || state?.fresh || forge?.mode !== 'create') setForge({ key: ++keys.current, mode: 'create', initial: state?.initial })
+      if (state?.initial || state?.fresh) navigate('/create', { replace: true, state: null })
+      return
+    }
+    if (!heroId || forge?.record?.id === heroId) return
+    if (state?.record?.id === heroId) {
+      setForge({ key: ++keys.current, mode: 'edit', record: state.record })
+      return
+    }
+    // a hero opened from its address: fetched from this device's heroes
+    let gone = false
+    setMissing(undefined)
+    liveDeps
+      .listBuilds()
+      .then((all) => {
+        if (gone) return
+        const record = all.find((r) => r.id === heroId)
+        if (record) setForge({ key: ++keys.current, mode: 'edit', record })
+        else setMissing(heroId)
+      })
+      .catch(() => !gone && setMissing(heroId))
+    return () => {
+      gone = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [path, heroId, state])
+
   return (
     <>
       <header className="topbar">
-        <BrandMark label="autobattler" paused={tab === 'arena'} />
-        <nav className="tabs" role="tablist" aria-label="Screens" onKeyDown={onKeyDown}>
-          {TABS.map((t) => (
-            <button key={t.id} id={`tab-${t.id}`} className="tab" role="tab" aria-selected={tab === t.id} aria-controls="screen" tabIndex={tab === t.id ? 0 : -1} onClick={() => open(t.id)}>
+        <BrandMark label="autobattler" paused={path.startsWith('/match') || path.startsWith('/range')} />
+        <nav className="tabs" aria-label="Screens">
+          {NAV.map((t) => (
+            <Link key={t.to} to={t.to} className="tab" aria-current={t.match(path) ? 'page' : undefined} state={t.to === '/create' && forge?.mode !== 'create' ? { fresh: true } : undefined}>
               <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 {t.icon}
               </svg>
@@ -189,7 +252,7 @@ function Screens() {
                   {t.hint}
                 </span>
               </span>
-            </button>
+            </Link>
           ))}
         </nav>
         <div className="topbar-end">
@@ -207,19 +270,41 @@ function Screens() {
           </button>
         </div>
       </header>
-      <div id="screen" className="screen" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        {tab === 'arena' && (
-          <Suspense fallback={<p className="screen-loading">Loading the Arena…</p>}>
-            <ArenaScreen />
-          </Suspense>
-        )}
-        {tab === 'loadout' && <LoadoutScreen onEdit={(record) => openInForge({ record })} onRemix={(build) => openInForge({ initial: remixBuild(build) })} onForge={() => openInForge({})} />}
-        {forgeKept && (
-          <div className="kept" hidden={tab !== 'forge'}>
-            <ForgeScreen key={forge.key} record={forge.record} initial={forge.initial} />
+      <main id="screen" className="screen">
+        {!inForge && <Outlet />}
+        {inForge && heroId && missing === heroId && (
+          <div className="screen-loading">
+            <p>That hero isn&apos;t on this device.</p>
+            <Link to="/">Back to your heroes</Link>
           </div>
         )}
-      </div>
+        {inForge && heroId && missing !== heroId && forge?.record?.id !== heroId && loading('your hero')}
+        {forge && (
+          <div className="kept" hidden={!inForge || (heroId !== undefined && forge.record?.id !== heroId)}>
+            <ForgeScreen
+              key={forge.key}
+              record={forge.record}
+              initial={forge.initial}
+              onCreated={(created) => {
+                setReveal({ buildId: created.buildId, build: created.build })
+              }}
+            />
+          </div>
+        )}
+        {reveal && (
+          <GachaReveal
+            build={reveal.build}
+            onDone={() => {
+              const id = reveal.buildId
+              setReveal(undefined)
+              // the new hero is now a saved one: the Forge carries on with it at its own address
+              setForge((f) => (f ? { ...f, mode: 'edit', record: { id, heroId: '', build: reveal.build } } : f))
+              navigate(`/forge/${encodeURIComponent(id)}`, { replace: true })
+            }}
+          />
+        )}
+      </main>
     </>
   )
 }
+
