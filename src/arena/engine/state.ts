@@ -91,6 +91,8 @@ export interface HeroState {
   slide?: { from: number; until: number; x: number; z: number }
   /** The tick it last landed. */
   landedAt: number
+  /** The tick a played hero walked or rolled off an edge, while it hasn't jumped or landed since (ENGINE.move.coyote). */
+  fellAt?: number
   /**
    * A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. A melee launch (`regain`) carries
    * the hero `push` metres a tick across the ground, and any input takes control back (combat.ts).

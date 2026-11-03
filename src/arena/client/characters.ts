@@ -7,7 +7,7 @@ import { CAST_POSES, POSE_RELEASE, poseClip } from '../../charter/skill-look.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { BuildSlot } from '../../charter/types.js'
 import { skillLookOf } from '../recipes/looks.js'
-import { meleeClip, skillMotion } from '../recipes/motions.js'
+import { meleeClip, meleeSet, skillMotion } from '../recipes/motions.js'
 import { MOTION_RELEASE } from './anim-index.js'
 import { HELD_KINDS, STANCE, type AnimState } from './animation.js'
 import { animIndexNow, clipTags } from './anim-index.js'
@@ -96,7 +96,7 @@ const LOCOMOTION = new Set(['idle', 'run', 'air', 'stunned', ...HELD_KINDS])
 /** Clips that play once and hold their last pose, but give way the moment the hero runs, jumps or stands again. */
 const YIELDING = new Set(['fall', 'slide', 'land'])
 /** Seconds each movement blends in over: a jump or a dash snaps, a slide drops in. */
-const MOVE_FADE: Record<string, number> = { jump: 0.06, air_jump: 0.05, dash: 0.04, dash_back: 0.04, land: 0.06, slide: 0.1, air: 0.18 }
+const MOVE_FADE: Record<string, number> = { jump: 0.06, air_jump: 0.05, roll: 0.06, dash: 0.04, dash_back: 0.04, land: 0.06, slide: 0.1, air: 0.18 }
 
 /** How far each finger joint curls round a held piece, radians, and each thumb joint. */
 const GRIP = { finger: 1.1, thumb: 0.4 }
@@ -774,14 +774,20 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       // a basic attack's blow plays its own step of the chain, or the charged heavy blow
       const blow = state.kind === 'cast' && state.melee ? meleeClip(build, state.melee) : undefined
       const cast = state.kind !== 'cast' ? undefined : blow && actions.has(blow) ? { clip: blow, from: 0 } : (casts.get(state.slot) ?? castClip(build, state.slot, (clip) => actions.has(clip)))
-      // a dash away from the aim hops backwards, where the model has the clip
-      const named = state.kind === 'dash' && backwards && actions.has('dash_back') ? 'dash_back' : state.kind
-      const wanted = cast ? cast.clip : state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : named
+      // a dash away from the aim hops backwards, where the model has the clip; a jump, a second jump or a roll plays its
+      // way's clip (animation.ts, Way), where the model has it
+      const wayed = 'way' in state && state.way && state.way !== 'forward' ? `${state.kind}_${state.way}` : undefined
+      const named = state.kind === 'dash' && backwards && actions.has('dash_back') ? 'dash_back' : wayed && actions.has(wayed) ? wayed : state.kind
+      // a charge holds the heavy blow's own wind-up, drawn back as far as the charge has gone (animation.ts, wound)
+      const heavy = state.kind === 'charge' ? meleeSet(build)?.heavy : undefined
+      const charging = heavy && actions.has(heavy) ? heavy : undefined
+      const wanted = cast ? cast.clip : (charging ?? (state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : named))
       const layered = layer > 0
       const onFoot = ground !== undefined && ground > STANCE.stride
       const aloft = state.kind === 'cast' && !!state.air
-      const pair = state.kind === 'cast' && state.prep !== undefined ? pairOf(wanted) : undefined
-      if (pair && state.kind === 'cast') {
+      const prep = state.kind === 'cast' ? state.prep : charging && state.kind === 'charge' ? (state.wound ?? 0) : undefined
+      const pair = prep !== undefined ? pairOf(wanted) : undefined
+      if (pair && prep !== undefined) {
         // on the engine's clock: the clip starts from its guard with the wind-up and is held to it, frame by frame. A
         // new cast's halves take over from the last one's, or from the whole body; the same clip again starts over
         if (pair !== shown) {
@@ -800,7 +806,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
           striding = onFoot ? 1 : 0
           hanging = aloft ? 1 : 0
         }
-        pair.legs.time = pair.top.time = castTime(wanted, pair.top.getClip().duration, state.prep ?? 0, state.recover ?? 0)
+        pair.legs.time = pair.top.time = castTime(wanted, pair.top.getClip().duration, prep, state.kind === 'cast' ? (state.recover ?? 0) : 0)
         layer = Math.min(1, layer + dt / CAST_FADE)
         striding = onFoot ? Math.min(1, striding + dt / LEG_FADE) : Math.max(0, striding - dt / LEG_FADE)
         hanging = aloft ? Math.min(1, hanging + dt / LEG_FADE) : Math.max(0, hanging - dt / LEG_FADE)
@@ -810,7 +816,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         // a swing, a blast, a jump or a dash finishes before running, idling or hanging in the air takes over; a new
         // cast, a hit, a movement or death cuts in at once, and a slide or a landing gives way as soon as it's done with
         const oneShotPlaying = current && !LOCOMOTION.has(currentName) && !YIELDING.has(currentName) && current.time < current.getClip().duration - 0.12
-        const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : (MOVE_FADE[wanted] ?? 0.15)
+        const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : (MOVE_FADE[wanted] ?? MOVE_FADE[state.kind] ?? 0.15)
         const again = 'seq' in state && state.kind !== 'cast' && state.seq !== moveSeq
         if (again) moveSeq = state.seq
         if (again || (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted)))) play(wanted, fade, cast?.from)

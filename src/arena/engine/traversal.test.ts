@@ -276,6 +276,34 @@ describe('a press that comes a moment early waits for its moment (owner playtest
     expect(fall(true)).toBe(1)
   })
 
+  it('a jump a moment after walking off an edge is still the ground jump (coyote time); later, the air jump', () => {
+    const late = (seconds: number, human = true) => {
+      const s = solo({ y: 2, pieces: [block(0, 0, 2, 2, 2)] })
+      if (human) s.m.human = 0
+      s.step(go(0, 0), 3)
+      for (let i = 0; i < 120 && !s.h.airborne; i++) s.step(go(0, 1))
+      s.step(go(0, 1), ticksOf(seconds) - 1)
+      s.step(go(0, 1, MOVES.jump))
+      return { moves: s.moves(), stamina: s.h.stamina }
+    }
+    expect(late(M.coyote).moves).toContain('jump')
+    expect(late(M.coyote).stamina).toBe(M.stamina.max)
+    expect(late(M.coyote + 0.1).moves).toContain('air-jump')
+    // a person's grace, like the buffer: the AI jumps on the tick it means
+    expect(late(M.coyote, false).moves).toContain('air-jump')
+  })
+
+  it('a roll a player makes off an edge ends there and falls, rather than rolling on through the air', () => {
+    const { m, h, step, moves } = solo({ y: 2, pieces: [block(0, 0, 2, 2, 2)] })
+    m.human = 0
+    step(go(0, 0), 3)
+    step(go(0, 1, MOVES.dodge))
+    expect(moves()).toContain('roll')
+    for (let i = 0; i < 40 && !h.airborne; i++) step(go(0, 1))
+    expect(h.airborne).toBe(true)
+    expect(h.roll).toBeUndefined()
+  })
+
   it('the AI gets no such grace: it presses on the tick it means', () => {
     const { h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })
     for (let i = 0; i < 120 && !h.mantle; i++) step(go(0, 1))

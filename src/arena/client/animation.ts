@@ -15,9 +15,19 @@ import type { HeroState } from '../engine/state.js'
  * as it was made.
  */
 export type AnimState =
-  | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' | HeldKind }
-  | { kind: MoveKind; seq: number }
+  | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' | HeldKind; wound?: number }
+  | { kind: MoveKind; seq: number; way?: Way }
   | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean; melee?: MeleeBlow }
+
+/**
+ * Which way a jump, a second jump or a roll goes from where the hero aims, picked as it starts (owner, 2026-11-04: one
+ * clip for every jump made platforming hard to read). Straight up, ahead, to its left or right, or back. Ahead, the
+ * body turns along the move; any other way it keeps facing the aim and plays that way's clip, as third-person
+ * shooters and parkour games do.
+ */
+export type Way = 'up' | 'forward' | 'left' | 'right' | 'back'
+/** The movements that pick a way as they start. */
+export const WAYED: ReadonlySet<string> = new Set(['jump', 'air_jump', 'roll'])
 
 /** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
 export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy'
@@ -36,7 +46,7 @@ export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move'
 /** The engine's move names that the animator spells differently. */
 const MOVE_KIND: Partial<Record<string, MoveKind>> = { 'air-jump': 'air_jump', 'land-roll': 'land_roll', 'land-heavy': 'land_heavy' }
 
-export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.3, air_jump: 0.32, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45 }
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.42, air_jump: 0.4, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45 }
 const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
@@ -49,6 +59,12 @@ export interface Animator {
   casts: number
   /** Movements so far. */
   moves: number
+  /** The way of the last jump, second jump or roll, held while it carries the hero (in the air or rolling). */
+  way?: Way
+  /** The movement `way` was picked for. */
+  waySeq?: number
+  /** How far into its heavy blow's wind-up a charge has drawn the hero (0 to 1), so the blow goes on from there. */
+  wound?: number
 }
 
 export const HIT_SECONDS = 0.25
@@ -95,16 +111,27 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
   if (a.state.kind === 'dead') return a.state
   const c = a.cast
   if (c && now < c.ends) {
-    const prep = Math.min(1, Math.max(0, (now - c.started) / Math.max(1, c.release - c.started)))
+    const drawn = Math.min(1, Math.max(0, (now - c.started) / Math.max(1, c.release - c.started)))
+    // a charged blow swings on from the wind-up the charge held, not from its guard again
+    const from = c.melee?.heavy !== undefined ? (a.wound ?? 0) : 0
+    const prep = from + (1 - from) * drawn
     const recover = now <= c.release ? 0 : Math.min(1, (now - c.release) / Math.max(1, c.ends - c.release))
     a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne, melee: c.melee }
     return a.state
   }
   a.cast = undefined
+  a.wound = undefined
+  // a jump, a second jump or a roll picks its way on its first frame, from where the engine sent it; the way holds
+  // while the move carries the hero and lets go back on its feet
+  if ('seq' in a.state && WAYED.has(a.state.kind) && a.waySeq !== a.state.seq) {
+    a.way = wayOf(hero)
+    a.waySeq = a.state.seq
+    a.state = { kind: a.state.kind as MoveKind, seq: a.state.seq!, way: a.way }
+  } else if (a.way && !hero.airborne && !hero.roll && !('seq' in a.state && WAYED.has(a.state.kind))) a.way = undefined
   // a landing or a toggle holds only a hero that stands there; one running on keeps its stride
   if ((a.state.kind === 'land' || a.state.kind === 'toggle') && moved > 0.01) a.hold = 0
-  // a ride shows at once, whatever one-shot was playing
-  if (hero.zip) a.hold = 0
+  // a ride shows at once, whatever one-shot was playing; a roll off an edge gives way to the fall
+  if (hero.zip || (a.state.kind === 'roll' && hero.airborne)) a.hold = 0
   if (a.hold > 0) {
     a.hold -= dt
     if (a.hold > 0) return a.state
@@ -129,13 +156,33 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
                 : hero.stance === 'crouch'
                   ? moving ? 'crouch_move' : 'crouch'
                   : moving ? 'run' : 'idle'
-  if (a.state.kind !== kind) a.state = { kind }
+  if (kind === 'charge') {
+    // the heavy blow's wind-up draws back as the charge fills and holds short of the release (owner, 2026-11-04: the
+    // charge read as raising a guard)
+    const fill = Math.min(1, (now - hero.basicSince) / (CHARGE.full * ENGINE.tickHz))
+    a.wound = CHARGE.from + (CHARGE.to - CHARGE.from) * fill
+    a.state = { kind, wound: a.wound }
+  } else if (a.state.kind !== kind) a.state = { kind }
   return a.state
 }
 
 const DEG = Math.PI / 180
-/** Ticks the basic attack is held before the hero shows its charge (ENGINE.melee.heavyHold). */
-const CHARGE_TICKS = Math.ceil(ENGINE.melee.heavyHold * ENGINE.tickHz)
+/** Off its aim by less than this a move goes ahead, by more than `back` it goes back; between, to the side. */
+const WAYS = { ahead: 55 * DEG, back: 125 * DEG, still: 1.5 }
+
+/** The way a hero is going from its aim (a quarter turn of yaw is its left), or up when it's barely moving across. */
+export function wayOf(hero: Pick<HeroState, 'velocity' | 'yaw'>): Way {
+  const { x, z } = hero.velocity
+  if (Math.hypot(x, z) < WAYS.still) return 'up'
+  const off = Math.atan2(Math.sin(Math.atan2(x, z) - hero.yaw), Math.cos(Math.atan2(x, z) - hero.yaw))
+  return Math.abs(off) <= WAYS.ahead ? 'forward' : Math.abs(off) >= WAYS.back ? 'back' : off > 0 ? 'left' : 'right'
+}
+/**
+ * The charge shows from `show` seconds of holding, well before the engine counts it (ENGINE.melee.heavyHold), as a tap
+ * is over by then: the heavy blow's wind-up drawn from `from` of the way to its release to `to` at a full charge.
+ */
+const CHARGE = { show: 0.12, from: 0.25, to: 0.85, full: ENGINE.melee.heavyHold + ENGINE.melee.chargeFull }
+const CHARGE_TICKS = Math.ceil(CHARGE.show * ENGINE.tickHz)
 
 /**
  * How fast hips turn (radians a second) and how far the chest twists from them. Running, the hips turn at most `warp`

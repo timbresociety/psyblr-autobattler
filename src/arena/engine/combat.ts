@@ -21,10 +21,15 @@ const PASSIVE = slotBit('passive')
 /** Deliveries that strike in reach, which a guard catches. */
 const CLOSE = new Set<Delivery['kind']>(['melee', 'cone'])
 
-/** What a basic attack carries: its step in the chain (2 the finisher), or how charged a heavy blow is (0 to 1). */
+/**
+ * What a basic attack carries: its step in the chain (2 the finisher), or how charged a heavy blow is (0 to 1), and
+ * `pace`, the share of a strike's damage it carries when it follows the last sooner than the hero's attack speed would
+ * (the chain's beat, deliveries.ts).
+ */
 export interface MeleeBlow {
   step: number
   heavy?: number
+  pace?: number
 }
 
 /**
@@ -51,7 +56,7 @@ export function meleeButtons(ctx: Ctx, index: number, command: Command, strike: 
 }
 
 /** How much a blow is worth against a light strike: the finisher more, a heavy blow more again the longer it charged. */
-export const blowWorth = (blow: MeleeBlow | undefined) => (!blow ? 1 : blow.heavy !== undefined ? MELEE.heavy + (MELEE.heavyFull - MELEE.heavy) * blow.heavy : blow.step === 2 ? MELEE.finisher : 1)
+export const blowWorth = (blow: MeleeBlow | undefined) => (!blow ? 1 : blow.heavy !== undefined ? MELEE.heavy + (MELEE.heavyFull - MELEE.heavy) * blow.heavy : (blow.step === 2 ? MELEE.finisher : 1) * (blow.pace ?? 1))
 
 /** The basic attack's template for a blow, its magnitudes scaled by what the blow is worth. */
 export const blowTemplate = (template: Template, blow: MeleeBlow | undefined) => {

@@ -12,7 +12,7 @@ import { HeroStage } from '../common/HeroStage'
  * The physique test bench's page (?physique, dev builds only; GAME.md §9.7). Face: the head up close on both genders,
  * every face shape one at a time (§9.1). Bench: any archetype on any key clip, beside its scores from
  * docs/bench/physique-bench.json (BENCH_WRITE=1 vitest run src/kit/bench), and the jiggle test (a jump on the anime
- * heroine). &shape=jawOpen, &facing=0.6, &tab=bench&arch=heavyweight&clip=run start there.
+ * heroine). &shape=jawOpen, &facing=0.6 (either tab: 1.57 is side on), &tab=bench&arch=heavyweight&clip=run start there.
  */
 const HEADS: { name: string; role: RoleId; gender: 'm' | 'f' }[] = [
   { name: 'Bench M', role: 'fighter', gender: 'm' },
@@ -113,7 +113,7 @@ function BodyBench({ params }: { params: URLSearchParams }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 12 }}>
         <section style={{ height: 640, display: 'grid', gridTemplateRows: 'auto 1fr' }}>
           <h2 style={{ margin: 0, fontSize: 14 }}>{`${p.label} (${p.gender}-${p.body}) · ${key}${clip ? '' : ' (not in the library yet)'}`}</h2>
-          <HeroStage key={arch} look={{ heroName: p.label, roleId: 'fighter', sizeClass: p.body, look }} hue={heroHue(p.label)} play={clip} label={p.label} />
+          <HeroStage key={arch} look={{ heroName: p.label, roleId: 'fighter', sizeClass: p.body, look }} hue={heroHue(p.label)} play={clip} facing={params.has('facing') ? Number(params.get('facing')) : undefined} label={p.label} />
         </section>
         <section>
           <h2 style={{ margin: 0, fontSize: 14 }}>{scores ? `Scores · spread ${scores.spread.arm}° arms, ${scores.spread.leg}° legs` : 'No scores (run the bench)'}</h2>

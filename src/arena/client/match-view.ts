@@ -720,8 +720,12 @@ function drawHeroes(
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
     const flying = h.airborne && pose.kind !== 'cast' && moved * ENGINE.tickHz > STANCE.airTravel
-    // a roll, like a slide, faces along its line: the body tumbles the way it goes
-    const mode = pose.kind === 'slide' || pose.kind === 'roll' || flying ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
+    // a roll, like a slide, faces along its line: the body turns into it and tumbles the way it goes, to the side too, as
+    // action games roll (the library has no standing side roll). A jump to the side or back, or a dodge back, keeps
+    // facing the aim and plays that way's clip instead (animation.ts, Way)
+    const way = animators[i].way
+    const sideways = way !== undefined && way !== 'forward' && !(pose.kind === 'roll' && way !== 'back')
+    const mode = pose.kind === 'slide' || ((pose.kind === 'roll' || flying) && !sideways) ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne || pose.kind === 'roll' ? 'square' : 'stand'
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined

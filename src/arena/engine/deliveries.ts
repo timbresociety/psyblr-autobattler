@@ -14,7 +14,7 @@ import { keepOut, standOn } from './locomotion.js'
 import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sin, sub, yawPitch, type Vec3 } from './maths.js'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import type { TickRules } from './tick.js'
-import { timingTicks } from './timing.js'
+import { BASIC_SHARE, timingOf, timingTicks } from './timing.js'
 
 /**
  * Where casts land (U4, KTD3). Every hit is engine geometry: heroes are vertical capsules, and each delivery is
@@ -223,7 +223,13 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
   let target: HeroState | undefined
   if (slot === 'basic') {
     if (match.tick < caster.nextAttackAt) return false
-    const between = ticks(1 / Math.max(0.2, setup.sheet.attackSpeed * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled())))
+    const tempo = ticks(1 / Math.max(0.2, setup.sheet.attackSpeed * (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled())))
+    // a light strike follows the last at the style's own beat, the way action brawlers chain (owner, 2026-11-04), and
+    // carries the share of damage its tempo would have spread over the wait, so damage a second is unchanged; a heavy
+    // blow keeps the tempo's wait. A hero quicker than the beat chains quicker still
+    const beat = timingOf(template, slot)
+    const between = blow?.heavy !== undefined ? tempo : Math.min(tempo, Math.max(1, ticks((beat.prep + beat.recover) / BASIC_SHARE)))
+    if (blow && blow.heavy === undefined && between < tempo) blow = { ...blow, pace: between / tempo }
     caster.nextAttackAt = match.tick + between
     interval = between / ENGINE.tickHz
     target = lungeAt(ctx, caster, template)

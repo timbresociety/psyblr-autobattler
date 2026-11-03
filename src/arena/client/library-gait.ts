@@ -28,8 +28,22 @@ const loads = new Map<string, Promise<LibraryGait | undefined>>()
  * A skill plays its own motion (recipes/motions.ts); slash, shoot, cast and ultimate are for a skill without one.
  */
 export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
-  jump: 'run_jump',
-  air_jump: 'backflip',
+  // a jump, a second jump and a roll each have a clip for every way they go (animation.ts, Way; owner 2026-11-04):
+  // a running jump tucks, standing it springs straight up, to the side it hops sideways; the second jump flips forward,
+  // twists going sideways and only flips backwards going back; a roll turns into its way and comes up running, except
+  // back, where the hero hops back still facing the aim
+  jump: 'standing_jump_running',
+  jump_up: 'jump_up',
+  jump_left: 'left_strafe_jump',
+  jump_right: 'right_strafe_jump',
+  jump_back: 'backward_jump',
+  air_jump: 'running_forward_flip',
+  air_jump_up: 'running_forward_flip',
+  air_jump_left: 'front_twist_flip',
+  air_jump_right: 'front_twist_flip',
+  air_jump_back: 'backflip',
+  roll_back: 'standing_dodge_backward',
+  land: 'ual_jump_land',
   air: 'falling',
   dash: 'standing_dodge_forward',
   dash_back: 'standing_dodge_backward',
@@ -41,7 +55,7 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   hurt: 'hit_to_body',
   stunned: 'big_hit_to_head',
   fall: 'falling_back_death',
-  roll: 'sprinting_forward_roll',
+  roll: 'quick_roll_to_run',
   block: 'standing_block_idle',
   crouch: 'crouch_idle',
   crouch_move: 'crouch_walk_forward',
@@ -63,7 +77,23 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
  * crouches for half a second before it rolls; the engine's roll starts at once.
  */
 const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number]>> = {
-  roll: [0.45, 1.2, ENGINE.move.roll.time],
+  // take-off to the top of the rise: the push, the tuck, the reach for whatever comes next
+  jump: [0.25, 0.75, 0.42],
+  jump_up: [0.08, 0.54, 0.42],
+  jump_left: [0, 0.5, 0.42],
+  jump_right: [0, 0.5, 0.42],
+  jump_back: [0.08, 0.7, 0.42],
+  // the flip itself, over the second jump's rise
+  air_jump: [0.12, 0.95, 0.5],
+  air_jump_up: [0.12, 0.95, 0.5],
+  air_jump_left: [0.55, 1.35, 0.5],
+  air_jump_right: [0.55, 1.35, 0.5],
+  air_jump_back: [0.5, 1.4, 0.5],
+  // a roll from the dive to running again, turned into its way (match-view); back, a dodge from the push off to the
+  // feet back under
+  roll: [0.22, 1.25, ENGINE.move.roll.time],
+  roll_back: [0.1, 0.95, ENGINE.move.roll.time],
+  land: [0.05, 0.55, 0.3],
   dash: [0.12, 0.75, 0.3],
   dash_back: [0.1, 0.9, 0.34],
   toggle: [0.15, 1.0, 0.6],

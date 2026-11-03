@@ -104,11 +104,13 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   const want = speed * acting * pace
   const jumpScale = M.jumpScale[hero.size]
 
-  // decided before the jump below changes whether the hero is in the air
-  if (pressed & MOVES.jump && !(free && !hero.roll && (!hero.airborne || (hero.airJumps < 1 && hero.stamina >= 1)))) missed |= MOVES.jump
+  // decided before the jump below changes whether the hero is in the air; just off an edge it still counts as standing
+  const footed = !hero.airborne || (hero.fellAt !== undefined && now - hero.fellAt <= ticks(M.coyote))
+  if (pressed & MOVES.jump && !(free && !hero.roll && (footed || (hero.airJumps < 1 && hero.stamina >= 1)))) missed |= MOVES.jump
   if (pressed & MOVES.jump && free && lowered && !hero.airborne) hero.stance = 'stand'
   else if (pressed & MOVES.jump && free && !hero.roll) {
-    if (!hero.airborne) {
+    if (footed) {
+      hero.fellAt = undefined
       // a slide's speed carries into the jump
       v.y = Math.sqrt(2 * M.gravity * M.jump * jumpScale)
       hero.airborne = true
@@ -372,10 +374,19 @@ export function standOn(hero: HeroState, match: MatchState | undefined, reach = 
       hero.airborne = false
       hero.airJumps = 0
       hero.landedAt = match?.tick ?? 0
+      hero.fellAt = undefined
     }
   } else if (p.y > floor + M.step) {
     hero.airborne = true
     hero.velocity.y = 0
+    // a person's grace, like the buffer, so the AI-only fights stay as they were: a jump just after the edge is still
+    // the ground jump (coyote time), and a roll ends at the edge, keeping its speed for the fall, with the jumps free
+    // again, rather than tumbling on through the air (playtest, 2026-11-03). The client shows any hero's roll off an
+    // edge as a fall
+    if (match?.human === hero.id) {
+      hero.fellAt = match.tick
+      hero.roll = undefined
+    }
   } else p.y = floor // down a ramp or a stair the feet follow the ground; off a ledge they fall
 }
 

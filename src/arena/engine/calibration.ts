@@ -88,6 +88,12 @@ export const ENGINE = {
      * the hero a player controls only.
      */
     buffer: 0.2,
+    /**
+     * Coyote time: for this long after walking or rolling off an edge a jump is still the ground jump, not the air
+     * jump (playtest, 2026-11-03: a press 17 ms late spent the second jump and a pip). For the hero a player controls
+     * only.
+     */
+    coyote: 0.1,
     /** X holds a guard: melee from in front lands on it, at `speed` times run speed. */
     block: { speed: 0.35, arcDegrees: 140 },
     slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
