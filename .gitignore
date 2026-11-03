@@ -11,3 +11,4 @@ tools/balance/out/
 .dev-store/
 __pycache__/
 .scratch/
+tools/blender/build/

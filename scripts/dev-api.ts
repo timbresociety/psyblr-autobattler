@@ -1,5 +1,5 @@
 import { mkdirSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join, resolve, sep } from 'node:path'
 import type { Plugin, ViteDevServer } from 'vite'
@@ -39,6 +39,13 @@ export function devApi(): Plugin {
           })
           return
         }
+        if (req.url?.startsWith(RECORDINGS_PATH)) {
+          recordings(req, res).catch(() => {
+            res.statusCode = 500
+            res.end()
+          })
+          return
+        }
         if (!req.url?.startsWith('/api/')) return next()
         handle(server, setup, req, res).catch((error) => {
           console.error(error)
@@ -67,6 +74,38 @@ function devDatabase(schema: string): Promise<Db> {
     return pg as unknown as Db
   })()
   return g.__psyblrDevDb
+}
+
+/** Session recordings (src/arena/client/recordings.ts): saved here by a dev match, listed and loaded by name. */
+const RECORDINGS_PATH = '/dev-recordings'
+const RECORDINGS_DIR = join(DEV_STORE_DIR, 'recordings')
+
+async function recordings(req: IncomingMessage, res: ServerResponse) {
+  mkdirSync(RECORDINGS_DIR, { recursive: true })
+  const name = decodeURIComponent(new URL(req.url!, 'http://dev').pathname.slice(RECORDINGS_PATH.length + 1))
+  const send = (status: number, body?: unknown) => {
+    res.statusCode = status
+    res.setHeader('content-type', 'application/json')
+    res.end(body === undefined ? undefined : JSON.stringify(body))
+  }
+  if (req.method === 'POST' && !name) {
+    const chunks: Buffer[] = []
+    for await (const chunk of req) chunks.push(chunk as Buffer)
+    const rec = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { made?: unknown; setup?: { seed?: unknown } }
+    if (typeof rec.made !== 'number' || typeof rec.setup?.seed !== 'number') return send(400)
+    // one file per match, named by when it started and its seed: saving again overwrites it
+    const file = `${new Date(rec.made).toISOString().replace(/[:.]/g, '-')}-seed${Math.floor(rec.setup.seed)}.json`
+    await writeFile(join(RECORDINGS_DIR, file), JSON.stringify(rec))
+    return send(200, { name: file })
+  }
+  if (req.method !== 'GET') return send(405)
+  if (!name) return send(200, { names: (await readdir(RECORDINGS_DIR)).filter((f) => f.endsWith('.json')).sort().reverse() })
+  if (!/^[\w.-]+\.json$/.test(name)) return send(404)
+  const bytes = await readFile(join(RECORDINGS_DIR, name)).catch(() => undefined)
+  if (!bytes) return send(404)
+  res.setHeader('content-type', 'application/json')
+  res.setHeader('cache-control', 'no-cache')
+  res.end(bytes)
 }
 
 const IMAGE_TYPES: [number[], string][] = [

@@ -31,7 +31,9 @@ export function hashState(match: MatchState): number {
       value.forEach(walk)
     } else if (typeof value === 'object') {
       byte(5)
+      // a key set to undefined is the same state as no key (a hero handed back to the AI, or never taken)
       for (const key of Object.keys(value as object).sort()) {
+        if ((value as Record<string, unknown>)[key] === undefined) continue
         walk(key)
         walk((value as Record<string, unknown>)[key])
       }

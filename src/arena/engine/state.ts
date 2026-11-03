@@ -103,6 +103,8 @@ export interface HeroState {
   shiftSince: number
   /** A dodge roll in progress along `x`, `z`. */
   roll?: { from: number; until: number; x: number; z: number }
+  /** Jump or roll presses (`MOVES` bits) waiting for the hero to be able to act on them, until the tick `until`. */
+  buffer?: { moves: number; until: number }
   /** Pulling up onto a ledge (GAME.md §7 mantle): from the start spot to the top over [from, until], out of control. */
   mantle?: { from: number; until: number; x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }
   /** Riding map line `line` (a zipline or a rail, §7) at `t` along it (0 at its start), toward `dir`. */

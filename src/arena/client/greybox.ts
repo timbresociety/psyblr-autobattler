@@ -21,7 +21,7 @@ const YELLOW = new THREE.Color(0xffc820)
  * metal, the pachinko islands vermilion, posts and plinths porcelain. Kept a shade under the palette's hex, since tops
  * are drawn a quarter brighter and the fluorescent light is bright.
  */
-const PALETTE = {
+export const PALETTE = {
   porcelain: 0xe9e3d7,
   graphite: 0x30383f,
   vermilion: 0xd44137,
@@ -31,26 +31,32 @@ const PALETTE = {
   oxblood: 0x78464d,
   champagne: 0xcdb98f,
 } as const
-const CHIPS = [PALETTE.vermilion, PALETTE.cobalt, PALETTE.yellow, PALETTE.jade] as const
+export type PaletteKey = keyof typeof PALETTE
+const CHIPS = ['vermilion', 'cobalt', 'yellow', 'jade'] as const
 
-/** A piece's surface colour, by what it is: its look, its size and where it stands. */
-export function paint(piece: CoverPiece, index: number): THREE.Color {
+/** What a piece is painted, by what it is: its look, its size and where it stands (and how far its tone is lowered). */
+export function paintKey(piece: CoverPiece, index: number): { key: PaletteKey; k: number } {
   const s = piece.shape
   const tall = piece.top - piece.base
-  const color = (hex: number, k = 0.8) => new THREE.Color(hex).multiplyScalar(k)
-  if (piece.look === 'chip') return color(CHIPS[index % CHIPS.length], 0.85)
-  if (piece.look === 'ramp') return color(PALETTE.cobalt, 0.85)
-  if (piece.look === 'step') return color(PALETTE.champagne, 0.82)
-  if (piece.look === 'rail' || piece.look === 'pillar') return color(PALETTE.graphite, 1.1)
+  if (piece.look === 'chip') return { key: CHIPS[index % CHIPS.length], k: 0.85 }
+  if (piece.look === 'ramp') return { key: 'cobalt', k: 0.85 }
+  if (piece.look === 'step') return { key: 'champagne', k: 0.82 }
+  if (piece.look === 'rail' || piece.look === 'pillar') return { key: 'graphite', k: 1.1 }
   // the lower routes' floors and walls: oxblood carpet and graphite machine bases
-  if (piece.top < 3) return color(PALETTE.oxblood, 0.85)
+  if (piece.top < 3) return { key: 'oxblood', k: 0.85 }
   // Pachinko Alley's islands of back-to-back machines
-  if (s.kind === 'block' && Math.abs(s.x) > 58 && tall > 3) return color(PALETTE.vermilion, 0.85)
+  if (s.kind === 'block' && Math.abs(s.x) > 58 && tall > 3) return { key: 'vermilion', k: 0.85 }
   // decks and walkways hung over a floor: graphite frames under porcelain tops reads as one colour here, so porcelain
-  if (piece.base > 0 && tall <= 1) return color(PALETTE.porcelain, 0.72)
+  if (piece.base > 0 && tall <= 1) return { key: 'porcelain', k: 0.72 }
   // a round machine column (the spire's pins, the crane posts)
-  if (s.kind === 'column') return color(PALETTE.jade, 0.85)
-  return color(PALETTE.porcelain, 0.74)
+  if (s.kind === 'column') return { key: 'jade', k: 0.85 }
+  return { key: 'porcelain', k: 0.74 }
+}
+
+/** A piece's surface colour in the grey box. */
+export function paint(piece: CoverPiece, index: number): THREE.Color {
+  const { key, k } = paintKey(piece, index)
+  return new THREE.Color(PALETTE[key]).multiplyScalar(k)
 }
 
 /** Colour every face: tops lighter than sides. */
@@ -133,7 +139,7 @@ function trim(piece: CoverPiece): THREE.BufferGeometry[] {
 }
 
 /** Traversal pieces carry yellow: chips, ramps, and decks hung above a floor; not the main floor's own slabs. */
-const traversal = (p: CoverPiece) => p.look === 'chip' || p.look === 'ramp' || (p.look === 'grey' && p.base > 0 && p.top - p.base <= 1)
+export const traversal = (p: CoverPiece) => p.look === 'chip' || p.look === 'ramp' || (p.look === 'grey' && p.base > 0 && p.top - p.base <= 1)
 
 let gridTexture: THREE.Texture | undefined
 /**
@@ -213,7 +219,8 @@ function grid(): THREE.Texture | undefined {
   return gridTexture
 }
 
-export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapLine[] = []): RuinsView {
+/** `baked` (client/baked.ts) draws every piece that never breaks in its place, dressed and lit in Blender. */
+export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapLine[] = [], baked?: THREE.Object3D): RuinsView {
   const group = new THREE.Group()
   group.name = 'greybox'
   const proxies: THREE.Box3[] = []
@@ -250,15 +257,20 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
       views[index] = node
       return
     }
-    solids.push(shade(solid(piece), paint(piece, index)))
+    // the baked house has its pieces and their trims, all but a ramp's side strips
+    if (baked && !piece.slope) return
+    if (!baked) solids.push(shade(solid(piece), paint(piece, index)))
     if (traversal(piece)) trims.push(...trim(piece))
   })
-  const merged = mergeGeometries(solids)!
-  bake(merged, pieces)
-  const body = new THREE.Mesh(merged, greyMat)
-  body.name = 'greybox:solids'
-  body.castShadow = body.receiveShadow = true
-  group.add(body)
+  if (baked) group.add(baked)
+  else {
+    const merged = mergeGeometries(solids)!
+    bake(merged, pieces)
+    const body = new THREE.Mesh(merged, greyMat)
+    body.name = 'greybox:solids'
+    body.castShadow = body.receiveShadow = true
+    group.add(body)
+  }
   if (trims.length) {
     const edges = new THREE.Mesh(mergeGeometries(trims.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => (g.deleteAttribute('uv'), g.deleteAttribute('normal'), g.computeVertexNormals(), g))), yellowMat)
     edges.name = 'greybox:traversal'

@@ -18,6 +18,7 @@ export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
 }
 
 const M = ENGINE.move
+const BUFFERED = MOVES.jump | MOVES.dodge
 
 /**
  * Move one tick by the command, like Deadlock (KTD2; Forge goal, phase 2): nobody flies. On the ground the hero eases
@@ -38,7 +39,16 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     mz /= len
   }
   const steering = len > 0.1
-  const pressed = command.moves & ~hero.held
+  const fresh = command.moves & ~hero.held
+  const queued = hero.buffer && now <= hero.buffer.until ? hero.buffer.moves : 0
+  const pressed = fresh | queued
+  // a player's jump or roll that can't happen this tick waits a moment for when it can (M.buffer); a fresh press
+  // restarts the wait. Only a person's hands need it: the AI presses on the tick it means, and the balance gate's
+  // AI-only fights stay as they were
+  const keep = (missed: number) => {
+    const moves = match?.human === hero.id ? missed & BUFFERED : 0
+    hero.buffer = moves ? { moves, until: moves & fresh || !hero.buffer ? now + ticks(M.buffer) : hero.buffer.until } : undefined
+  }
   const rooted = hero.cc.root > now
   const pinned = hero.cc.grounded > now
   // feet stay planted through a wind-up and slow through the recovery (phase 1); a wind-up that roots the hero holds
@@ -51,8 +61,15 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   const released = hero.held & ~command.moves
   hero.held = command.moves
   // a mantle and a ride carry the hero on their own (GAME.md §7)
-  if (hero.mantle) return mantling(hero, now, events)
-  if (hero.zip && match?.lines) return riding(hero, match.lines, (pressed & MOVES.jump) !== 0, now, events)
+  if (hero.mantle) {
+    keep(pressed)
+    return mantling(hero, now, events)
+  }
+  if (hero.zip && match?.lines) {
+    keep(pressed & ~MOVES.jump)
+    return riding(hero, match.lines, (pressed & MOVES.jump) !== 0, now, events)
+  }
+  let missed = 0
   // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone, either again stands; a jump stands
   // a low hero up rather than leaving the ground
   const across0 = Math.sqrt(v.x * v.x + v.z * v.z)
@@ -71,7 +88,8 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   hero.blocking = (command.moves & MOVES.block) !== 0 && !hero.airborne && !hero.roll && !(hero.action && now < hero.action.ends && !hero.action.released) && free
   // Z rolls the way the hero steers (ahead when it doesn't), not where it aims (owner, 2026-11-03), untouchable for its
   // first moments
-  if (pressed & MOVES.dodge && free && !hero.airborne && !hero.roll && hero.stamina >= 1) {
+  if (pressed & MOVES.dodge && !(free && !hero.airborne && !hero.roll && hero.stamina >= 1)) missed |= MOVES.dodge
+  else if (pressed & MOVES.dodge) {
     const n = Math.sqrt(mx * mx + mz * mz)
     const [rx, rz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]
     hero.roll = { from: now, until: now + ticks(M.roll.time), x: rx, z: rz }
@@ -86,6 +104,8 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   const want = speed * acting * pace
   const jumpScale = M.jumpScale[hero.size]
 
+  // decided before the jump below changes whether the hero is in the air
+  if (pressed & MOVES.jump && !(free && !hero.roll && (!hero.airborne || (hero.airJumps < 1 && hero.stamina >= 1)))) missed |= MOVES.jump
   if (pressed & MOVES.jump && free && lowered && !hero.airborne) hero.stance = 'stand'
   else if (pressed & MOVES.jump && free && !hero.roll) {
     if (!hero.airborne) {
@@ -108,6 +128,7 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
       }
     }
   }
+  keep(missed)
   if (dashNow && free && hero.stamina >= 1 && now >= hero.dashUntil && !hero.roll) {
     const n = Math.sqrt(mx * mx + mz * mz)
     const [dx, dz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]

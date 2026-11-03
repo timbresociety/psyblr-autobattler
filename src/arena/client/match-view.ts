@@ -4,21 +4,21 @@ import type { Style } from '../../charter/motions.js'
 import type { BuildSlot } from '../../charter/types.js'
 import type { AiLevel } from '../ai/calibration.js'
 import type { HeroPackage } from '../../forge/package.js'
-import { aiCommands } from '../ai/brain.js'
 import { ENGINE, ticks } from '../engine/calibration.js'
 import { shotSeconds } from '../engine/combat.js'
 import type { MatchEvent } from '../engine/events.js'
 import type { Vec3 } from '../engine/maths.js'
-import { LIVE_PROFILE, PRACTICE_PROFILE, createMatch, healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
-import { capsule, type Command, type MatchState, type Team } from '../engine/state.js'
-import { tick } from '../engine/tick.js'
+import { healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
+import { hashState } from '../engine/snapshot.js'
+import { advance, arenaFor, createRecorder, playback, type Recorder, type RecordedSetup, type Recording } from '../engine/replay.js'
+import { AIM_STEPS, capsule, type Command, type MatchState, type Team } from '../engine/state.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
 import { Cameras, FIRST_PERSON } from './camera.js'
 import { TEAM_COLORS } from './map.js'
-import { handBack, releaseIfDead, take } from './takeover.js'
+import { handBack, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
 import { HeroLod, impostorMaterial, LOD, lodReady, POSE_EVERY, tiersFor, type Tier } from './lod.js'
-import { createClock, frame } from './loop.js'
+import { MAX_FRAME_SECONDS, createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { cascade, sunShadows, VIEW_FAR } from './sky.js'
 import { propLods } from './render/prop-lod.js'
@@ -28,6 +28,7 @@ import { HIDE_AFTER, OCCLUDED_LAYER, occluded, setOccluded, sightHealth } from '
 import { mayRest, setResting } from './rest.js'
 import { buildRuins } from './ruins.js'
 import { buildGreybox } from './greybox.js'
+import { loadBakedHouse } from './baked.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
 import { arenaExtent } from '../engine/cover.js'
 import { HALL } from './hall.js'
@@ -56,6 +57,8 @@ export interface MatchSetup {
   idle?: readonly number[]
   /** How well the AI plays each side (§2); Hard, the gate's level, when absent. */
   aiLevels?: [AiLevel, AiLevel]
+  /** Play this recording back instead of a live match: its player's inputs, nobody else's (see engine/replay.ts). */
+  replay?: Recording
 }
 
 export interface HudHero {
@@ -174,7 +177,46 @@ export interface ArenaController {
    * its own rectangle, `[x, y, width, height]` as fractions of the screen from the top left. An empty list clears them.
    */
   insets: (views: readonly Inset[]) => void
+  /** The live match's recording so far (a played-back match has none). */
+  recording: () => Recording | undefined
+  /** Played back: the first tick whose state parted from the recording's, if one has. */
+  diverged: () => { tick: number; expected: number; got: number } | undefined
+  /** Mark this moment in the recording: "this felt wrong", with an optional note. */
+  mark: (note?: string) => void
+  /** Frame by frame play, for a script or an agent (see `Seat`). */
+  seat: Seat
   stop: () => void
+}
+
+/**
+ * Frame by frame play (owner, 2026-11-03): held, the match waits — no wall-clock time passes for the fight, the
+ * animation, the effects or the camera — and `step(n)` runs exactly n ticks through the same path as live play
+ * (the keys held in the controls drive the played hero), then draws one frame of them. So a script can press keys,
+ * step, look, and play the game at whatever pace it thinks, and what it sees is what a player would have seen.
+ */
+export interface Seat {
+  hold: (on: boolean) => void
+  held: () => boolean
+  /** Run n ticks at the next frame and draw it; resolves once that frame is drawn. */
+  step: (n: number) => Promise<SeatRow>
+  /** What the played (or followed) hero and the camera are doing now. */
+  row: () => SeatRow
+}
+
+export interface SeatRow {
+  tick: number
+  hero?: number
+  position?: Vec3
+  velocity?: Vec3
+  airborne?: boolean
+  yaw?: number
+  stance?: string
+  /** The animation state and the body's stance mode this frame. */
+  pose?: string
+  mode?: string
+  /** The body's facing as drawn, against the way it travels. */
+  body?: number
+  camera: { position: Vec3; yaw: number; pitch: number; tooClose: boolean; inside: boolean }
 }
 
 export interface Inset {
@@ -616,7 +658,7 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[] },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[]; poses?: string[]; modes?: string[] },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
@@ -684,6 +726,8 @@ function drawHeroes(
     const strafes = view.strafes === true && pose.kind !== 'dash'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
     stances[i] = s
+    if (ctx.poses) ctx.poses[i] = pose.kind
+    if (ctx.modes) ctx.modes[i] = mode
     // standing on the ground, the feet stay where they land
     if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading, h.sprinting)
     view.aim?.(h.yaw, h.pitch)
@@ -745,8 +789,14 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void, signal?: AbortSignal): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
   // the range's drills (a dummy standing idle) play without the house's edge and vault
-  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, { profile: setup.idle?.length ? PRACTICE_PROFILE : LIVE_PROFILE, formations: setup.formations, map: LIVE_MAP })
-  if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
+  // every live match is recorded from its setup, so it can be played again tick for tick (engine/replay.ts)
+  const recorded: RecordedSetup = setup.replay?.setup ?? { teams: setup.teams, seed: setup.seed, formations: setup.formations, idle: setup.idle, aiLevels: setup.aiLevels, side: setup.side, map: LIVE_MAP }
+  const arena = arenaFor(recorded)
+  const recorder: Recorder | undefined = setup.replay ? undefined : createRecorder(recorded, import.meta.env.MODE)
+  const feed = setup.replay ? playback(setup.replay) : undefined
+  // played back, the recorded hashes say whether this is still the match that was played
+  const checks = new Map(setup.replay?.checks)
+  let diverged: { tick: number; expected: number; got: number } | undefined
   // dev only: ?style=rifle hands every hero that fighting style, to watch a style's clips in a live match
   const devStyle = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('style') : null
   const builds = arena.setups.map((s) => (devStyle && s.build.look ? { ...s.build, look: { ...s.build.look, style: devStyle as Style } } : s.build))
@@ -790,7 +840,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the arena comes from the engine's own cover, so what is drawn is exactly what blocks (R25): the House of
   // Instinct in grey boxes (GAME.md §8), or the ruins
   const cover = arena.match.cover
-  const ruins = cover ? (arena.match.map === 'house' ? buildGreybox(cover.pieces, arena.match.lines) : buildRuins(cover.pieces)) : undefined
+  const baked = cover && arena.match.map === 'house' ? await loadBakedHouse(stage.sun, renderer) : undefined
+  const ruins = cover ? (arena.match.map === 'house' ? buildGreybox(cover.pieces, arena.match.lines, baked) : buildRuins(cover.pieces)) : undefined
   if (ruins) {
     scene.add(ruins.group)
     map.proxies.push(...ruins.proxies)
@@ -813,7 +864,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
   const props = propLods(scene)
-  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[] }
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[], poses: [] as string[], modes: [] as string[] }
   if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
@@ -851,6 +902,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let lag = 0
   // the hero whose body the camera may hide when it's too close: the one played or followed
   let hiddenNear: number | undefined
+  // the seat: held, nothing moves on wall time; `step` books ticks for the next frame
+  let seatHeld = false
+  let booked = 0
+  let stepped: ((row: SeatRow) => void)[] = []
+  // the animation clock: time drawn so far (slowed with the fight), not the wall's, so a held frame stays put
+  let shown = 0
   const publish = () => {
     store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
     store.flush()
@@ -863,25 +920,47 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
 
   const step = () => {
     const now = performance.now()
-    const dt = Math.min(0.25, (now - last) / 1000)
+    // held, a frame lasts exactly the ticks booked for it (none: a still frame)
+    const wall = Math.min(0.25, (now - last) / 1000)
     last = now
     frameNo++
-    if (!clock.paused) quality.observe(dt * 1000)
+    if (!clock.paused && !seatHeld) quality.observe(wall * 1000)
     // a slowed clock slows everything drawn with it: the fight, the animation and the effects
-    const speed = hooks.speed?.() ?? 1
-    const { ticks, alpha } = frame(clock, dt * speed)
+    const speed = seatHeld ? 1 : (hooks.speed?.() ?? 1)
+    // a long step draws as one frame of at most MAX_FRAME_SECONDS, as a stalled live frame does: cloth, debris and blends
+    // integrate in small steps, and a four-second one blows them apart
+    const dt = seatHeld ? Math.min(MAX_FRAME_SECONDS, booked / ENGINE.tickHz) : wall
+    const run = seatHeld ? { ticks: booked, alpha: 1 } : frame(clock, dt * speed)
+    booked = 0
+    const { ticks, alpha } = run
     const scale = hooks.timeScale?.() ?? 1
-    const elapsed = clock.paused ? 0 : dt * speed * ENGINE.tickHz
+    const elapsed = clock.paused && !seatHeld ? 0 : dt * speed * ENGINE.tickHz
     lag = Math.min(HIT_STOP_LAG.max, scale < 1 ? lag + elapsed * (1 - scale) : Math.max(0, lag - elapsed * HIT_STOP_LAG.catchUp))
+    shown += dt * speed
     for (let i = 0; i < ticks && arena.match.winner === undefined; i++) {
       prev = arena.match.heroes.map((h) => ({ ...h.position }))
-      const commands = aiCommands(arena)
-      for (const i of setup.idle ?? []) commands[i] = undefined
-      const human = arena.match.human
-      if (human !== undefined) commands[human] = hooks.human?.()
-      const events = tick(arena.match, arena.setups, commands, rules)
+      // one path for every tick, live or replayed (engine/replay.ts): the recording's player or the keys drive the
+      // played hero, the AI the rest
+      const command = feed ? feed.next(arena) : arena.match.human !== undefined ? hooks.human?.() : undefined
+      // played back, the camera looks where the player looked (its aim), from behind its hero
+      if (feed && command) {
+        cameras.set('hero')
+        cameras.yaw = (command.aimYaw / AIM_STEPS) * Math.PI * 2
+        cameras.pitch = ((command.aimPitch - AIM_STEPS) / AIM_STEPS) * Math.PI * 2
+      } else if (feed && cameras.mode === 'hero') cameras.set('free')
+      recorder?.input(arena, command)
+      const { events, released } = advance(arena, rules, setup.idle, command)
+      recorder?.after(arena)
+      const expected = checks.get(arena.match.tick)
+      if (expected !== undefined && !diverged) {
+        const got = hashState(arena.match)
+        if (got !== expected) {
+          diverged = { tick: arena.match.tick, expected, got }
+          console.warn('[replay] the match parted from its recording at tick', arena.match.tick)
+        }
+      }
       // the controlled hero died: control goes back to watching from the free camera (AE1)
-      if (releaseIfDead(arena.match)) cameras.set('free')
+      if (released) cameras.set('free')
       physics?.events(events, arena.match)
       for (const e of events) {
         if (e.type === 'cover-hit') ruins?.hit(e.index, e.health)
@@ -896,7 +975,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     ruins?.update(dt)
     for (const p of props) p.update(camera.position)
     houseView.update(arena.match, alpha)
-    drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
+    drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: shown, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const follow = arena.match.human === undefined ? cameras.follow : undefined
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined)
@@ -912,6 +991,27 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     stage.draw()
     // the HUD snapshot is built only when the store will pass it on (about 10 times a second)
     if (store.due()) store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
+    if (stepped.length) {
+      const done = stepped
+      stepped = []
+      const r = seatRow()
+      done.forEach((f) => f(r))
+    }
+  }
+  const seatRow = (): SeatRow => {
+    const m = arena.match
+    const hero = m.human ?? cameras.follow
+    const h = hero === undefined ? undefined : m.heroes[hero]
+    const c = camera.position
+    const round = (v: Vec3) => ({ x: Math.round(v.x * 1000) / 1000, y: Math.round(v.y * 1000) / 1000, z: Math.round(v.z * 1000) / 1000 })
+    return {
+      tick: m.tick,
+      hero,
+      ...(h && hero !== undefined
+        ? { position: round(h.position), velocity: round(h.velocity), airborne: h.airborne, yaw: Math.round(h.yaw * 1000) / 1000, stance: h.stance, pose: drawCtx.poses[hero], mode: drawCtx.modes[hero], body: stances[hero] ? Math.round(stances[hero]!.body * 1000) / 1000 : undefined }
+        : {}),
+      camera: { position: round(c), yaw: Math.round(cameras.yaw * 1000) / 1000, pitch: Math.round(cameras.pitch * 1000) / 1000, tooClose: cameras.tooClose(), inside: map.proxies.some((b) => b.containsPoint(c)) },
+    }
   }
   // a thrown frame must never stop the match: the next frame is booked first, and each distinct error is reported once
   const reported = new Set<string>()
@@ -963,6 +1063,22 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     resume: () => setPaused(false),
     quality: quality.current,
     insets: (views) => insets.set(views),
+    recording: () => recorder?.recording,
+    diverged: () => diverged,
+    mark: (note) => recorder?.mark(arena, note),
+    seat: {
+      hold: (on) => {
+        seatHeld = on
+        if (!on) last = performance.now()
+      },
+      held: () => seatHeld,
+      step: (n) =>
+        new Promise<SeatRow>((resolve) => {
+          booked += Math.max(0, Math.floor(n))
+          stepped.push(resolve)
+        }),
+      row: () => seatRow(),
+    },
     screen: (f) => {
       const u = stage.glow?.enabled ? stage.glow.feel : undefined
       if (!u) return

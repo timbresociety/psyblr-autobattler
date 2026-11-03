@@ -243,6 +243,48 @@ describe('ceilings (§8)', () => {
   })
 })
 
+describe('a press that comes a moment early waits for its moment (owner playtest, 2026-11-03)', () => {
+  it('a roll pressed as a climb ends rolls the moment the hero stands on top', () => {
+    const { m, h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })
+    m.human = 0
+    for (let i = 0; i < 120 && !h.mantle; i++) step(go(0, 1))
+    step(go(0, 1), h.mantle!.until - m.tick - 4)
+    // Z while still climbing: nothing yet, then the roll as soon as the hero is up
+    step(go(1, 0, MOVES.dodge))
+    expect(h.mantle).toBeDefined()
+    expect(moves()).not.toContain('roll')
+    step(go(1, 0), 6)
+    expect(moves()).toContain('roll')
+    expect(h.roll).toBeDefined()
+  })
+
+  it('a jump pressed just before landing jumps on landing; pressed high in the air, it is gone by then', () => {
+    const fall = (early: boolean) => {
+      const s = solo()
+      s.m.human = 0
+      s.step(go(0, 1, MOVES.jump))
+      s.step(go(0, 1), 12)
+      s.step(go(0, 1, MOVES.jump))
+      // out of jumps: the next press waits — from near the floor it lands in time, from the top of the arc it doesn't
+      for (let i = 0; i < 200 && !(early ? s.h.velocity.y < 0 : s.h.velocity.y < 0 && s.h.position.y < 0.6); i++) s.step(go(0, 1))
+      s.step(go(0, 1, MOVES.jump))
+      for (let i = 0; i < 200 && s.h.airborne; i++) s.step(go(0, 1))
+      s.step(go(0, 1), 3)
+      return s.moves().filter((x) => x === 'jump').length
+    }
+    expect(fall(false)).toBe(2)
+    expect(fall(true)).toBe(1)
+  })
+
+  it('the AI gets no such grace: it presses on the tick it means', () => {
+    const { h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })
+    for (let i = 0; i < 120 && !h.mantle; i++) step(go(0, 1))
+    step(go(1, 0, MOVES.dodge))
+    step(go(1, 0), 40)
+    expect(moves()).not.toContain('roll')
+  })
+})
+
 describe('mantle (§7)', () => {
   it('walking into a ledge up to 1.4 m high pulls the hero up onto it', () => {
     const { h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })

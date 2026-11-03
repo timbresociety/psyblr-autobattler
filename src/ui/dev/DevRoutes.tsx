@@ -6,12 +6,14 @@ const SoakScreen = lazy(() => import('../arena/SoakScreen').then((m) => ({ defau
 // the wardrobe and the physique bench are development tools only, never in a production build
 const WardrobeScreen = import.meta.env.DEV ? lazy(() => import('./WardrobeScreen').then((m) => ({ default: m.WardrobeScreen }))) : undefined
 const PhysiqueBench = import.meta.env.DEV ? lazy(() => import('./PhysiqueBench').then((m) => ({ default: m.PhysiqueBench }))) : undefined
+const ReplayScreen = import.meta.env.DEV ? lazy(() => import('./ReplayScreen').then((m) => ({ default: m.ReplayScreen }))) : undefined
 
 const TOOLS: readonly { path: string; label: string; hint: string; dev?: boolean }[] = [
   { path: 'bench', label: 'Bench', hint: 'Twenty heroes under load: frame time, draws, triangles' },
   { path: 'soak', label: 'Soak', hint: 'Real 10 v 10s back to back for ten minutes, graded on frame time and memory' },
   { path: 'wardrobe', label: 'Wardrobe', hint: 'Every garment on every body', dev: true },
   { path: 'physique', label: 'Physique bench', hint: 'Twelve archetypes, face close-up and jiggle', dev: true },
+  { path: 'replay', label: 'Replays', hint: 'Matches played here, tick for tick, with their F9 marks', dev: true },
   { path: 'probe', label: 'Probe', hint: 'Scene rays and sound recording from a script, in any match', dev: true },
 ]
 
@@ -26,6 +28,7 @@ export function DevRoutes() {
       <Route path="soak" element={<Suspense fallback={wait('the soak test')}>{<SoakScreen />}</Suspense>} />
       {WardrobeScreen && <Route path="wardrobe" element={<Suspense fallback={wait('the wardrobe')}>{<WardrobeScreen />}</Suspense>} />}
       {PhysiqueBench && <Route path="physique" element={<Suspense fallback={wait('the physique bench')}>{<PhysiqueBench />}</Suspense>} />}
+      {ReplayScreen && <Route path="replay/:name?" element={<Suspense fallback={wait('the replays')}>{<ReplayScreen />}</Suspense>} />}
       <Route path="probe" element={<ProbeHelp />} />
       <Route path="*" element={<DevIndex />} />
     </Routes>

@@ -7,6 +7,8 @@ import { createEffects } from '../../arena/client/effects/player'
 import { atLeast } from '../../arena/client/quality'
 import { ControlHud, MatchHud } from './MatchHud'
 import { canRender, startArena, type ArenaController, type HudState, type MatchSetup } from '../../arena/client/match-view'
+import { saveRecording } from '../../arena/client/recordings'
+import type { Recording } from '../../arena/engine/replay'
 import { Staging, type StagingResult } from './staging/Staging'
 import { arenaStaging, tryItStaging } from './staging/try-it'
 import { POVS, TAKES, takeCommand } from '../forge/reel/takes'
@@ -62,6 +64,27 @@ export function matchSetup(staged: StagingResult): MatchSetup {
   if (!staged.dummy) return setup
   teams[1] = teams[1].map((c) => ({ ...c, mods: { ...c.mods, mul: { ...c.mods?.mul, maxHealth: DUMMY_HEALTH - 1 } } }))
   return { ...setup, idle: teams[1].map((_, j) => teams[0].length + j) }
+}
+
+/** F9: mark this moment in the match's recording and save it, with a short notice of where. */
+function markMoment(c: ArenaController) {
+  const rec = c.recording()
+  if (!rec) return
+  c.mark()
+  const s = Math.floor(c.arena.match.tick / ENGINE.tickHz)
+  const at = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  void saveRecording(rec).then((name) => flash(name ? `Marked ${at}. Saved for replay.` : `Marked ${at}.`))
+}
+
+/** A line of text over the arena for two seconds. */
+function flash(text: string) {
+  const el = document.createElement('div')
+  el.className = 'arena-notice'
+  el.style.position = 'fixed'
+  el.setAttribute('role', 'status')
+  el.textContent = text
+  document.body.appendChild(el)
+  setTimeout(() => el.remove(), 2000)
 }
 
 /**
@@ -252,7 +275,8 @@ export function KitReel({ build, onClose, start }: { build: Build; onClose: () =
   )
 }
 
-export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string }) {
+/** `replay` plays a recorded match back (its player's inputs, the AI as it was) instead of a live one. */
+export function Fight({ staged, onBack, onRestart, back = 'Back to staging', replay }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string; replay?: Recording }) {
   const host = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -272,7 +296,8 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: {
     const abort = new AbortController()
     let live: ArenaController | undefined
     let detach: (() => void) | undefined
-    const setup = matchSetup(staged)
+    let offEnd: (() => void) | undefined
+    const setup = replay ? { ...matchSetup(staged), seed: replay.setup.seed, replay } : matchSetup(staged)
     startDeferred(host.current, setup, (done, total) => !cancelled && setProgress({ done, total }), abort.signal)
       .then((c) => {
         live = c
@@ -285,6 +310,13 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: {
         if (import.meta.env.DEV) Object.assign(window, { __fx: effects, __arena: c })
         c.hooks.on('events', effects.events)
         c.hooks.timeScale = effects.timeScale
+        // the recording keeps what it takes to draw this match again, and saves itself when the match ends
+        const rec = c.recording()
+        if (rec) {
+          const { formation, loadout, side, dummy, aiLevels } = staged
+          rec.view = { formation, loadout, side, dummy, aiLevels }
+          offEnd = c.hooks.on('events', (events) => void (events.some((e) => e.type === 'end') && saveRecording(rec)))
+        }
         // shake rides on top of wherever the cameras put the view this frame
         c.hooks.on('frame', (dt) => {
           effects.frame(dt)
@@ -300,6 +332,8 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: {
           (code) => {
             if (code === 'KeyP') toggleMenu.current()
             if (code === 'KeyH') setHelp((on) => !on)
+            // "this felt wrong": a mark in the recording at this tick, saved at once
+            if (code === 'F9') markMoment(c)
           },
         )
         setController(c)
@@ -309,9 +343,12 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: {
       cancelled = true
       abort.abort()
       detach?.()
+      offEnd?.()
+      const rec = live?.recording()
+      if (rec && rec.end > 0) void saveRecording(rec, true)
       live?.stop()
     }
-  }, [staged])
+  }, [staged, replay])
 
   const pause = useCallback(() => {
     if (!controller || counting || controller.arena.match.winner !== undefined) return

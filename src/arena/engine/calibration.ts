@@ -82,6 +82,12 @@ export const ENGINE = {
     prone: { speed: 0.22, height: 0.35 },
     /** Z rolls `distance` metres the way the hero steers (ahead when it does not) in `time` seconds for a stamina pip, untouchable for its first `iframes`. */
     roll: { distance: 5, time: 0.55, iframes: 0.3 },
+    /**
+     * A jump or roll pressed when it can't happen yet (mid-climb, mid-roll, a roll in the air, a third jump just before
+     * landing) waits this long and happens the moment it can, rather than being lost (owner playtest, 2026-11-03). For
+     * the hero a player controls only.
+     */
+    buffer: 0.2,
     /** X holds a guard: melee from in front lands on it, at `speed` times run speed. */
     block: { speed: 0.35, arcDegrees: 140 },
     slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
