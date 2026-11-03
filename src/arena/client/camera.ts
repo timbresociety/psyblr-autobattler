@@ -3,12 +3,18 @@ import type { Vec3 } from '../engine/maths.js'
 
 /**
  * The two cameras (U17, R13, R42, KTD16): a watching camera that works like a strategy game's (drag to turn around
- * what it looks at, right drag or WASD to slide, the wheel to zoom, click a hero to follow it), and an
- * over-the-shoulder camera behind and right of the controlled hero, reticle at screen centre. Switching blends over
- * half a second, and walls pull the camera in rather than letting it clip inside scenery.
+ * what it looks at, right drag or WASD to slide, the wheel to zoom), and an over-the-shoulder camera behind and right
+ * of the controlled hero, reticle at screen centre. A hero clicked while watching is followed from behind its shoulder
+ * too, turning with it; a drag looks around it and the wheel moves in or out, and sliding the camera lets it go.
+ * Switching blends over half a second. Walls pull the camera in at once rather than let it clip inside scenery, and it
+ * eases back out, so a wall grazing past the line of sight doesn't shake it.
  */
 
 export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2, eyes: 1.62, ahead: 0.12 }
+/** Following a hero while watching: a little further back and higher than playing it, and how fast it turns with it. */
+export const FOLLOW_CAMERA = { back: 5.6, right: 0.7, up: 2.3, pitch: -0.22, minBack: 2.5, maxBack: 14, turn: 3, lookAround: 2.5 }
+/** How fast a camera pulled in by a wall eases back out to its full distance, in metres a second. */
+const BOOM_OUT = 4
 /** How fast the camera goes to first person and back, in whole zooms a second. */
 const SCOPE_SPEED = 6
 /** Past this much of the zoom, the hero's own body hides so the camera sees out of its eyes. */
@@ -38,8 +44,13 @@ export class Cameras {
   private from = new THREE.Vector3()
   private fromQ = new THREE.Quaternion()
   mode: 'free' | 'hero' = 'free'
-  /** The hero the watching camera follows (a click on a hero or its portrait); panning ends it. */
-  follow: number | undefined
+  private followed: number | undefined
+  /** How far behind a followed hero the camera sits (the wheel moves it). */
+  followBack = FOLLOW_CAMERA.back
+  /** Seconds since the camera was last turned by hand while following: it turns with the hero again after a while. */
+  private turnedFor = Infinity
+  /** How far the shoulder camera's boom reaches now; a wall shortens it at once and it grows back slowly. */
+  private boom: number | undefined
   /**
    * First person (the canon: the right button held zooms in): `scoping` while it's held, and `scope` how far the
    * camera has gone from over the shoulder to the hero's eyes, 0 to 1. The hero's own body hides past FIRST_PERSON.
@@ -57,10 +68,41 @@ export class Cameras {
   set(mode: 'free' | 'hero') {
     if (mode === this.mode) return
     this.mode = mode
+    this.startBlend()
+    if (mode === 'free') this.free.copy(this.camera.position)
+  }
+
+  /** The hero the watching camera follows from behind its shoulder (a click on a hero or its portrait); panning ends it. */
+  get follow(): number | undefined {
+    return this.followed
+  }
+
+  set follow(hero: number | undefined) {
+    if (hero === this.followed) return
+    const was = this.followed
+    this.followed = hero
+    if (this.mode !== 'free') return
+    this.startBlend()
+    if (hero === undefined) {
+      // let go: watch on from where the camera is, looking the same way
+      this.free.copy(this.camera.position)
+      this.pitch = Math.min(this.pitch, WATCH.maxPitch)
+    } else if (was === undefined) {
+      this.pitch = FOLLOW_CAMERA.pitch
+      this.turnedFor = Infinity
+    }
+  }
+
+  private startBlend() {
     this.from.copy(this.camera.position)
     this.fromQ.copy(this.camera.quaternion)
     this.blend = 0
-    if (mode === 'free') this.free.copy(this.camera.position)
+    this.boom = undefined
+  }
+
+  /** Whether a wall has pulled the shoulder camera in so close it would sit inside the hero's head. */
+  tooClose(): boolean {
+    return this.boom !== undefined && this.boom < 1.2
   }
 
   /** Blend progress 0-1; 1 once settled. */
@@ -98,16 +140,22 @@ export class Cameras {
   /** Watching: move the camera and what it looks at together, along the ground. */
   pan(right: number, forward: number) {
     if (right === 0 && forward === 0) return
+    this.follow = undefined
     const flat = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw))
     const side = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
     this.free.addScaledVector(side, right).addScaledVector(flat, forward)
     this.free.x = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.x))
     this.free.z = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.z))
-    this.follow = undefined
   }
 
-  /** Watching: turn around the point being looked at (left drag, Q and E). */
+  /** Watching: turn around the point being looked at (left drag, Q and E), or around the hero being followed. */
   orbit(dx: number, dy: number) {
+    if (this.followed !== undefined) {
+      this.yaw -= dx * 0.005
+      this.pitch = Math.max(-HERO_CAMERA.pitchLimit, Math.min(HERO_CAMERA.pitchLimit * 0.5, this.pitch - dy * 0.004))
+      this.turnedFor = 0
+      return
+    }
     const pivot = this.pivot()
     const distance = this.free.distanceTo(pivot)
     this.yaw -= dx * 0.005
@@ -116,8 +164,12 @@ export class Cameras {
     this.free.y = Math.max(WATCH.minHeight, this.free.y)
   }
 
-  /** Watching: move in toward the point being looked at, or back out (the wheel). */
+  /** Watching: move in toward the point being looked at, or back out (the wheel); following, toward the hero. */
   zoom(factor: number) {
+    if (this.followed !== undefined) {
+      this.followBack = Math.max(FOLLOW_CAMERA.minBack, Math.min(FOLLOW_CAMERA.maxBack, this.followBack * factor))
+      return
+    }
     const pivot = this.pivot()
     const distance = Math.max(WATCH.minDistance, Math.min(WATCH.maxDistance, this.free.distanceTo(pivot) * factor))
     this.free.copy(pivot).addScaledVector(this.forward(), -distance)
@@ -125,15 +177,18 @@ export class Cameras {
   }
 
   /**
-   * `hero` is the controlled hero, `followed` the hero the watching camera keeps in view (its drawn position), if any.
+   * `hero` is the controlled hero, `followed` the hero the watching camera follows (its drawn position) and
+   * `followedYaw` the way it faces, if any.
    */
-  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3) {
-    if (this.mode === 'free' && followed) {
-      // keep the same angle and distance, and glide the point being looked at onto the followed hero
-      const pivot = this.pivot()
-      const k = 1 - Math.exp(-dt * 5)
-      this.free.x += (followed.x - pivot.x) * k
-      this.free.z += (followed.z - pivot.z) * k
+  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number) {
+    const following = this.mode === 'free' && this.followed !== undefined && followed !== undefined
+    if (following && followedYaw !== undefined) {
+      // turn with the hero, the short way round, unless the camera was turned by hand a moment ago
+      this.turnedFor += dt
+      if (this.turnedFor > FOLLOW_CAMERA.lookAround) {
+        const off = Math.atan2(Math.sin(followedYaw - this.yaw), Math.cos(followedYaw - this.yaw))
+        this.yaw += off * (1 - Math.exp(-dt * FOLLOW_CAMERA.turn))
+      }
     }
     const target = new THREE.Vector3()
     const forward = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
@@ -142,14 +197,34 @@ export class Cameras {
     if (this.mode === 'hero' && hero) {
       const s = this.scope * this.scope * (3 - 2 * this.scope)
       const pivot = new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up + (HERO_CAMERA.eyes - HERO_CAMERA.up) * s, hero.z)
-      const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
-      const desired = pivot.clone().addScaledVector(forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s).addScaledVector(right, HERO_CAMERA.right * (1 - s))
-      target.copy(pullIn(pivot, desired, proxies))
-    } else target.copy(this.free)
+      target.copy(this.shoulder(dt, pivot, forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s, HERO_CAMERA.right * (1 - s), proxies))
+    } else if (following) {
+      const pivot = new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up, followed.z)
+      target.copy(this.shoulder(dt, pivot, forward, -this.followBack, FOLLOW_CAMERA.right, proxies))
+      this.free.copy(target)
+    } else {
+      this.boom = undefined
+      target.copy(this.free)
+    }
     const look = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(target, target.clone().add(forward), new THREE.Vector3(0, 1, 0)))
     this.blend = Math.min(1, this.blend + dt / BLEND_SECONDS)
     const k = this.blend * this.blend * (3 - 2 * this.blend)
     this.camera.position.lerpVectors(this.from, target, k)
     this.camera.quaternion.slerpQuaternions(this.fromQ, look, k)
+  }
+
+  /**
+   * Where a camera `back` metres along `forward` and `right` to the side of `pivot` sits: pulled in at once by any wall
+   * between, easing back out at BOOM_OUT when the wall is gone.
+   */
+  private shoulder(dt: number, pivot: THREE.Vector3, forward: THREE.Vector3, back: number, right: number, proxies: THREE.Box3[]): THREE.Vector3 {
+    const side = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
+    const offset = forward.clone().multiplyScalar(back).addScaledVector(side, right)
+    const full = offset.length()
+    if (full < 1e-6) return pivot.clone()
+    const room = pullIn(pivot, pivot.clone().add(offset), proxies).distanceTo(pivot)
+    const reach = Math.min(full, room)
+    this.boom = this.boom === undefined || reach < this.boom ? reach : Math.min(reach, this.boom + BOOM_OUT * dt)
+    return pivot.clone().addScaledVector(offset, this.boom / full)
   }
 }

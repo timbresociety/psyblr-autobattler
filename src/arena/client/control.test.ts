@@ -74,6 +74,51 @@ describe('takeover and controls (U17)', () => {
     expect(cams.progress()).toBe(1)
   })
 
+  it('a wall behind the shoulder pulls the camera in at once, and it eases back out once the wall is gone', () => {
+    const camera = new THREE.PerspectiveCamera()
+    const cams = new Cameras(camera)
+    cams.set('hero')
+    cams.yaw = 0
+    cams.pitch = 0
+    const hero = { x: 0, y: 0, z: 0 }
+    for (let i = 0; i < 60; i++) cams.update(1 / 60, hero, [])
+    const full = camera.position.z
+    expect(full).toBeLessThan(-4)
+    const wall = new THREE.Box3(new THREE.Vector3(-5, 0, -3), new THREE.Vector3(5, 5, -2))
+    cams.update(1 / 60, hero, [wall])
+    expect(camera.position.z).toBeGreaterThan(-2)
+    // gone: one frame later it has moved out only a little, half a second later most of the way
+    cams.update(1 / 60, hero, [])
+    expect(camera.position.z).toBeGreaterThan(-2.2)
+    for (let i = 0; i < 40; i++) cams.update(1 / 60, hero, [])
+    expect(camera.position.z).toBeLessThan(full + 0.5)
+  })
+
+  it('following a hero while watching shows it from behind its shoulder, turning with it; a slide lets it go', () => {
+    const camera = new THREE.PerspectiveCamera()
+    const cams = new Cameras(camera)
+    const hero = { x: 10, y: 4.5, z: 5 }
+    cams.follow = 3
+    for (let i = 0; i < 240; i++) cams.update(1 / 60, undefined, [], hero, Math.PI / 2)
+    // facing +x, the camera is behind it (-x), a little above, and looks the same way
+    expect(camera.position.x).toBeLessThan(hero.x - 4)
+    expect(Math.abs(camera.position.z - hero.z)).toBeLessThan(1.5)
+    expect(camera.position.y).toBeGreaterThan(hero.y + 1.5)
+    const look = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
+    expect(look.x).toBeGreaterThan(0.8)
+    // turned by hand it stays turned a moment, then comes round behind the hero again
+    cams.orbit(400, 0)
+    cams.update(1 / 60, undefined, [], hero, Math.PI / 2)
+    expect(Math.abs(cams.yaw - Math.PI / 2)).toBeGreaterThan(1)
+    for (let i = 0; i < 600; i++) cams.update(1 / 60, undefined, [], hero, Math.PI / 2)
+    expect(Math.abs(cams.yaw - Math.PI / 2)).toBeLessThan(0.05)
+    const at = camera.position.clone()
+    cams.pan(1, 0)
+    expect(cams.follow).toBeUndefined()
+    for (let i = 0; i < 60; i++) cams.update(1 / 60, undefined, [])
+    expect(camera.position.distanceTo(at)).toBeLessThan(1.5)
+  })
+
   it('pulls the camera in front of a wall', () => {
     const wall = new THREE.Box3(new THREE.Vector3(-5, 0, -3), new THREE.Vector3(5, 5, -2))
     const at = pullIn(new THREE.Vector3(0, 2, 0), new THREE.Vector3(0, 2, -6), [wall])

@@ -23,7 +23,7 @@ import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing.js'
 import { cue, kitReady, playCast, playHit, type Cue, type Voice } from './sound.js'
 import { createWorldFx } from './world-fx.js'
 import { contactPoint, groundUnder } from './anchors.js'
-import { createBlasts, elementOf, feelAt, tierOf, type Blow, type Feel, type Tier } from './blast.js'
+import { createBlasts, elementOf, feelAt, nearness, tierOf, type Blow, type Feel, type Tier } from './blast.js'
 import { DebrisPool } from './debris.js'
 import { Decals } from './decals.js'
 import { Props, fracture, houseProps, pieceColor } from './props.js'
@@ -192,6 +192,9 @@ interface Ghost {
 const DUST = new THREE.Color(0.78, 0.72, 0.62)
 const AIR = new THREE.Color(0.9, 0.94, 1)
 const TEAM_GLOW = [new THREE.Color(0.31, 0.64, 1), new THREE.Color(1, 0.42, 0.29)] as const
+
+/** The most the camera shakes, metres from one side to the other: an ultimate next to it, never more. */
+const SHAKE_MAX = 0.12
 
 export function createEffects(ctrl: ArenaController, packages: (HeroPackage | undefined)[] = []): Effects {
   const { scene, arena } = ctrl
@@ -422,6 +425,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   const background = (scene.background as THREE.Color).clone()
   let hitStop = 0
   let shake = 0
+  // a shake from something at a place: less the further it is from the camera, like a blast's hit feel
+  const shakeFrom = (amount: number, at: THREE.Vector3) => void (shake = Math.max(shake, amount * nearness(at.distanceTo(ctrl.camera.position))))
   let sky = 0
   let skyColor = new THREE.Color()
 
@@ -443,7 +448,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     motif,
     ribbon: (path, c, width, life, options) => ribbons.spawn(path, c, width, life, clock, options),
     later,
-    shake: (amount) => (shake = Math.max(shake, amount)),
+    shake: (amount, at) => shakeFrom(amount, at),
     darken: (seconds, c) => {
       sky = Math.max(sky, seconds)
       skyColor = c
@@ -859,7 +864,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             sparkle({ at, count: 40, kind: 'glow', life: 0.6, size: [0.2, 0.04], color: c, speed: 9, gravity: 8 })
             show('shock', c, 0.45, (m) => m.position.set(hero.position.x, hero.position.y + 0.06, hero.position.z), (p, m) => (m.scale.setScalar(1 + 5 * p), setOpacity(m, 0.9 * (1 - p))))
             puff({ at: { x: hero.position.x, y: hero.position.y + 0.05, z: hero.position.z }, count: 10, kind: 'smoke', life: 0.9, size: [0.4, 1.4], color: DUST, speed: 3, spread: 0.4, drag: 3, up: 0.3, alpha: 0.35, spin: 0.6 })
-            shake = Math.max(shake, 0.35)
+            shakeFrom(0.35, at)
           } else if (e.what === 'charge') {
             const c = TEAM_GLOW[hero.team]
             sparkle({ at: hands, count: 18, kind: 'glow', life: 0.5, size: [0.16, 0.03], color: hot(c, 0.2), spread: 0.4, velocity: { x: 0, y: 1.5, z: 0 }, speed: 0.6 })
@@ -890,7 +895,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           puff({ at, count: 28, kind: 'smoke', life: 1.8, size: [0.8, 2.6], color: new THREE.Color(0.78, 0.7, 0.58), speed: 4, spread: 1, drag: 1.8, up: 0.5, alpha: 0.6, spin: 0.5 })
           puff({ at, count: 30, kind: 'glow', life: 0.9, size: [0.12, 0.08], color: new THREE.Color(0.45, 0.3, 0.16), speed: 8, gravity: 12, alpha: 1 })
           show('shock', new THREE.Color(1, 0.9, 0.7), 0.5, (m) => m.position.set(at.x, floorAt(at) + 0.06, at.z), (p, m) => (m.scale.setScalar(1 + 4 * p), setOpacity(m, 0.8 * (1 - p))))
-          shake = Math.max(shake, 0.4)
+          shakeFrom(0.4, at)
         } else if (e.type === 'slam') {
           // a body knocked into a wall: a heavy blast against it, dust, chunks off the wall, a crater at its foot, and
           // whatever props it went through break
@@ -1053,7 +1058,12 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       drawBatches()
     },
     timeScale: () => (hitStop > 0 ? 0.05 : 1),
-    shake: () => new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake).addScaledVector(kickAt, kick * kick),
+    // a rumble of 3 to 5 sways a second, not new noise every frame: in a brawl something always shakes the camera, and
+    // per-frame noise read as the view jittering
+    shake: () => {
+      const a = Math.min(SHAKE_MAX, shake) * 0.5
+      return new THREE.Vector3(a * Math.sin(clock * 31 + 1.3), a * Math.sin(clock * 25 + 4.1), a * Math.sin(clock * 19 + 2.6)).addScaledVector(kickAt, kick * kick)
+    },
     // two frames of ink, the first inverted, the way an anime impact frame cuts in
     screen: () => pinned ?? { blur, centre, lines, impact: impactFrames.shift() ?? 0, seed: clock },
     stats: () => ({ meshes: live.length + projectiles.size + forms.live() + ghosts.length, particles: BUDGET.glow + BUDGET.smoke + BUDGET.motifs, debris: debris.live(), decals: decals.live(), props: props?.standing() ?? 0 }),

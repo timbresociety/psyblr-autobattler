@@ -838,6 +838,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // ticks the cast clips run behind the engine: a hit-stop holds every swing at its contact frame, and the clips catch
   // up through the recovery
   let lag = 0
+  // the hero whose body the camera may hide when it's too close: the one played or followed
+  let hiddenNear: number | undefined
   const publish = () => {
     store.set(hud(arena, views, clock.paused, stage.backend, quality.current()))
     store.flush()
@@ -885,10 +887,14 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     houseView.update(arena.match, alpha)
     drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
-    const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
-    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
-    // in first person the camera looks out of the hero's eyes, so its own body isn't drawn
-    if (arena.match.human !== undefined) views[arena.match.human].root.visible = cameras.scope < FIRST_PERSON
+    const follow = arena.match.human === undefined ? cameras.follow : undefined
+    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined)
+    // in first person the camera looks out of the hero's eyes, so its own body isn't drawn; nor is the body of a hero
+    // played or followed when a wall has pulled the camera into its head
+    const near = arena.match.human ?? follow
+    if (hiddenNear !== undefined && hiddenNear !== near) views[hiddenNear].root.visible = true
+    if (near !== undefined) views[near].root.visible = cameras.scope < FIRST_PERSON && !cameras.tooClose()
+    hiddenNear = near
     range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt * speed, alpha)
     if (!stage.recovering) insets.render(stage.renderer)

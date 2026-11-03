@@ -42,7 +42,8 @@ export interface Kit {
   ribbon: (path: RibbonPath, c: THREE.Color, width: number, life: number, options?: { taper?: boolean; flicker?: boolean }) => void
   /** Run `fn` this many seconds from now (effect time, so a hit-stop holds it too). */
   later: (seconds: number, fn: () => void) => void
-  shake: (amount: number) => void
+  /** Shake the camera, less the further `at` is from it. */
+  shake: (amount: number, at: THREE.Vector3) => void
   /** Tint the sky toward a colour for a while: a charge that darkens the heavens. */
   darken: (seconds: number, c: THREE.Color) => void
   /** A frozen, glowing copy of a hero, standing where it was: an afterimage. */
@@ -296,7 +297,7 @@ export function createDraw(kit: Kit) {
         show('shock', v, 0.4, (m) => m.position.copy(ground), (p, m) => (m.scale.setScalar(reach * (0.2 + 0.5 * p)), setOpacity(m, 0.9 * (1 - p))))
         show('crack', v, 1, (m) => (m.position.set(ground.x, floorAt(ground) + 0.05, ground.z), m.scale.setScalar(reach * 0.45), (m.rotation.y = Math.random() * Math.PI * 2)), (p, m) => setOpacity(m, 1.2 * (1 - p)))
         puff({ at: { x: ground.x, y: floorAt(ground) + 0.3, z: ground.z }, count: 8, kind: 'smoke', life: 1, size: [0.4, 1.3], color: new THREE.Color(0.7, 0.64, 0.56), speed: 3, drag: 2, up: 0.7, alpha: 0.35 })
-        kit.shake(0.18)
+        kit.shake(0.18, ground)
         break
       }
       case 'flurry':

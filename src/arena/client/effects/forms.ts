@@ -79,7 +79,7 @@ export function createForms(kit: FormKit) {
         kit.darken(0.5, v)
         kit.flash(mid, v, cap.height * 1.2)
         ring(0.6, 6)
-        kit.shake(0.45)
+        kit.shake(0.45, feet)
         break
       }
       case 'implode':
@@ -87,7 +87,7 @@ export function createForms(kit: FormKit) {
         kit.sparkle({ at: mid, count: 60, kind: 'glow', life: 0.35, size: [0.16, 0.03], color: hot(v, 0.3), speed: -cap.height * 4, spread: cap.height * 1.4 })
         kit.show('shell', v, 0.3, (m) => (m.position.copy(mid), m.scale.setScalar(cap.height * 1.2)), (p, m) => (m.scale.setScalar(cap.height * 1.2 * (1 - p) + 0.05), setOpacity(m, 0.8 * (1 - p * 0.5))))
         kit.later(0.28, () => kit.flash(parts(b).mid, v, cap.height * 0.6))
-        kit.shake(0.15)
+        kit.shake(0.15, mid)
         break
       case 'swirl': {
         // ribbons spiralling up round the hero, and motes lifting with them
@@ -115,7 +115,7 @@ export function createForms(kit: FormKit) {
         kit.show('shell', v, 0.4, (m) => (m.position.copy(mid), m.scale.setScalar(cap.height * 0.4)), (p, m) => (m.scale.setScalar(cap.height * (0.4 + 0.9 * p)), setOpacity(m, 0.8 * (1 - p) ** 1.5)))
         kit.sparks(mid, v, 30, 7)
         ring(0.5, 4)
-        kit.shake(0.3)
+        kit.shake(0.3, mid)
     }
   }
 

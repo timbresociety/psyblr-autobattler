@@ -114,13 +114,16 @@ export interface BlastOptions {
 const DUST = new THREE.Color(0.74, 0.7, 0.64)
 const STONE = new THREE.Color(0.55, 0.53, 0.5)
 
+/** How much of a shake or a hit feel `distance` metres from the camera reaches it: all within 15 m, none past 50. */
+export const nearness = (distance: number) => Math.min(1, Math.max(0, 1 - (distance - 15) / 35))
+
 /**
  * The share of a blast's hit feel that reaches the screen: all of it within 15 m of the camera, none past 50 m, so a
  * brawl across the map does not shake or blur the view of this one. The blur, the speed lines and the impact frame
  * also need the blast on screen.
  */
 export function feelAt(f: Feel, distance: number, seen: boolean): Feel {
-  const w = Math.min(1, Math.max(0, 1 - (distance - 15) / 35))
+  const w = nearness(distance)
   const v = seen ? w : 0
   return { stop: w > 0.4 ? f.stop : 0, shake: f.shake * w, kick: f.kick * w, blur: f.blur * v, lines: f.lines && v > 0.5, impactFrame: f.impactFrame && v > 0.4 }
 }
