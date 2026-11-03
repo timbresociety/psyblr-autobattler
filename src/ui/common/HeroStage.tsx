@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { metarigRuntime, type MetarigRuntime } from '../../arena/client/metarig/runtime.js'
-import type { Metarig } from '../../arena/client/metarig/upgrade.js'
-import type { HeadRig } from '../../arena/client/head/build.js'
 import { ARKIT_SHAPES, type ArkitShape } from '../../kit/head/head.js'
 import { headRuntime, type HeadRuntime } from '../../arena/client/head/runtime.js'
 import * as THREE from 'three'
@@ -12,7 +10,7 @@ import { animClip, animIndex, fitClip, restPose, setOf, type RestPose } from '..
 import { characterLook, classicCharacterMaterial, V2_BODIES, type BodyName, type CharacterLook, type Gltf } from '../../arena/client/character-look.js'
 import { heroAtlas } from '../../arena/client/face/hero-face.js'
 import { restClothOn, settleCloth } from '../../arena/client/wear/cloth-model.js'
-import { classicClothMaterial, classicPrintMaterial, dressModel } from '../../arena/client/wear/dress-model.js'
+import { classicClothMaterial, classicPrintMaterial, dressModel, rigsOf } from '../../arena/client/wear/dress-model.js'
 import { isShared } from '../../arena/client/head/kit.js'
 import { loadWear } from '../../arena/client/wear/items.js'
 import type { Gender, HeroLook } from '../../charter/look.js'
@@ -529,9 +527,8 @@ export function HeroStage({ look, hue = 0.08, cue, size, hitbox = false, facing,
           }
           if (time !== undefined) mixer.update(0)
           state.sizer.add(model)
-          const metarig = model.userData.metarig as Metarig | undefined
+          const { metarig, head: headRig } = rigsOf(model)
           const meta = metarig ? metarigRuntime(metarig, model, painted.physique, gender) : undefined
-          const headRig = model.userData.head as HeadRig | undefined
           const face = headRig ? headRuntime(headRig, 3) : undefined
           // dev probe: the head's face, to set shapes by hand (window.__face.set('jawOpen', 1))
           if (face && typeof window !== 'undefined') (window as unknown as { __face?: HeadRuntime }).__face = face

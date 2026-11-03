@@ -17,12 +17,10 @@ import { GAIT_CLIPS, GAIT_TIERS, GAIT_WAYS, PACE_LIMITS, pickTier, strideSeconds
 import type { LibraryGait } from './library-gait.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { restClothOn, settleCloth } from './wear/cloth-model.js'
-import { dressModel, type ClothPrint } from './wear/dress-model.js'
+import { dressModel, rigsOf, type ClothPrint } from './wear/dress-model.js'
 import type { LoadedWear } from './wear/items.js'
 import { rigOf, RIGS, type RigNames } from './rig.js'
 import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
-import type { Metarig } from './metarig/upgrade.js'
-import type { HeadRig } from './head/build.js'
 import { headRuntime, type HeadRuntime } from './head/runtime.js'
 import { fixups as fixupsFor, type Fixups, type Gaze } from './metarig/fixups.js'
 import { extraSpread } from '../../kit/body/spread.js'
@@ -434,7 +432,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
   dressModel(scene, look, wear, { body, cloth: (map) => clothMaterial(team, map), print: (print) => printMaterial(team, print) }, atlas)
   scene.traverse((o) => {
-    if ((o as THREE.SkinnedMesh).isSkinnedMesh) o.castShadow = true
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && !o.userData.noShadow) o.castShadow = true
   })
   root.add(scene)
   const mixer = new THREE.AnimationMixer(scene)
@@ -713,7 +711,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   }
   // the metarig (metarig/): muscles, correctives and jiggle after everything else has posed the body. Jiggle and the
   // muscles' ring are kicked by any sudden change in the body's speed: a jump, a landing, a dash, a knockback
-  const metarig = scene.userData.metarig as Metarig | undefined
+  const { metarig, head: headRig } = rigsOf(scene)
   const meta = metarig ? metarigRuntime(metarig, scene, look.physique, look.build.startsWith('f') ? 'f' : 'm') : undefined
   const bodyAt = new THREE.Vector3()
   const lastAt = new THREE.Vector3()
@@ -722,7 +720,6 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const kick = new THREE.Vector3()
   let tracked = false
   // the head (head/): blinks on each hero's own beat, the eyes held inside their limit, the jaw with jawOpen
-  const headRig = scene.userData.head as HeadRig | undefined
   const face = headRig ? headRuntime(headRig, seedOf(look.build + build.heroName)) : undefined
   // the fix-ups after the clip (GAME.md §9.6): limbs spread by the body's girth, the off hand onto a two-handed grip,
   // the look and aim spread up the back; like the twist, put back before the next update

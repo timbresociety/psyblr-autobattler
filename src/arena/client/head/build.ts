@@ -281,6 +281,7 @@ export function buildHead(input: HeadInput): HeadRig | undefined {
     m.frustumCulled = false
   }
   headMesh.castShadow = true
+  cardMesh.userData.noShadow = true
   headMesh.morphTargetDictionary = cardMesh.morphTargetDictionary = Object.fromEntries(shapes.map((s, k) => [s, k]))
   headMesh.morphTargetInfluences = cardMesh.morphTargetInfluences = shapes.map(() => 0)
   mesh.parent!.add(headMesh, cardMesh)

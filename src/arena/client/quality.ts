@@ -70,6 +70,17 @@ export const atLeast = (current: QualityLevel, step: QualityLevel) => QUALITY_LE
  * The render scale (Forge goal, phase 0): a fraction of the device's pixel ratio, moved in small steps before any
  * quality level. On a Retina MacBook Air the pixel count is most of a frame's cost, and changing it compiles nothing.
  */
+/**
+ * The resolution the game is built for (GAME.md §10: 60 fps at 1440 × 900): the drawing buffer is never bigger than
+ * this many pixels, however large or dense the screen, and the scaler below only ever takes it down from there.
+ */
+export const TARGET_PIXELS = 1440 * 900
+
+/** The pixel ratio that fills a `width` × `height` (CSS pixels) canvas at no more than `TARGET_PIXELS`. */
+export function basePixelRatio(width: number, height: number, devicePixelRatio: number): number {
+  return Math.min(2, devicePixelRatio, Math.sqrt(TARGET_PIXELS / Math.max(1, width * height)))
+}
+
 export const SCALER = {
   min: 0.5,
   max: 1,

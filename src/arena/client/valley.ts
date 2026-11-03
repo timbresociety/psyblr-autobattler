@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { batchStatic } from './render/batch.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { abs, attribute, cameraPosition, color, float, length, max, mix, modelPosition, normalize, normalViewGeometry, positionLocal, positionWorld, pow, sin, smoothstep, texture, time, vec2, vec3 } from 'three/tsl'
 import type { CoverPiece } from '../engine/cover.js'
@@ -380,7 +381,9 @@ export function valley(W: number, L: number, sun: THREE.Vector3): Valley {
     if (Math.hypot(p.x, p.z) < 130) proxies.push(new THREE.Box3(new THREE.Vector3(p.x - 2, p.y, p.z - 2), new THREE.Vector3(p.x + 2, p.y + 12, p.z + 2)))
   }
 
+  // the ring of ruins round the courtyard is scenery that never breaks: one draw per material, not one per stone
   const ruins = buildRuins(perimeter(W, L))
+  batchStatic(ruins.group)
   group.add(ruins.group)
   proxies.push(...ruins.proxies)
 

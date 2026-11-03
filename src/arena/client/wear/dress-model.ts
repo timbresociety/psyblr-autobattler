@@ -18,9 +18,9 @@ import type { LoadedWear } from './items.js'
 import { refineGeometry } from '../../../kit/body/refine.js'
 import { helperSkin, planHelpers } from '../../../kit/body/helpers.js'
 import { bodySpread } from '../../../kit/body/spread.js'
-import { meshRest, upgradeRig } from '../metarig/upgrade.js'
+import { meshRest, upgradeRig, type Metarig } from '../metarig/upgrade.js'
 import { applyPosture } from '../metarig/posture.js'
-import { buildHead } from '../head/build.js'
+import { buildHead, type HeadRig } from '../head/build.js'
 
 /**
  * Dressing a cloned body for one hero: its physique and face baked into its own copy of the body's positions, the
@@ -79,6 +79,17 @@ const UNDER_ROUGH = 0.9
 const UNDER_RECEDE = 0.45
 
 /** The items with their hair cards kept, the shell under them darkened, or left off. */
+/**
+ * A dressed model's metarig and head, kept beside the model rather than in its userData: a clone (an afterimage)
+ * copies userData through JSON, which would serialise the head's meshes and textures, images and all, every time.
+ */
+const RIGS = new WeakMap<THREE.Object3D, { metarig?: Metarig; head?: HeadRig }>()
+export function rigsOf(model: THREE.Object3D): { metarig?: Metarig; head?: HeadRig } {
+  let rigs = RIGS.get(model)
+  if (!rigs) RIGS.set(model, (rigs = {}))
+  return rigs
+}
+
 export function withCards(items: DressedItem[], keep: boolean): DressedItem[] {
   return items.map((item) => {
     const card = (v: number) => item.uv[v * 2] > CARD_U
@@ -442,7 +453,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   const shape = { ...proportioned, joints: helped.joints, weights: helped.weights }
   const metarig = upgradeRig(model, mesh, plans)
   metarig.spread = bodySpread(proportioned, restNow)
-  model.userData.metarig = metarig
+  rigsOf(model).metarig = metarig
   applyPosture(model, look.physique)
   const { worn, rigid, textured, patterns } = outfitItems(look.outfit, wear, cache.base.surface.count)
   const dressed = dress({ body: shape, fields: cache.fields, worn, rigid })
@@ -465,7 +476,7 @@ export function dressModel(model: THREE.Object3D, look: CharacterLook, wear: Loa
   // the head as its own object (GAME.md §9.1): its triangles leave the body's, it brings its eyes, teeth and face shapes
   if (wear?.head && kit?.faceScale) {
     const brow = look.outfit.hair?.colors?.[0]
-    model.userData.head = buildHead({
+    rigsOf(model).head = buildHead({
       model,
       mesh,
       body: shape,

@@ -1,9 +1,13 @@
 import * as THREE from 'three'
+import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { attribute } from 'three/tsl'
 
 /**
  * Marks on the ground (GAME.md §6b): craters where heavies, slams and ultimates land, skid marks where a knockback slid
  * a body along the floor, and the elements' marks (scorch, frost, acid, char, void, a holy ring). Each lies on the
  * floor under it, tilted to a ramp's slope, and fades away; at most `DECAL_BUDGET` at once, the oldest giving way.
+ * Marks drawn alike share one instanced mesh, each mark tinted and faded on its own: a draw call per kind of picture,
+ * not one per mark (GAME.md §10).
  */
 export const DECAL_BUDGET = 64
 
@@ -124,8 +128,8 @@ const art = (a: Art) => {
 }
 
 interface Live {
-  mesh: THREE.Mesh
-  material: THREE.MeshBasicMaterial
+  /** Where the mark lies: its place, tilt and size; drawn through its slot in its picture's instanced mesh. */
+  mesh: THREE.Object3D
   kind: Mark
   born: number
   life: number
@@ -133,12 +137,23 @@ interface Live {
   live: boolean
 }
 
+/** One picture's marks: an instanced quad, a slot per mark (unused slots squashed to nothing), faded per instance. */
+interface Sheet {
+  mesh: THREE.InstancedMesh
+  fade: THREE.InstancedBufferAttribute
+  used: number
+}
+
 const flat = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)
 const UP = new THREE.Vector3(0, 1, 0)
+const tint = new THREE.Color()
+const NOTHING = new THREE.Matrix4().makeScale(0, 0, 0)
+const ADDITIVE: ReadonlySet<Art> = new Set(['frost', 'ring'])
 
 export class Decals {
   readonly group = new THREE.Group()
   private readonly marks: Live[] = []
+  private readonly sheets = new Map<Art, Sheet>()
   private next = 0
   private layer = 0
 
@@ -147,14 +162,51 @@ export class Decals {
     readonly budget = DECAL_BUDGET,
   ) {
     this.group.name = 'fx:decals'
-    for (let i = 0; i < budget; i++) {
-      const material = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
-      const mesh = new THREE.Mesh(flat, material)
-      mesh.visible = false
-      mesh.renderOrder = 1
-      this.group.add(mesh)
-      this.marks.push({ mesh, material, kind: 'scorch', born: 0, life: 0, opacity: 0, live: false })
+    for (let i = 0; i < budget; i++) this.marks.push({ mesh: new THREE.Object3D(), kind: 'scorch', born: 0, life: 0, opacity: 0, live: false })
+  }
+
+  private sheet(a: Art): Sheet {
+    let sheet = this.sheets.get(a)
+    if (sheet) return sheet
+    const geometry = flat.clone()
+    const fade = new THREE.InstancedBufferAttribute(new Float32Array(this.budget), 1)
+    geometry.setAttribute('fade', fade)
+    const material = new MeshBasicNodeMaterial({ map: art(a) ?? null, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })
+    material.blending = ADDITIVE.has(a) ? THREE.AdditiveBlending : THREE.NormalBlending
+    material.opacityNode = attribute('fade', 'float')
+    const mesh = new THREE.InstancedMesh(geometry, material, this.budget)
+    mesh.name = `decals:${a}`
+    mesh.renderOrder = 1
+    mesh.frustumCulled = false
+    mesh.visible = false
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(this.budget * 3), 3)
+    for (let i = 0; i < this.budget; i++) mesh.setMatrixAt(i, NOTHING)
+    this.group.add(mesh)
+    this.sheets.set(a, (sheet = { mesh, fade, used: 0 }))
+    return sheet
+  }
+
+  /** Write mark `i` into its picture's sheet (or clear it from `from`, the sheet it was on). */
+  private draw(i: number, from?: Art) {
+    const m = this.marks[i]
+    if (from && (!m.live || from !== ART[m.kind])) {
+      const old = this.sheet(from)
+      old.mesh.setMatrixAt(i, NOTHING)
+      old.mesh.instanceMatrix.needsUpdate = true
+      old.used--
+      old.mesh.visible = old.used > 0
     }
+    if (!m.live) return
+    const sheet = this.sheet(ART[m.kind])
+    if (from !== ART[m.kind]) {
+      sheet.used++
+      sheet.mesh.visible = true
+    }
+    m.mesh.updateMatrix()
+    sheet.mesh.setMatrixAt(i, m.mesh.matrix)
+    sheet.mesh.instanceMatrix.needsUpdate = true
+    sheet.fade.setX(i, m.opacity)
+    sheet.fade.needsUpdate = true
   }
 
   live(): number {
@@ -172,12 +224,15 @@ export class Decals {
       const same = this.marks.find((m) => m.live && m.kind === kind && Math.hypot(m.mesh.position.x - at.x, m.mesh.position.z - at.z) < m.mesh.scale.x * 0.5 && Math.abs(m.mesh.position.y - this.floorAt(at)) < 0.5)
       if (same) {
         same.born = clock
-        same.material.opacity = same.opacity
         same.mesh.scale.setScalar(Math.min(Math.max(same.mesh.scale.x, size) * 1.08, size * 1.5)).setY(1)
+        const i = this.marks.indexOf(same)
+        this.draw(i, ART[same.kind])
         return
       }
     }
-    const m = this.marks[this.next]
+    const index = this.next
+    const m = this.marks[index]
+    const was = m.live ? ART[m.kind] : undefined
     this.next = (this.next + 1) % this.budget
     const y = this.floorAt(at)
     m.kind = kind
@@ -185,14 +240,8 @@ export class Decals {
     m.life = MARK_LIFE[kind]
     m.opacity = OPACITY[kind]
     m.live = true
-    const map = art(ART[kind])
-    if (m.material.map !== (map ?? null)) {
-      m.material.map = map ?? null
-      m.material.needsUpdate = true
-    }
-    m.material.color.set(options.color ?? TINT[kind])
-    m.material.opacity = m.opacity
-    m.material.blending = kind === 'holy' || kind === 'frost' ? THREE.AdditiveBlending : THREE.NormalBlending
+    this.sheet(ART[kind]).mesh.setColorAt(index, tint.set(options.color ?? TINT[kind]))
+    this.sheet(ART[kind]).mesh.instanceColor!.needsUpdate = true
     // each new mark a hair above the last, so overlapping marks never flicker through each other
     this.layer = (this.layer + 1) % 16
     m.mesh.position.set(at.x, y + 0.02 + this.layer * 0.002, at.z)
@@ -202,7 +251,7 @@ export class Decals {
     m.mesh.rotateY(options.yaw ?? Math.random() * Math.PI * 2)
     if (kind === 'skid') m.mesh.scale.set(size, 1, options.length ?? size)
     else m.mesh.scale.set(size, 1, size)
-    m.mesh.visible = true
+    this.draw(index, was)
   }
 
   private normalAt(x: number, y: number, z: number): THREE.Vector3 {
@@ -216,16 +265,26 @@ export class Decals {
   }
 
   step(clock: number) {
-    for (const m of this.marks) {
-      if (!m.live) continue
+    this.marks.forEach((m, i) => {
+      if (!m.live) return
       const age = clock - m.born
       if (age >= m.life) {
         m.live = false
-        m.mesh.visible = false
-        continue
+        this.draw(i, ART[m.kind])
+        return
       }
       const fadeFrom = m.life * (2 / 3)
-      m.material.opacity = age < fadeFrom ? m.opacity : m.opacity * (1 - (age - fadeFrom) / (m.life - fadeFrom))
-    }
+      if (age < fadeFrom) return
+      const sheet = this.sheet(ART[m.kind])
+      sheet.fade.setX(i, m.opacity * (1 - (age - fadeFrom) / (m.life - fadeFrom)))
+      sheet.fade.needsUpdate = true
+    })
+  }
+
+  /** Draw calls the marks take now: one per picture with a mark on the floor. */
+  draws(): number {
+    let n = 0
+    for (const s of this.sheets.values()) if (s.mesh.visible) n++
+    return n
   }
 }

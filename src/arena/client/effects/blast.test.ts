@@ -113,6 +113,11 @@ describe('the MacBook Air budget (§6b)', () => {
     const decals = new Decals(() => 0)
     for (let k = 0; k < 200; k++) decals.place('crater', { x: k, y: 0, z: 0 }, 1, k * 0.01)
     expect(decals.live()).toBe(64)
+    // marks drawn alike are one instanced draw, however many lie on the floor
+    const kinds = ['crater', 'scorch', 'frost', 'acid', 'char', 'void', 'holy', 'skid'] as const
+    for (let k = 0; k < 64; k++) decals.place(kinds[k % kinds.length], { x: k * 3, y: 0, z: 5 }, 1, 2 + k * 0.01)
+    expect(decals.live()).toBe(64)
+    expect(decals.draws()).toBe(6)
     // blows on one spot deepen the crater already there instead of spending the budget
     const spot = new Decals(() => 0)
     for (let k = 0; k < 50; k++) spot.place('crater', { x: 0.1 * (k % 3), y: 0, z: 0 }, 1.3, k * 0.1)

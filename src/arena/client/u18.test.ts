@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { QUALITY_LEVELS, SCALER, atFloor, createGuard, createScaler, observe, scaleFor } from './quality.js'
+import { QUALITY_LEVELS, SCALER, TARGET_PIXELS, atFloor, basePixelRatio, createGuard, createScaler, observe, scaleFor } from './quality.js'
 import { loadAudio, saveAudio } from './settings.js'
 
 describe('frame-rate guard (U18)', () => {
@@ -70,6 +70,20 @@ describe('render scale (Forge goal, phase 0)', () => {
     const s = createScaler()
     for (let i = 0; i < 120; i++) scaleFor(s, i % 30 === 0 ? 400 : 1000 / 60)
     expect(s.scale).toBe(SCALER.max)
+  })
+})
+
+describe('the 1440 × 900 target (GAME.md §10)', () => {
+  it('the drawing buffer is never bigger than 1440 × 900 pixels, and never denser than the screen', () => {
+    // a MacBook Air's full-screen browser window, at its Retina density
+    const air = basePixelRatio(1440, 821, 2)
+    expect(1440 * air * 821 * air).toBeLessThanOrEqual(TARGET_PIXELS + 1)
+    // a large external screen
+    const big = basePixelRatio(2560, 1340, 1)
+    expect(2560 * big * 1340 * big).toBeLessThanOrEqual(TARGET_PIXELS + 1)
+    // a small window keeps the screen's own density, up to 2x
+    expect(basePixelRatio(800, 500, 1)).toBe(1)
+    expect(basePixelRatio(600, 400, 3)).toBe(2)
   })
 })
 

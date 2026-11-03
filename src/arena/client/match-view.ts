@@ -17,6 +17,7 @@ import { Cameras, FIRST_PERSON } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, releaseIfDead, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
+import { HeroLod, impostorMaterial, lodReady, POSE_EVERY, tiersFor, type Tier } from './lod.js'
 import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
 import { VIEW_FAR } from './sky.js'
@@ -25,7 +26,7 @@ import { buildGreybox } from './greybox.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
 import { CosmeticPhysics } from './physics.js'
 import { groundUnder } from './effects/anchors.js'
-import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
+import { atFloor, atLeast, basePixelRatio, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
 import { createRenderer, forceWebGLFlag, gpuTimeFlag, type Backend } from './render/renderer.js'
 import { createStore, type Store } from './store.js'
@@ -408,9 +409,9 @@ const MAX_RECOVERIES = 3
 async function createStage(host: HTMLElement) {
   const first = await newRenderer(host, forceWebGLFlag(window.location.search))
   try {
-    const pixelRatio = Math.min(2, window.devicePixelRatio)
-    // the frame-rate guard scales down from here; until 2026-10-30 nothing applied it, so a Retina screen drew at 1x
-    // and then jumped to 2x on the guard's first step down
+    // the frame-rate guard scales down from the screen's own density, held to the 1440 × 900 the game is built for;
+    // until 2026-10-30 nothing applied it, so a Retina screen drew at 1x and then jumped to 2x on its first step down
+    const pixelRatio = basePixelRatio(host.clientWidth, host.clientHeight, window.devicePixelRatio)
     first.renderer.setPixelRatio(pixelRatio)
     const scene = new THREE.Scene()
     // far enough to draw the sky dome and the mountains in front of it
@@ -425,6 +426,8 @@ async function createStage(host: HTMLElement) {
       renderer: first.renderer as Renderer,
       backend: first.backend,
       pixelRatio,
+      /** The frame-rate scaler's share of `pixelRatio` (SCALER.min to 1). */
+      scale: 1,
       scene,
       camera,
       map,
@@ -436,6 +439,8 @@ async function createStage(host: HTMLElement) {
       resize: () => {
         const w = host.clientWidth
         const h = host.clientHeight
+        stage.pixelRatio = basePixelRatio(w, h, window.devicePixelRatio)
+        stage.renderer.setPixelRatio(Math.max(0.5, stage.pixelRatio * stage.scale))
         stage.renderer.setSize(w, h, false)
         camera.aspect = w / Math.max(1, h)
         camera.updateProjectionMatrix()
@@ -457,7 +462,6 @@ async function createStage(host: HTMLElement) {
         stage.recoveries++
         stage.recovering = true
         try {
-          const pixel = stage.renderer.getPixelRatio()
           const shadows = stage.sun.castShadow
           const bloomOn = stage.glow?.enabled ?? false
           const next = await newRenderer(host, true)
@@ -470,7 +474,6 @@ async function createStage(host: HTMLElement) {
           stage.canvas = next.canvas
           stage.renderer = next.renderer
           stage.backend = next.backend
-          stage.renderer.setPixelRatio(pixel)
           stage.sun.castShadow = shadows
           stage.glow = await bloomPipeline(stage.renderer, scene, camera)
           if (stage.glow) stage.glow.enabled = bloomOn
@@ -530,8 +533,7 @@ function qualityControl(stage: Stage) {
   let current: QualityLevel = 'full'
   let frame = 0
   const applyScale = () => {
-    lastScale = scaler.scale
-    stage.renderer.setPixelRatio(Math.max(0.75, stage.pixelRatio * scaler.scale))
+    lastScale = stage.scale = scaler.scale
     stage.resize()
   }
   if (scaler.scale < SCALER.max) applyScale()
@@ -563,20 +565,43 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[] },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
-  const { arena, views, animators, stances, physics, camera } = ctx
+  const { arena, views, animators, stances, physics, camera, lods, impostors } = ctx
+  const ats = arena.match.heroes.map((h, i) => {
+    const p = prev[i]
+    const c = h.position
+    return { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
+  })
+  // each hero's level of detail from how far it stands from the camera (GAME.md §10)
+  const tiers = ctx.tiers
+  tiersFor(
+    ats.map((a) => Math.sqrt((a.x - camera.position.x) ** 2 + (a.y - camera.position.y) ** 2 + (a.z - camera.position.z) ** 2)),
+    tiers,
+  ).forEach((t, i) => (tiers[i] = t))
   return arena.match.heroes.map((h, i) => {
     const p = prev[i]
     const c = h.position
-    const at = { x: p.x + (c.x - p.x) * frame.alpha, y: p.y + (c.y - p.y) * frame.alpha, z: p.z + (c.z - p.z) * frame.alpha }
+    const at = ats[i]
     const moved = Math.sqrt((c.x - p.x) ** 2 + (c.z - p.z) ** 2)
     const view = views[i]
     view.setForm?.(h.formUntil > 0, h.size)
-    // under load, heroes far from the camera animate every other frame
-    const far = frame.slowFar && camera.position.distanceToSquared(view.root.position) > 900
+    const tier = tiers[i]
+    lods?.[i].apply(tier)
+    const card = impostors?.[i]
+    if (card) {
+      card.visible = tier === 'impostor' && view.root.visible
+      if (card.visible) {
+        const { height } = capsule(h)
+        card.scale.set(height * 0.5, height, 1)
+        card.position.set(at.x, at.y + height / 2, at.z)
+      }
+    }
+    // mid heroes animate at 30 Hz and far ones at 15; under load, twice as seldom again; an impostor not at all
+    const every = POSE_EVERY[tier] * (frame.slowFar && tier !== 'near' ? 2 : 1)
+    const far = tier !== 'near'
     // casts run on the engine's clock, between ticks too, so a clip's release frame lands on its release tick
     const pose = settle(animators[i], h, moved, frame.clock, frame.dt)
     const scaled = frame.dt * frame.timeScale
@@ -596,8 +621,7 @@ function drawHeroes(
     // standing on the ground, the feet stay where they land
     if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading, h.sprinting)
     view.aim?.(h.yaw, h.pitch)
-    if (!far) view.pose(pose, frame.t + i, scaled, moving)
-    else if ((frame.frameNo + i) % 2 === 0) view.pose(pose, frame.t + i, scaled * 2, moving)
+    if (every && (frame.frameNo + i) % every === 0) view.pose(pose, frame.t + i, scaled * every, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
     const fallen = view.animatesDeath ? undefined : physics?.fallenPose(i)
     if (fallen) {
@@ -679,6 +703,24 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   )
   signal?.throwIfAborted()
   views.forEach((v) => scene.add(v.root))
+  // every hero's simplified meshes are made now, while loading, not in the frame it first walks off; a hero whose
+  // view the simplifier can't take is drawn whole
+  const lods = await lodReady()
+    .then(() => views.map((v) => {
+      const lod = new HeroLod(v.root)
+      lod.prepare()
+      return lod
+    }))
+    .catch(() => undefined)
+  signal?.throwIfAborted()
+  const cards = TEAM_COLORS.map((c) => impostorMaterial(new THREE.Color(c)))
+  const impostors = arena.match.heroes.map((h) => {
+    const card = new THREE.Sprite(cards[h.team])
+    card.name = 'impostor'
+    card.visible = false
+    scene.add(card)
+    return card
+  })
   // the arena comes from the engine's own cover, so what is drawn is exactly what blocks (R25): the House of
   // Instinct in grey boxes (GAME.md §8), or the ruins
   const cover = arena.match.cover
@@ -702,6 +744,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
 
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors }
+  if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
   const quality = qualityControl(stage)
@@ -776,7 +820,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     }
     physics?.step(dt)
     ruins?.update(dt)
-    drawn = drawHeroes({ arena, views, animators, stances, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
+    drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
