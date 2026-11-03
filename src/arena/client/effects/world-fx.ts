@@ -18,6 +18,8 @@ export interface FxKit {
   flash: (at: THREE.Vector3, color: THREE.Color, size: number) => void
   /** A hero's colour for a skill: the slot's recipe colour, or its main skill's. */
   tint: (hero: number, slot?: BuildSlot) => THREE.Color
+  /** The height of the floor under a point. */
+  floorAt: (p: { x: number; y: number; z: number }) => number
 }
 
 const TEAM = [new THREE.Color(0.31, 0.64, 1), new THREE.Color(1, 0.42, 0.29)]
@@ -69,6 +71,7 @@ function ringTexture(): THREE.Texture {
 }
 
 export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
+  const { floorAt } = kit
   const { scene, arena } = ctrl
   const group = new THREE.Group()
   group.name = 'world-fx'
@@ -102,13 +105,13 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     slab.add(edges)
     slab.castShadow = true
     root.add(slab)
-    root.position.set(e.at.x, 0, e.at.z)
+    root.position.set(e.at.x, floorAt(e.at), e.at.z)
     root.scale.y = 0.02
     group.add(root)
     walls.set(e.index, { root, slab, born: clock })
     const at = v3(e.at)
     kit.puff({ at, count: 16, kind: 'smoke', life: 1.2, size: [0.6, 1.8], color: new THREE.Color(0.75, 0.7, 0.62), speed: 2.4, spread: Math.max(e.hx, e.hz), drag: 1.6, up: 0.6, alpha: 0.45, spin: 0.4 })
-    kit.sparkle({ at: { x: at.x, y: 0.3, z: at.z }, count: 24, kind: 'glow', life: 0.6, size: [0.14, 0.03], color: color.clone().lerp(new THREE.Color(1, 1, 1), 0.4), speed: 4, spread: Math.max(e.hx, e.hz), velocity: { x: 0, y: 3, z: 0 } })
+    kit.sparkle({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: 24, kind: 'glow', life: 0.6, size: [0.14, 0.03], color: color.clone().lerp(new THREE.Color(1, 1, 1), 0.4), speed: 4, spread: Math.max(e.hx, e.hz), velocity: { x: 0, y: 3, z: 0 } })
   }
 
   function dropWall(index: number) {
@@ -116,7 +119,7 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     if (!w || w.dying !== undefined) return
     w.dying = clock
     const at = w.root.position
-    kit.puff({ at: { x: at.x, y: 1, z: at.z }, count: 22, kind: 'smoke', life: 1.5, size: [0.7, 2.2], color: new THREE.Color(0.72, 0.68, 0.62), speed: 3, spread: 1.5, drag: 1.8, up: 0.4, alpha: 0.5 })
+    kit.puff({ at: { x: at.x, y: floorAt(at) + 1, z: at.z }, count: 22, kind: 'smoke', life: 1.5, size: [0.7, 2.2], color: new THREE.Color(0.72, 0.68, 0.62), speed: 3, spread: 1.5, drag: 1.8, up: 0.4, alpha: 0.5 })
   }
 
   function placeTurret(e: Extract<MatchEvent, { type: 'turret' }>) {
@@ -134,12 +137,12 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     head.add(body, barrel, core)
     root.add(base, post, head)
     for (const m of [base, post, body, barrel]) m.castShadow = true
-    root.position.set(e.at.x, 0, e.at.z)
+    root.position.set(e.at.x, floorAt(e.at), e.at.z)
     root.scale.setScalar(0.02)
     group.add(root)
     turrets.set(e.id, { root, head, core, born: clock, recoil: 0 })
-    kit.flash(v3({ x: e.at.x, y: 0.6, z: e.at.z }), color, 1.2)
-    kit.puff({ at: { x: e.at.x, y: 0.2, z: e.at.z }, count: 10, kind: 'smoke', life: 0.9, size: [0.4, 1.2], color: new THREE.Color(0.7, 0.68, 0.64), speed: 2, drag: 2, up: 0.5, alpha: 0.4 })
+    kit.flash(v3({ x: e.at.x, y: floorAt(e.at) + 0.6, z: e.at.z }), color, 1.2)
+    kit.puff({ at: { x: e.at.x, y: floorAt(e.at) + 0.2, z: e.at.z }, count: 10, kind: 'smoke', life: 0.9, size: [0.4, 1.2], color: new THREE.Color(0.7, 0.68, 0.64), speed: 2, drag: 2, up: 0.5, alpha: 0.4 })
   }
 
   function turretShot(e: Extract<MatchEvent, { type: 'turret' }>) {
@@ -163,7 +166,7 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     const disc = new THREE.Mesh(discGeo, mat(e.trap ? 0.35 : 0.7))
     const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(1.5), transparent: true, opacity: e.trap ? 0.5 : 0.85, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }))
     for (const m of [disc, ring]) {
-      m.position.set(e.at.x, 0.04, e.at.z)
+      m.position.set(e.at.x, floorAt(e.at) + 0.04, e.at.z)
       m.scale.setScalar(e.radius)
       m.renderOrder = 2
       group.add(m)
@@ -179,9 +182,9 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
       // a trap snapping shut: a burst where it caught someone, in its owner's colour
       const at = v3(e.at)
       const color = TEAM[teamOf(e.owner)]
-      kit.flash(new THREE.Vector3(at.x, 0.5, at.z), color, 2)
-      kit.sparkle({ at: { x: at.x, y: 0.3, z: at.z }, count: 30, kind: 'glow', life: 0.5, size: [0.16, 0.03], color, speed: 6, spread: e.radius * 0.6 })
-      kit.puff({ at: { x: at.x, y: 0.2, z: at.z }, count: 10, kind: 'smoke', life: 1, size: [0.5, 1.4], color: new THREE.Color(0.6, 0.55, 0.5), speed: 2.5, drag: 2, up: 0.6, alpha: 0.4 })
+      kit.flash(new THREE.Vector3(at.x, floorAt(at) + 0.5, at.z), color, 2)
+      kit.sparkle({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: 30, kind: 'glow', life: 0.5, size: [0.16, 0.03], color, speed: 6, spread: e.radius * 0.6 })
+      kit.puff({ at: { x: at.x, y: floorAt(at) + 0.2, z: at.z }, count: 10, kind: 'smoke', life: 1, size: [0.5, 1.4], color: new THREE.Color(0.6, 0.55, 0.5), speed: 2.5, drag: 2, up: 0.6, alpha: 0.4 })
     }
   }
 
@@ -250,7 +253,7 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
         // a field cast around its owner moves with it, as the engine's does
         const live = arena.match.fields?.find((x) => x.id === id)
         if (live?.follow && drawn[f.owner]) {
-          f.disc.position.set(drawn[f.owner].x, 0.04, drawn[f.owner].z)
+          f.disc.position.set(drawn[f.owner].x, floorAt(drawn[f.owner]) + 0.04, drawn[f.owner].z)
           f.ring.position.copy(f.disc.position)
         }
         // a trap is hidden from the player it is set for

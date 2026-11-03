@@ -22,6 +22,11 @@ import { createForms } from './forms.js'
 import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing.js'
 import { cue, kitReady, playCast, playHit, type Cue, type Voice } from './sound.js'
 import { createWorldFx } from './world-fx.js'
+import { contactPoint, groundUnder } from './anchors.js'
+import { createBlasts, elementOf, feelAt, tierOf, type Blow, type Feel, type Tier } from './blast.js'
+import { DebrisPool } from './debris.js'
+import { Decals } from './decals.js'
+import { Props, fracture, houseProps, pieceColor } from './props.js'
 import {
   RibbonPool,
   SpritePool,
@@ -69,9 +74,28 @@ export interface Effects {
   frame: (dt: number) => void
   /** Animation time scale: near zero during a hit-stop (render only; the engine keeps ticking). */
   timeScale: () => number
-  /** Camera shake offset to add this frame. */
+  /** Camera shake and kick offset to add this frame. */
   shake: () => THREE.Vector3
-  stats: () => { meshes: number; particles: number }
+  /** The screen's share of the hit feel this frame (§6b): radial blur and speed lines toward a blast, the impact frame. */
+  screen: () => ScreenFeel
+  stats: () => { meshes: number; particles: number; debris: number; decals: number; props: number }
+  /** For checking the look by hand (dev scripts): play a blast of a tier at a point. */
+  blast: (tier: Tier, at: { x: number; y: number; z: number }, color?: THREE.Color) => void
+  /** For checking the look by hand: hold the screen's hit feel at this until unpinned (a still of a two-frame flash). */
+  pin: (screen?: ScreenFeel) => void
+}
+
+export interface ScreenFeel {
+  /** Radial blur toward `centre`, 0-1. */
+  blur: number
+  /** Where the blast is on screen, 0-1 from the top left. */
+  centre: [number, number]
+  /** Speed lines streaming out of `centre`, 0-1. */
+  lines: number
+  /** The anime impact frame: 0 off, 1 ink, 2 ink inverted. */
+  impact: number
+  /** Changes every frame, so the lines flicker. */
+  seed: number
 }
 
 type EnergyMaterial = MeshBasicNodeMaterial & { tint: { value: THREE.Color }; fade: { value: number } }
@@ -349,6 +373,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     return out
   })
   const recipe = (hero: number, slot: BuildSlot): EffectRecipe => recipes[hero][slot]
+  // ground effects lie on the floor under them, which on the house is a slab 4.5 m up, a deck or a ramp
+  const floorAt = (p: { x: number; y: number; z: number }) => groundUnder(arena.match, p)
 
   const kit: Kit = {
     camera: () => ctrl.camera,
@@ -365,9 +391,58 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     },
     ghost,
     fans,
+    floorAt,
   }
   const draw = createDraw(kit)
   const { flash, sparks } = draw
+
+  // what big hits leave in the world (§6b): debris, marks on the floor, and the house's breakable props
+  const debris = new DebrisPool(floorAt)
+  const decals = new Decals(floorAt)
+  const props = arena.match.map === 'house' ? new Props(houseProps(floorAt)) : undefined
+  scene.add(debris.mesh, decals.group)
+  if (props) scene.add(props.group)
+  // the hit feel the screen shows: a kick along the blow, radial blur and speed lines toward it, the impact frame
+  const kickAt = new THREE.Vector3()
+  let kick = 0
+  let blur = 0
+  let lines = 0
+  // the impact frame's frames still to show, one taken each time the screen is drawn: ink inverted, then ink
+  let impactFrames: number[] = []
+  const centre: [number, number] = [0.5, 0.5]
+  const onScreen = new THREE.Vector3()
+  const feel = (full: Feel, at: THREE.Vector3, dir?: THREE.Vector3) => {
+    onScreen.copy(at).project(ctrl.camera)
+    const f = feelAt(full, at.distanceTo(ctrl.camera.position), onScreen.z < 1 && Math.abs(onScreen.x) <= 1 && Math.abs(onScreen.y) <= 1)
+    hitStop = Math.max(hitStop, f.stop)
+    shake = Math.max(shake, f.shake)
+    if (f.kick > kick) {
+      kick = f.kick
+      kickAt.copy(dir ?? at.clone().sub(ctrl.camera.position)).setY(0).normalize()
+    }
+    if (f.blur || f.lines || f.impactFrame) {
+      centre[0] = THREE.MathUtils.clamp(0.5 + onScreen.x * 0.5, 0, 1)
+      centre[1] = THREE.MathUtils.clamp(0.5 - onScreen.y * 0.5, 0, 1)
+      blur = Math.max(blur, f.blur)
+      if (f.lines) lines = 1
+      if (f.impactFrame) impactFrames = [2, 1]
+    }
+  }
+  const blast = createBlasts({ flash, sparkle, puff, show, later, floorAt, camera: () => ctrl.camera, debris, decals, clock: () => clock, feel })
+  // how far each tier's blast reaches into the props round it
+  const PROP_REACH: Record<Tier, number> = { light: 0.4, heavy: 1.2, finisher: 1.6, spell: 1.8, ultimate: 3.5 }
+  const blastAt = (tier: Tier, at: THREE.Vector3, c: THREE.Color, options: Parameters<typeof blast>[3] = {}) => {
+    blast(tier, at, c, options)
+    props?.blast(at, Math.max(PROP_REACH[tier], options.radius ?? 0), debris, tier === 'ultimate' ? 2 : 1)
+  }
+  // the blow each hero's basic attack is: the cast says whether it is the chain's finisher or a held heavy
+  const blows = new Map<number, Blow | undefined>()
+  // one hit feel a tick from each source's skill: an area spell landing on five heroes shakes once
+  let felt = new Set<string>()
+  let feltTick = -1
+  // where a knockback set off from, for the skid it leaves
+  const slides = new Map<number, THREE.Vector3>()
+  let pinned: ScreenFeel | undefined
   // transformations: how each arrives, what surrounds it, what it leaves behind and what it wears (forms.ts)
   const forms = createForms({
     ...kit,
@@ -384,7 +459,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   }
 
   // walls, turrets, fields, traps and stealth: what skills leave in the world
-  const world = createWorldFx(ctrl, { sparkle, puff, flash, tint: (hero, slot = 'active1') => vivid(recipe(hero, slot), 0) })
+  const world = createWorldFx(ctrl, { sparkle, puff, flash, tint: (hero, slot = 'active1') => vivid(recipe(hero, slot), 0), floorAt })
 
   const aimOf = (hero: number) => {
     const h = arena.match.heroes[hero]
@@ -397,6 +472,23 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     const body = v3(chest(arena.match.heroes[hero]))
     const palm = ctrl.views[hero]?.hand?.(dir, new THREE.Vector3())
     return palm && palm.distanceToSquared(body) < 9 ? palm : body
+  }
+  // where a shot leaves (§6): the far end of what the hand holds (a gun's muzzle, a staff's head), else the palm
+  const muzzleOf = (hero: number, dir: THREE.Vector3) => {
+    const palm = handOf(hero, dir)
+    const tip = ctrl.views[hero]?.tip?.(new THREE.Vector3())
+    return tip && tip.distanceToSquared(palm) < 4 ? tip : palm
+  }
+  // a spell or an ultimate that lands somewhere (a shot, a zone, a leap, a nova) bursts there once; a beam, a cone or a
+  // blow bursts on each body it reaches
+  const landsAsBlast = (hero: number, slot: BuildSlot) =>
+    (slot === 'active1' || slot === 'active2' || slot === 'ultimate') && ['projectile', 'zone', 'leap', 'aura'].includes(arena.setups[hero].kit[slot].delivery.kind)
+  // where a blow or shot from `source` meets `target`'s body (§6): its weapon tip or muzzle, onto the victim's capsule
+  const contactOf = (source: number, target: number) => {
+    const h = arena.match.heroes[target]
+    const cap = capsule(h)
+    const drawnAt = ctrl.positions()[target] ?? h.position
+    return contactPoint({ feet: drawnAt, radius: cap.radius, height: cap.height }, muzzleOf(source, aimOf(source)))
   }
   const newHalo = () => spareHalos.pop() ?? new THREE.Sprite(new THREE.SpriteMaterial({ map: haloMap, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
 
@@ -494,12 +586,12 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     trail.mesh.visible = true
     if (!trail.mesh.parent) scene.add(trail.mesh)
     const wakes = r.layers.filter((l) => l.phase === 'travel' && (l.primitive === 'sparks' || l.primitive === 'smoke' || l.primitive === 'motif'))
-    // drawn leaving the palm, and eased onto the engine's line over its first moment
-    const from = handOf(e.hero, aimOf(e.hero))
+    // drawn leaving the muzzle (or the palm), and eased onto the engine's line over its first moment
+    const from = muzzleOf(e.hero, aimOf(e.hero))
     const lead = from.clone().sub(v3(e.from))
     body.position.copy(from)
     projectiles.set(e.id, { body, kind, shape, halo, trail, skin, recipe: r, size, wakes, last: from, lead, born: clock })
-    // a muzzle flash where it leaves the hand
+    // a muzzle flash where it leaves
     flash(from, v, Math.max(0.4, size * 2.2))
   }
 
@@ -575,6 +667,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       world.events(events)
       for (const e of events) {
         if (e.type === 'cast') {
+          if (e.slot === 'basic') blows.set(e.hero, e.melee)
           // the wind-up (phase 1): the charge gathers and the circle opens; what the skill does waits for its release
           const r = recipe(e.hero, e.slot)
           const hero = arena.match.heroes[e.hero]
@@ -627,6 +720,10 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           // arrival is the form's own, from its event)
           if (family === 'self' && !transformOf(arena.setups[e.hero].kit[e.slot])) for (const l of r.layers) if (l.phase === 'impact' || l.phase === 'linger') draw.layer(l, r, at, capsule(hero).height / 2, { dir, caster: at })
           // a movement skill has just moved the hero; its way runs from where the hero was last drawn
+          // the cast flash (§6): off the hand or weapon, on the release; a shot flashes at its muzzle as it leaves, and a
+          // blow's light is its swing
+          const kind = arena.setups[e.hero].kit[e.slot].delivery.kind
+          if (family !== 'self' && family !== 'movement' && kind !== 'projectile' && kind !== 'melee') flash(handOf(e.hero, dir), vivid(r, 0), e.slot === 'ultimate' ? 1.4 : 0.8)
           if (family === 'movement') {
             const was = ctrl.positions()[e.hero]
             const from = was ? v3(was) : v3(hero.position)
@@ -640,11 +737,10 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           launch(e)
         } else if (e.type === 'impact') {
           const r = recipe(e.hero, e.slot)
-          const caster = arena.match.heroes[e.hero]
           const end = v3(e.at)
           // a beam runs from the hands to where the engine stopped it, wall or full range
           const beam = r.delivery === 'beam'
-          const from = beam ? handOf(e.hero, aimOf(e.hero)) : v3(chest(caster))
+          const from = handOf(e.hero, aimOf(e.hero))
           const length = beam ? from.distanceTo(end) : e.range
           const dir = beam && length > 0.01 ? end.clone().sub(from).normalize() : aimOf(e.hero)
           const base = baseSize(e as ImpactEvent, arena.setups[e.hero].kit[e.slot].delivery.projectileRadius)
@@ -657,21 +753,28 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             const place = l.primitive === 'beam' || l.primitive === 'cone' ? from : end
             draw.layer(l, r, place, base, { dir, range: length, arc: e.arcDegrees, caster: from })
           }
+          // a spell or an ultimate bursts where it lands (§6b); one that only reaches what it touches bursts on each hit
+          if (landsAsBlast(e.hero, e.slot)) {
+            const template = arena.setups[e.hero].kit[e.slot]
+            blastAt(e.slot === 'ultimate' ? 'ultimate' : 'spell', end, vivid(r, 0), { radius: e.radius, mark: elementOf(template.tags), dir })
+          }
         } else if (e.type === 'hit') {
-          const feel = hitFeel(e)
-          const target = arena.match.heroes[e.target]
-          const at = v3(chest(target))
+          // an anime hit (§6, §6b): a blast at the point the blow or shot met the body, of the tier its cause sets (a
+          // light hit, a heavy, the chain's finisher, a spell, an ultimate), and a little blood
+          const at = contactOf(e.source, e.target)
           const r = recipe(e.source, e.slot)
           const c = vivid(r, 1)
-          // an anime hit: a star flash, sparks thrown off the body, a shock ring on heavy blows, a little blood
-          flash(at, c, e.heavy ? 1.2 : 0.7)
-          sparks(at, c, e.heavy ? 18 : 8, e.heavy ? 6 : 4, 0.1)
-          if (e.heavy) {
-            show('face', hot(c), 0.3, (m) => (m.position.copy(at), m.lookAt(ctrl.camera.position)), (p, m) => (m.scale.setScalar(0.5 + 1.6 * p), setOpacity(m, 1 - p)))
-          }
-          if (feel.blood) puff({ at, count: Math.ceil(feel.blood / 3), kind: 'glow', life: 0.5, size: [0.08, 0.03], color: new THREE.Color(0.6, 0.02, 0.02), speed: 3.5, gravity: 14, alpha: 0.9 })
-          hitStop = Math.max(hitStop, feel.hitStop)
-          shake = Math.max(shake, feel.shake)
+          const tier = tierOf(e.slot, e.heavy, e.slot === 'basic' ? blows.get(e.source) : undefined)
+          if (arena.match.tick !== feltTick) ((felt = new Set()), (feltTick = arena.match.tick))
+          const key = `${e.source}:${e.slot}`
+          const dir = at.clone().sub(muzzleOf(e.source, aimOf(e.source))).setY(0)
+          if (dir.lengthSq() > 1e-6) dir.normalize()
+          // a spell that burst where it landed already shook the screen; its victims only spark
+          if (landsAsBlast(e.source, e.slot)) blastAt('light', at, c, { dir, quiet: true })
+          else blastAt(tier, at, c, { dir, quiet: felt.has(key) })
+          felt.add(key)
+          const bleed = hitFeel(e).blood
+          if (bleed) puff({ at, count: Math.ceil(bleed / 3), kind: 'glow', life: 0.5, size: [0.08, 0.03], color: new THREE.Color(0.6, 0.02, 0.02), speed: 3.5, gravity: 14, alpha: 0.9 })
           if (kitReady()) cue(e.heavy ? 'hit-heavy' : 'hit', spot(at))
           else playHit(e.heavy)
         } else if (e.type === 'form') {
@@ -691,6 +794,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           // a heavy blow's charge glows at the hands, a guard throws sparks
           const hero = arena.match.heroes[e.hero]
           const at = v3(chest(hero))
+          const hands = handOf(e.hero, aimOf(e.hero))
           if (e.what === 'launch') {
             const c = new THREE.Color(1, 0.86, 0.5)
             sparkle({ at, count: 40, kind: 'glow', life: 0.6, size: [0.2, 0.04], color: c, speed: 9, gravity: 8 })
@@ -699,8 +803,8 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
             shake = Math.max(shake, 0.35)
           } else if (e.what === 'charge') {
             const c = TEAM_GLOW[hero.team]
-            sparkle({ at, count: 18, kind: 'glow', life: 0.5, size: [0.16, 0.03], color: hot(c, 0.2), spread: 0.4, velocity: { x: 0, y: 1.5, z: 0 }, speed: 0.6 })
-          } else if (e.what === 'blocked') sparkle({ at, count: 16, kind: 'glow', life: 0.35, size: [0.1, 0.02], color: new THREE.Color(1, 0.95, 0.75), speed: 6, gravity: 10 })
+            sparkle({ at: hands, count: 18, kind: 'glow', life: 0.5, size: [0.16, 0.03], color: hot(c, 0.2), spread: 0.4, velocity: { x: 0, y: 1.5, z: 0 }, speed: 0.6 })
+          } else if (e.what === 'blocked') sparkle({ at: e.by !== undefined ? contactOf(e.by, e.hero) : at, count: 16, kind: 'glow', life: 0.35, size: [0.1, 0.02], color: new THREE.Color(1, 0.95, 0.75), speed: 6, gravity: 10 })
         } else if (e.type === 'passive') {
           // F: switched on, a ring in the passive's colours rises up the body; switched off, it drains to the floor
           const hero = arena.match.heroes[e.hero]
@@ -717,12 +821,42 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           sparkle({ at, count: 8, kind: 'glow', life: 0.4, size: [0.08, 0.02], color: new THREE.Color(1, 0.85, 0.6), speed: 4, gravity: 10 })
           puff({ at, count: 3, kind: 'smoke', life: 0.9, size: [0.3, 1.0], color: new THREE.Color(0.85, 0.8, 0.7), speed: 0.8, drag: 2, alpha: 0.5, spin: 0.8 })
         } else if (e.type === 'cover-broken') {
-          // a barricade bursting: a cloud of dust, splinters flying, a shockwave and a thump in the camera
+          // a barricade, a glass partition or a card bridge bursting into its own pieces (pre-cut, §6b): a cloud of dust,
+          // a shockwave and a thump in the camera
           const at = v3(e.at)
+          const piece = arena.match.cover?.pieces[e.index]
+          if (piece) debris.shatter(fracture(piece, e.index + 1), at, { speed: piece.look === 'glass' ? 6 : 4, up: 3, color: pieceColor(piece), life: piece.look === 'glass' ? 3 : 6 })
+          if (piece?.look === 'glass') sparkle({ at: { x: at.x, y: (piece.base + piece.top) / 2, z: at.z }, count: 24, kind: 'star', life: 0.5, size: [0.18, 0.03], color: new THREE.Color(0.8, 0.95, 1), speed: 5, gravity: 9, spin: 8 })
+          props?.blast(at, 2, debris)
           puff({ at, count: 28, kind: 'smoke', life: 1.8, size: [0.8, 2.6], color: new THREE.Color(0.78, 0.7, 0.58), speed: 4, spread: 1, drag: 1.8, up: 0.5, alpha: 0.6, spin: 0.5 })
           puff({ at, count: 30, kind: 'glow', life: 0.9, size: [0.12, 0.08], color: new THREE.Color(0.45, 0.3, 0.16), speed: 8, gravity: 12, alpha: 1 })
-          show('shock', new THREE.Color(1, 0.9, 0.7), 0.5, (m) => m.position.set(at.x, 0.06, at.z), (p, m) => (m.scale.setScalar(1 + 4 * p), setOpacity(m, 0.8 * (1 - p))))
+          show('shock', new THREE.Color(1, 0.9, 0.7), 0.5, (m) => m.position.set(at.x, floorAt(at) + 0.06, at.z), (p, m) => (m.scale.setScalar(1 + 4 * p), setOpacity(m, 0.8 * (1 - p))))
           shake = Math.max(shake, 0.4)
+        } else if (e.type === 'slam') {
+          // a body knocked into a wall: a heavy blast against it, dust, chunks off the wall, a crater at its foot, and
+          // whatever props it went through break
+          const hero = arena.match.heroes[e.hero]
+          const at = v3(e.at).setY(e.at.y + capsule(hero).height * 0.45)
+          const back = slides.get(e.hero)
+          const dir = back ? v3(e.at).sub(back).setY(0) : undefined
+          if (dir && dir.lengthSq() > 1e-6) dir.normalize().negate()
+          blastAt(e.speed > 20 ? 'finisher' : 'heavy', at, DUST, { dir })
+        } else if (e.type === 'knockback') {
+          // a slide along the floor leaves a skid from where the blow landed to where the body stopped
+          const hero = arena.match.heroes[e.hero]
+          if (e.phase === 'start') {
+            if (!hero.airborne) slides.set(e.hero, v3(hero.position))
+            else slides.delete(e.hero)
+          } else {
+            const from = slides.get(e.hero)
+            slides.delete(e.hero)
+            const to = v3(hero.position)
+            const run = to.clone().sub(from ?? to).setY(0)
+            if (from && !hero.airborne && Math.abs(to.y - from.y) < 0.3 && run.length() > 1) {
+              decals.place('skid', from.clone().add(to).multiplyScalar(0.5), 0.9, clock, { yaw: Math.atan2(run.x, run.z), length: run.length() })
+              puff({ at: { x: to.x, y: to.y + 0.1, z: to.z }, count: 5, kind: 'smoke', life: 0.8, size: [0.3, 1], color: DUST, speed: 1.5, drag: 3, up: 0.3, alpha: 0.3, spin: 0.5 })
+            }
+          }
         } else if (e.type === 'move') {
           // moving like Deadlock (phase 2): dust kicked up by a jump, a hard landing or a slide, a puff of air under a
           // second jump, and a dash leaves a faint copy of the hero where it set off
@@ -753,7 +887,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           flash(at, team, 2)
           // spirit motes rising off the fallen, in their team's colour
           sparkle({ at, count: 50, kind: 'glow', life: 1.6, size: [0.22, 0.04], color: hot(team, 0.35), spread: 0.6, velocity: { x: 0, y: 2.8, z: 0 }, speed: 1 })
-          puff({ at: { x: at.x, y: 0.3, z: at.z }, count: 8, kind: 'smoke', life: 1.4, size: [0.5, 1.5], color: new THREE.Color(0.7, 0.65, 0.58), speed: 2.5, drag: 2, up: 0.4, alpha: 0.35 })
+          puff({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: 8, kind: 'smoke', life: 1.4, size: [0.5, 1.5], color: new THREE.Color(0.7, 0.65, 0.58), speed: 2.5, drag: 2, up: 0.4, alpha: 0.35 })
         }
       }
     },
@@ -761,6 +895,20 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       warmUp()
       clock += dt
       world.frame(dt)
+      debris.step(dt)
+      decals.step(clock)
+      // bodies going through the props: a knocked-back one breaks what it meets, a walking one scatters loose things
+      if (props) {
+        const drawn = ctrl.positions()
+        arena.match.heroes.forEach((h, i) => {
+          if (!h.alive) return
+          const cap = capsule(h)
+          props.body(drawn[i] ?? h.position, cap.radius, cap.height, !!h.knockback, debris)
+        })
+      }
+      kick = Math.max(0, kick - dt * 3)
+      blur = Math.max(0, blur - dt * 2.5)
+      lines = Math.max(0, lines - dt * 3)
       // tasks may book more tasks; those run from the next frame
       for (let i = tasks.length - 1; i >= 0; i--) {
         if (tasks[i].at > clock) continue
@@ -845,7 +993,11 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       } else (scene.background as THREE.Color).copy(background).lerp(skyColor, Math.min(0.55, sky))
     },
     timeScale: () => (hitStop > 0 ? 0.05 : 1),
-    shake: () => new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake),
-    stats: () => ({ meshes: live.length + projectiles.size + forms.live() + ghosts.length, particles: BUDGET.glow + BUDGET.smoke + BUDGET.motifs }),
+    shake: () => new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake).addScaledVector(kickAt, kick * kick),
+    // two frames of ink, the first inverted, the way an anime impact frame cuts in
+    screen: () => pinned ?? { blur, centre, lines, impact: impactFrames.shift() ?? 0, seed: clock },
+    stats: () => ({ meshes: live.length + projectiles.size + forms.live() + ghosts.length, particles: BUDGET.glow + BUDGET.smoke + BUDGET.motifs, debris: debris.live(), decals: decals.live(), props: props?.standing() ?? 0 }),
+    blast: (tier, at, c = new THREE.Color(1, 0.55, 0.2)) => blastAt(tier, v3(at), c, { mark: tier === 'spell' || tier === 'ultimate' ? 'scorch' : undefined, radius: tier === 'ultimate' ? 4 : tier === 'spell' ? 2.5 : 0 }),
+    pin: (screen) => void (pinned = screen),
   }
 }

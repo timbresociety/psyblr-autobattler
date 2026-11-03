@@ -1,18 +1,20 @@
 import type RAPIER from '@dimforge/rapier3d-compat'
+import type { CoverPiece } from '../engine/cover.js'
 import type { MatchEvent } from '../engine/events.js'
 import type { Vec3 } from '../engine/maths.js'
 import type { MatchState } from '../engine/state.js'
 
 /**
  * Cosmetic physics (U15, KTD12): Rapier makes hits look physical and never decides anything. A launched hero tumbles
- * while the engine still owns where it is, then blends back upright; a fallen hero drops and settles; heavy hits throw
- * debris. The engine never reads any of this, so a match plays out the same with physics on or off.
+ * while the engine still owns where it is, then blends back upright; a fallen hero drops and settles on the floor it
+ * fell on (the map's own pieces are its colliders, so a body on the house's raised floor lies on it). The engine never
+ * reads any of this, so a match plays out the same with physics on or off. Debris is the effects' own pool
+ * (effects/debris.ts), budgeted apart from these bodies.
  */
 
 export const PHYSICS = {
-  /** Most bodies awake at once: tumbling or fallen heroes plus debris. */
+  /** Most bodies awake at once: tumbling or fallen heroes. */
   maxBodies: 48,
-  debrisPerHit: 4,
   /** Seconds a hero takes to stand back up after a knockback. */
   blendBack: 0.2,
 }
@@ -49,21 +51,40 @@ interface Tumble {
 export class CosmeticPhysics {
   private readonly tumbling = new Map<number, Tumble>()
   private readonly fallen = new Map<number, RAPIER.RigidBody>()
-  private readonly debris: RAPIER.RigidBody[] = []
+  /** The collider of each breakable map piece, removed when the engine breaks it. */
+  private readonly pieces = new Map<number, RAPIER.Collider>()
   /** Set when Rapier fails; physics then stays off, because it is cosmetic and must never stop a match (KTD12). */
   broken = false
 
   private constructor(
     private readonly R: typeof RAPIER,
     private readonly world: RAPIER.World,
+    map: readonly CoverPiece[],
   ) {
     const ground = world.createRigidBody(R.RigidBodyDesc.fixed())
     world.createCollider(R.ColliderDesc.cuboid(60, 0.1, 60).setTranslation(0, -0.1, 0), ground)
+    map.forEach((piece, index) => {
+      const c = world.createCollider(collider(R, piece), ground)
+      if (piece.health !== undefined) this.pieces.set(index, c)
+    })
   }
 
-  static async create(): Promise<CosmeticPhysics> {
+  /** A world for a match on `map` (its cover pieces); an open floor without one. */
+  static async create(map: readonly CoverPiece[] = []): Promise<CosmeticPhysics> {
     const R = await loadRapier()
-    return new CosmeticPhysics(R, new R.World({ x: 0, y: -18, z: 0 }))
+    return new CosmeticPhysics(R, new R.World({ x: 0, y: -18, z: 0 }), map)
+  }
+
+  /** The engine broke map piece `index`: bodies fall through where it stood. */
+  breakPiece(index: number) {
+    const c = this.pieces.get(index)
+    if (!c || this.broken) return
+    this.pieces.delete(index)
+    try {
+      this.world.removeCollider(c, true)
+    } catch {
+      this.broken = true
+    }
   }
 
   /** Free the world's WASM memory when the match ends; the instance is inert afterwards. */
@@ -72,7 +93,7 @@ export class CosmeticPhysics {
     this.broken = true
     this.tumbling.clear()
     this.fallen.clear()
-    this.debris.length = 0
+    this.pieces.clear()
     this.world.free()
   }
 
@@ -84,11 +105,7 @@ export class CosmeticPhysics {
   }
 
   private budget(): boolean {
-    if (this.world.bodies.len() - 1 < PHYSICS.maxBodies) return true
-    // over the cap: the oldest debris goes first
-    const old = this.debris.shift()
-    if (old) this.world.removeRigidBody(old)
-    return this.world.bodies.len() - 1 < PHYSICS.maxBodies
+    return this.tumbling.size + this.fallen.size < PHYSICS.maxBodies
   }
 
   private body(at: Vec3, velocity: Vec3, spin: number, half: Vec3) {
@@ -96,19 +113,6 @@ export class CosmeticPhysics {
     const b = this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(at.x, at.y, at.z).setLinvel(velocity.x, velocity.y, velocity.z).setAngvel({ x: spin, y: spin * 0.3, z: -spin * 0.6 }).setCanSleep(true))
     this.world.createCollider(R.ColliderDesc.cuboid(half.x, half.y, half.z).setRestitution(0.2).setFriction(0.9), b)
     return b
-  }
-
-  /** Throw `count` chunks from `at`, for a barrier the engine just broke. */
-  burst(at: Vec3, count: number) {
-    if (this.broken) return
-    try {
-      for (let i = 0; i < count && this.budget(); i++) {
-        const a = (i / count) * Math.PI * 2
-        this.debris.push(this.body({ x: at.x + Math.cos(a) * 0.4, y: at.y, z: at.z + Math.sin(a) * 0.4 }, { x: Math.cos(a) * 5, y: 4 + (i % 3) * 2, z: Math.sin(a) * 5 }, 10, { x: 0.18, y: 0.12, z: 0.25 }))
-      }
-    } catch {
-      this.broken = true
-    }
   }
 
   /** React to this tick's engine events. */
@@ -142,13 +146,7 @@ export class CosmeticPhysics {
         if (t) this.world.removeRigidBody(t.body)
         this.tumbling.delete(e.hero)
         if (this.budget()) this.fallen.set(e.hero, this.body({ x: hero.position.x, y: hero.position.y + 0.9, z: hero.position.z }, { x: 0, y: 1, z: 0 }, 3, { x: 0.3, y: 0.9, z: 0.3 }))
-      } else if (e.type === 'hit' && e.heavy) {
-        const target = match.heroes[e.target]
-        for (let i = 0; i < PHYSICS.debrisPerHit && this.budget(); i++) {
-          const a = (i / PHYSICS.debrisPerHit) * Math.PI * 2
-          this.debris.push(this.body({ x: target.position.x, y: 0.3, z: target.position.z }, { x: Math.cos(a) * 4, y: 5 + i, z: Math.sin(a) * 4 }, 12, { x: 0.12, y: 0.12, z: 0.12 }))
-        }
-      }
+      } else if (e.type === 'cover-broken') this.breakPiece(e.index)
     }
   }
 
@@ -190,8 +188,25 @@ export class CosmeticPhysics {
     return { position: { x: p.x, y: p.y - 0.9, z: p.z }, rotation: b.rotation(), sleeping: b.isSleeping() }
   }
 
-  debrisPoses(): { position: Vec3; rotation: Quat }[] {
-    if (this.broken) return []
-    return this.debris.map((b) => ({ position: b.translation(), rotation: b.rotation() }))
-  }
+}
+
+/** A fixed collider for a map piece: a box, a column, or a ramp's sloped deck. */
+function collider(R: typeof RAPIER, piece: CoverPiece): RAPIER.ColliderDesc {
+  const s = piece.shape
+  const mid = (piece.base + piece.top) / 2
+  const half = Math.max(0.01, (piece.top - piece.base) / 2)
+  if (s.kind === 'column') return R.ColliderDesc.cylinder(half, s.r).setTranslation(s.x, mid, s.z)
+  if (!piece.slope) return R.ColliderDesc.cuboid(s.hx, half, s.hz).setTranslation(s.x, mid, s.z)
+  // a ramp: a deck 0.3 m thick lying on its slope, from its low end up to its top
+  const { rise, low } = piece.slope
+  const along = rise[0] === 'x' ? s.hx : s.hz
+  const climb = piece.top - low
+  const angle = Math.atan2(climb, 2 * along) * (rise.endsWith('+') ? 1 : -1)
+  const length = Math.sqrt(4 * along * along + climb * climb) / 2
+  const thick = 0.15
+  const y = (low + piece.top) / 2 - thick
+  // tilt about the axis across the slope: z for a ramp rising along x, x for one along z
+  const q = rise[0] === 'x' ? { x: 0, y: 0, z: Math.sin(angle / 2), w: Math.cos(angle / 2) } : { x: -Math.sin(angle / 2), y: 0, z: 0, w: Math.cos(angle / 2) }
+  const desc = rise[0] === 'x' ? R.ColliderDesc.cuboid(length, thick, s.hz) : R.ColliderDesc.cuboid(s.hx, thick, length)
+  return desc.setTranslation(s.x, y, s.z).setRotation(q)
 }

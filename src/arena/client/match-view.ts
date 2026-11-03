@@ -23,7 +23,8 @@ import { VIEW_FAR } from './sky.js'
 import { buildRuins } from './ruins.js'
 import { buildGreybox } from './greybox.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
-import { CosmeticPhysics, PHYSICS } from './physics.js'
+import { CosmeticPhysics } from './physics.js'
+import { groundUnder } from './effects/anchors.js'
 import { atFloor, atLeast, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
 import { createRenderer, forceWebGLFlag, gpuTimeFlag, type Backend } from './render/renderer.js'
@@ -142,6 +143,8 @@ export interface ArenaController {
   resume: () => void
   /** The frame-rate guard's current level (U18, R26). */
   quality: () => QualityLevel
+  /** Show the hit feel on screen this frame (radial blur, speed lines, impact frame); nothing without the post pass. */
+  screen: (feel: ScreenFeel) => void
   stop: () => void
 }
 
@@ -195,16 +198,58 @@ function hud(arena: Arena, views: HeroView[], paused: boolean, backend: Backend,
  */
 async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>>['renderer'], scene: THREE.Scene, camera: THREE.Camera) {
   try {
-    const [{ RenderPipeline }, { pass, screenUV, smoothstep, float }, { bloom }] = await Promise.all([import('three/webgpu'), import('three/tsl'), import('three/addons/tsl/display/BloomNode.js')])
+    const [{ RenderPipeline }, { pass, screenUV, smoothstep, float, uniform, vec2, vec3, Fn, Loop, If, mix, step, luminance, atan, hash, floor, PI }, { bloom }] = await Promise.all([
+      import('three/webgpu'),
+      import('three/tsl'),
+      import('three/addons/tsl/display/BloomNode.js'),
+    ])
     const scenePass = pass(scene, camera)
     const color = scenePass.getTextureNode('output')
+    // the hit feel's share of the screen (§6b): radial blur and speed lines toward a heavy blow or an ultimate, and the
+    // impact frame. Each costs nothing while its uniform is zero: the branch is the same for every pixel
+    const feel = { blur: uniform(0), centre: uniform(new THREE.Vector2(0.5, 0.5)), lines: uniform(0), impact: uniform(0), seed: uniform(0) }
+    const post = Fn(() => {
+      const c = vec3(color.rgb).toVar()
+      const toward = vec2(feel.centre).sub(screenUV)
+      If(feel.blur.greaterThan(0.001), () => {
+        const sum = vec3(0).toVar()
+        Loop(8, ({ i }) => {
+          sum.addAssign(color.sample(screenUV.add(toward.mul(float(i).div(8).mul(feel.blur).mul(0.16)))).rgb)
+        })
+        c.assign(sum.div(8))
+      })
+      If(feel.lines.greaterThan(0.001), () => {
+        const away = screenUV.sub(vec2(feel.centre))
+        const angle = atan(away.y, away.x).div(PI.mul(2)).add(0.5)
+        const ray = hash(floor(angle.mul(110)).add(floor(feel.seed.mul(24)).mul(131)))
+        const streak = step(0.8, ray).mul(smoothstep(0.16, 0.5, away.length())).mul(feel.lines)
+        c.assign(mix(c, vec3(1, 1, 1), streak.mul(0.7)))
+      })
+      // the impact frame: two frames of ink, light parts white on black, the first of them the other way round
+      If(feel.impact.greaterThan(0.5), () => {
+        const ink = step(0.3, luminance(c))
+        c.assign(vec3(feel.impact.greaterThan(1.5).select(float(1).sub(ink), ink)))
+      })
+      return c
+    })()
     // a soft vignette pulls the eye to the fight in the middle of the frame
     const vignette = float(1).sub(smoothstep(0.35, 0.85, screenUV.sub(0.5).length()).mul(0.35))
-    const pipeline = new RenderPipeline(renderer, color.add(bloom(color, 0.55, 0.35, 0.82)).mul(vignette))
-    return { pipeline, enabled: true }
+    const glow = bloom(color, 0.55, 0.35, 0.82)
+    const lit = post.add(glow.rgb.mul(float(1).sub(step(0.5, feel.impact)))).mul(vignette)
+    const pipeline = new RenderPipeline(renderer, lit)
+    return { pipeline, enabled: true, feel }
   } catch {
     return undefined
   }
+}
+
+/** The hit feel the screen shows this frame (effects/player.ts `screen`). */
+export interface ScreenFeel {
+  blur: number
+  centre: [number, number]
+  lines: number
+  impact: number
+  seed: number
 }
 
 type Renderer = Awaited<ReturnType<typeof createRenderer>>['renderer']
@@ -494,24 +539,12 @@ function drawHeroes(
 
 const place = new THREE.Object3D()
 
-function drawDebris(debris: THREE.InstancedMesh, physics: CosmeticPhysics | undefined) {
-  const pieces = physics?.debrisPoses() ?? []
-  debris.count = pieces.length
-  pieces.forEach((d, k) => {
-    place.position.set(d.position.x, d.position.y, d.position.z)
-    place.quaternion.set(d.rotation.x, d.rotation.y, d.rotation.z, d.rotation.w)
-    place.scale.setScalar(1)
-    place.updateMatrix()
-    debris.setMatrixAt(k, place.matrix)
-  })
-  debris.instanceMatrix.needsUpdate = true
-}
-
 /** A team ring on the floor under every living hero, sized to its hitbox, so a crowd still reads at a glance (R38). */
 function drawRings(rings: THREE.InstancedMesh, arena: Arena, drawn: Vec3[]) {
   arena.match.heroes.forEach((h, i) => {
     const at = drawn[i]
-    place.position.set(at.x, 0.03, at.z)
+    // on the floor under the hero (a jump leaves its ring behind on the deck it left), not at y 0
+    place.position.set(at.x, groundUnder(arena.match, at) + 0.03, at.z)
     place.quaternion.setFromAxisAngle(right, -Math.PI / 2)
     place.scale.setScalar(h.alive ? capsule(h).radius * 1.6 : 0)
     place.updateMatrix()
@@ -547,7 +580,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const total = builds.length + 1
   onProgress(0, total)
   // physics is cosmetic: if Rapier fails to load, the match runs without it (KTD12)
-  const physicsReady = CosmeticPhysics.create()
+  const physicsReady = CosmeticPhysics.create(arena.match.cover?.pieces)
     .catch(() => undefined)
     .then((p) => (keepPhysics(p), onProgress(++loaded, total), p))
   // the two heroes nearest the streamer's side load at 2K; the rest at 1K (R24)
@@ -568,9 +601,6 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     map.proxies.push(...ruins.proxies)
   }
   const physics = await physicsReady
-  const debris = new THREE.InstancedMesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: 0x8a7f72, roughness: 0.9 }), PHYSICS.maxBodies)
-  debris.count = 0
-  scene.add(debris)
   const rings = new THREE.InstancedMesh(new THREE.RingGeometry(0.8, 1, 40), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }), arena.match.heroes.length)
   // the HUD draws each hero's name and health over its head; the floor ring keeps its team readable from far off
   arena.match.heroes.forEach((h, i) => rings.setColorAt(i, new THREE.Color(TEAM_COLORS[h.team])))
@@ -647,10 +677,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       physics?.events(events, arena.match)
       for (const e of events) {
         if (e.type === 'cover-hit') ruins?.hit(e.index, e.health)
-        else if (e.type === 'cover-broken') {
-          ruins?.broken(e.index)
-          physics?.burst(e.at, 12)
-        }
+        else if (e.type === 'cover-broken') ruins?.broken(e.index)
       }
       if (events.length) {
         arena.match.heroes.forEach((_, j) => onEvents(animators[j], j, events, arena.match.tick))
@@ -660,7 +687,6 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     physics?.step(dt)
     ruins?.update(dt)
     drawn = drawHeroes({ arena, views, animators, stances, physics, camera }, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
-    drawDebris(debris, physics)
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
     cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, followed)
@@ -721,6 +747,15 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     quality: quality.current,
+    screen: (f) => {
+      const u = stage.glow?.enabled ? stage.glow.feel : undefined
+      if (!u) return
+      u.blur.value = f.blur
+      u.centre.value.set(f.centre[0], f.centre[1])
+      u.lines.value = f.lines
+      u.impact.value = f.impact
+      u.seed.value = f.seed
+    },
     stop: () => {
       stopped = true
       unprobe?.()

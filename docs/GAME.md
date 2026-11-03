@@ -780,8 +780,8 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | --- | --- | --- |
 | Roster | The 20 demo heroes (looks, faces, retunes) | **Dropped (M3):** deleted with their faces; staging and the soak use two generated squads of ten, and balance uses generated kits (§4) |
 | Kit | Ki Blast sits in melee; Chain Hook in ranged; Skill 1 is forced into projectiles; strike skills in Q | **Fixed (M3):** six typed rows enforced on save; melee is a weapon style, LMB the ranged library (magazine, reload, bloom, muzzle), Q the 10 spell families, F passives on an energy meter (§4, §5) |
-| Effects | Casts flash at the torso | Rework (§6) |
-| Effects | No proper blasts, craters or breakable props | Rework (§6b) |
+| Effects | Casts flash at the torso | **Fixed (M5):** casts flash at the hand, projectiles leave the muzzle, impacts land at the contact point on the victim, melee sparks at the weapon tip, zones and marks sit on the floor under them (not y 0), auras on the body |
+| Effects | No proper blasts, craters or breakable props | **Fixed (M5):** six-layer blasts at five tiers; hit-stop, shake and kick, radial blur and speed lines, an ink impact frame on ultimates (felt near the camera); craters with rubble, skid marks and elemental marks on a 64-decal budget; 300-chunk debris pool; pre-fractured chips, cards, dice, capsules, cabinet panels, signs and railings; engine knockback arcs with mass and slams; breakable glass partitions and card bridges in the engine, routes kept when they fall |
 | Map | The arena is a flat 2D floor | **Fixed (M4):** the House of Instinct's first deliverable in grey boxes, cut down for 10 v 10 (Roulette Court, Chip Stacks, Card Ramp, VIP Crescent, balcony loop, Chart Climb, Chandelier Spine, trenches, service tunnel, vault): four bands, mirrored halves, §8 starting dimensions, arcade yellow on traversal; live matches and the balance gate play it. Art and the other zones come later |
 | Engine | No 3D collision, mantle or navmesh | **Fixed (M4):** walkable tops, ramps, ledges and ceilings; mantle, drop and landing roll, ziplines and rails (§7); a nav graph built from the map with walk, jump, double-jump, drop and zipline links, which the bots path on. Occlusion by zone and level waits for §10 |
 | Engine | No LOD or crowd path for 100 heroes | Rework (§10) |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-03: §13 status updated for Milestone 5 (effects and destruction, §6–§6b): both Effects rows closed. No rule changed.
 - 2026-11-03: §13 status updated for Milestone 4 (traversal and the grey-box map, §7–§8): Map and Engine rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 3 (kit engine, §2–§5): Roster, Kit, AI and Controls rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 2 (animation library, §12): three Animation/Kit gaps closed. No rule changed.

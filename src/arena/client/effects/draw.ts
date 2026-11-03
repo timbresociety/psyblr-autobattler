@@ -49,6 +49,8 @@ export interface Kit {
   ghost: (hero: number, at: THREE.Vector3, c: THREE.Color, life: number) => void
   /** This match's fan and band shapes. */
   fans: Fans
+  /** The height of the floor under a point (the map's top under it, not y 0: the house stands on a raised floor). */
+  floorAt: (p: { x: number; y: number; z: number }) => number
 }
 
 /** What the impact event knows beyond where it landed. */
@@ -101,7 +103,7 @@ const randomIn = (radius: number) => {
 const motifCell = (style?: string) => Math.max(0, MOTIFS.indexOf(style as Motif))
 
 export function createDraw(kit: Kit) {
-  const { show, sparkle, puff, later, ribbon } = kit
+  const { show, sparkle, puff, later, ribbon, floorAt } = kit
 
   /** A bright flash that pops and is gone: the punctuation on every impact. */
   const flash = (at: THREE.Vector3, c: THREE.Color, size: number) => {
@@ -172,7 +174,7 @@ export function createDraw(kit: Kit) {
         core(size * 0.65, 0.2, 0.45)
         for (let k = 0; k < 8; k++) {
           const p = at.clone().addScaledVector(dir, (len * (k + 0.5)) / 8)
-          sparkle({ at: { x: p.x, y: 0.15, z: p.z }, count: 3, kind: 'glow', life: 0.6, size: [0.14, 0.03], color: hot(accent, 0.3), speed: 0.8, velocity: { x: 0, y: 1.6, z: 0 } })
+          sparkle({ at: { x: p.x, y: floorAt(p) + 0.15, z: p.z }, count: 3, kind: 'glow', life: 0.6, size: [0.14, 0.03], color: hot(accent, 0.3), speed: 0.8, velocity: { x: 0, y: 1.6, z: 0 } })
         }
         break
       }
@@ -188,7 +190,7 @@ export function createDraw(kit: Kit) {
         const height = Math.max(2.5, size * 4)
         for (let d = 0; d <= len; d += step) {
           const p = at.clone().addScaledVector(dir, d)
-          later((d / len) * 0.25, () => pillar(new THREE.Vector3(p.x, 0, p.z), v, size, height, 0.55))
+          later((d / len) * 0.25, () => pillar(new THREE.Vector3(p.x, floorAt(p), p.z), v, size, height, 0.55))
         }
         break
       }
@@ -214,8 +216,8 @@ export function createDraw(kit: Kit) {
       setOpacity(m, 0.9 * (1 - p) ** 1.2)
       scroll(m, -0.05)
     })
-    flash(new THREE.Vector3(at.x, 0.3, at.z), v, radius * 1.4)
-    sparkle({ at: { x: at.x, y: 0.4, z: at.z }, count: 16, kind: 'glow', life: 0.7, size: [0.2, 0.04], color: hot(v, 0.3), spread: radius, velocity: { x: 0, y: height * 1.4, z: 0 }, speed: 0.6 })
+    flash(new THREE.Vector3(at.x, floorAt(at) + 0.3, at.z), v, radius * 1.4)
+    sparkle({ at: { x: at.x, y: floorAt(at) + 0.4, z: at.z }, count: 16, kind: 'glow', life: 0.7, size: [0.2, 0.04], color: hot(v, 0.3), spread: radius, velocity: { x: 0, y: height * 1.4, z: 0 }, speed: 0.6 })
   }
 
   function cone(style: string, r: EffectRecipe, at: THREE.Vector3, dir: THREE.Vector3, range: number, arc: number) {
@@ -246,7 +248,7 @@ export function createDraw(kit: Kit) {
       case 'gust':
         // curved streaks of air racing out and dust kicked off the ground
         for (let k = 0; k < 3; k++) later(k * 0.06, () => slash(at, dir, range * (0.5 + 0.25 * k), hot(v, 0.5), (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * half, 0.3, -0.6))
-        puff({ at: { x: at.x, y: 0.3, z: at.z }, count: 8, kind: 'smoke', life: 0.8, size: [0.4, 1.4], color: new THREE.Color(0.8, 0.78, 0.74), velocity: { x: dir.x * range * 1.6, y: 0.3, z: dir.z * range * 1.6 }, speed: 1, drag: 2, alpha: 0.3 })
+        puff({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: 8, kind: 'smoke', life: 0.8, size: [0.4, 1.4], color: new THREE.Color(0.8, 0.78, 0.74), velocity: { x: dir.x * range * 1.6, y: 0.3, z: dir.z * range * 1.6 }, speed: 1, drag: 2, alpha: 0.3 })
         break
       case 'sonic':
         // rings of sound spreading out across the fan, one after another
@@ -254,7 +256,7 @@ export function createDraw(kit: Kit) {
           later(k * 0.08, () =>
             show('band', hot(v, 0.2), 0.4, (m) => {
               m.geometry = kit.fans.band(arc)
-              m.position.set(at.x, 0.4 + at.y * 0.5, at.z)
+              m.position.set(at.x, floorAt(at) + 0.4 + (at.y - floorAt(at)) * 0.5, at.z)
               m.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
               m.scale.setScalar(range * 0.15)
             }, (p, m) => (m.scale.setScalar(range * (0.15 + 0.85 * p)), setOpacity(m, 0.9 * (1 - p)))),
@@ -290,10 +292,10 @@ export function createDraw(kit: Kit) {
         flash(caster.clone().addScaledVector(dir, reach), v, 0.6)
         break
       case 'smash': {
-        const ground = new THREE.Vector3(tip.x, 0.06, tip.z)
+        const ground = new THREE.Vector3(tip.x, floorAt(tip) + 0.06, tip.z)
         show('shock', v, 0.4, (m) => m.position.copy(ground), (p, m) => (m.scale.setScalar(reach * (0.2 + 0.5 * p)), setOpacity(m, 0.9 * (1 - p))))
-        show('crack', v, 1, (m) => (m.position.set(ground.x, 0.05, ground.z), m.scale.setScalar(reach * 0.45), (m.rotation.y = Math.random() * Math.PI * 2)), (p, m) => setOpacity(m, 1.2 * (1 - p)))
-        puff({ at: { x: ground.x, y: 0.3, z: ground.z }, count: 8, kind: 'smoke', life: 1, size: [0.4, 1.3], color: new THREE.Color(0.7, 0.64, 0.56), speed: 3, drag: 2, up: 0.7, alpha: 0.35 })
+        show('crack', v, 1, (m) => (m.position.set(ground.x, floorAt(ground) + 0.05, ground.z), m.scale.setScalar(reach * 0.45), (m.rotation.y = Math.random() * Math.PI * 2)), (p, m) => setOpacity(m, 1.2 * (1 - p)))
+        puff({ at: { x: ground.x, y: floorAt(ground) + 0.3, z: ground.z }, count: 8, kind: 'smoke', life: 1, size: [0.4, 1.3], color: new THREE.Color(0.7, 0.64, 0.56), speed: 3, drag: 2, up: 0.7, alpha: 0.35 })
         kit.shake(0.18)
         break
       }
@@ -312,21 +314,21 @@ export function createDraw(kit: Kit) {
       case 'flame':
         auraDome(at, v, size, dur, 0.18)
         for (const t of [0, 0.22])
-          later(t, () => sparkle({ at: { x: at.x, y: 0.3, z: at.z }, count: 40, kind: 'glow', life: 0.7, size: [0.5, 0.05], color: hot(v, 0.2), spread: size * 0.9, velocity: { x: 0, y: 3.2, z: 0 }, speed: 0.5 }))
-        puff({ at: { x: at.x, y: 1.2, z: at.z }, count: 6, kind: 'smoke', life: 1, size: [0.4, 1.4], color: new THREE.Color(0.25, 0.2, 0.18), spread: size * 0.6, velocity: { x: 0, y: 1.6, z: 0 }, alpha: 0.25 })
+          later(t, () => sparkle({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: 40, kind: 'glow', life: 0.7, size: [0.5, 0.05], color: hot(v, 0.2), spread: size * 0.9, velocity: { x: 0, y: 3.2, z: 0 }, speed: 0.5 }))
+        puff({ at: { x: at.x, y: floorAt(at) + 1.2, z: at.z }, count: 6, kind: 'smoke', life: 1, size: [0.4, 1.4], color: new THREE.Color(0.25, 0.2, 0.18), spread: size * 0.6, velocity: { x: 0, y: 1.6, z: 0 }, alpha: 0.25 })
         break
       case 'storm':
         auraDome(at, v, size, dur, 0.18)
         for (let k = 0; k < 6; k++)
           later(k * 0.07, () => {
-            const end = at.clone().add(randomIn(size)).setY(0.05)
+            const end = at.clone().add(randomIn(size)).setY(floorAt(at) + 0.05)
             ribbon(lightning(at, end, 0.5, Math.random() * 100), hot(v, 0.4), 0.07, 0.2, { flicker: true })
             sparks(end, v, 6, 3)
           })
         break
       case 'mist':
         auraDome(at, v, size, dur, 0.16)
-        puff({ at: { x: at.x, y: 0.5, z: at.z }, count: 18, kind: 'smoke', life: 1.4, size: [0.8, 2], color: v.clone().lerp(new THREE.Color(0.75, 0.78, 0.8), 0.5), spread: size * 0.9, speed: 0.6, drag: 1, alpha: 0.35, spin: 0.3 })
+        puff({ at: { x: at.x, y: floorAt(at) + 0.5, z: at.z }, count: 18, kind: 'smoke', life: 1.4, size: [0.8, 2], color: v.clone().lerp(new THREE.Color(0.75, 0.78, 0.8), 0.5), spread: size * 0.9, speed: 0.6, drag: 1, alpha: 0.35, spin: 0.3 })
         break
       default:
         // a low dome of light over the aura's ground, and motes rising off it: a sphere this wide would swallow the fight
@@ -362,14 +364,14 @@ export function createDraw(kit: Kit) {
     switch (l.primitive) {
       case 'ring':
         // a shockwave along the ground at exactly the hit radius, a second wave racing out, and dust kicked up
-        show('shock', v, dur, (m) => (m.position.set(at.x, 0.06, at.z), m.scale.setScalar(size)), (p, m) => setOpacity(m, 0.9 * (1 - p) ** 1.5))
-        show('shock', hot(v, 0.4), dur * 0.7, (m) => m.position.set(at.x, 0.07, at.z), (p, m) => (m.scale.setScalar(size * (0.3 + 0.9 * p)), setOpacity(m, 0.6 * (1 - p))))
-        puff({ at: { x: at.x, y: 0.3, z: at.z }, count: Math.round(6 + size * 2), kind: 'smoke', life: 1.1, size: [0.5, 1.5], color: new THREE.Color(0.7, 0.64, 0.56), speed: 3 + size, spread: size * 0.8, drag: 2, up: 0.6, alpha: 0.35, spin: 0.6 })
+        show('shock', v, dur, (m) => (m.position.set(at.x, floorAt(at) + 0.06, at.z), m.scale.setScalar(size)), (p, m) => setOpacity(m, 0.9 * (1 - p) ** 1.5))
+        show('shock', hot(v, 0.4), dur * 0.7, (m) => m.position.set(at.x, floorAt(at) + 0.07, at.z), (p, m) => (m.scale.setScalar(size * (0.3 + 0.9 * p)), setOpacity(m, 0.6 * (1 - p))))
+        puff({ at: { x: at.x, y: floorAt(at) + 0.3, z: at.z }, count: Math.round(6 + size * 2), kind: 'smoke', life: 1.1, size: [0.5, 1.5], color: new THREE.Color(0.7, 0.64, 0.56), speed: 3 + size, spread: size * 0.8, drag: 2, up: 0.6, alpha: 0.35, spin: 0.6 })
         break
       case 'crack':
         // molten fissures that linger where the blow landed
-        show('crack', v, Math.max(1.2, dur), (m) => (m.position.set(at.x, 0.05, at.z), m.scale.setScalar(size), (m.rotation.y = Math.random() * Math.PI * 2)), (p, m) => setOpacity(m, 1.2 * (1 - p)))
-        sparkle({ at: { x: at.x, y: 0.2, z: at.z }, count: 18, kind: 'glow', life: 0.9, size: [0.15, 0.05], color: hot(c, 0.4), speed: 1.5, spread: size * 0.6, velocity: { x: 0, y: 2.2, z: 0 }, drag: 0.6 })
+        show('crack', v, Math.max(1.2, dur), (m) => (m.position.set(at.x, floorAt(at) + 0.05, at.z), m.scale.setScalar(size), (m.rotation.y = Math.random() * Math.PI * 2)), (p, m) => setOpacity(m, 1.2 * (1 - p)))
+        sparkle({ at: { x: at.x, y: floorAt(at) + 0.2, z: at.z }, count: 18, kind: 'glow', life: 0.9, size: [0.15, 0.05], color: hot(c, 0.4), speed: 1.5, spread: size * 0.6, velocity: { x: 0, y: 2.2, z: 0 }, drag: 0.6 })
         break
       case 'beam':
         // the soft glow round a beam is drawn faint, in the beam's own profile; the beam itself draws the rest
@@ -386,7 +388,7 @@ export function createDraw(kit: Kit) {
         // the fan on the ground is the hit area at its true size, whatever the cone is made of
         show('cone', v, dur, (m) => {
           m.geometry = kit.fans.cone(extra.arc ?? 90)
-          m.position.set(at.x, 0.08, at.z)
+          m.position.set(at.x, floorAt(at) + 0.08, at.z)
           m.rotation.set(-Math.PI / 2, 0, coneYaw(dir))
           m.scale.setScalar(extra.range ?? size)
         }, (p, m) => setOpacity(m, (l.style && l.style !== 'spray' ? 0.5 : 0.8) * (1 - p)))
@@ -453,7 +455,7 @@ export function createDraw(kit: Kit) {
         break
       }
       case 'pillar':
-        pillar(new THREE.Vector3(at.x, 0, at.z), v, size, Math.max(3, size * 3.5), 0.7)
+        pillar(new THREE.Vector3(at.x, floorAt(at), at.z), v, size, Math.max(3, size * 3.5), 0.7)
         break
       case 'dome':
         if (l.style === 'shield') {
@@ -487,19 +489,19 @@ export function createDraw(kit: Kit) {
           later(t, () => {
             const p = at.clone().add(randomIn(size))
             for (let k = 0; k < 3; k++) sparkle({ at: { x: p.x, y: height + k * 0.45, z: p.z }, count: 1, kind: 'glow', life: fall, size: [0.45, 0.3], color: hot(v, 0.3), velocity: { x: 0, y: -height / fall, z: 0 } })
-            later(fall, () => (flash(new THREE.Vector3(p.x, 0.25, p.z), v, 0.6), sparks(new THREE.Vector3(p.x, 0.2, p.z), v, 5, 3, 0.08)))
+            later(fall, () => (flash(new THREE.Vector3(p.x, floorAt(p) + 0.25, p.z), v, 0.6), sparks(new THREE.Vector3(p.x, floorAt(p) + 0.2, p.z), v, 5, 3, 0.08)))
           })
         break
       }
       case 'vortex':
         // a whirlpool turning on the ground, drawing motes into its eye
-        show('vortex', v, r.linger, (m) => (m.position.set(at.x, 0.07, at.z), m.scale.setScalar(size)), (p, m) => ((m.rotation.y = -p * 7), setOpacity(m, 0.9 * Math.min(1, p * 6) * (1 - p) ** 0.7)))
-        for (let t = 0; t < r.linger; t += 0.12) later(t, () => sparkle({ at: { x: at.x, y: 0.4, z: at.z }, count: 10, kind: 'glow', life: 0.6, size: [0.18, 0.04], color: hot(v, 0.3), speed: -size * 1.6, spread: size }))
+        show('vortex', v, r.linger, (m) => (m.position.set(at.x, floorAt(at) + 0.07, at.z), m.scale.setScalar(size)), (p, m) => ((m.rotation.y = -p * 7), setOpacity(m, 0.9 * Math.min(1, p * 6) * (1 - p) ** 0.7)))
+        for (let t = 0; t < r.linger; t += 0.12) later(t, () => sparkle({ at: { x: at.x, y: floorAt(at) + 0.4, z: at.z }, count: 10, kind: 'glow', life: 0.6, size: [0.18, 0.04], color: hot(v, 0.3), speed: -size * 1.6, spread: size }))
         break
       case 'field':
         // a glyph on the ground the size of the area, turning slowly while it lasts
-        show('magic', v, r.linger, (m) => (m.position.set(at.x, 0.06, at.z), m.scale.setScalar(size)), (p, m) => ((m.rotation.y = p * 1.4), setOpacity(m, 1.1 * Math.min(1, p * 6) * (1 - p) ** 0.6)))
-        for (let t = 0; t < r.linger; t += 0.25) later(t, () => sparkle({ at: { x: at.x, y: 0.2, z: at.z }, count: 8, kind: 'glow', life: 0.8, size: [0.14, 0.03], color: hot(v, 0.3), spread: size, velocity: { x: 0, y: 1.8, z: 0 } }))
+        show('magic', v, r.linger, (m) => (m.position.set(at.x, floorAt(at) + 0.06, at.z), m.scale.setScalar(size)), (p, m) => ((m.rotation.y = p * 1.4), setOpacity(m, 1.1 * Math.min(1, p * 6) * (1 - p) ** 0.6)))
+        for (let t = 0; t < r.linger; t += 0.25) later(t, () => sparkle({ at: { x: at.x, y: floorAt(at) + 0.2, z: at.z }, count: 8, kind: 'glow', life: 0.8, size: [0.14, 0.03], color: hot(v, 0.3), spread: size, velocity: { x: 0, y: 1.8, z: 0 } }))
         break
       case 'afterimage':
       case 'chain':

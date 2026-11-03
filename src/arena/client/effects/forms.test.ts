@@ -32,6 +32,7 @@ function recorder() {
     motif: () => {},
     ribbon: () => void seen.ribbons++,
     later: (_seconds, fn) => fn(),
+    floorAt: () => 0,
     shake: (amount) => void (seen.shake = Math.max(seen.shake, amount)),
     darken: () => void seen.darken++,
     ghost: () => void seen.ghosts++,

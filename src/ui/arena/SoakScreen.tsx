@@ -107,6 +107,7 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
             c.cameras.pitch = -0.22
           }
           c.camera.position.add(effects.shake())
+          c.screen(effects.screen())
         })
         setLive({ controller: c, staged })
 

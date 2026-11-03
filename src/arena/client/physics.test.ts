@@ -5,6 +5,7 @@ import { aiCommands } from '../ai/brain.js'
 import { LIVE_PROFILE, createMatch, matchRules } from '../engine/match.js'
 import { hashState } from '../engine/snapshot.js'
 import { tick } from '../engine/tick.js'
+import { LEVEL } from '../engine/house.js'
 import { CosmeticPhysics, PHYSICS } from './physics.js'
 
 async function play(withPhysics: boolean, seconds: number) {
@@ -57,10 +58,29 @@ describe('cosmetic physics (U15)', () => {
     expect(pose.position.y).toBeLessThan(0.5)
   })
 
+  it('on the house a fallen body lies on the floor it fell on, and falls through a card bridge the engine broke', async () => {
+    const arena = createMatch(armyModifiers(referenceArmy()), armyModifiers(referenceArmy()), 4, { map: 'house' })
+    const pieces = arena.match.cover!.pieces
+    const p = await CosmeticPhysics.create(pieces)
+    p.events([{ type: 'death', hero: 2 }], arena.match)
+    // one more falls on a card bridge over a trench, and the bridge goes
+    const bridge = pieces.findIndex((q) => q.look === 'card')
+    const s = pieces[bridge].shape
+    arena.match.heroes[3].position = { x: s.x, y: LEVEL.main, z: s.z }
+    p.events([{ type: 'death', hero: 3 }], arena.match)
+    for (let i = 0; i < 30; i++) p.step(1 / 60)
+    p.events([{ type: 'cover-broken', index: bridge, at: { x: s.x, y: LEVEL.main, z: s.z } }], arena.match)
+    for (let i = 0; i < 60 * 6; i++) p.step(1 / 60)
+    // a body lying down reads 0.6 under its floor (the pose is its feet as if standing), as on the open floor
+    expect(p.fallenPose(2)!.position.y).toBeGreaterThan(LEVEL.main - 1)
+    expect(p.fallenPose(2)!.position.y).toBeLessThan(LEVEL.main + 0.5)
+    expect(p.fallenPose(3)!.position.y).toBeLessThan(0.5)
+  })
+
   it('a rematch builds a fresh world after the last one is freed', async () => {
     const first = (await play(true, 20)).physics!
     first.dispose()
-    expect(first.debrisPoses()).toEqual([])
+    expect(first.fallenPose(0)).toBeUndefined()
     const second = await play(true, 20)
     expect(second.physics!.broken).toBe(false)
   }, 120_000)
@@ -76,7 +96,6 @@ describe('cosmetic physics (U15)', () => {
     expect(p.broken).toBe(true)
     expect(p.fallenPose(1)).toBeUndefined()
     expect(p.rotation(1)).toBeUndefined()
-    expect(p.debrisPoses()).toEqual([])
     expect(() => p.events([{ type: 'death', hero: 2 }], arena.match)).not.toThrow()
     expect(() => p.step(1 / 60)).not.toThrow()
   })

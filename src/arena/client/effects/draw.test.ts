@@ -20,6 +20,7 @@ function recorder() {
     motif: () => void seen.motifs++,
     ribbon: () => void seen.ribbons++,
     later: (_seconds, fn) => fn(),
+    floorAt: () => 0,
     shake: () => {},
     darken: () => void seen.darken++,
     fans: fanShapes(),

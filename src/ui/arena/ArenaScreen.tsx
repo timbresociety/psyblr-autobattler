@@ -169,6 +169,7 @@ export function KitReel({ build, onClose }: { build: Build; onClose: () => void 
         c.hooks.on('frame', (dt) => {
           effects.frame(dt)
           c.camera.position.add(effects.shake())
+          c.screen(effects.screen())
         })
         setController(c)
       })
@@ -254,12 +255,16 @@ function Fight({ staged, onBack, onRestart, back = 'Back to staging' }: { staged
         // nothing ticks until the countdown ends (R39)
         c.pause()
         const effects = createEffects(c, setup.packages)
+        // a dev-only handle, like `__arena`: a script can play effects by hand to check how they look (never in production)
+        // (the live arena sets `__arena` again: under StrictMode a discarded first load can take the handle and clear it)
+        if (import.meta.env.DEV) Object.assign(window, { __fx: effects, __arena: c })
         c.hooks.on('events', effects.events)
         c.hooks.timeScale = effects.timeScale
         // shake rides on top of wherever the cameras put the view this frame
         c.hooks.on('frame', (dt) => {
           effects.frame(dt)
           c.camera.position.add(effects.shake())
+          c.screen(effects.screen())
         })
         detach = attachControls(
           c,
