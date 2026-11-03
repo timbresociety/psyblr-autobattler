@@ -18,7 +18,7 @@ const typing = (e: KeyboardEvent) => {
 }
 
 export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLockChange: (locked: boolean) => void, extra: (code: string) => void = () => {}): () => void {
-  const input: InputState = { held: new Set() }
+  const input: InputState = { held: new Set(), tapped: new Set() }
   // looked up each time: after a lost graphics device the stage swaps in a new canvas
   const canvas = () => canvasHost.querySelector('canvas') ?? canvasHost
   const locked = () => document.pointerLockElement === canvas()
@@ -56,9 +56,11 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
       return
     }
     // Space would scroll and Ctrl reach the browser's shortcuts; in a fight they're the hero's
-    if (e.code === 'Space' || (locked() && (e.code === 'ControlLeft' || e.code === 'KeyV'))) e.preventDefault()
-    if (down) input.held.add(e.code)
-    else input.held.delete(e.code)
+    if (e.code === 'Space' || e.code.startsWith('Arrow') || (locked() && (e.code === 'ControlLeft' || e.code === 'KeyV'))) e.preventDefault()
+    if (down) {
+      input.held.add(e.code)
+      input.tapped!.add(e.code)
+    } else input.held.delete(e.code)
   }
   const keydown = onKey(true)
   const keyup = onKey(false)
@@ -104,6 +106,7 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
   const mousedown = (e: MouseEvent) => {
     if (locked()) {
       input.held.add(`Mouse${e.button}`)
+      input.tapped!.add(`Mouse${e.button}`)
       c.cameras.scoping = input.held.has('Mouse2')
       return
     }
@@ -145,6 +148,7 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
     pending = undefined
     if (!locked()) {
       input.held.clear()
+      input.tapped!.clear()
       // without the mouse a controlled hero cannot be steered, so the AI takes it back rather than leave it idle;
       // the pause menu frees the mouse too, and keeps the hero until the match resumes
       if (c.arena.match.human !== undefined && !c.arena.match.paused) c.handBack()
@@ -174,7 +178,7 @@ export function attachControls(c: ArenaController, canvasHost: HTMLElement, onLo
     // watching: WASD slides the camera, Q and E turn it; a followed hero that falls is let go
     if (watching()) {
       const h = (code: string) => (input.held.has(code) ? 1 : 0)
-      c.cameras.fly(dt, h('KeyW') - h('KeyS'), h('KeyD') - h('KeyA'), h('Space') - h('KeyZ'))
+      c.cameras.fly(dt, h('KeyW') + h('ArrowUp') - h('KeyS') - h('ArrowDown'), h('KeyD') + h('ArrowRight') - h('KeyA') - h('ArrowLeft'), h('Space') - h('KeyZ'))
       const turn = h('KeyE') - h('KeyQ')
       if (turn) c.cameras.orbit(turn * dt * 280, 0)
       if (c.cameras.follow !== undefined && !c.arena.match.heroes[c.cameras.follow]?.alive) c.cameras.follow = undefined

@@ -29,6 +29,8 @@ import { mayRest, setResting } from './rest.js'
 import { buildRuins } from './ruins.js'
 import { buildGreybox } from './greybox.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
+import { arenaExtent } from '../engine/cover.js'
+import { HALL } from './hall.js'
 import { CosmeticPhysics } from './physics.js'
 import { groundUnder } from './effects/anchors.js'
 import { atFloor, atLeast, basePixelRatio, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
@@ -355,7 +357,8 @@ async function bloomPipeline(renderer: Awaited<ReturnType<typeof createRenderer>
     })()
     // a soft vignette pulls the eye to the fight in the middle of the frame
     const vignette = float(1).sub(smoothstep(0.35, 0.85, screenUV.sub(0.5).length()).mul(0.35))
-    const glow = bloom(color, 0.55, 0.35, 0.82)
+    // only what is truly hot blooms: the cores and flashes, never a whole cone or a smoke plume (anime pass, 2026-11-03)
+    const glow = bloom(color, 0.5, 0.3, 0.92)
     const lit = post.add(glow.rgb.mul(float(1).sub(step(0.5, feel.impact)))).mul(vignette)
     const pipeline = new RenderPipeline(renderer, lit)
     return { pipeline, enabled: true, feel }
@@ -456,10 +459,12 @@ async function createStage(host: HTMLElement) {
     const scene = new THREE.Scene()
     // far enough to draw the sky dome and the mountains in front of it
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, VIEW_FAR)
-    atmosphere(scene)
-    const map = buildMap()
+    // live matches play the House of Instinct, inside the Game Centre hall
+    const hall = LIVE_MAP === 'house' ? arenaExtent(MAPS.house.pieces) : undefined
+    atmosphere(scene, !!hall)
+    const map = buildMap(hall)
     scene.add(map.group)
-    const sun = lights(scene)
+    const sun = lights(scene, hall)
     cascade(sun)
     const stage = {
       host,
@@ -666,12 +671,15 @@ function drawHeroes(
     const moving = moved > 0.01
     // the hips turn partway toward the way the hero moves, the legs run the rest at an angle and the chest twists to
     // its aim, casting on the move too, since its legs keep running under the cast, and dashing, on the ground or off
-    // it; a slide or a roll faces along its line; standing, the feet stay put until the aim is far round; in the air, the whole
-    // body faces the aim. A view that can't twist faces its aim whole. The run keeps pace with the ground covered
+    // it; a slide or a roll faces along its line; standing, the feet stay put until the aim is far round; a jump faces the
+    // way it carries the hero (the way WASD sent it, owner 2026-11-03), its chest turned to the aim as far as it twists,
+    // and only a jump straight up or a cast in the air faces the aim whole. A view that can't twist faces its aim whole.
+    // The run keeps pace with the ground covered
     const ground = h.airborne ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
+    const flying = h.airborne && pose.kind !== 'cast' && moved * ENGINE.tickHz > STANCE.airTravel
     // a roll, like a slide, faces along its line: the body tumbles the way it goes
-    const mode = pose.kind === 'slide' || pose.kind === 'roll' ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
+    const mode = pose.kind === 'slide' || pose.kind === 'roll' || flying ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne ? 'square' : 'stand'
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
     const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
@@ -819,6 +827,9 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const house = arena.match.map === 'house'
   if (house) {
     cameras.floor = MAPS.house.stand
+    // inside the hall: short of its walls and under its ceiling
+    const { halfWidth, halfLength } = arenaExtent(MAPS.house.pieces)
+    cameras.limits = { x: halfWidth + HALL.margin - 2, z: halfLength + HALL.endMargin - 2, height: HALL.ceiling - 4 }
     cameras.free.set(0, 26, -38)
     cameras.pitch = -0.52
   }

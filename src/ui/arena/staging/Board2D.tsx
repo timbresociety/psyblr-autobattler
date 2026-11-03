@@ -1,7 +1,6 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { ENGINE } from '../../../arena/engine/calibration'
 import type { Team } from '../../../arena/engine/state'
-import { MAX_PER_SIDE, SPACING, STAGE, inRuins, onOwnHalf, type Formation } from './formation'
+import { BOUNDS, MAX_PER_SIDE, SPACING, STAGE, inRuins, onOwnHalf, type Formation } from './formation'
 import { bust, type LoadoutEntry } from './loadout'
 
 /**
@@ -10,7 +9,7 @@ import { bust, type LoadoutEntry } from './loadout'
  * being dragged off the board.
  */
 
-const { halfWidth: W, halfLength: L } = ENGINE.arena
+const { halfWidth: W, halfLength: L } = BOUNDS
 const TOKEN_R = 1.55
 
 export const initialsOf = (name: string) =>

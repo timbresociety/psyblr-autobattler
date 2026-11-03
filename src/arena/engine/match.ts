@@ -1,4 +1,4 @@
-import { initialCoverHealth, type CoverPiece } from './cover.js'
+import { arenaExtent, initialCoverHealth, type CoverPiece } from './cover.js'
 import type { TraitMods } from '../../charter/traits.js'
 import { keepOut } from './locomotion.js'
 import type { Build } from '../../charter/build.js'
@@ -59,10 +59,14 @@ function defaultSpot(match: MatchState, side: Team, index: number, count: number
   return { x, y: map ? standingHeight(map, x, z) : 0, z }
 }
 
-/** Keep a staged spot on its own half of the arena (R1, R2), standing on the map's floor there. */
+/**
+ * Keep a staged spot on its own half of the arena (R1, R2), standing on the map's floor there, or on the level it was
+ * staged on (a deck, a balcony: its height is kept).
+ */
 function ownHalf(side: Team, p: Vec3, map?: ArenaMap): Vec3 {
+  const { halfWidth } = arenaExtent(map?.pieces)
   const z = side === 0 ? Math.min(-0.5, p.z) : Math.max(0.5, p.z)
-  const x = clamp(p.x, -ENGINE.arena.halfWidth, ENGINE.arena.halfWidth)
+  const x = clamp(p.x, -halfWidth, halfWidth)
   return { x, y: map ? Math.max(p.y, standingHeight(map, x, z)) : clamp(p.y, 0, ENGINE.arena.ceiling), z }
 }
 

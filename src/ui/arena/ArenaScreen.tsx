@@ -50,12 +50,15 @@ function startDeferred(host: HTMLElement, setup: MatchSetup, onProgress: (done: 
 /** A training dummy's health against an ordinary tank's: enough to try every skill on it more than once. */
 const DUMMY_HEALTH = 5
 
+/** A dev-only fixed seed (`window.__seed`), so a probe can replay the same match frame for frame; never in production. */
+const devSeed = (): number | undefined => (import.meta.env.DEV && typeof window !== 'undefined' ? (window as unknown as { __seed?: number }).__seed : undefined)
+
 /** Turn a staged formation into the engine's teams, formations and per-hero packages. */
 export function matchSetup(staged: StagingResult): MatchSetup {
   const side = (s: 0 | 1) => staged.formation[s].map((p) => staged.loadout[p.hero])
   const teams = ([0, 1] as const).map((s) => armyModifiers(side(s).map((e) => e.build))) as MatchSetup['teams']
-  const formations = ([0, 1] as const).map((s) => staged.formation[s].map((p) => ({ x: p.x, y: 0, z: p.z }))) as MatchSetup['formations']
-  const setup: MatchSetup = { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: Date.now() % 100_000, side: staged.side, aiLevels: staged.aiLevels ?? [DEFAULT_AI_LEVEL, DEFAULT_AI_LEVEL] }
+  const formations = ([0, 1] as const).map((s) => staged.formation[s].map((p) => ({ x: p.x, y: p.y ?? 0, z: p.z }))) as MatchSetup['formations']
+  const setup: MatchSetup = { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: devSeed() ?? Date.now() % 100_000, side: staged.side, aiLevels: staged.aiLevels ?? [DEFAULT_AI_LEVEL, DEFAULT_AI_LEVEL] }
   if (!staged.dummy) return setup
   teams[1] = teams[1].map((c) => ({ ...c, mods: { ...c.mods, mul: { ...c.mods?.mul, maxHealth: DUMMY_HEALTH - 1 } } }))
   return { ...setup, idle: teams[1].map((_, j) => teams[0].length + j) }

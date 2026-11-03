@@ -127,15 +127,15 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
   const say = (reason: Parameters<typeof refine>[0], x: number, z: number) => setNotice(NOTICE[refine(reason, { x, z })])
 
   // what either board asks for; the formation's rules decide, and a refused spot says why
-  const placeHero = (hero: number, x: number, z: number) => {
-    const r = place(formation, editing, hero, x, z)
+  const placeHero = (hero: number, x: number, z: number, y?: number) => {
+    const r = place(formation, editing, hero, x, z, y)
     if (r.ok) {
       setFormation(r.formation)
       changed()
     } else say(r.reason, x, z)
   }
-  const moveHero = (s: Team, index: number, x: number, z: number) => {
-    const r = move(formation, s, index, x, z)
+  const moveHero = (s: Team, index: number, x: number, z: number, y?: number) => {
+    const r = move(formation, s, index, x, z, y)
     if (r.ok) {
       setFormation(r.formation)
       changed()
@@ -204,7 +204,7 @@ export function Staging({ onStart, deps = liveLoadout, demo = true, initial }: {
       // the click that may follow a drag is not a pick
       swallowClickUntil.current = performance.now() + 400
       const spot = board3d.current?.drop(ev.clientX, ev.clientY)
-      if (spot) placeRef.current(hero, spot.x, spot.z)
+      if (spot) placeRef.current(hero, spot.x, spot.z, spot.y)
     }
     const abandon = () => {
       board3d.current?.cancelCarry()

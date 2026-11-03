@@ -1,10 +1,9 @@
 import { PerspectiveCamera } from 'three'
 import { describe, expect, it } from 'vitest'
-import { ENGINE } from '../../../arena/engine/calibration.js'
 import { BOARD_FOV, ZOOM_LEAN, applyView, clampView, elevation, fitDistance, floorPoint, homeView, judge, limitsFor, matchSlots, orbit, pan, pick, reasonText, toNdc, toScreen, wrapAngle, zoom, type Standee, type View } from './board-math.js'
-import { MAX_PER_SIDE, deployHeroes, emptyFormation, place } from './formation.js'
+import { BOUNDS, MAX_PER_SIDE, deployHeroes, emptyFormation, place } from './formation.js'
 
-const { halfWidth: W, halfLength: L } = ENGINE.arena
+const { halfWidth: W, halfLength: L } = BOUNDS
 
 function cameraFor(view: View, aspect = 1.4) {
   const camera = new PerspectiveCamera(BOARD_FOV, aspect, 0.5, 1200)

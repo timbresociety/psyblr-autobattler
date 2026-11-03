@@ -1,5 +1,5 @@
 import { ENGINE } from '../engine/calibration.js'
-import { ceilingOver, coverHit, floorUnder, initialCoverHealth, pushOut, type CoverHealth, type CoverPiece, type MapLine } from '../engine/cover.js'
+import { arenaExtent, ceilingOver, coverHit, floorUnder, initialCoverHealth, pushOut, type CoverHealth, type CoverPiece, type MapLine } from '../engine/cover.js'
 import type { Vec3 } from '../engine/maths.js'
 import { bodyRadius, type HeroState, type MatchState } from '../engine/state.js'
 
@@ -117,7 +117,7 @@ export function buildNav(pieces: readonly CoverPiece[], lines: readonly MapLine[
     if (pushOut(pieces, health, { x, y, z }, RADIUS, HEIGHT, M.step)) return false
     return ceilingOver(pieces, health, { x, y, z }, RADIUS, y + 0.05, y + HEIGHT) === undefined
   }
-  const { halfWidth, halfLength } = ENGINE.arena
+  const { halfWidth, halfLength } = arenaExtent(pieces)
   const heightsAt = (x: number, z: number) => {
     const ys = [0]
     pieces.forEach((p, i) => {

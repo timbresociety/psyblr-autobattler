@@ -80,7 +80,7 @@ export const ENGINE = {
     /** Crouched and prone heroes move at these shares of run speed, their bodies these shares of their height. */
     crouch: { speed: 0.55, height: 0.7 },
     prone: { speed: 0.22, height: 0.35 },
-    /** Z rolls `distance` metres along the facing in `time` seconds for a stamina pip, untouchable for its first `iframes`. */
+    /** Z rolls `distance` metres the way the hero steers (ahead when it does not) in `time` seconds for a stamina pip, untouchable for its first `iframes`. */
     roll: { distance: 5, time: 0.55, iframes: 0.3 },
     /** X holds a guard: melee from in front lands on it, at `speed` times run speed. */
     block: { speed: 0.35, arcDegrees: 140 },

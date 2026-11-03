@@ -15,6 +15,7 @@ import { tickWorld } from './world.js'
  */
 
 const M = ENGINE.move
+const ticksOf = (seconds: number) => Math.round(seconds * ENGINE.tickHz)
 const go = (moveX: number, moveZ: number, moves = 0): Command => ({ moveX, moveZ, moves, aimYaw: 0, aimPitch: 0, buttons: 0 })
 
 function solo(opts: { moveSpeed?: number; y?: number; pieces?: CoverPiece[]; lines?: MapLine[]; size?: HeroSetup['build']['sizeClass'] } = {}) {
@@ -36,6 +37,20 @@ function solo(opts: { moveSpeed?: number; y?: number; pieces?: CoverPiece[]; lin
 const block = (x: number, z: number, hx: number, hz: number, top: number, extra: Partial<CoverPiece> = {}): CoverPiece => ({ shape: { kind: 'block', x, z, hx, hz }, base: 0, top, look: 'grey', ...extra })
 
 describe('the baseline every hero has (§7, measured)', () => {
+  it('rolls the way it steers, not the way it aims; with no key held, ahead (owner, 2026-11-03)', () => {
+    // aim along +z (aimYaw 0), steer right (-x): the roll goes right
+    const s = solo()
+    s.step(go(-1, 0, MOVES.dodge))
+    s.step(go(-1, 0), ticksOf(M.roll.time) - 2)
+    expect(s.moves()).toContain('roll')
+    expect(s.h.position.x).toBeLessThan(-M.roll.distance * 0.6)
+    expect(Math.abs(s.h.position.z)).toBeLessThan(0.3)
+    const still = solo()
+    still.step(go(0, 0, MOVES.dodge))
+    still.step(go(0, 0), ticksOf(M.roll.time) - 2)
+    expect(still.h.position.z).toBeGreaterThan(M.roll.distance * 0.6)
+  })
+
   it('the field jogs about 6.5 m/s and a 6.5 m/s jog sprints at 8', () => {
     const jogs = ROLE_IDS.map((r) => prepareHero(defaultBuild(r)).sheet.moveSpeed)
     const mean = jogs.reduce((a, b) => a + b, 0) / jogs.length

@@ -46,10 +46,10 @@ export interface Edge {
  * fight onto the spot's own floor. The last step leaves a ring a squad can just stand in.
  */
 export const EDGE = {
-  start: { r: 76, lo: -10, hi: 40 },
+  start: { r: 100, lo: -10, hi: 40 },
   // timed on AI 10 v 10s, which wipe in one to two minutes: the first close lands as the squads first meet
   steps: [
-    { at: 20, until: 50, r: 40, lo: -12, hi: 26, toward: 0.4, dps: 0.02 },
+    { at: 20, until: 50, r: 52, lo: -12, hi: 26, toward: 0.4, dps: 0.02 },
     { at: 60, until: 85, r: 22, lo: -7.5, hi: 14, toward: 0.75, dps: 0.04 },
     { at: 95, until: 120, r: 10, lo: -1.5, hi: 9, toward: 1, dps: 0.07 },
     { at: 130, until: 150, r: 3.5, lo: -0.5, hi: 5, toward: 1, dps: 0.12 },

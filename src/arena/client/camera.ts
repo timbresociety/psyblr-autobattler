@@ -15,6 +15,11 @@ export const HERO_CAMERA = { back: 4.2, right: 1.1, up: 1.9, pitchLimit: 1.2, ey
 export const FOLLOW_CAMERA = { back: 5.6, right: 0.7, up: 2.3, pitch: -0.22, minBack: 2.5, maxBack: 14, turn: 3, lookAround: 2.5 }
 /** How fast a camera pulled in by a wall eases back out to its full distance, in metres a second. */
 const BOOM_OUT = 4
+/**
+ * A boom blocked close behind (a post, a railing, a wall at the hero's back) lifts over it rather than pressing the
+ * camera into the hero's head: the heights it tries, metres, and how fast it rises and settles back, metres a second.
+ */
+const BOOM_LIFT = { tries: [1, 2, 3], up: 8, down: 3 } as const
 /** How fast the camera goes to first person and back, in whole zooms a second. */
 const SCOPE_SPEED = 6
 /** Past this much of the zoom, the hero's own body hides so the camera sees out of its eyes. */
@@ -32,7 +37,17 @@ export function pullIn(from: THREE.Vector3, to: THREE.Vector3, proxies: THREE.Bo
   let nearest = length
   const hit = new THREE.Vector3()
   for (const box of proxies) if (ray.intersectBox(box, hit)) nearest = Math.min(nearest, hit.distanceTo(from) - 0.3)
-  return from.clone().add(ray.direction.multiplyScalar(Math.max(0.5, nearest)))
+  // a box closer than the margin stops it just short of the box (never inside it), however close that is
+  return from.clone().add(ray.direction.multiplyScalar(Math.min(length, Math.max(0, Math.min(0.5, nearest + 0.25), nearest))))
+}
+
+/**
+ * The boom's pivot over a hero's feet at `feet`: lowered under any deck or roof it would be inside (a jump that took the
+ * head up to a deck's underside), so the boom always starts in the open.
+ */
+export function underRoof(pivot: THREE.Vector3, feet: number, proxies: THREE.Box3[]): THREE.Vector3 {
+  for (const box of proxies) if (box.containsPoint(pivot) && box.min.y > feet) pivot.y = Math.max(feet + 0.2, box.min.y - 0.15)
+  return pivot
 }
 
 export class Cameras {
@@ -51,6 +66,8 @@ export class Cameras {
   private turnedFor = Infinity
   /** How far the shoulder camera's boom reaches now; a wall shortens it at once and it grows back slowly. */
   private boom: number | undefined
+  /** How far the boom's root is lifted over something close behind the hero, metres. */
+  private lift = 0
   /**
    * First person (the canon: the right button held zooms in): `scoping` while it's held, and `scope` how far the
    * camera has gone from over the shoulder to the hero's eyes, 0 to 1. The hero's own body hides past FIRST_PERSON.
@@ -59,6 +76,8 @@ export class Cameras {
   scope = 0
   /** Height of the floor the watching camera turns around and zooms toward: the map's main floor. */
   floor = 0
+  /** How far out and up the watching camera may go: the map's edge and the sky, or a hall's walls and ceiling. */
+  limits = { x: WATCH.bounds, z: WATCH.bounds, height: WATCH.maxHeight }
 
   constructor(private readonly camera: THREE.PerspectiveCamera) {
     camera.position.copy(this.free)
@@ -98,6 +117,7 @@ export class Cameras {
     this.fromQ.copy(this.camera.quaternion)
     this.blend = 0
     this.boom = undefined
+    this.lift = 0
   }
 
   /** Whether a wall has pulled the shoulder camera in so close it would sit inside the hero's head. */
@@ -134,7 +154,7 @@ export class Cameras {
     // higher up, the same key covers more ground, the way a strategy camera feels
     const speed = (10 + this.free.y * 0.9) * dt
     this.pan(r * speed, f * speed)
-    this.free.y = Math.max(WATCH.minHeight, Math.min(WATCH.maxHeight, this.free.y + u * speed))
+    this.free.y = Math.max(WATCH.minHeight, Math.min(this.limits.height, this.free.y + u * speed))
   }
 
   /** Watching: move the camera and what it looks at together, along the ground. */
@@ -144,8 +164,8 @@ export class Cameras {
     const flat = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw))
     const side = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw))
     this.free.addScaledVector(side, right).addScaledVector(flat, forward)
-    this.free.x = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.x))
-    this.free.z = Math.max(-WATCH.bounds, Math.min(WATCH.bounds, this.free.z))
+    this.free.x = Math.max(-this.limits.x, Math.min(this.limits.x, this.free.x))
+    this.free.z = Math.max(-this.limits.z, Math.min(this.limits.z, this.free.z))
   }
 
   /** Watching: turn around the point being looked at (left drag, Q and E), or around the hero being followed. */
@@ -173,7 +193,7 @@ export class Cameras {
     const pivot = this.pivot()
     const distance = Math.max(WATCH.minDistance, Math.min(WATCH.maxDistance, this.free.distanceTo(pivot) * factor))
     this.free.copy(pivot).addScaledVector(this.forward(), -distance)
-    this.free.y = Math.max(WATCH.minHeight, Math.min(WATCH.maxHeight, this.free.y))
+    this.free.y = Math.max(WATCH.minHeight, Math.min(this.limits.height, this.free.y))
   }
 
   /**
@@ -196,14 +216,15 @@ export class Cameras {
     this.scope += Math.sign(toward - this.scope) * Math.min(Math.abs(toward - this.scope), dt * SCOPE_SPEED)
     if (this.mode === 'hero' && hero) {
       const s = this.scope * this.scope * (3 - 2 * this.scope)
-      const pivot = new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up + (HERO_CAMERA.eyes - HERO_CAMERA.up) * s, hero.z)
+      const pivot = underRoof(new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up + (HERO_CAMERA.eyes - HERO_CAMERA.up) * s, hero.z), hero.y, proxies)
       target.copy(this.shoulder(dt, pivot, forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s, HERO_CAMERA.right * (1 - s), proxies))
     } else if (following) {
-      const pivot = new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up, followed.z)
+      const pivot = underRoof(new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up, followed.z), followed.y, proxies)
       target.copy(this.shoulder(dt, pivot, forward, -this.followBack, FOLLOW_CAMERA.right, proxies))
       this.free.copy(target)
     } else {
       this.boom = undefined
+      this.lift = 0
       target.copy(this.free)
     }
     const look = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(target, target.clone().add(forward), new THREE.Vector3(0, 1, 0)))
@@ -222,9 +243,31 @@ export class Cameras {
     const offset = forward.clone().multiplyScalar(back).addScaledVector(side, right)
     const full = offset.length()
     if (full < 1e-6) return pivot.clone()
-    const room = pullIn(pivot, pivot.clone().add(offset), proxies).distanceTo(pivot)
-    const reach = Math.min(full, room)
+    // how far the boom reaches from its root lifted `lift` over the pivot; -1 when something is in the way of the lift
+    const up = new THREE.Vector3(0, 1, 0)
+    const reachFrom = (lift: number) => {
+      const root = pivot.clone().addScaledVector(up, lift)
+      if (lift > 0 && pullIn(pivot, root, proxies).distanceTo(pivot) < lift - 0.05) return -1
+      return Math.min(full, pullIn(root, root.clone().add(offset), proxies).distanceTo(root))
+    }
+    let want = 0
+    let best = reachFrom(0)
+    if (best < full * 0.6)
+      for (const lift of BOOM_LIFT.tries) {
+        const r = reachFrom(lift)
+        if (r > best + 0.5) {
+          best = r
+          want = lift
+          if (r >= full * 0.9) break
+        }
+      }
+    this.lift += want > this.lift ? Math.min(want - this.lift, BOOM_LIFT.up * dt) : -Math.min(this.lift - want, BOOM_LIFT.down * dt)
+    const root = pivot.clone().addScaledVector(up, this.lift)
+    // the root eases, so it may be partway up something: never through it
+    const rootRoom = this.lift > 0 ? pullIn(pivot, root, proxies).distanceTo(pivot) : 0
+    if (this.lift > 0 && rootRoom < this.lift) root.copy(pivot).addScaledVector(up, rootRoom)
+    const reach = Math.min(full, pullIn(root, root.clone().add(offset), proxies).distanceTo(root))
     this.boom = this.boom === undefined || reach < this.boom ? reach : Math.min(reach, this.boom + BOOM_OUT * dt)
-    return pivot.clone().addScaledVector(offset, this.boom / full)
+    return root.addScaledVector(offset, this.boom / full)
   }
 }

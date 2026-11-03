@@ -1,7 +1,7 @@
 import { SIZES } from '../../charter/sizes.js'
 import { DT, ENGINE, ticks } from './calibration.js'
 import { atan2, clamp, cos, sin } from './maths.js'
-import { ceilingOver, floorUnder, pushOut, type MapLine } from './cover.js'
+import { arenaExtent, ceilingOver, floorUnder, pushOut, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
 import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import { moveShare } from './timing.js'
@@ -69,9 +69,12 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   hero.sprinting = (command.moves & MOVES.dash) !== 0 && hero.shiftSince >= 0 && now >= hero.dashUntil && !hero.airborne && !lowered && steering
   // a guard is up while X is held on the ground and nothing else is going on
   hero.blocking = (command.moves & MOVES.block) !== 0 && !hero.airborne && !hero.roll && !(hero.action && now < hero.action.ends && !hero.action.released) && free
-  // Z rolls along the facing, untouchable for its first moments
+  // Z rolls the way the hero steers (ahead when it doesn't), not where it aims (owner, 2026-11-03), untouchable for its
+  // first moments
   if (pressed & MOVES.dodge && free && !hero.airborne && !hero.roll && hero.stamina >= 1) {
-    hero.roll = { from: now, until: now + ticks(M.roll.time), x: sin(hero.yaw), z: cos(hero.yaw) }
+    const n = Math.sqrt(mx * mx + mz * mz)
+    const [rx, rz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]
+    hero.roll = { from: now, until: now + ticks(M.roll.time), x: rx, z: rz }
     hero.invulnerableUntil = Math.max(hero.invulnerableUntil, now + ticks(M.roll.iframes))
     hero.stamina -= 1
     hero.stance = 'stand'
@@ -361,7 +364,7 @@ export function standOn(hero: HeroState, match: MatchState | undefined, reach = 
  * or its body would stop short of the edge and its centre never get over it.
  */
 export function keepOut(hero: HeroState, match: MatchState | undefined, hits?: number[], clearance: number = M.step): boolean {
-  clampToArena(hero)
+  clampToArena(hero, match)
   if (!match?.cover) return false
   const touched = pushOut(match.cover.pieces, match.cover.health, hero.position, bodyRadius(hero), capsule(hero).height, clearance, hits)
   // a deck or roof the body has risen or drifted into from below, by a jump, a knock-up or a throw, pushes it down under
@@ -373,13 +376,14 @@ export function keepOut(hero: HeroState, match: MatchState | undefined, hits?: n
     p.y = Math.max(roof - height, floorUnder(match.cover.pieces, match.cover.health, p, p.y + M.step))
     hero.velocity.y = Math.min(0, hero.velocity.y)
   }
-  if (touched) clampToArena(hero)
+  if (touched) clampToArena(hero, match)
   return touched
 }
 
-export function clampToArena(hero: HeroState) {
+export function clampToArena(hero: HeroState, match?: MatchState) {
   const p = hero.position
-  const { halfWidth, halfLength, ceiling } = ENGINE.arena
+  const { ceiling } = ENGINE.arena
+  const { halfWidth, halfLength } = arenaExtent(match?.cover?.pieces)
   p.x = clamp(p.x, -halfWidth, halfWidth)
   p.z = clamp(p.z, -halfLength, halfLength)
   p.y = clamp(p.y, 0, ceiling)

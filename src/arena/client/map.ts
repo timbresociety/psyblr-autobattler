@@ -6,6 +6,7 @@ import { paintedTexture } from './ruins.js'
 import { PALETTE, SUN } from './sky.js'
 import { batchStatic } from './render/batch.js'
 import { valley } from './valley.js'
+import { buildHall, HALL } from './hall.js'
 
 export { atmosphere, lights, skyFlashOf, type SkyFlash } from './sky.js'
 
@@ -39,8 +40,13 @@ function barrierTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(canvas)
 }
 
-export function buildMap(): ArenaMap {
-  const { halfWidth: W, halfLength: L } = ENGINE.arena
+/**
+ * `hall` gives the arena's bounds when it is the House of Instinct: then the floor is the Game Centre's, the bounds are
+ * marked by the hall's railing and walls rather than a glowing barrier, and the hall stands round it (hall.ts) instead
+ * of the valley.
+ */
+export function buildMap(hall?: { halfWidth: number; halfLength: number; open?: boolean }): ArenaMap {
+  const { halfWidth: W, halfLength: L } = hall ?? ENGINE.arena
   const group = new THREE.Group()
   const proxies: THREE.Box3[] = []
 
@@ -48,6 +54,16 @@ export function buildMap(): ArenaMap {
   // every 5 m in world space, so the paving that runs on past the barrier (valley.ts) lines up with it; a slow blotch of
   // lighter and darker stone over tens of metres keeps the tiling from showing, and each half leans a touch toward its team
   const half = (side: 0 | 1) => {
+    if (hall) {
+      // the Game Centre's floor where it shows (the trenches, the tunnel, the vault): worn oxblood carpet
+      const top = new THREE.Mesh(new THREE.PlaneGeometry(W * 2, L), new THREE.MeshStandardMaterial({ color: new THREE.Color(HALL.colors.oxblood).lerp(new THREE.Color(TEAM_COLORS[side]), 0.06), roughness: 0.95 }))
+      top.name = 'floor'
+      top.rotation.x = -Math.PI / 2
+      top.position.z = (side ? 1 : -1) * (L / 2)
+      top.receiveShadow = true
+      group.add(top)
+      return
+    }
     const mat = new MeshStandardNodeMaterial({ normalMap: paintedTexture('paving', 'normal'), roughnessMap: paintedTexture('paving', 'rough'), normalScale: new THREE.Vector2(1.1, 1.1), roughness: 1 })
     const blotch = smoothstep(0.25, 0.55, texture(paintedTexture('meadow', 'albedo'), positionWorld.xz.div(47)).g)
     const tint = new THREE.Color(0xffffff).lerp(new THREE.Color(TEAM_COLORS[side]), 0.05)
@@ -84,6 +100,7 @@ export function buildMap(): ArenaMap {
   }
   glow(W * 2, 0.22, 0, 0, PALETTE.line, 0.75)
   for (const side of [0, 1] as const) {
+    if (hall) break
     const z = (side ? 1 : -1) * (L - 0.15)
     glow(W * 2, 0.28, 0, z, TEAM_COLORS[side], 0.85)
     glow(0.28, L, -W + 0.15, (side ? 1 : -1) * (L / 2), TEAM_COLORS[side], 0.85)
@@ -102,6 +119,7 @@ export function buildMap(): ArenaMap {
     trim.add(m)
   }
   for (const side of [0, 1] as const) {
+    if (hall) break
     const s = side ? 1 : -1
     wall(W * 2, 0, s * L, 0, TEAM_COLORS[side])
     wall(L, -W, s * (L / 2), Math.PI / 2, TEAM_COLORS[side])
@@ -113,6 +131,10 @@ export function buildMap(): ArenaMap {
   for (const m of trim.children) if (m.name === 'batch') m.name = ((m as THREE.Mesh).material as THREE.Material).transparent ? 'barrier' : 'line'
   group.add(trim)
 
+  if (hall) {
+    group.add(buildHall(W, L, hall.open))
+    return { group, proxies }
+  }
   // the land outside: meadow and ruins at the courtyard's edge, pine forest, the lake and the mountains
   const around = valley(W, L, SUN)
   group.add(around.group)

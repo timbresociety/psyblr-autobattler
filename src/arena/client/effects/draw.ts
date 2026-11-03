@@ -63,7 +63,8 @@ export interface Extra {
 }
 
 const white = new THREE.Color(1, 1, 1)
-export const hot = (c: THREE.Color, k = 0.55) => c.clone().lerp(white, k)
+/** A colour toward white: the hot core of a flash or a bolt. Kept short of white, so a core still reads as its colour. */
+export const hot = (c: THREE.Color, k = 0.55) => c.clone().lerp(white, k * 0.6)
 const hsl = { h: 0, s: 0, l: 0 }
 const chroma = (c: THREE.Color) => (c.getHSL(hsl), hsl.s * (1 - Math.abs(2 * hsl.l - 1)))
 export const color = (r: EffectRecipe, i: 0 | 1 | 2) => new THREE.Color(r.palette[i])
@@ -73,8 +74,18 @@ export const color = (r: EffectRecipe, i: 0 | 1 | 2) => new THREE.Color(r.palett
  */
 export function vivid(r: EffectRecipe, i: 0 | 1 | 2): THREE.Color {
   const c = color(r, i)
-  if (chroma(c) >= 0.3) return c
-  return ([0, 1, 2] as const).map((k) => color(r, k)).reduce((a, b) => (chroma(b) > chroma(a) ? b : a))
+  return anime(chroma(c) >= 0.3 ? c : ([0, 1, 2] as const).map((k) => color(r, k)).reduce((a, b) => (chroma(b) > chroma(a) ? b : a)))
+}
+
+/**
+ * Anime colour discipline for anything that covers an area (owner, 2026-11-03: hyper-real anime, not a wash): rich
+ * saturation and a mid lightness, so a cone, a sphere or a pillar reads as its colour even where several overlap.
+ * Greys (smoke, steel) keep their greyness.
+ */
+export function anime(c: THREE.Color): THREE.Color {
+  c.getHSL(hsl)
+  if (hsl.s < 0.08) return c.clone()
+  return new THREE.Color().setHSL(hsl.h, Math.max(hsl.s, 0.82), Math.min(0.58, Math.max(0.4, hsl.l)))
 }
 
 type Energy = THREE.MeshBasicMaterial & { fade?: { value: number } }
@@ -115,7 +126,7 @@ export function createDraw(kit: Kit) {
   const sparks = (at: THREE.Vector3, c: THREE.Color, count: number, speed: number, size = 0.12) =>
     sparkle({ at, count, kind: 'glow', life: 0.5, size: [size, size * 0.2], color: hot(c, 0.3), speed, gravity: 9, drag: 1.5 })
   const smokePop = (at: THREE.Vector3, c: THREE.Color, size: number) => {
-    puff({ at, count: Math.round(10 + size * 4), kind: 'smoke', life: 1, size: [size * 0.5, size * 1.5], color: c.clone().lerp(new THREE.Color(0.85, 0.85, 0.88), 0.7), speed: 2 + size, spread: size * 0.3, drag: 2.5, alpha: 0.55, spin: 0.8 })
+    puff({ at, count: Math.round(10 + size * 4), kind: 'smoke', life: 1, size: [size * 0.5, size * 1.5], color: c.clone().lerp(new THREE.Color(0.5, 0.5, 0.55), 0.6), speed: 2 + size, spread: size * 0.3, drag: 2.5, alpha: 0.5, spin: 0.8 })
     sparkle({ at, count: 2, kind: 'star', life: 0.18, size: [size * 1.2, size * 0.2], color: hot(c, 0.6), spin: 3 })
   }
   /** A slash of light from the caster along the aim, with a tilt that makes it a diagonal cut. */

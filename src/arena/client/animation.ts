@@ -147,7 +147,8 @@ const CHARGE_TICKS = Math.ceil(ENGINE.melee.heavyHold * ENGINE.tickHz)
  * than `stride` metres a second keeps running under the cast, and a standing hero's hips hold until its aim is `pivot`
  * round from them.
  */
-export const STANCE = { turn: 12, twist: 100 * DEG, warp: 55 * DEG, legs: 60 * DEG, swing: 8, back: { enter: 110 * DEG, leave: 90 * DEG }, stride: 0.6, pivot: 45 * DEG }
+/** `airTravel`: m/s across the ground over which a jump faces the way it travels rather than the aim. */
+export const STANCE = { turn: 12, twist: 100 * DEG, warp: 55 * DEG, legs: 60 * DEG, swing: 8, back: { enter: 110 * DEG, leave: 90 * DEG }, stride: 0.6, pivot: 45 * DEG, airTravel: 1.5 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a))
 
@@ -170,8 +171,8 @@ export interface Stance {
  * moves, its legs run the rest at an angle, and its chest twists to where it aims, so a hero shooting while it strafes
  * or backs away doesn't skate; moving away from its aim it faces the aim and runs backwards. Standing, its feet stay
  * put: the hips hold while the chest follows the aim, and only once the aim is STANCE.pivot round do the hips turn, all
- * the way to face it. In the air the whole body faces the aim. Sliding, the hips face along the slide and the chest
- * turns toward the aim as far as it twists. `last` is last frame's stance: the hips turn from there at STANCE.turn.
+ * the way to face it. In the air the whole body faces the aim (the caller passes a jump that travels as a slide).
+ * Sliding, the hips face along the slide and the chest turns toward the aim as far as it twists. `last` is last frame's stance: the hips turn from there at STANCE.turn.
  * `move` is how far the hero moved, if it did. A hero that `strafes` (its view sidesteps and backpedals on clips of
  * its own: see gait.ts) runs with its hips square to its aim whichever way it goes, its legs and the clips doing the
  * rest; it still counts as running backwards when it moves away from its aim, for the dash it hops back on.

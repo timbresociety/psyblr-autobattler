@@ -1,3 +1,4 @@
+import { ENGINE } from './calibration.js'
 import { GRIDS } from './grid.js'
 import { cos, sin, type Vec3 } from './maths.js'
 
@@ -48,6 +49,28 @@ export function surfaceAt(piece: CoverPiece, x: number, z: number): number {
   const c = alongX ? x - s.x : z - s.z
   const u = Math.max(0, Math.min(1, ((sl.rise[1] === '+' ? c : -c) + half) / (2 * half)))
   return sl.low + (piece.top - sl.low) * u
+}
+
+const extents = new WeakMap<readonly CoverPiece[], { halfWidth: number; halfLength: number }>()
+
+/**
+ * How far a map reaches from its middle: as far as its pieces go, and never less than the arena (the House of Instinct's
+ * concourse takes it past the old bounds; the ruins sit inside them).
+ */
+export function arenaExtent(pieces: readonly CoverPiece[] | undefined): { halfWidth: number; halfLength: number } {
+  const { halfWidth, halfLength } = ENGINE.arena
+  if (!pieces) return { halfWidth, halfLength }
+  let e = extents.get(pieces)
+  if (!e) {
+    e = { halfWidth, halfLength }
+    for (const p of pieces) {
+      const s = p.shape
+      e.halfWidth = Math.max(e.halfWidth, Math.abs(s.x) + (s.kind === 'block' ? s.hx : s.r))
+      e.halfLength = Math.max(e.halfLength, Math.abs(s.z) + (s.kind === 'block' ? s.hz : s.r))
+    }
+    extents.set(pieces, e)
+  }
+  return e
 }
 
 /** One piece's state in a match: its health, or -1 for unbreakable; 0 means broken and gone. */

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { attribute, float, normalView, positionViewDirection, uniform } from 'three/tsl'
+import { attribute, float, normalView, positionViewDirection, smoothstep, uniform, vec3 } from 'three/tsl'
 import { clone as cloneRig } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS } from '../../../charter/build.js'
 import { FAMILY_OF } from '../../../charter/skill-look.js'
@@ -101,16 +101,23 @@ export interface ScreenFeel {
 type EnergyMaterial = MeshBasicNodeMaterial & { tint: { value: THREE.Color }; fade: { value: number } }
 
 /**
- * An energy body, tinted per effect, additive. A core (a projectile) glows through its middle; a shell (a burst, an
- * aura, a transformed hero's hitbox) lights only its rim, so what sits inside it stays readable.
+ * An energy body, tinted per effect, additive, shaded the anime way (owner, 2026-11-03): cel bands, not a soft gradient.
+ * A shell (a burst, an aura, a transformed hero's hitbox) is clear inside, a crisp band of saturated colour round its
+ * silhouette with a thin hot line at the very edge, so what sits inside it stays readable and overlapping shells don't
+ * sum to a white fog. A core (a projectile) is the same band round a flat saturated body and a small white-hot heart.
  */
 function energyMaterial(color: THREE.Color, opacity: number, shell = false): EnergyMaterial {
   const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }) as EnergyMaterial
   const tint = uniform(color.clone())
   const fade = uniform(opacity)
   const facing = normalView.dot(positionViewDirection).abs()
-  const rim = float(1).sub(facing).pow(1.6)
-  m.colorNode = shell ? tint.mul(rim.pow(1.5).mul(2).add(0.03)) : tint.mul(rim.mul(1.8).add(facing.pow(4).mul(1.2)).add(0.25))
+  const rim = float(1).sub(facing)
+  // two hard steps toward the silhouette: the band, then a thin line a touch whiter than the band
+  const band = smoothstep(0.5, 0.56, rim)
+  const line = smoothstep(0.82, 0.86, rim)
+  const white = vec3(1, 1, 1)
+  if (shell) m.colorNode = tint.mul(band.mul(0.9).add(0.02)).add(white.mul(line.mul(0.35)))
+  else m.colorNode = tint.mul(band.mul(0.8).add(0.45)).add(white.mul(smoothstep(0.82, 0.9, facing).mul(0.9)))
   m.opacityNode = fade
   m.tint = tint
   m.fade = fade
@@ -212,7 +219,14 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   const thin = (spec: SpriteSpec): SpriteSpec => (atLeast(ctrl.quality(), 'fewer-particles') ? { ...spec, count: Math.ceil(spec.count / 2) } : spec)
   let clock = 0
   const sparkle = (spec: SpriteSpec) => glow.spawn(thin(spec), clock)
-  const puff = (spec: SpriteSpec) => smoke.spawn(thin(spec), clock)
+  // smoke is accent, not atmosphere (anime pass, owner 2026-11-03): ten heroes' worth of plumes at full strength fog the
+  // whole fight white, so every puff is fewer, smaller, thinner and a mid tone of its colour rather than near white
+  const SMOKE = { count: 0.5, size: 0.75, alpha: 0.55, tone: 0.72 } as const
+  const puff = (spec: SpriteSpec) =>
+    smoke.spawn(
+      thin({ ...spec, count: Math.max(1, Math.round(spec.count * SMOKE.count)), size: [spec.size[0] * SMOKE.size, spec.size[1] * SMOKE.size], alpha: (spec.alpha ?? 1) * SMOKE.alpha, color: spec.color.clone().multiplyScalar(SMOKE.tone) }),
+      clock,
+    )
   const motif = (spec: SpriteSpec) => motifs.spawn(thin(spec), clock)
   const tex = {
     shock: shockTexture(),

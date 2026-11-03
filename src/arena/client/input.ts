@@ -3,8 +3,8 @@ import type { BuildSlot } from '../../charter/types.js'
 import { AIM_STEPS, MOVES, slotBit, type Command } from '../engine/state.js'
 
 /**
- * Keyboard and mouse, as GAME.md §3 binds them (jump Space, melee V, owner 2026-11-02). WASD moves relative to the
- * camera; Space jumps (again in the air for the double jump); Z rolls along the facing; Shift tapped dashes and held
+ * Keyboard and mouse, as GAME.md §3 binds them (jump Space, melee V, owner 2026-11-02). WASD (or the arrow keys) moves
+ * relative to the camera; Space jumps (again in the air for the double jump); Z rolls the way WASD steers; Shift tapped dashes and held
  * sprints; C crouches (at a run it slides) and Ctrl lies prone, each again to stand; V strikes (tapped, chaining
  * into a combo) or charges a heavy blow (held, let go to land it); X guards; left click is Skill 1, Q Skill 2, E the
  * movement skill, F turns the passive on and off, R the ultimate; the right button held zooms to first person (the
@@ -18,6 +18,10 @@ export const BINDINGS: Record<string, Action> = {
   KeyS: 'back',
   KeyA: 'left',
   KeyD: 'right',
+  ArrowUp: 'forward',
+  ArrowDown: 'back',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
   Space: 'jump',
   KeyZ: 'dodge',
   ShiftLeft: 'dash',
@@ -36,6 +40,11 @@ export const BINDINGS: Record<string, Action> = {
 
 export interface InputState {
   held: Set<string>
+  /**
+   * Keys and buttons pressed since the last command: a tap let go before the engine's next tick still counts once, so a
+   * quick Z or a fast second Space is never lost between ticks.
+   */
+  tapped?: Set<string>
 }
 
 const TAU = Math.PI * 2
@@ -43,7 +52,7 @@ const steps = (a: number) => (((Math.round((a / TAU) * AIM_STEPS) % AIM_STEPS) +
 
 /** The engine command for this tick from what is held and where the camera looks. The aim is the crosshair's, no assist (R16). */
 export function commandFrom(input: InputState, cameraYaw: number, cameraPitch: number, aim?: { yaw: number; pitch: number }): Command {
-  const held = (action: string) => Object.entries(BINDINGS).some(([code, a]) => a === action && input.held.has(code))
+  const held = (action: string) => Object.entries(BINDINGS).some(([code, a]) => a === action && (input.held.has(code) || !!input.tapped?.has(code)))
   const f = (held('forward') ? 1 : 0) - (held('back') ? 1 : 0)
   const r = (held('right') ? 1 : 0) - (held('left') ? 1 : 0)
   // forward is along the camera's yaw (0 = +z); right is a quarter turn clockwise from it
@@ -52,6 +61,7 @@ export function commandFrom(input: InputState, cameraYaw: number, cameraPitch: n
   let buttons = 0
   for (const slot of BUILD_SLOTS) if (held(slot)) buttons |= slotBit(slot)
   const moves = (['jump', 'dash', 'crouch', 'prone', 'dodge', 'block'] as const).reduce((bits, move) => bits | (held(move) ? MOVES[move] : 0), 0)
+  input.tapped?.clear()
   // the aim is where the crosshair points (aim.ts) when it's known, else straight along the camera
   return { moveX, moveZ, moves, aimYaw: steps(aim?.yaw ?? cameraYaw), aimPitch: steps(aim?.pitch ?? cameraPitch), buttons }
 }

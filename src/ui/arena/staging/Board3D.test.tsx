@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ENGINE } from '../../../arena/engine/calibration'
+import { BOUNDS } from './formation'
 import type { BoardHandlers, BoardScene, BoardState } from './board-scene'
 import { Staging, type StagingResult } from './Staging'
 import type { LoadoutDeps } from './loadout'
@@ -111,7 +111,7 @@ describe('the 3D staging board', () => {
     expect(screen.getByRole('region', { name: 'Hero details' }).textContent).not.toContain('Select or drag a hero')
     act(() => h.move(1, 0, 0, -10))
     expect(screen.getByText('That spot is on the other half.')).toBeTruthy()
-    act(() => h.move(1, 0, ENGINE.arena.halfWidth - 0.5, 12))
+    act(() => h.move(1, 0, BOUNDS.halfWidth - 0.5, 12))
     expect(screen.getByText('That spot is too close to the wall.')).toBeTruthy()
     act(() => h.remove(1, 0))
     expect(screen.getByRole('radio', { name: /Enemy side/ }).textContent).toContain('(9/10)')

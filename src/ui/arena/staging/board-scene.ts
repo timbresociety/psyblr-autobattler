@@ -8,8 +8,7 @@ import { buildRuins } from '../../../arena/client/ruins.js'
 import { SIZE_SCALE } from '../../../arena/client/procedural-hero.js'
 import { heightFactor } from '../../../kit/body/physique.js'
 import { ENGINE } from '../../../arena/engine/calibration.js'
-import { STAGE, inRuins } from './formation.js'
-import { standingHeight } from '../../../arena/engine/maps.js'
+import { BOUNDS, STAGE, inRuins, landingOf, standAt, topAt } from './formation.js'
 import { buildGreybox } from '../../../arena/client/greybox.js'
 import type { Team } from '../../../arena/engine/state.js'
 import { shortName } from '../hud/format.js'
@@ -18,7 +17,6 @@ import {
   applyView,
   approach,
   clampView,
-  floorPoint,
   homeView,
   insideBox,
   judge,
@@ -67,8 +65,8 @@ export interface BoardState {
 
 export interface BoardHandlers {
   /** Put `hero` on the side being set up at (x, z); the caller applies the rules and says why a spot is refused. */
-  place: (hero: number, x: number, z: number) => void
-  move: (side: Team, index: number, x: number, z: number) => void
+  place: (hero: number, x: number, z: number, y?: number) => void
+  move: (side: Team, index: number, x: number, z: number, y?: number) => void
   remove: (side: Team, index: number) => void
   select: (placed: { side: Team; index: number } | undefined) => void
   /** A placed hero is in the hand (true) or let go (false). */
@@ -88,13 +86,15 @@ export interface BoardScene {
   dispose: () => Promise<void>
 }
 
-const { halfWidth: W, halfLength: L } = ENGINE.arena
+const { halfWidth: W, halfLength: L } = BOUNDS
+/** The House stands in the Game Centre hall, as in the match; other maps keep their outdoor stage. */
+const HALL_STAGE = STAGE.id === 'house' ? { ...BOUNDS, open: true } : undefined
 /**
  * The board's floor is the stage's main floor: the arena is drawn sunk by its height, so placing, picking and the
  * overlays all work on y = 0, and a hero placed over a lower route stands down in it.
  */
 const FLOOR = STAGE.stand
-const groundOf = (x: number, z: number) => standingHeight(STAGE, x, z) - FLOOR
+const groundOf = (at: FloorPoint) => standAt(at.x, at.z, at.y) - FLOOR
 const sunk = (o: THREE.Object3D) => ((o.position.y -= FLOOR), o)
 const TEAM_RGB = TEAM_COLORS.map((c) => [(c >> 16) & 255, (c >> 8) & 255, c & 255] as const)
 /** Pixels per metre in the floor overlays. */
@@ -114,9 +114,10 @@ interface Figure {
   /** The loadout entry's key: the same hero keeps the same figure across edits. */
   key: string
   hero: number
-  /** Where the formation has it. */
+  /** Where the formation has it, and the level it stands on (absent: the main floor). */
   x: number
   z: number
+  y?: number
   /** Where it is drawn now; eases toward `x, z` unless it is in the hand. */
   at: FloorPoint
   held: boolean
@@ -268,13 +269,13 @@ function keepOutTexture(side: Team): THREE.CanvasTexture {
   g.beginPath()
   g.rect(left, top, width, height)
   g.clip()
-  // every half metre a hero can't be placed (formation.inRuins: inside a piece, on whatever floor is there)
+  // every half metre a hero can't be placed on the top surface there, as the camera sees it from above (formation.inRuins)
   const X = (x: number) => (x + W) * PPM
   const CELL = 0.5
   g.beginPath()
   const z0 = side === 0 ? -L : 0
   for (let x = -W; x < W; x += CELL)
-    for (let z = z0; z < z0 + L; z += CELL) if (inRuins(x + CELL / 2, z + CELL / 2)) g.rect(X(x), Z(z), CELL * PPM + 0.5, CELL * PPM + 0.5)
+    for (let z = z0; z < z0 + L; z += CELL) if (inRuins(x + CELL / 2, z + CELL / 2, topAt(x + CELL / 2, z + CELL / 2))) g.rect(X(x), Z(z), CELL * PPM + 0.5, CELL * PPM + 0.5)
   g.fillStyle = 'rgba(255, 70, 50, 0.16)'
   g.fill()
   g.fillStyle = g.createPattern(hatch, 'repeat')!
@@ -351,15 +352,15 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   // the match's own stage: sky, island, lights and the ruins the engine blocks with
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(BOARD_FOV, 1, 2, 1400)
-  atmosphere(scene)
+  atmosphere(scene, !!HALL_STAGE)
   // the camera stands far back to take in the whole arena: push the haze out with it so the floor stays clear
   const fog = scene.fog as THREE.Fog | null
   if (fog) {
     fog.near = 420
     fog.far = 1500
   }
-  scene.add(sunk(buildMap().group))
-  lights(scene)
+  scene.add(sunk(buildMap(HALL_STAGE).group))
+  lights(scene, HALL_STAGE)
   scene.add(sunk((STAGE.levels ? buildGreybox(STAGE.pieces, STAGE.lines) : buildRuins(STAGE.pieces)).group))
   const pipeline = await bloomPipeline(renderer, scene, camera)
   await fontsReady()
@@ -423,7 +424,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     }
     const c = VERDICT_COLOR[verdict.kind]
     marker.visible = true
-    marker.position.set(at.x, 0.07, at.z)
+    marker.position.set(at.x, groundOf(at) + 0.07, at.z)
     marker.scale.setScalar(Math.max(1, scale) * RING_RADIUS * 1.2)
     markerRing.material.color.copy(c)
     markerDisc.material.color.copy(c)
@@ -461,7 +462,14 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
   const floorAt = (clientX: number, clientY: number, rect: DOMRect, through: View = goal) => {
     applyView(probe, through)
     const ndc = toNdc(clientX, clientY, rect)
-    return floorPoint(probe, ndc.x, ndc.y)
+    // the first surface under the pointer, on any level: the board is drawn sunk by the main floor's height
+    const from = new THREE.Vector3().setFromMatrixPosition(probe.matrixWorld)
+    const dir = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(probe).sub(from)
+    const hit = landingOf({ x: from.x, y: from.y + FLOOR, z: from.z }, dir)
+    if (!hit || Math.abs(hit.x) > 400 || Math.abs(hit.z) > 400) return undefined
+    const at: FloorPoint = { x: hit.x, z: hit.z }
+    if (standAt(hit.x, hit.z, hit.y) !== standAt(hit.x, hit.z)) at.y = hit.y
+    return at
   }
 
   // ── placed heroes ──
@@ -569,8 +577,8 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
 
   /** Keep the figures in step with the formation: the same hero on the same spot keeps its figure; new ones drop in. */
   function reconcile() {
-    const next: (Slot & { index: number; hero: number })[] = []
-    for (const s of [0, 1] as const) state.formation[s].forEach((p, index) => next.push({ side: s, key: entryKey(p.hero), x: p.x, z: p.z, index, hero: p.hero }))
+    const next: (Slot & { y?: number; index: number; hero: number })[] = []
+    for (const s of [0, 1] as const) state.formation[s].forEach((p, index) => next.push({ side: s, key: entryKey(p.hero), x: p.x, z: p.z, y: p.y, index, hero: p.hero }))
     const current = [...placed[0], ...placed[1]]
     const assign = matchSlots(
       current.map((f) => ({ side: f.side, key: f.key, x: f.x, z: f.z })),
@@ -591,14 +599,15 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
         clearTimeout(landing.timer)
         landing = undefined
         f.hero = n.hero
-        f.at = { x: n.x, z: n.z }
+        f.at = { x: n.x, z: n.z, y: n.y }
       } else {
         f = acquire(n.side, n.hero)
-        f.at = { x: n.x, z: n.z }
+        f.at = { x: n.x, z: n.z, y: n.y }
         f.dropAt = reduced ? 0 : now + arriving++ * 28
       }
       f.x = n.x
       f.z = n.z
+      f.y = n.y
       f.hero = n.hero
       showFigure(f, true)
       fresh[n.side][n.index] = f
@@ -678,6 +687,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       f.at = { ...at }
       f.x = at.x
       f.z = at.z
+      f.y = at.y
       showFigure(f, true)
       f.mark.visible = false
       f.badge.hidden = true
@@ -702,6 +712,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     }
     f.x = at.x
     f.z = at.z
+    f.y = at.y
     f.at = { ...at }
     f.held = false
     f.liftTo = 0
@@ -783,8 +794,9 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       if (verdict.kind === 'ok') {
         f.x = at.x
         f.z = at.z
+        f.y = at.y
       }
-      handlers().move(side, index, at.x, at.z)
+      handlers().move(side, index, at.x, at.z, at.y)
     }
     kick()
   }
@@ -892,7 +904,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       if (!at) return
       const good = judge(state.formation, { side: state.editing, hero: state.brush }, at).kind === 'ok'
       if (good && ghost) land(at)
-      handlers().place(state.brush, at.x, at.z)
+      handlers().place(state.brush, at.x, at.z, at.y)
     } else handlers().select(undefined)
   }
   const onCancel = (e: PointerEvent) => {
@@ -946,6 +958,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
         f.at.x = f.x
         f.at.z = f.z
       }
+      f.at.y = f.y
     }
     if (Math.abs(f.liftTo - f.lift) > 0.005) {
       f.lift += (f.liftTo - f.lift) * (reduced ? 1 : 1 - Math.exp(-dt * 16))
@@ -965,9 +978,10 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
       if (t >= 1) f.dropAt = 0
       busy = true
     }
-    f.body.position.set(f.at.x, groundOf(f.at.x, f.at.z) + f.lift + drop, f.at.z)
+    const ground = groundOf(f.at)
+    f.body.position.set(f.at.x, ground + f.lift + drop, f.at.z)
     f.body.scale.setScalar(f.grow)
-    f.mark.position.set(f.held ? f.x : f.at.x, 0.05, f.held ? f.z : f.at.z)
+    f.mark.position.set(f.held ? f.x : f.at.x, ground + 0.05, f.held ? f.z : f.at.z)
     f.mark.scale.setScalar(Math.max(1, f.scale) * RING_RADIUS * pop * (hovered === f ? 1.12 : 1))
     if (f.view && now < f.animUntil) {
       f.view.pose(f.anim, now / 1000, dt, false)
@@ -983,7 +997,7 @@ export async function createBoardScene(host: HTMLElement, initial: BoardState, h
     for (const list of placed)
       for (const f of list) {
         const height = ENGINE.capsule.height * f.scale * f.grow + 0.3
-        const ground = groundOf(f.at.x, f.at.z)
+        const ground = groundOf(f.at)
         toScreen(camera, f.at.x, ground, f.at.z, w, h, f.standee.foot)
         toScreen(camera, f.at.x, ground + f.lift + height, f.at.z, w, h, f.standee.top)
         const show = f.body.visible && f.standee.top.visible

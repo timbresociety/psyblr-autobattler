@@ -32,31 +32,37 @@ export function spriteAtlas(): THREE.CanvasTexture {
   return canvas(1024, (ctx, size) => {
     const cell = size / 2
     const rnd = seeded(9)
-    // glow: a hot core and a long soft falloff
+    // glow: a hot core with a short, defined falloff (an anime glow has an edge; a long soft tail only fogs the frame)
     let g = ctx.createRadialGradient(cell / 2, cell / 2, 0, cell / 2, cell / 2, cell / 2)
     g.addColorStop(0, 'rgba(255,255,255,1)')
-    g.addColorStop(0.12, 'rgba(255,255,255,0.95)')
-    g.addColorStop(0.35, 'rgba(255,255,255,0.4)')
-    g.addColorStop(0.7, 'rgba(255,255,255,0.08)')
-    g.addColorStop(1, 'rgba(255,255,255,0)')
+    g.addColorStop(0.16, 'rgba(255,255,255,0.95)')
+    g.addColorStop(0.3, 'rgba(255,255,255,0.5)')
+    g.addColorStop(0.42, 'rgba(255,255,255,0.1)')
+    g.addColorStop(0.6, 'rgba(255,255,255,0)')
     ctx.fillStyle = g
     ctx.fillRect(0, 0, cell, cell)
-    // smoke: many soft blobs inside a round mask, lighter in the middle
+    // smoke: an anime puff, a cluster of round lobes with crisp edges, lit from above in two tones (a light cap over a
+    // shaded underside), not a soft grey haze; tinted per effect like every sprite
     ctx.save()
     ctx.translate(cell, 0)
-    for (let i = 0; i < 70; i++) {
+    const lobes = Array.from({ length: 9 }, () => {
       const a = rnd() * Math.PI * 2
-      const r = Math.sqrt(rnd()) * cell * 0.3
-      const x = cell / 2 + Math.cos(a) * r
-      const y = cell / 2 + Math.sin(a) * r
-      const rad = cell * (0.08 + rnd() * 0.14)
-      const b = ctx.createRadialGradient(x, y, 0, x, y, rad)
-      const shade = 200 + Math.floor(rnd() * 55)
-      b.addColorStop(0, `rgba(${shade},${shade},${shade},0.22)`)
-      b.addColorStop(1, `rgba(${shade},${shade},${shade},0)`)
-      ctx.fillStyle = b
-      ctx.fillRect(0, 0, cell, cell)
+      const r = Math.sqrt(rnd()) * cell * 0.17
+      return { x: cell / 2 + Math.cos(a) * r, y: cell / 2 + Math.sin(a) * r, rad: cell * (0.12 + rnd() * 0.08) }
+    })
+    const lobe = (fill: string, dx: number, dy: number, k: number) => {
+      ctx.fillStyle = fill
+      for (const l of lobes) {
+        ctx.beginPath()
+        ctx.arc(l.x + dx, l.y + dy, l.rad * k, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
+    ctx.filter = 'blur(2px)'
+    lobe('rgba(150,150,150,0.85)', 0, 0, 1)
+    lobe('rgba(225,225,225,0.9)', -cell * 0.025, -cell * 0.035, 0.82)
+    lobe('rgba(255,255,255,0.9)', -cell * 0.04, -cell * 0.06, 0.55)
+    ctx.filter = 'none'
     ctx.restore()
     // star: a four-point flare with thin streaks over a small glow
     ctx.save()

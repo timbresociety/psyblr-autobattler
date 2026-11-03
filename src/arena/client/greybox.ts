@@ -4,19 +4,53 @@ import { ceilingOver, coverHit, floorUnder, initialCoverHealth, surfaceAt, type 
 import type { RuinsView } from './ruins.js'
 
 /**
- * The House of Instinct in grey boxes on screen (GAME.md §8, first deliverable: "tested ... before any art"), built
- * from the engine's own pieces and lines so what is drawn is what blocks. Each band has its own grey, tops are lighter
- * than sides with a metre grid to judge jumps by, and arcade yellow marks traversal (§1, §7 rule 4): the rims of chips
+ * The House of Instinct on screen (GAME.md §8), built from the engine's own pieces and lines so what is drawn is what
+ * blocks. Each piece is painted in the Game Centre's palette by what it is (paint), tops lighter than sides with faint
+ * metre seams to judge jumps by, and arcade yellow marks traversal (§1, §7 rule 4): the rims of chips
  * and candlesticks, the edges of decks and walkways, the sides of ramps, and the ziplines and rails. Everything that
  * cannot break is merged into a few meshes; breakable barricades, glass and card bridges stay separate so they can
  * wear and burst.
  */
 
 const YELLOW = new THREE.Color(0xffc820)
-/** Greys by height of a piece's top: the lower routes darkest, the aerial routes lightest. */
-function grey(top: number): THREE.Color {
-  const k = top < 3 ? 0.34 : top < 8 ? 0.5 : top < 14 ? 0.62 : 0.72
-  return new THREE.Color(k, k, k * 1.04)
+
+/**
+ * The Game Centre's surface colours (GAME.md §1 palette, owner 2026-11-02): physical colours, never light. Floors and
+ * walls are the neutral 60% (warm porcelain, graphite, oxblood carpet down in the lower routes); machines and traversal
+ * pieces carry the saturated 30%: chip stacks in casino-chip colours, ramps cobalt, ball trays and counters champagne
+ * metal, the pachinko islands vermilion, posts and plinths porcelain. Kept a shade under the palette's hex, since tops
+ * are drawn a quarter brighter and the fluorescent light is bright.
+ */
+const PALETTE = {
+  porcelain: 0xe9e3d7,
+  graphite: 0x30383f,
+  vermilion: 0xd44137,
+  yellow: 0xeabb43,
+  cobalt: 0x3569ab,
+  jade: 0x70a99b,
+  oxblood: 0x78464d,
+  champagne: 0xcdb98f,
+} as const
+const CHIPS = [PALETTE.vermilion, PALETTE.cobalt, PALETTE.yellow, PALETTE.jade] as const
+
+/** A piece's surface colour, by what it is: its look, its size and where it stands. */
+export function paint(piece: CoverPiece, index: number): THREE.Color {
+  const s = piece.shape
+  const tall = piece.top - piece.base
+  const color = (hex: number, k = 0.8) => new THREE.Color(hex).multiplyScalar(k)
+  if (piece.look === 'chip') return color(CHIPS[index % CHIPS.length], 0.85)
+  if (piece.look === 'ramp') return color(PALETTE.cobalt, 0.85)
+  if (piece.look === 'step') return color(PALETTE.champagne, 0.82)
+  if (piece.look === 'rail' || piece.look === 'pillar') return color(PALETTE.graphite, 1.1)
+  // the lower routes' floors and walls: oxblood carpet and graphite machine bases
+  if (piece.top < 3) return color(PALETTE.oxblood, 0.85)
+  // Pachinko Alley's islands of back-to-back machines
+  if (s.kind === 'block' && Math.abs(s.x) > 58 && tall > 3) return color(PALETTE.vermilion, 0.85)
+  // decks and walkways hung over a floor: graphite frames under porcelain tops reads as one colour here, so porcelain
+  if (piece.base > 0 && tall <= 1) return color(PALETTE.porcelain, 0.72)
+  // a round machine column (the spire's pins, the crane posts)
+  if (s.kind === 'column') return color(PALETTE.jade, 0.85)
+  return color(PALETTE.porcelain, 0.74)
 }
 
 /** Colour every face: tops lighter than sides. */
@@ -161,10 +195,10 @@ function grid(): THREE.Texture | undefined {
   if (!g) return undefined
   g.fillStyle = '#ffffff'
   g.fillRect(0, 0, 128, 128)
-  g.strokeStyle = 'rgba(0, 0, 0, 0.22)'
-  g.lineWidth = 3
+  g.strokeStyle = 'rgba(0, 0, 0, 0.1)'
+  g.lineWidth = 2
   g.strokeRect(0, 0, 128, 128)
-  g.strokeStyle = 'rgba(0, 0, 0, 0.08)'
+  g.strokeStyle = 'rgba(0, 0, 0, 0.035)'
   g.lineWidth = 2
   g.beginPath()
   g.moveTo(64, 0)
@@ -216,7 +250,7 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
       views[index] = node
       return
     }
-    solids.push(shade(solid(piece), piece.look === 'pillar' ? grey(piece.top).multiplyScalar(0.8) : grey(piece.top)))
+    solids.push(shade(solid(piece), paint(piece, index)))
     if (traversal(piece)) trims.push(...trim(piece))
   })
   const merged = mergeGeometries(solids)!

@@ -94,6 +94,39 @@ describe('takeover and controls (U17)', () => {
     expect(camera.position.z).toBeLessThan(full + 0.5)
   })
 
+  it('a post just behind the hero lifts the camera over it, never into it (owner playtest, 2026-11-03)', () => {
+    const camera = new THREE.PerspectiveCamera()
+    const cams = new Cameras(camera)
+    cams.set('hero')
+    cams.yaw = 0
+    cams.pitch = 0
+    const hero = { x: 0, y: 0, z: 0 }
+    // a 3 m post 0.4 m behind the hero's centre, as on the House's main floor
+    const post = new THREE.Box3(new THREE.Vector3(-1, 0, -1.9), new THREE.Vector3(1, 3, -0.4))
+    for (let i = 0; i < 90; i++) {
+      cams.update(1 / 60, hero, [post])
+      expect(post.containsPoint(camera.position)).toBe(false)
+    }
+    // settled: over the post and well back from the hero's head, so the hero stays in view
+    expect(camera.position.y).toBeGreaterThan(3)
+    expect(cams.tooClose()).toBe(false)
+  })
+
+  it('a jump up to a deck underside keeps the camera under the deck and back from the head', () => {
+    const camera = new THREE.PerspectiveCamera()
+    const cams = new Cameras(camera)
+    cams.set('hero')
+    cams.yaw = 0
+    cams.pitch = 0
+    // the head is at the deck's underside (y 2), the shoulder pivot would be inside the slab
+    const deck = new THREE.Box3(new THREE.Vector3(-10, 2, -10), new THREE.Vector3(10, 2.6, 10))
+    const hero = { x: 0, y: 0.2, z: 0 }
+    for (let i = 0; i < 60; i++) cams.update(1 / 60, hero, [deck])
+    expect(deck.containsPoint(camera.position)).toBe(false)
+    expect(camera.position.y).toBeLessThan(2)
+    expect(cams.tooClose()).toBe(false)
+  })
+
   it('following a hero while watching shows it from behind its shoulder, turning with it; a slide lets it go', () => {
     const camera = new THREE.PerspectiveCamera()
     const cams = new Cameras(camera)
@@ -123,5 +156,17 @@ describe('takeover and controls (U17)', () => {
     const wall = new THREE.Box3(new THREE.Vector3(-5, 0, -3), new THREE.Vector3(5, 5, -2))
     const at = pullIn(new THREE.Vector3(0, 2, 0), new THREE.Vector3(0, 2, -6), [wall])
     expect(at.z).toBeGreaterThan(-2)
+  })
+})
+
+describe('a quick tap between ticks (owner, 2026-11-03)', () => {
+  it('counts once, then is gone', () => {
+    const input = { held: new Set<string>(), tapped: new Set(['KeyZ', 'Space']) }
+    expect(commandFrom(input, 0, 0).moves).toBe(MOVES.dodge | MOVES.jump)
+    expect(commandFrom(input, 0, 0).moves).toBe(0)
+  })
+  it('the arrow keys move like WASD', () => {
+    expect(commandFrom({ held: new Set(['ArrowUp']) }, 0, 0)).toMatchObject({ moveX: 0, moveZ: 1 })
+    expect(commandFrom({ held: new Set(['ArrowLeft']) }, 0, 0).moveX).toBeCloseTo(1)
   })
 })

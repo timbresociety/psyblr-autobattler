@@ -1,7 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three'
-import { ENGINE } from '../../../arena/engine/calibration.js'
 import type { Team } from '../../../arena/engine/state.js'
-import { MAX_PER_SIDE, move, place, type Formation } from './formation.js'
+import { BOUNDS, MAX_PER_SIDE, move, place, type Formation } from './formation.js'
 
 /**
  * The 3D staging board's maths, free of the renderer and the DOM so it tests on its own: the camera that orbits a spot on
@@ -9,7 +8,7 @@ import { MAX_PER_SIDE, move, place, type Formation } from './formation.js'
  * is under the pointer, and what a spot means for the hero carried there.
  */
 
-const { halfWidth: W, halfLength: L } = ENGINE.arena
+const { halfWidth: W, halfLength: L } = BOUNDS
 
 /** A narrow lens: close to isometric, so the far half does not shrink away. */
 export const BOARD_FOV = 32
@@ -23,6 +22,8 @@ const MIN_ELEVATION = 0.4
 export interface FloorPoint {
   x: number
   z: number
+  /** The height of the surface picked there (a deck, a balcony); absent, the main floor. */
+  y?: number
 }
 
 export interface View {
@@ -300,7 +301,7 @@ export function refine(reason: 'wrong-half' | 'full' | 'crowded' | 'in-ruins', a
  */
 export function judge(f: Formation, c: Carried, at: FloorPoint | undefined): Verdict {
   if (!at || !onArena(at.x, at.z)) return c.index !== undefined ? { kind: 'remove' } : { kind: 'bad', reason: 'off-arena' }
-  const r = c.index !== undefined ? move(f, c.side, c.index, at.x, at.z) : place(f, c.side, c.hero, at.x, at.z)
+  const r = c.index !== undefined ? move(f, c.side, c.index, at.x, at.z, at.y) : place(f, c.side, c.hero, at.x, at.z, at.y)
   return r.ok ? { kind: 'ok' } : { kind: 'bad', reason: refine(r.reason, at) }
 }
 

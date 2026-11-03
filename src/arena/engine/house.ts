@@ -173,6 +173,41 @@ box(27, 37, -4, 4, up, 'grey', up - DECK)
 box(ring + half, 27, -1, 1, up, 'grey', up - DECK)
 disc(32, 0, 1.6, air, 'chip', main)
 
+// the Game Centre concourse round the house (owner, 2026-11-03: a bigger map, not scenery round it), on the main floor
+// from the old bounds out to 152 x 116 m, in §8's sizes. Pachinko Alley down each flank: the ball trays of the giant
+// cabinets along the hall's side, a step up, and islands of back-to-back machines down the middle, their tops a
+// 2 m walk in 12 m runs over 4 m gaps (the high-risk way along), stools beside them to climb from. The Prize Counter
+// across each end behind the muster: the counter a step up, the prize shelves behind it, crane machines behind glass
+// and coin pushers a step and a chip up
+export const CONCOURSE = { halfWidth: 76, halfLength: 58 } as const
+{
+  const X = CONCOURSE.halfWidth
+  const Z = CONCOURSE.halfLength
+  box(56, X, -Z, Z, main, 'grey')
+  box(-X, -56, -Z, Z, main, 'grey')
+  box(-56, 56, 42, Z, main, 'grey')
+  box(-56, 56, -Z, -42, main, 'grey')
+  for (const sx of [-1, 1]) {
+    const x = (a: number, b: number): [number, number] => (sx > 0 ? [a, b] : [-b, -a])
+    // the cabinets themselves stand against the hall's wall, past the bounds (drawn, not walked: hall.ts)
+    for (const zc of [-50, -40, -30, -20, -10, 0, 10, 20, 30, 40, 50]) box(...x(72, X), zc - 3.5, zc + 3.5, main + 1.2, 'step', main)
+    for (const zc of [-48, -32, -16, 0, 16, 32, 48]) {
+      box(...x(61.5, 63.5), zc - 6, zc + 6, main + 5.4, 'grey', main)
+      for (const side of [59.6, 65.4]) for (const dz of [-3, 3]) disc(sx * side, zc + dz, 1.3, main + 1.2, 'chip', main)
+    }
+  }
+  for (const s of [-1, 1]) {
+    const z = (a: number, b: number): [number, number] => (s > 0 ? [a, b] : [-b, -a])
+    // the counter, with the prize shelves behind it against the hall's end wall (drawn, past the bounds)
+    box(-14, 14, ...z(53, Z), main + 1.2, 'step', main)
+    for (const cx of [-44, -34, 34, 44]) box(cx - 2, cx + 2, ...z(45, 49), main + 4, 'glass', main, { health: GLASS })
+    for (const cx of [-25, 25]) {
+      box(cx - 4, cx + 4, ...z(52, Z), main + 2.4, 'grey', main)
+      box(cx - 2, cx + 2, ...z(50, 52), main + 1.2, 'step', main)
+    }
+  }
+}
+
 /**
  * Where the house edge can close (GAME.md §2): floors on the mirror line, one per band but the aerial one, so the
  * fight is pulled up or down as well as in: Roulette Court's floor, the vault under it, the middle of either trench

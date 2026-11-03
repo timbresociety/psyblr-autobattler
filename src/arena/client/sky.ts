@@ -104,7 +104,44 @@ function skyMaterial(tint: Node<'color'>, amount: Node<'float'>): MeshBasicNodeM
 }
 
 /** The sky dome, the light it gives every material, and the haze that blends the far land into it. */
-export function atmosphere(scene: THREE.Scene) {
+/**
+ * Inside the Game Centre hall (hall.ts) there is no sky: the ceiling's neutral fluorescent panels light everything
+ * (GAME.md §1: 4500–5000 K overhead, neutral contrast), porcelain above and carpet below fill the shadows, and a light
+ * neutral haze softens the far end of a 150 m room.
+ */
+export const INDOOR = {
+  key: 0xfff1e2,
+  keyIntensity: 3.4,
+  /** The panels are overhead, a little toward one corner so shapes still model. */
+  from: new THREE.Vector3(-0.28, 0.92, 0.27).normalize(),
+  above: 0xf2ece2,
+  below: 0x8a6b62,
+  fill: 1.15,
+  haze: 0xd8d1c4,
+  ceiling: 0x30383f,
+} as const
+
+export function atmosphere(scene: THREE.Scene, indoor = false) {
+  if (indoor) {
+    scene.background = new THREE.Color(INDOOR.ceiling)
+    const canvas = document.createElement('canvas')
+    canvas.width = 4
+    canvas.height = 64
+    const ctx = canvas.getContext('2d')!
+    const g = ctx.createLinearGradient(0, 0, 0, 64)
+    g.addColorStop(0, '#f6f2ea')
+    g.addColorStop(0.5, '#d9d2c4')
+    g.addColorStop(1, '#6e4d4f')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 4, 64)
+    const env = new THREE.CanvasTexture(canvas)
+    env.colorSpace = THREE.SRGBColorSpace
+    env.mapping = THREE.EquirectangularReflectionMapping
+    scene.environment = env
+    scene.environmentIntensity = 0.45
+    scene.fog = new THREE.Fog(INDOOR.haze, 140, 900)
+    return
+  }
   const tint = uniform(new THREE.Color())
   const amount = uniform(0)
   const dome = new THREE.Mesh(new THREE.SphereGeometry(SKY_RADIUS, 48, 24), skyMaterial(tint, amount))
@@ -175,7 +212,20 @@ export function skyProbe(): THREE.LightProbe {
 }
 
 /** A warm key light from the low sun, and the sky's fill in a probe. */
-export function lights(scene: THREE.Scene) {
+export function lights(scene: THREE.Scene, indoor?: { halfWidth: number; halfLength: number }) {
+  if (indoor) {
+    const { halfWidth: W, halfLength: L } = indoor
+    scene.add(new THREE.HemisphereLight(INDOOR.above, INDOOR.below, INDOOR.fill))
+    const key = new THREE.DirectionalLight(INDOOR.key, INDOOR.keyIntensity)
+    key.position.copy(INDOOR.from).multiplyScalar(200)
+    key.castShadow = true
+    key.shadow.mapSize.set(2048, 2048)
+    key.shadow.bias = -0.0005
+    key.shadow.normalBias = 0.05
+    fitShadow(key, new THREE.Box3(new THREE.Vector3(-W - 4, 0, -L - 4), new THREE.Vector3(W + 4, 22, L + 4)))
+    scene.add(key)
+    return key
+  }
   const { halfWidth: W, halfLength: L } = ENGINE.arena
   scene.add(skyProbe())
   const sun = new THREE.DirectionalLight(0xffc68e, 4.4)
