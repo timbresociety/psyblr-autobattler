@@ -8,6 +8,7 @@ import { Unsupported } from './Loading'
 import { emptyFormation } from './staging/formation'
 import { starterLoadout } from './staging/loadout'
 import { matchup } from './staging/presets'
+import { textureMb } from '../../arena/client/render/budget.js'
 import type { StagingResult } from './staging/Staging'
 
 const noop = () => {}
@@ -87,7 +88,7 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
     const loadout = starterLoadout()
     const staged: StagingResult = { side: 0, formation: matchup('squads', loadout, 0, emptyFormation(), seeded(options.seed + index)), loadout }
     const setup = { ...matchSetup(staged), seed: options.seed + index }
-    recorder.context({ match: index, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0 })
+    recorder.context({ match: index, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, textureMb: 0 })
     startArena(host.current, setup)
       .then((c) => {
         controller = c
@@ -128,6 +129,7 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
             triangles: render.triangles,
             geometries: memory.geometries,
             textures: memory.textures,
+            textureMb: textureMb(c.scene),
           })
         }
         const every = Math.max(1, Math.round(options.ultimateEvery))
@@ -220,6 +222,7 @@ function SoakPanel({ options, report, error }: { options: SoakOptions; report?: 
             <>
               <div style={good(report.pass.frames)}>frames {report.pass.frames ? 'pass' : 'fail'}</div>
               <div style={good(report.pass.memory)}>memory {report.pass.memory ? 'flat' : 'check'}</div>
+              <div style={good(report.pass.budget)}>budget {report.pass.budget ? 'pass' : 'over'}</div>
               {report.pass.notes.map((n) => (
                 <div key={n}>· {n}</div>
               ))}

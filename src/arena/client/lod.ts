@@ -13,6 +13,8 @@ import { MeshoptSimplifier } from 'meshoptimizer'
 export type Tier = 'near' | 'mid' | 'far' | 'impostor'
 
 export const LOD = {
+  /** Within this, a near hero is drawn with everything: inside its mouth, the shine on its eyes, its gear's shadow. */
+  close: 6,
   /** Where each tier ends, in metres from the camera. */
   near: 15,
   mid: 40,
@@ -45,12 +47,19 @@ export function tiersFor(distances: readonly number[], previous: readonly (Tier 
   return tiers
 }
 
-/** Parts too small to read past the near tier: inside the mouth, the corneas, brow and lash cards; the eyes go too when far. */
-const HIDDEN: Record<Exclude<Tier, 'near'>, RegExp> = {
+/**
+ * Parts too small to read at each tier: inside the mouth, the corneas and the brow and lash cards past arm's length,
+ * the eyes when far.
+ */
+const HIDDEN: Record<Tier, RegExp> = {
+  near: /^(teeth:|tongue|cornea|head:cards)/,
   mid: /^(teeth:|tongue|cornea|head:cards)/,
   far: /^(teeth:|tongue|cornea|sclera|head:cards)/,
   impostor: /./,
 }
+/** The eyeballs a near hero shows past arm's length: a few pixels across, a quarter of the triangles. */
+const EYES = /^sclera/
+const EYE_RATIO = 0.25
 
 /** A mesh this small (gear, mostly) is drawn whole in every tier: simplifying it saves nothing and spoils its outline. */
 const SMALL = 1000
@@ -113,6 +122,7 @@ const made = new WeakMap<THREE.BufferGeometry, Map<string, THREE.BufferGeometry>
 export class HeroLod {
   private readonly parts = new Map<THREE.Mesh, Part>()
   tier: Tier = 'near'
+  close = true
 
   constructor(readonly root: THREE.Object3D) {}
 
@@ -136,16 +146,21 @@ export class HeroLod {
     return big ? Math.min(1, Math.max(0.02, (LOD.triangles[tier] - small) / big)) : 1
   }
 
-  /** Simplify every mesh for the mid and far tiers now, while loading, rather than in the frame a hero first walks off. */
+  /**
+   * Simplify every mesh for the mid and far tiers now, while loading, rather than in the frame a hero first walks off;
+   * and let the hero be culled.
+   */
   prepare() {
     this.take()
+    cullable(this.root)
+    for (const p of this.parts.values()) if (EYES.test(p.mesh.name)) this.lod(p.geometry, 'near', EYE_RATIO)
     for (const tier of ['mid', 'far'] as const) {
       const ratio = this.ratio(tier)
       for (const p of this.parts.values()) if (!HIDDEN[tier].test(p.mesh.name) && triangles(p.geometry) >= SMALL) this.lod(p.geometry, tier, ratio)
     }
   }
 
-  private lod(geometry: THREE.BufferGeometry, tier: 'mid' | 'far', ratio: number): THREE.BufferGeometry {
+  private lod(geometry: THREE.BufferGeometry, tier: 'near' | 'mid' | 'far', ratio: number): THREE.BufferGeometry {
     let byTier = made.get(geometry)
     if (!byTier) made.set(geometry, (byTier = new Map()))
     let g = byTier.get(tier)
@@ -153,14 +168,18 @@ export class HeroLod {
     return g
   }
 
-  apply(tier: Tier) {
-    if (tier === this.tier) return
+  /** Draw the hero at `tier`; `close` (within `LOD.close`) draws a near hero with everything it has. */
+  apply(tier: Tier, close = false) {
+    close = close && tier === 'near'
+    if (tier === this.tier && close === this.close) return
     this.tier = tier
+    this.close = close
     this.take()
     const ratio = tier === 'mid' || tier === 'far' ? this.ratio(tier) : 1
     for (const p of this.parts.values()) {
       const m = p.mesh
-      if (tier === 'near') {
+      const small = triangles(p.geometry) < SMALL
+      if (close) {
         m.geometry = p.geometry
         m.visible = p.visible
         m.castShadow = p.castShadow
@@ -168,8 +187,10 @@ export class HeroLod {
       }
       m.visible = p.visible && !HIDDEN[tier].test(m.name)
       if (tier === 'impostor') continue
-      m.geometry = triangles(p.geometry) >= SMALL ? this.lod(p.geometry, tier, ratio) : p.geometry
-      m.castShadow = p.castShadow && tier !== 'far'
+      if (tier === 'near') m.geometry = EYES.test(m.name) ? this.lod(p.geometry, 'near', EYE_RATIO) : p.geometry
+      else m.geometry = small ? p.geometry : this.lod(p.geometry, tier, ratio)
+      // a hat's or a staff's shadow is a few pixels past arm's length; the body's carries the silhouette
+      m.castShadow = p.castShadow && tier !== 'far' && !small
     }
   }
 
@@ -214,4 +235,31 @@ export function impostorMaterial(team: THREE.Color): THREE.SpriteMaterial {
   map.colorSpace = THREE.SRGBColorSpace
   material.map = map
   return material
+}
+
+/** How much bigger than its body at rest a hero's culling sphere is, for the reach of a swing, a flip or lying prone. */
+export const CULL_REACH = 1.5
+
+/**
+ * Let a hero's skinned meshes be culled, in the main view and in each shadow cascade, instead of drawn wherever they
+ * are. A skinned mesh's bounds move with its pose, so every one of them takes the body's sphere at rest, grown by
+ * `CULL_REACH`: generous enough for anything the body does, and the head is never culled apart from the body.
+ */
+export function cullable(root: THREE.Object3D) {
+  const skinned: THREE.SkinnedMesh[] = []
+  root.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh && !o.frustumCulled) skinned.push(o as THREE.SkinnedMesh)
+  })
+  // per body: a transformed form is a body of its own, under its own parent
+  for (const parent of new Set(skinned.map((m) => m.parent))) {
+    const meshes = skinned.filter((m) => m.parent === parent)
+    const body = meshes.find((m) => m.name === 'hero') ?? meshes.reduce((a, b) => (triangles(b.geometry) > triangles(a.geometry) ? b : a))
+    if (!body.geometry.boundingSphere) body.geometry.computeBoundingSphere()
+    const sphere = body.geometry.boundingSphere!.clone()
+    sphere.radius *= CULL_REACH
+    for (const m of meshes) {
+      m.boundingSphere = sphere.clone()
+      m.frustumCulled = true
+    }
+  }
 }

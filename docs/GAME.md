@@ -783,13 +783,13 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Effects | Casts flash at the torso | **Fixed (M5):** casts flash at the hand, projectiles leave the muzzle, impacts land at the contact point on the victim, melee sparks at the weapon tip, zones and marks sit on the floor under them (not y 0), auras on the body |
 | Effects | No proper blasts, craters or breakable props | **Fixed (M5):** six-layer blasts at five tiers; hit-stop, shake and kick, radial blur and speed lines, an ink impact frame on ultimates (felt near the camera); craters with rubble, skid marks and elemental marks on a 64-decal budget; 300-chunk debris pool; pre-fractured chips, cards, dice, capsules, cabinet panels, signs and railings; engine knockback arcs with mass and slams; breakable glass partitions and card bridges in the engine, routes kept when they fall |
 | Map | The arena is a flat 2D floor | **Fixed (M4):** the House of Instinct's first deliverable in grey boxes, cut down for 10 v 10 (Roulette Court, Chip Stacks, Card Ramp, VIP Crescent, balcony loop, Chart Climb, Chandelier Spine, trenches, service tunnel, vault): four bands, mirrored halves, §8 starting dimensions, arcade yellow on traversal; live matches and the balance gate play it. Art and the other zones come later |
-| Engine | No 3D collision, mantle or navmesh | **Fixed (M4):** walkable tops, ramps, ledges and ceilings; mantle, drop and landing roll, ziplines and rails (§7); a nav graph built from the map with walk, jump, double-jump, drop and zipline links, which the bots path on. Occlusion by zone and level waits for §10 |
-| Engine | No LOD or crowd path for 100 heroes | Rework (§10) |
+| Engine | No 3D collision, mantle or navmesh | **Fixed (M4):** walkable tops, ramps, ledges and ceilings; mantle, drop and landing roll, ziplines and rails (§7); a nav graph built from the map with walk, jump, double-jump, drop and zipline links, which the bots path on. Occlusion by zone and level added in M6 (§10) |
+| Engine | No LOD or crowd path for 100 heroes | **Mostly fixed (M6):** a spatial grid for hit queries, AI thinking by distance from players, 50 v 50 inside the tick; character tiers (whole near, ~8k mid at 30 Hz, ~2k far at 15 Hz without shadows, impostor cards), at most 10 near; the sun in two shadow cascades, the sky in a light probe, baked light on the grey box, occlusion by zone and level, batched scenery, decals and effects, distance LOD on props, a 1440 × 900 render cap, and budget checks in the bench and soak. **Still open:** the far tier is skinned, not baked vertex-animation textures; textures are not KTX2 and the GLBs not meshopt-compressed; a 10 v 10 does not yet hold a steady 60 fps on the M1 (M7) |
 | Engine | No netcode | Later phase; this rework is AI-only in the browser (§2) |
 | AI | Bots are too strong | **Fixed (M3):** Easy, Normal (default) and Hard (today's bots, used by the gate), picked per side in staging (§2) |
 | Controls | Jump and melee keys | **Fixed (M3):** Space jumps, V is melee (§3) |
-| Forge | Moves and Kit are split | Merge (§11) |
-| App | Loose screen switching | Routes (§11) |
+| Forge | Moves and Kit are split | **Fixed (M6):** one Kit panel with the six rows, and the dummy reel from three views (shoulder, side and the dummy's own) in one renderer (§11) |
+| App | Loose screen switching | **Fixed (M6):** React Router routes for Home, Create, Forge, Lobby, Match, Range, Credits and the dev tools; every route lazy-loads; old `?flags` redirect. The 3D canvas does not yet persist across routes: each 3D route makes and disposes its own renderer (§11) |
 | Body | No helper bones or corrective morphs | **Fixed (M1):** muscle helpers, correctives and drivers added at load (§9.2–9.4) |
 | Body | Arms pass through bulky torsos | **Fixed (M1):** girth spread fix-up; on the bench, heavyweight run penetration fell from 9.6 to 1.6 cm (§9.6, §9.7) |
 | Body | No hand IK | **Fixed (M1):** two-hand grip IK plus aim and look IK within joint limits (§9.6). Foot locking on tagged plants waits for the §12 tags |
@@ -822,6 +822,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-03: §13 status updated for Milestone 6 (performance and app, §10–§11): Forge and App rows closed, the LOD and crowd row mostly closed, with what's still open noted. No rule changed.
 - 2026-11-03: §13 status updated for Milestone 5 (effects and destruction, §6–§6b): both Effects rows closed. No rule changed.
 - 2026-11-03: §13 status updated for Milestone 4 (traversal and the grey-box map, §7–§8): Map and Engine rows closed. No rule changed.
 - 2026-11-02: §13 status updated for Milestone 3 (kit engine, §2–§5): Roster, Kit, AI and Controls rows closed. No rule changed.

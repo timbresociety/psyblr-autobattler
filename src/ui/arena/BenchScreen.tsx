@@ -47,8 +47,9 @@ export function BenchScreen() {
               {report.backend} · {report.heroes} heroes · {report.particles.toLocaleString()} particles
             </div>
             <div>
-              {report.drawCalls} draw calls · {report.triangles.toLocaleString()} triangles
+              {report.drawCalls} draw calls · {report.triangles.toLocaleString()} triangles · {Math.round(report.textureMb)} MB textures
             </div>
+            <div style={{ color: report.over.length ? '#ff8a7d' : '#7dffa0' }}>{report.over.length ? report.over.join(' · ') : 'within budget'}</div>
           </>
         ) : (
           <div>Warming up…</div>

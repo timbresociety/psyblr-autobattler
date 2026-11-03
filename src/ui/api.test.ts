@@ -37,4 +37,19 @@ describe('device IDs on the client', () => {
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('network down'))))
     expect(await liveDeps.uploadPhoto(new Blob([new Uint8Array([1])]))).toEqual({ ok: false, reason: 'offline' })
   })
+
+  it('a host that answers every path with the app page (no game server) reads as unreachable, not as an empty answer', async () => {
+    localStorage.setItem('psyblr.deviceId', OLD)
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('<!doctype html><div id="root"></div>', { headers: { 'content-type': 'text/html' } })))
+    const { livePieceDeps } = await import('./api.js')
+    await expect(livePieceDeps.searchItems('')).rejects.toThrow('not answering')
+  })
+
+  it('a library answer without its list reads as an empty list', async () => {
+    localStorage.setItem('psyblr.deviceId', OLD)
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({})))
+    const { livePieceDeps } = await import('./api.js')
+    expect(await livePieceDeps.searchItems('')).toEqual([])
+    expect(await livePieceDeps.searchPieces('')).toEqual([])
+  })
 })

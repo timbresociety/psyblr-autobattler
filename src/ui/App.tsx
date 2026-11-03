@@ -3,8 +3,6 @@ import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation, useN
 import { remixBuild, type Build } from '../charter/build'
 import { liveDeps, type BuildRecord } from './api'
 import { BrandMark } from './brand/BrandMark'
-import { ForgeScreen } from './forge/ForgeScreen'
-import { GachaReveal } from './create/GachaReveal'
 import './theme.css'
 
 // every route loads only when it opens (GAME.md §11); the 3D ones bring three's WebGPU build, the engine and the AI
@@ -13,6 +11,8 @@ const LobbyScreen = lazy(() => import('./arena/routes').then((m) => ({ default: 
 const MatchScreen = lazy(() => import('./arena/routes').then((m) => ({ default: m.MatchScreen })))
 const RangeScreen = lazy(() => import('./arena/routes').then((m) => ({ default: m.RangeScreen })))
 const CreditsScreen = lazy(() => import('./credits/CreditsScreen').then((m) => ({ default: m.CreditsScreen })))
+const ForgeScreen = lazy(() => import('./forge/ForgeScreen').then((m) => ({ default: m.ForgeScreen })))
+const GachaReveal = lazy(() => import('./create/GachaReveal').then((m) => ({ default: m.GachaReveal })))
 const DevRoutes = lazy(() => import('./dev/DevRoutes').then((m) => ({ default: m.DevRoutes })))
 
 type Theme = 'light' | 'dark'
@@ -281,27 +281,31 @@ function Layout() {
         {inForge && heroId && missing !== heroId && forge?.record?.id !== heroId && loading('your hero')}
         {forge && (
           <div className="kept" hidden={!inForge || (heroId !== undefined && forge.record?.id !== heroId)}>
-            <ForgeScreen
-              key={forge.key}
-              record={forge.record}
-              initial={forge.initial}
-              onCreated={(created) => {
-                setReveal({ buildId: created.buildId, build: created.build })
-              }}
-            />
+            <Suspense fallback={loading('the Forge')}>
+              <ForgeScreen
+                key={forge.key}
+                record={forge.record}
+                initial={forge.initial}
+                onCreated={(created) => {
+                  setReveal({ buildId: created.buildId, build: created.build })
+                }}
+              />
+            </Suspense>
           </div>
         )}
         {reveal && (
-          <GachaReveal
-            build={reveal.build}
-            onDone={() => {
-              const id = reveal.buildId
-              setReveal(undefined)
-              // the new hero is now a saved one: the Forge carries on with it at its own address
-              setForge((f) => (f ? { ...f, mode: 'edit', record: { id, heroId: '', build: reveal.build } } : f))
-              navigate(`/forge/${encodeURIComponent(id)}`, { replace: true })
-            }}
-          />
+          <Suspense fallback={null}>
+            <GachaReveal
+              build={reveal.build}
+              onDone={() => {
+                const id = reveal.buildId
+                setReveal(undefined)
+                // the new hero is now a saved one: the Forge carries on with it at its own address
+                setForge((f) => (f ? { ...f, mode: 'edit', record: { id, heroId: '', build: reveal.build } } : f))
+                navigate(`/forge/${encodeURIComponent(id)}`, { replace: true })
+              }}
+            />
+          </Suspense>
         )}
       </main>
     </>

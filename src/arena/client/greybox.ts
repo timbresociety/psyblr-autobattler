@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { surfaceAt, type CoverPiece, type MapLine } from '../engine/cover.js'
+import { ceilingOver, coverHit, floorUnder, initialCoverHealth, surfaceAt, type CoverHealth, type CoverPiece, type MapLine } from '../engine/cover.js'
 import type { RuinsView } from './ruins.js'
 
 /**
@@ -49,12 +49,20 @@ function worldUV(g: THREE.BufferGeometry): THREE.BufferGeometry {
   return g
 }
 
-/** A block, a ramp (its top sloped as the engine slopes it) or an upright cylinder, in world space. */
+/** Metres between the vertices the baked light is stored at (`bake`). */
+const LIGHT_STEP = 2
+const steps = (size: number) => Math.min(40, Math.max(1, Math.ceil(size / LIGHT_STEP)))
+
+/**
+ * A block, a ramp (its top sloped as the engine slopes it) or an upright cylinder, in world space, cut into faces
+ * about `LIGHT_STEP` across so the light baked into its vertices has somewhere to change.
+ */
 function solid(piece: CoverPiece): THREE.BufferGeometry {
   const s = piece.shape
   const h = Math.max(0.01, piece.top - piece.base)
-  if (s.kind === 'column') return new THREE.CylinderGeometry(s.r, s.r, h, 40).translate(s.x, piece.base + h / 2, s.z)
-  const geo = new THREE.BoxGeometry(s.hx * 2, h, s.hz * 2).translate(s.x, piece.base + h / 2, s.z)
+  if (s.kind === 'column') return new THREE.CylinderGeometry(s.r, s.r, h, 40, steps(h)).translate(s.x, piece.base + h / 2, s.z)
+  // a ramp keeps its sides one row high: its top is lifted onto the slope vertex by vertex
+  const geo = new THREE.BoxGeometry(s.hx * 2, h, s.hz * 2, steps(s.hx * 2), piece.slope ? 1 : steps(h), steps(s.hz * 2)).translate(s.x, piece.base + h / 2, s.z)
   if (piece.slope) {
     const pos = geo.getAttribute('position')
     for (let i = 0; i < pos.count; i++) if (pos.getY(i) > piece.base + h / 2) pos.setY(i, surfaceAt(piece, pos.getX(i), pos.getZ(i)))
@@ -94,6 +102,56 @@ function trim(piece: CoverPiece): THREE.BufferGeometry[] {
 const traversal = (p: CoverPiece) => p.look === 'chip' || p.look === 'ramp' || (p.look === 'grey' && p.base > 0 && p.top - p.base <= 1)
 
 let gridTexture: THREE.Texture | undefined
+/**
+ * Bake the house's light into its vertex colours (GAME.md §10: one shadowed sun, everything else baked), from the
+ * engine's own pieces: sky light falls off under a deck or balcony, more the lower it is, and floors darken where
+ * they meet a wall, walls where they meet the floor. The sun's own shadow stays live; this is the light it doesn't
+ * cast, worked out once at load.
+ */
+export function bake(geo: THREE.BufferGeometry, pieces: readonly CoverPiece[], health: readonly CoverHealth[] = initialCoverHealth(pieces)) {
+  const pos = geo.getAttribute('position')
+  const nor = geo.getAttribute('normal')
+  const col = geo.getAttribute('color')
+  const q = { x: 0, y: 0, z: 0 }
+  const b = { x: 0, y: 0, z: 0 }
+  const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const
+  // vertices are shared by up to six triangles once unindexed: each spot is worked out once
+  const seen = new Map<string, number>()
+  for (let i = 0; i < pos.count; i++) {
+    const ny = nor.getY(i)
+    q.x = pos.getX(i) + nor.getX(i) * 0.15
+    q.y = pos.getY(i) + ny * 0.15
+    q.z = pos.getZ(i) + nor.getZ(i) * 0.15
+    const key = `${q.x.toFixed(2)},${q.y.toFixed(2)},${q.z.toFixed(2)}`
+    let light = seen.get(key)
+    if (light === undefined) {
+      light = 1
+      // under a roof: open at the sides, so never black; a low roof shades more than a high one
+      const roof = ny > -0.5 ? ceilingOver(pieces, health, q, 0, q.y + 0.05, q.y + 30) : undefined
+      if (roof !== undefined) light *= 0.5 + 0.3 * Math.min(1, (roof - q.y) / 12)
+      if (ny > 0.5) {
+        // a floor beside a wall: how much of the way round is walled within a metre
+        let shut = 0
+        for (const [dx, dz] of AROUND) {
+          b.x = q.x + dx * 1.2
+          b.y = q.y + 0.3
+          b.z = q.z + dz * 1.2
+          const hit = coverHit(pieces, health, { x: q.x, y: q.y + 0.3, z: q.z }, b)
+          if (hit) shut += 1 - hit.t
+        }
+        light *= 1 - 0.18 * shut
+      } else if (Math.abs(ny) < 0.5) {
+        // a wall's foot, where it meets the floor in front of it
+        const floor = floorUnder(pieces, health, q, 0.5)
+        light *= 1 - 0.22 * Math.max(0, 1 - (q.y - floor) / 1.5)
+      }
+      seen.set(key, light)
+    }
+    col.setXYZ(i, col.getX(i) * light, col.getY(i) * light, col.getZ(i) * light)
+  }
+  col.needsUpdate = true
+}
+
 /** A one-metre grid, faint, to judge a gap or a step by eye. */
 function grid(): THREE.Texture | undefined {
   if (gridTexture || typeof document === 'undefined') return gridTexture
@@ -161,7 +219,9 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
     solids.push(shade(solid(piece), piece.look === 'pillar' ? grey(piece.top).multiplyScalar(0.8) : grey(piece.top)))
     if (traversal(piece)) trims.push(...trim(piece))
   })
-  const body = new THREE.Mesh(mergeGeometries(solids), greyMat)
+  const merged = mergeGeometries(solids)!
+  bake(merged, pieces)
+  const body = new THREE.Mesh(merged, greyMat)
   body.name = 'greybox:solids'
   body.castShadow = body.receiveShadow = true
   group.add(body)

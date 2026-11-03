@@ -3,6 +3,7 @@ import { ENGINE } from '../engine/calibration.js'
 import type { MatchEvent } from '../engine/events.js'
 import { TAU } from '../engine/maths.js'
 import { AIM_STEPS, MOVES, slotBit, type Command, type HeroState, type MatchState } from '../engine/state.js'
+import { overBudget } from './render/budget.js'
 import type { QualityLevel } from './quality.js'
 
 /**
@@ -107,6 +108,8 @@ export interface SoakContext {
   triangles: number
   geometries: number
   textures: number
+  /** Estimated GPU memory of the scene's textures (render/budget.ts). */
+  textureMb: number
 }
 
 export interface FrameStats {
@@ -168,7 +171,8 @@ export interface SoakReport {
   spikes: SoakSpike[]
   matchStarts: SoakMatchStart[]
   ultimateWaves: { t: number; forced: number; fired: number }[]
-  pass: { frames: boolean; memory: boolean; notes: string[] }
+  /** `budget`: no fight sample broke GAME.md §10's draw, triangle or texture budget. */
+  pass: { frames: boolean; memory: boolean; budget: boolean; notes: string[] }
 }
 
 /** Frame statistics for a list of frame times; empty-safe. */
@@ -202,7 +206,7 @@ export function createSoakRecorder(options: SoakOptions, env: { userAgent: strin
   let count = 0
   let windowStart = 0
   let elapsed = 0
-  let context: SoakContext = { match: 0, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0 }
+  let context: SoakContext = { match: 0, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, textureMb: 0 }
   // when the current fight started, and whether its counts are in yet (taken 5 s in, once everything has drawn)
   let fightSince = -1
   let counted = -1
@@ -256,6 +260,11 @@ export function createSoakRecorder(options: SoakOptions, env: { userAgent: strin
       if (base.heapMb && last.heapMb && grew(base.heapMb, last.heapMb, 30)) notes.push(`heap ${base.heapMb} → ${last.heapMb} MB between fights ${base.match + 1} and ${last.match + 1}`)
       memoryPass = !notes.some((n) => /^(geometries|textures|heap) /.test(n))
     } else notes.push('memory needs at least three fights to judge')
+    // the worst of each budget over the fights' samples
+    const fights = samples.filter((s) => s.phase === 'fight')
+    const worst = { triangles: Math.max(0, ...fights.map((s) => s.triangles)), drawCalls: Math.max(0, ...fights.map((s) => s.drawCalls)), textureMb: Math.max(0, ...fights.map((s) => s.textureMb)) }
+    const over = overBudget(worst)
+    notes.push(...over.map((o) => `worst sample: ${o}`))
     return {
       options,
       ...env,
@@ -268,7 +277,7 @@ export function createSoakRecorder(options: SoakOptions, env: { userAgent: strin
       spikes,
       matchStarts,
       ultimateWaves: waves,
-      pass: { frames: framesPass, memory: memoryPass && matchStarts.length >= 3, notes },
+      pass: { frames: framesPass, memory: memoryPass && matchStarts.length >= 3, budget: over.length === 0, notes },
     }
   }
 

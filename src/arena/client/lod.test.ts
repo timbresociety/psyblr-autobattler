@@ -18,8 +18,9 @@ function hero() {
   const outfit = add('outfit', new THREE.CylinderGeometry(1, 1, 2, 96, 48))
   const head = add('head', new THREE.SphereGeometry(0.3, 96, 48))
   const teeth = add('teeth:upper', new THREE.TorusGeometry(0.1, 0.02, 24, 64), false)
+  const eye = add('sclera', new THREE.SphereGeometry(0.012, 64, 24), false)
   const hat = add('wizard_hat_1', new THREE.ConeGeometry(0.3, 0.6, 24, 4))
-  return { root, body, outfit, head, teeth, hat }
+  return { root, body, outfit, head, teeth, eye, hat }
 }
 
 describe('character levels of detail (GAME.md §10)', () => {
@@ -77,9 +78,26 @@ describe('character levels of detail (GAME.md §10)', () => {
     expect(h.body.castShadow || h.outfit.castShadow || h.hat.castShadow).toBe(false)
     lod.apply('impostor')
     expect(lod.drawn()).toBe(0)
-    lod.apply('near')
+    lod.apply('near', true)
     expect(lod.drawn()).toBe(whole)
     expect(h.teeth.visible && h.body.castShadow && h.hat.castShadow).toBe(true)
     expect(h.teeth.castShadow).toBe(false)
+  })
+
+  it("near but past arm's length: the body whole, the mouth hidden, the eyes rougher, the gear casting no shadow", () => {
+    const h = hero()
+    const lod = new HeroLod(h.root)
+    const eye = h.eye.geometry
+    const body = h.body.geometry
+    lod.prepare()
+    lod.apply('near')
+    expect(h.body.geometry).toBe(body)
+    expect(h.teeth.visible).toBe(false)
+    expect(tris(h.eye.geometry)).toBeLessThan(tris(eye) * 0.3)
+    expect(h.hat.castShadow).toBe(false)
+    expect(h.body.castShadow).toBe(true)
+    lod.apply('near', true)
+    expect(h.eye.geometry).toBe(eye)
+    expect(h.teeth.visible && h.hat.castShadow).toBe(true)
   })
 })

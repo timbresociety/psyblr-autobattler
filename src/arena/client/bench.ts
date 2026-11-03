@@ -4,6 +4,7 @@ import { float, fract, instancedBufferAttribute, length, positionLocal, smoothst
 import { STARTERS } from '../starters.js'
 import { benchHero, type BenchHero } from './procedural-hero.js'
 import { summarizeFrames, type FrameSummary } from './frames.js'
+import { overBudget, textureMb } from './render/budget.js'
 import { createRenderer, type Backend } from './render/renderer.js'
 
 /**
@@ -29,6 +30,9 @@ export interface BenchReport extends FrameSummary {
   triangles: number
   particles: number
   heroes: number
+  textureMb: number
+  /** GAME.md §10's budgets this frame breaks, if any. */
+  over: string[]
 }
 
 const PARTICLES_PER_SYSTEM = 12_500
@@ -158,7 +162,8 @@ export async function runBench(canvas: HTMLCanvasElement, options: { forceWebGL:
 
     if (now - lastReport > 500 && frames.length > 30) {
       lastReport = now
-      const report: BenchReport = { ...summarizeFrames(frames), backend, drawCalls: renderer.info.render.drawCalls, triangles: renderer.info.render.triangles, particles: PARTICLES_PER_SYSTEM * SYSTEMS, heroes: heroes.length }
+      const spend = { drawCalls: renderer.info.render.drawCalls, triangles: renderer.info.render.triangles, textureMb: textureMb(scene) }
+      const report: BenchReport = { ...summarizeFrames(frames), backend, ...spend, particles: PARTICLES_PER_SYSTEM * SYSTEMS, heroes: heroes.length, over: overBudget(spend) }
       ;(window as unknown as { __bench?: BenchReport }).__bench = report
       options.onReport(report)
     }

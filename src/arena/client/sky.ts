@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial, type Node } from 'three/webgpu'
 import { cameraPosition, color, dot, exp, float, fog, max, mix, mx_fractal_noise_float, normalize, positionLocal, positionView, positionWorld, pow, reference, smoothstep, time, uniform, vec3 } from 'three/tsl'
+import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
 import { ENGINE } from '../engine/calibration.js'
+import { OCCLUDED_LAYER } from './occlusion.js'
 
 /**
  * The light over the arena (R25; Forge goal, phase 2 look pass): golden hour after the owner's reference sheet. A low
@@ -129,10 +131,53 @@ export function atmosphere(scene: THREE.Scene) {
   scene.fogNode = fog(mix(horizonAt(dir), tint.mul(float(0.7)), amount), amountAt)
 }
 
-/** A warm key light from the low sun, a cool sky fill, and a soft bounce from the camera's side. */
+/** The sky's fill: blue from above, warm bounce from the ground, and a soft warm bounce from the camera's side. */
+export const FILL = {
+  sky: 0xa9c2e6,
+  ground: 0x8a6a48,
+  hemisphere: 0.85,
+  bounce: 0xffdcb8,
+  bounceIntensity: 0.7,
+  /** Toward the bounce: behind the sun, from about 35 degrees up. */
+  bounceFrom: new THREE.Vector3(-SUN.x * 100, 70, -SUN.z * 100).normalize(),
+} as const
+
+/** Lambert's cosine, band by band, for turning irradiance into the radiance a probe holds. */
+const BAND = [Math.PI, (2 * Math.PI) / 3, (2 * Math.PI) / 3, (2 * Math.PI) / 3, Math.PI / 4, Math.PI / 4, Math.PI / 4, Math.PI / 4, Math.PI / 4]
+
+/**
+ * The sky's fill baked into one light probe (GAME.md §10: one shadowed key light, everything else baked): the light a
+ * surface facing `n` gets from the sky dome and the ground below it, plus the unshadowed bounce, projected onto nine
+ * spherical harmonics. It lights the same as a hemisphere light and a second directional did, for none of their cost.
+ */
+export function skyProbe(): THREE.LightProbe {
+  const sky = new THREE.Color(FILL.sky).multiplyScalar(FILL.hemisphere)
+  const ground = new THREE.Color(FILL.ground).multiplyScalar(FILL.hemisphere)
+  const bounce = new THREE.Color(FILL.bounce).multiplyScalar(FILL.bounceIntensity)
+  const sh = new THREE.SphericalHarmonics3()
+  const basis: number[] = []
+  const n = new THREE.Vector3()
+  const at = new THREE.Color()
+  const e = new THREE.Vector3()
+  // directions spread evenly over the sphere (a Fibonacci spiral), each standing for an equal share of it
+  const N = 4096
+  for (let i = 0; i < N; i++) {
+    const y = 1 - (2 * (i + 0.5)) / N
+    const r = Math.sqrt(1 - y * y)
+    const a = i * Math.PI * (3 - Math.sqrt(5))
+    n.set(Math.cos(a) * r, y, Math.sin(a) * r)
+    at.copy(ground).lerp(sky, 0.5 * y + 0.5)
+    e.set(at.r, at.g, at.b).addScaledVector(new THREE.Vector3(bounce.r, bounce.g, bounce.b), Math.max(0, n.dot(FILL.bounceFrom)))
+    THREE.SphericalHarmonics3.getBasisAt(n, basis)
+    for (let k = 0; k < 9; k++) sh.coefficients[k].addScaledVector(e, (basis[k] * 4 * Math.PI) / N / BAND[k])
+  }
+  return new THREE.LightProbe(sh, 1)
+}
+
+/** A warm key light from the low sun, and the sky's fill in a probe. */
 export function lights(scene: THREE.Scene) {
   const { halfWidth: W, halfLength: L } = ENGINE.arena
-  scene.add(new THREE.HemisphereLight(0xa9c2e6, 0x8a6a48, 0.85))
+  scene.add(skyProbe())
   const sun = new THREE.DirectionalLight(0xffc68e, 4.4)
   sun.position.copy(SUN).multiplyScalar(200)
   sun.castShadow = true
@@ -142,10 +187,31 @@ export function lights(scene: THREE.Scene) {
   sun.shadow.normalBias = 0.05
   fitShadow(sun, new THREE.Box3(new THREE.Vector3(-W - 14, 0, -L - 14), new THREE.Vector3(W + 14, 14, L + 14)))
   scene.add(sun)
-  const fill = new THREE.DirectionalLight(0xffdcb8, 0.7)
-  fill.position.set(-SUN.x * 100, 70, -SUN.z * 100)
-  scene.add(fill)
   return sun
+}
+
+/**
+ * The sun's shadow in cascades (GAME.md §10: one shadowed key light, in cascades): fine texels at the camera's feet,
+ * coarser out to the valley, so a hero's shadow stays crisp up close and the ruins still throw theirs far off. A
+ * cascade node is bound to the renderer it first draws with, so a new renderer needs a new one.
+ */
+// two cascades: a hero near the camera is drawn into each one its shadow might reach, so a third cost every near hero
+// another shadow draw for shadows a few pixels across. The margin reaches back toward the sun far enough for the
+// house's tallest piece (about 10 m) to throw its long low-sun shadow into the near cascade.
+export const CASCADES = { count: 2, maxFar: 160, lightMargin: 40 } as const
+
+export function cascade(sun: THREE.DirectionalLight): void {
+  // a hero hidden from the camera still casts its shadow (occlusion.ts); the cascades copy this camera's layers
+  sun.shadow.camera.layers.enable(OCCLUDED_LAYER)
+  const node = new CSMShadowNode(sun, { cascades: CASCADES.count, maxFar: CASCADES.maxFar, mode: 'practical', lightMargin: CASCADES.lightMargin })
+  node.fade = true
+  ;(sun.shadow as THREE.LightShadow & { shadowNode?: unknown }).shadowNode = node
+}
+
+/** Every shadow map the sun draws: its cascades' once they're built, else its own. */
+export function sunShadows(sun: THREE.DirectionalLight): THREE.LightShadow[] {
+  const node = (sun.shadow as THREE.LightShadow & { shadowNode?: { lights?: { shadow: THREE.LightShadow }[] } }).shadowNode
+  return node?.lights?.length ? node.lights.map((l) => l.shadow) : [sun.shadow]
 }
 
 /**

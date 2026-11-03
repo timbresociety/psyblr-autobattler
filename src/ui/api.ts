@@ -265,7 +265,11 @@ async function localGate(build: Build): Promise<GateOutcome> {
   }
 }
 
-/** A JSON call with this device's ID and the session cookie; a refusal throws with the server's own words. */
+/**
+ * A JSON call with this device's ID and the session cookie; a refusal throws with the server's own words, and so does
+ * an answer that isn't the API's (a static host serving the app's own page for every path), so a caller's fallback runs
+ * instead of it reading fields off nothing.
+ */
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   const device = await deviceId()
   const res = await fetch(path, {
@@ -273,6 +277,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: 'same-origin',
     headers: { ...(init.body ? { 'content-type': 'application/json' } : {}), ...deviceHeader(device), ...init.headers },
   })
+  if (res.ok && res.headers.get('content-type')?.includes('text/html')) throw new ApiError('the game server is not answering', 503)
   const json = (await res.json().catch(() => ({}))) as T & { error?: string }
   if (!res.ok) throw new ApiError(json.error ?? `request failed (${res.status})`, res.status)
   return json
@@ -283,11 +288,11 @@ const send = <T>(path: string, body: unknown) => call<T>(path, { method: 'POST',
 export const livePieceDeps: PieceDeps = {
   async searchPieces(query, kind) {
     const params = new URLSearchParams({ q: query, ...(kind ? { kind } : {}) })
-    return (await call<{ pieces: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces
+    return (await call<{ pieces?: PieceEntry[] }>(`/api/assets/search?${params}`)).pieces ?? []
   },
   async searchItems(query, slot) {
     const params = new URLSearchParams({ q: query, ...(slot ? { slot } : {}) })
-    return (await call<{ items: LibraryEntry[] }>(`/api/assets/items?${params}`)).items
+    return (await call<{ items?: LibraryEntry[] }>(`/api/assets/items?${params}`)).items ?? []
   },
   generationReady: async () => (await call<{ ready: boolean }>('/api/pieces')).ready,
   session: () => call<SessionView>('/api/auth/session'),

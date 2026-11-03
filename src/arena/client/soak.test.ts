@@ -48,7 +48,7 @@ describe('soak test (Forge goal, phase 0)', () => {
   it('grades frames and keeps the spikes with what was happening', () => {
     expect(frameStats([])).toMatchObject({ frames: 0, medianMs: 0, worstMs: 0 })
     const r = createSoakRecorder({ ...DEFAULT_SOAK, minutes: 1 }, env)
-    const base = { match: 0, alive: 20, controlled: true, quality: 'full' as const, pixelRatio: 2, drawCalls: 300, triangles: 1e6, geometries: 100, textures: 50 }
+    const base = { match: 0, alive: 20, controlled: true, quality: 'full' as const, pixelRatio: 2, drawCalls: 300, triangles: 1e6, geometries: 100, textures: 50, textureMb: 180 }
     r.context({ ...base, phase: 'loading' })
     r.frame(250)
     r.context({ ...base, phase: 'fight' })
@@ -66,6 +66,17 @@ describe('soak test (Forge goal, phase 0)', () => {
     expect(report.spikes[1].ultimates).toBe(1)
     expect(report.samples[0]).toMatchObject({ phase: 'fight', frames: 600, ultimates: 1 })
     expect(report.pass.frames).toBe(true)
+    expect(report.pass.budget).toBe(true)
     expect(report.finished).toBe(false)
+  })
+
+  it('fails the budget when a fight sample draws over GAME.md §10, and says which', () => {
+    const r = createSoakRecorder({ ...DEFAULT_SOAK, minutes: 1 }, env)
+    r.context({ match: 0, alive: 20, controlled: true, quality: 'full', pixelRatio: 2, drawCalls: 420, triangles: 1e6, geometries: 100, textures: 50, textureMb: 180, phase: 'fight' })
+    for (let i = 0; i < 60; i++) r.frame(16.7)
+    r.sample()
+    const report = r.report()
+    expect(report.pass.budget).toBe(false)
+    expect(report.pass.notes).toContain('worst sample: 420 draw calls, over 300')
   })
 })

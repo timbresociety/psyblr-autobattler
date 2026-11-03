@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { float, normalView, positionViewDirection, uniform } from 'three/tsl'
+import { attribute, float, normalView, positionViewDirection, uniform } from 'three/tsl'
 import { clone as cloneRig } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS } from '../../../charter/build.js'
 import { FAMILY_OF } from '../../../charter/skill-look.js'
@@ -132,6 +132,8 @@ const own = (t: THREE.Texture, u: number, v: number) => {
 // a tube of length 1 along +z from the origin, so `lookAt` and a z scale lay it from one point to another
 const tube = (segments: number) => new THREE.CylinderGeometry(1, 1, 1, segments, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5)
 const ground = () => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2)
+/** The effect kinds drawn instanced (plain additive basic materials sharing their kind's texture). */
+const BATCHED: ReadonlySet<MeshKind> = new Set(['shock', 'face', 'magic', 'crack', 'vortex', 'cone', 'band', 'core', 'disc', 'crescent', 'slash'])
 
 /** What a shot flies as: the hit layer's primitive and style pick the body, and the body fits inside the hit sphere. */
 type ShotBody = 'orb' | 'bolt' | 'crystal' | 'arrow' | 'disc' | 'crescent' | 'meteor'
@@ -275,6 +277,58 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   }
   const pool = new Map<MeshKind, THREE.Mesh[]>()
   const live: Live[] = []
+  // the plain additive kinds are drawn instanced, one draw per kind however many are out (GAME.md §10: a big fight had
+  // 150 effect meshes on screen, a draw each). Their pooled meshes are only holders: an effect moves, scales, tints and
+  // fades its holder as before, and each frame the holders taken out are copied into their kind's instanced mesh.
+  // Beams, pillars and chains scroll their own textures, and the energy kinds and rocks have shaders of their own, so
+  // those stay meshes in the scene.
+  const out = new Map<MeshKind, Set<THREE.Mesh>>()
+  const batches = new Map<MeshKind, { mesh: THREE.InstancedMesh; fade: THREE.InstancedBufferAttribute }>()
+  const batchOf = (kind: MeshKind, like: THREE.MeshBasicMaterial, needed: number) => {
+    let b = batches.get(kind)
+    if (b && b.mesh.instanceMatrix.count >= needed) return b
+    const capacity = Math.max(64, (b?.mesh.instanceMatrix.count ?? 0) * 2, needed)
+    if (b) {
+      b.mesh.removeFromParent()
+      b.mesh.geometry.dispose()
+      ;(b.mesh.material as THREE.Material).dispose()
+    }
+    const g = geometry[kind]()
+    const fade = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1)
+    g.setAttribute('fade', fade)
+    const material = new MeshBasicNodeMaterial({ map: like.map, transparent: true, blending: like.blending, depthWrite: false, side: like.side })
+    material.opacityNode = attribute('fade', 'float')
+    const mesh = new THREE.InstancedMesh(g, material, capacity)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3)
+    mesh.name = `fx:${kind}`
+    mesh.renderOrder = 2
+    mesh.frustumCulled = false
+    scene.add(mesh)
+    batches.set(kind, (b = { mesh, fade }))
+    return b
+  }
+  const drawBatches = () => {
+    for (const [kind, holders] of out) {
+      let n = 0
+      const first = holders.values().next().value
+      const b = first ? batchOf(kind, first.material as THREE.MeshBasicMaterial, holders.size) : batches.get(kind)
+      if (!b) continue
+      for (const m of holders) {
+        if (!m.visible) continue
+        const mat = m.material as THREE.MeshBasicMaterial
+        m.updateMatrix()
+        b.mesh.setMatrixAt(n, m.matrix)
+        b.mesh.setColorAt(n, mat.color)
+        b.fade.setX(n, mat.opacity)
+        n++
+      }
+      b.mesh.count = n
+      b.mesh.visible = n > 0
+      b.mesh.instanceMatrix.needsUpdate = true
+      b.mesh.instanceColor!.needsUpdate = true
+      b.fade.needsUpdate = true
+    }
+  }
   const tint = (m: THREE.Mesh, c: THREE.Color, opacity: number) => {
     const mat = m.material as THREE.MeshBasicMaterial & Partial<EnergyMaterial>
     if (mat.tint && mat.fade) {
@@ -296,11 +350,16 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
     m.rotation.set(0, 0, 0)
     m.scale.setScalar(1)
     m.renderOrder = 2
-    if (!free) scene.add(m)
+    if (BATCHED.has(kind)) {
+      let held = out.get(kind)
+      if (!held) out.set(kind, (held = new Set()))
+      held.add(m)
+    } else if (!free) scene.add(m)
     return m
   }
   const park = (kind: MeshKind, m: THREE.Mesh) => {
     m.visible = false
+    out.get(kind)?.delete(m)
     const list = pool.get(kind) ?? []
     list.push(m)
     pool.set(kind, list)
@@ -991,6 +1050,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
         flashSky.tint.copy(skyColor)
         flashSky.amount.value = Math.min(0.55, sky)
       } else (scene.background as THREE.Color).copy(background).lerp(skyColor, Math.min(0.55, sky))
+      drawBatches()
     },
     timeScale: () => (hitStop > 0 ? 0.05 : 1),
     shake: () => new THREE.Vector3((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake).addScaledVector(kickAt, kick * kick),

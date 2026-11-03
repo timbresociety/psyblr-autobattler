@@ -17,10 +17,12 @@ import { Cameras, FIRST_PERSON } from './camera.js'
 import { TEAM_COLORS } from './map.js'
 import { handBack, releaseIfDead, take } from './takeover.js'
 import { loadHeroView, type HeroView } from './heroes.js'
-import { HeroLod, impostorMaterial, lodReady, POSE_EVERY, tiersFor, type Tier } from './lod.js'
+import { HeroLod, impostorMaterial, LOD, lodReady, POSE_EVERY, tiersFor, type Tier } from './lod.js'
 import { createClock, frame } from './loop.js'
 import { atmosphere, buildMap, lights, type ArenaMap } from './map.js'
-import { VIEW_FAR } from './sky.js'
+import { cascade, sunShadows, VIEW_FAR } from './sky.js'
+import { propLods } from './render/prop-lod.js'
+import { HIDE_AFTER, OCCLUDED_LAYER, occluded, setOccluded, sightHealth } from './occlusion.js'
 import { buildRuins } from './ruins.js'
 import { buildGreybox } from './greybox.js'
 import { LIVE_MAP, MAPS } from '../engine/maps.js'
@@ -420,6 +422,7 @@ async function createStage(host: HTMLElement) {
     const map = buildMap()
     scene.add(map.group)
     const sun = lights(scene)
+    cascade(sun)
     const stage = {
       host,
       canvas: first.canvas,
@@ -475,6 +478,7 @@ async function createStage(host: HTMLElement) {
           stage.renderer = next.renderer
           stage.backend = next.backend
           stage.sun.castShadow = shadows
+          cascade(stage.sun)
           stage.glow = await bloomPipeline(stage.renderer, scene, camera)
           if (stage.glow) stage.glow.enabled = bloomOn
           watchDevice(stage)
@@ -548,8 +552,12 @@ function qualityControl(stage: Stage) {
       if (current === 'full' && !atFloor(scaler)) guard.frames = []
       else current = observe(guard, frameMs)
       // lazy shadows redraw the sun's shadow map every third frame instead of every frame
-      stage.sun.shadow.autoUpdate = !atLeast(current, 'lazy-shadows')
-      if (!stage.sun.shadow.autoUpdate && frame++ % 3 === 0) stage.sun.shadow.needsUpdate = true
+      const lazy = atLeast(current, 'lazy-shadows')
+      const redraw = lazy && frame++ % 3 === 0
+      for (const shadow of sunShadows(stage.sun)) {
+        shadow.autoUpdate = !lazy
+        if (redraw) shadow.needsUpdate = true
+      }
     },
   }
 }
@@ -565,7 +573,7 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[] },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
@@ -577,10 +585,11 @@ function drawHeroes(
   })
   // each hero's level of detail from how far it stands from the camera (GAME.md §10)
   const tiers = ctx.tiers
-  tiersFor(
-    ats.map((a) => Math.sqrt((a.x - camera.position.x) ** 2 + (a.y - camera.position.y) ** 2 + (a.z - camera.position.z) ** 2)),
-    tiers,
-  ).forEach((t, i) => (tiers[i] = t))
+  const distances = ats.map((a) => Math.sqrt((a.x - camera.position.x) ** 2 + (a.y - camera.position.y) ** 2 + (a.z - camera.position.z) ** 2))
+  tiersFor(distances, tiers).forEach((t, i) => (tiers[i] = t))
+  // occlusion by zone and level: a hero the stone hides from the camera for a few frames is drawn for the sun only
+  const cover = arena.match.cover
+  const sight = cover && sightHealth(cover.pieces, cover.health, ctx.sight)
   return arena.match.heroes.map((h, i) => {
     const p = prev[i]
     const c = h.position
@@ -589,18 +598,23 @@ function drawHeroes(
     const view = views[i]
     view.setForm?.(h.formUntil > 0, h.size)
     const tier = tiers[i]
-    lods?.[i].apply(tier)
+    lods?.[i].apply(tier, distances[i] <= LOD.close)
+    const unseen = ctx.occlude && !!cover && !!sight && i !== arena.match.human && distances[i] > LOD.close && occluded(camera.position, at, capsule(h).height, cover.pieces, sight)
+    ctx.hidden[i] = unseen ? (ctx.hidden[i] ?? 0) + 1 : 0
+    const hide = ctx.hidden[i] >= HIDE_AFTER
+    if (hide !== view.root.layers.isEnabled(OCCLUDED_LAYER)) setOccluded(view.root, hide)
     const card = impostors?.[i]
     if (card) {
-      card.visible = tier === 'impostor' && view.root.visible
+      card.visible = tier === 'impostor' && view.root.visible && !hide
       if (card.visible) {
         const { height } = capsule(h)
         card.scale.set(height * 0.5, height, 1)
         card.position.set(at.x, at.y + height / 2, at.z)
       }
     }
-    // mid heroes animate at 30 Hz and far ones at 15; under load, twice as seldom again; an impostor not at all
-    const every = POSE_EVERY[tier] * (frame.slowFar && tier !== 'near' ? 2 : 1)
+    // mid heroes animate at 30 Hz and far ones at 15; under load, or seen only by its shadow, twice as seldom again; an
+    // impostor not at all
+    const every = POSE_EVERY[tier] * (frame.slowFar && tier !== 'near' ? 2 : 1) * (hide ? 2 : 1)
     const far = tier !== 'near'
     // casts run on the engine's clock, between ticks too, so a clip's release frame lands on its release tick
     const pose = settle(animators[i], h, moved, frame.clock, frame.dt)
@@ -744,7 +758,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
 
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
-  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors }
+  const props = propLods(scene)
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true }
   if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
@@ -820,6 +835,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     }
     physics?.step(dt)
     ruins?.update(dt)
+    for (const p of props) p.update(camera.position)
     drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: now / 1000, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const followed = arena.match.human === undefined && cameras.follow !== undefined ? drawn[cameras.follow] : undefined
