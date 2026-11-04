@@ -233,6 +233,7 @@ td code, p code { font-size:12px; color:var(--mute) }
 <li><b>Audit every clip in use:</b> the shared moves (the table above), seven melee styles (three hits, heavy, guard), ranged in each stance, the four E kinds, the F toggle, R, hit reacts, knock-downs. Each gets keep, trim, replace or missing.</li>
 <li><b>Fix the five overlaps:</b> forms in one row, E without baseline repeats, Q burst set apart from LMB, summon given real summons, stun folded into control.</li>
 <li><b>Write the library as a grid</b> per button (delivery × effect group) so every item has exactly one cell, and list each gap as a new engine piece with a size and a yes or no.</li>
+<li><b>Attitude sets:</b> each hero can carry a walk, run and idle with character (a strut, a swagger, a hip sway, a heavy brute's roll) and Forge and victory poses. The library has one strutting walk and about 25 hand-on-hip poses; the rest come from the free libraries or our own recordings.</li>
 <li><b>Lock the weapon families</b> (the seven under LMB): every weapon belongs to one grip and one clip set; the bow gets its own set from the 16 bow clips we already have, and the heavy gun gets clips.</li>
 <li><b>Map it to bodies and archetypes:</b> the clip each item plays per size class, the default kits per role, and which melee styles and ranged kinds each body may hold.</li></ol></div>
 <div><h4>The owner decides</h4><ul class="owner">
@@ -280,6 +281,7 @@ td code, p code { font-size:12px; color:var(--mute) }
 <li><b>Skin:</b> copy the weights from our standard body by nearest point; a hard part (a block head, armour plates) binds stiffly to its own bone.</li>
 <li><b>Head:</b> attached at the neck socket (§9.1), the seam closed by the collar blend we already have. A face wrapped onto our head layout keeps the 52 face shapes; one that isn't keeps a painted face and still turns with the head.</li>
 <li><b>Gate:</b> the mesh plays the session 1 audit clips on the physique bench (skin passing through itself, joint limits, foot slide) and is fixed or refused before the player sees it.</li>
+<li><b>Sex appeal for adult characters (owner, 2026-11-05):</b> proportions, face, hair and a fitted outfit from the mesh; skin and hair shading that hold up close; bust, glute and thigh jiggle tuned per hero; the attitude sets from session 1. Never nude; a hero that reads as a child gets none of it, as the child preset already does.</li>
 <li><b>Weapons:</b> generated, attached to the hand socket, and placed in a weapon family so it plays that family's clips.</li>
 <li><b>Projectiles:</b> a look per ranged family, plus generated meshes for thrown objects.</li>
 <li><b>Cost and reliability:</b> a cap per player, caching, and a fallback to a library body when the service fails; the one content check is the hard line above.</li>
