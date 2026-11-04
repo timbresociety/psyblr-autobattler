@@ -523,7 +523,7 @@ Props: scratch cards, dice, slot machines, pachinko, gacha capsules and crash-st
 
 **Not now:** hair movement, cloth waves, outfits, tails, wings and beast skeletons.
 
-**Bare bodies until movement is locked (owner, 2026-11-04).** Every character is a bare body: no outfit, hair or beard, and the forge's wardrobe and garment making are removed. The work is the skeleton performing every traversal and combat action accurately. Once the map and movement are locked, the forge is reworked to generate a unique mesh, outfit included, fitting each size of skeleton, plus melee and ranged weapons. A weapon is offered only if the animations fit it, including ranged attacks while crouched or prone and on the move. **Any look, one skeleton (owner, 2026-11-04):** a player may ask for any hero, and the forge makes it human-like within our rig: joints in our places, anything on the surface (a block head, wood grain, a suit, cartoon proportions), never tails, wings, four legs or extra arms. The head can be its own generated mesh at the neck socket (§9.1). Real people and famous characters are an open decision (docs/plans/2026-11-04-kit-library-and-four-sessions.html, session 4).
+**Bare bodies until movement is locked (owner, 2026-11-04).** Every character is a bare body: no outfit, hair or beard, and the forge's wardrobe and garment making are removed. The work is the skeleton performing every traversal and combat action accurately. Once the map and movement are locked, the forge is reworked to generate a unique mesh, outfit included, fitting each size of skeleton, plus melee and ranged weapons. A weapon is offered only if the animations fit it, including ranged attacks while crouched or prone and on the move. **Any look, one skeleton (owner, 2026-11-04):** a player may ask for any hero, and the forge makes it human-like within our rig: joints in our places, anything on the surface (a block head, wood grain, a suit, cartoon proportions), never tails, wings, four legs or extra arms. The head can be its own generated mesh at the neck socket (§9.1). Real people and famous characters are an open decision (docs/plans/2026-11-04-kit-library-and-four-sessions.html, session 4). **The physique dials go (owner, 2026-11-04):** the prompt shapes the body instead; the size classes stay, and so do the jiggle and muscle helpers, placed on each generated mesh from its own skin.
 
 ### 9.1 The head is a separate, fixed object
 
@@ -850,6 +850,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-04: Owner decision recorded in §9: the physique dials go with the generative forge; size classes, jiggle and muscle helpers stay.
 - 2026-11-04: Owner direction recorded in §9: any hero a player asks for is generated human-like on our skeleton (joints in our places, anything on the surface); session 4 of the plan spells out generate, fit, skin, head, gate and weapons.
 - 2026-11-04: §13 Body: the heavy body's neck hump fixed, after the owner's screenshot. No rule changed.
 - 2026-11-04: Owner's order for closing the game recorded in §13 (Plan): lock a MECE kit library after a clip audit, build it and check it on the current map, rebuild the map, then the generative forge. Matching MHUR's movement feel is set aside for now; the game may differ. No rule changed.
