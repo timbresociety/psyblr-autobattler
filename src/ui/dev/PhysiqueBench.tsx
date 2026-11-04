@@ -5,13 +5,13 @@ import { heroHue } from '../../arena/client/characters'
 import { ARKIT_SHAPES, type ArkitShape } from '../../kit/head/head'
 import { PRESETS, presetDials, type ArchetypeId } from '../../kit/body/physique'
 import { BENCH_CLIPS } from '../../kit/bench/clips'
-import bench from '../../../docs/bench/physique-bench.json'
+import bench from '../../kit/bench/physique-bench.json'
 import { HeroStage } from '../common/HeroStage'
 
 /**
  * The physique test bench's page (?physique, dev builds only; GAME.md §9.7). Face: the head up close on both genders,
  * every face shape one at a time (§9.1). Bench: any archetype on any key clip, beside its scores from
- * docs/bench/physique-bench.json (BENCH_WRITE=1 vitest run src/kit/bench), and the jiggle test (a jump on the anime
+ * src/kit/bench/physique-bench.json (BENCH_WRITE=1 vitest run src/kit/bench), and the jiggle test (a jump on the anime
  * heroine). &shape=jawOpen, &facing=0.6 (either tab: 1.57 is side on), &tab=bench&arch=heavyweight&clip=run start there.
  */
 const HEADS: { name: string; role: RoleId; gender: 'm' | 'f' }[] = [

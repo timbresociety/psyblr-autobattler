@@ -5,7 +5,7 @@ import { benchArchetype, BENCH_CLIPS, type ArchetypeScore, type ClipScore } from
 
 /**
  * The physique bench's scores (GAME.md §9.7) over every archetype and key clip. BENCH_WRITE=1 also writes them to
- * docs/bench/physique-bench.json, the record regressions are read against.
+ * src/kit/bench/physique-bench.json, the record regressions are read against.
  */
 let scores: ArchetypeScore[]
 
@@ -14,7 +14,7 @@ beforeAll(async () => {
   for (const id of ARCHETYPES) scores.push(await benchArchetype(id))
   if (process.env.BENCH_WRITE) {
     mkdirSync('docs/bench', { recursive: true })
-    writeFileSync('docs/bench/physique-bench.json', `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), clips: BENCH_CLIPS, scores }, null, 1)}\n`)
+    writeFileSync('src/kit/bench/physique-bench.json', `${JSON.stringify({ generated: new Date().toISOString().slice(0, 10), clips: BENCH_CLIPS, scores }, null, 1)}\n`)
   }
 }, 120000)
 
