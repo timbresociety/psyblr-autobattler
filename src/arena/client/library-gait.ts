@@ -29,25 +29,27 @@ const loads = new Map<string, Promise<LibraryGait | undefined>>()
  */
 export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   // a jump, a second jump and a roll each have a clip for every way they go (animation.ts, Way; owner 2026-11-04):
-  // a running jump tucks, standing it springs straight up, to the side it hops sideways; the second jump flips forward,
-  // twists going sideways and only flips backwards going back; a roll turns into its way and comes up running, except
-  // back, where the hero hops back still facing the aim
+  // a running jump tucks, standing it springs straight up, to the side it hops sideways; the second jump is the same
+  // jump again, for reach, not a flip (owner, 2026-11-04); a roll turns into its way and comes up running, except back,
+  // where the hero hops back still facing the aim
   jump: 'standing_jump_running',
   jump_up: 'jump_up',
   jump_left: 'left_strafe_jump',
   jump_right: 'right_strafe_jump',
   jump_back: 'backward_jump',
-  air_jump: 'running_forward_flip',
-  air_jump_up: 'running_forward_flip',
-  air_jump_left: 'front_twist_flip',
-  air_jump_right: 'front_twist_flip',
-  air_jump_back: 'backflip',
+  air_jump: 'standing_jump_running',
+  air_jump_up: 'jump_up',
+  air_jump_left: 'left_strafe_jump',
+  air_jump_right: 'right_strafe_jump',
+  air_jump_back: 'backward_jump',
   roll_back: 'standing_dodge_backward',
   land: 'ual_jump_land',
   air: 'falling',
   dash: 'standing_dodge_forward',
   dash_back: 'standing_dodge_backward',
-  slide: 'running_slide_pose',
+  slide: 'running_slide',
+  // Ctrl at a run: the dive of a dive roll, up to the body lying flat, which prone then takes over from
+  dive: 'cmu_dive_roll',
   slash: 'jab_cross',
   shoot: 'shooting_gun',
   cast: 'spell_cast',
@@ -61,6 +63,9 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   crouch_move: 'crouch_walk_forward',
   prone: 'prone_idle',
   prone_move: 'prone_forward',
+  // a shot or a spell from low stays low (owner, 2026-11-04): each fires from its stance's own hips
+  crouch_fire: 'crouch_rapid_fire',
+  prone_fire: 'rifle_prone_fire',
   launched: 'fall_a_loop',
   charge: 'standing_block_start',
   toggle: 'spell_cast',
@@ -68,12 +73,13 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   land_roll: 'falling_to_roll',
   land_heavy: 'mid_air_falling_to_a_hard_landing',
   zip: 'hanging',
-  // a ledge (§7, owner 2026-11-04): caught from a walk off it, held with the feet braced on the face, shimmied along,
-  // climbed up from
-  catch: 'braced_hang',
-  hang: 'braced_hang',
-  hang_left: 'left_braced_hang_shimmy',
-  hang_right: 'right_braced_hang_shimmy',
+  // a ledge (§7, owner 2026-11-04): caught from a walk off it or a jump, held hanging straight down from both hands
+  // (the braced hang folded the legs into the wall and its hold bobbed, owner 2026-11-04), shimmied along hand over
+  // hand, climbed up from
+  catch: 'hanging_from_a_ledge_idle',
+  hang: 'hanging_from_a_ledge_idle',
+  hang_left: 'left_shimmy',
+  hang_right: 'right_shimmy',
   climb: 'braced_hang_to_crouch',
   rail: 'crouch_idle',
 }
@@ -83,19 +89,19 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
  * the engine's move does. Seconds into the clip, from and to, and how long it plays. A Mixamo roll stands, steps and
  * crouches for half a second before it rolls; the engine's roll starts at once.
  */
-const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number, lift?: number]>> = {
+const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: number]>> = {
   // take-off to the top of the rise: the push, the tuck, the reach for whatever comes next
   jump: [0.25, 0.75, 0.42],
   jump_up: [0.08, 0.54, 0.42],
   jump_left: [0, 0.5, 0.42],
   jump_right: [0, 0.5, 0.42],
   jump_back: [0.08, 0.7, 0.42],
-  // the flip itself, over the second jump's rise
-  air_jump: [0.12, 0.95, 0.5],
-  air_jump_up: [0.12, 0.95, 0.5],
-  air_jump_left: [0.55, 1.35, 0.5],
-  air_jump_right: [0.55, 1.35, 0.5],
-  air_jump_back: [0.5, 1.4, 0.5],
+  // the second jump plays the first's push again
+  air_jump: [0.25, 0.75, 0.42],
+  air_jump_up: [0.08, 0.54, 0.42],
+  air_jump_left: [0, 0.5, 0.42],
+  air_jump_right: [0, 0.5, 0.42],
+  air_jump_back: [0.08, 0.7, 0.42],
   // a roll from the dive to running again, turned into its way (match-view); back, a dodge from the push off to the
   // feet back under
   roll: [0.22, 1.25, ENGINE.move.roll.time],
@@ -107,17 +113,98 @@ const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: num
   // the pull-up itself, from the hands taking the weight to the feet on top
   mantle: [0.6, 2.2, ENGINE.move.mantle.time],
   land_roll: [0.05, 1.3, 0.55],
+  // from the run into the slide to before it gets back up: crouching takes over from there
+  slide: [0.17, 0.85, ENGINE.move.slide.time],
+  // the body already leaning out off the push to it flat in the air (from upright, it read as a lunge, owner 2026-11-04)
+  dive: [0.2, 0.5, ENGINE.move.dive.time],
   land_heavy: [0.55, 1.6, 0.45],
-  // the braced hang clip opens with the drop into the brace (the hips fall a metre) and then holds it: the catch is the
-  // drop, the hold the rest, so the loop never drops again; both lifted to put the hands on the edge where the shimmies
-  // put them
-  catch: [0, 0.62, 0.4, 0.5],
-  hang: [0.62, 1.29, 0.67, 0.5],
+  catch: [0, 0.45, 0.45],
   climb: [0, 1.13, ENGINE.move.hang.climb],
 }
 
-/** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`, the hips raised `lift` metres. */
-function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number, lift = 0): THREE.AnimationClip {
+/**
+ * Tumbles turned to roll straight along the way the hero goes. A Mixamo roll goes over a shoulder, on its own line:
+ * quick_roll_to_run rolls 65 degrees right of the way it faces and falling_to_roll 61 left, so a dodge played along the
+ * move dived across the camera's line, head off to the right (owner, 2026-11-04).
+ */
+const ALIGNED: ReadonlySet<string> = new Set(['roll', 'land_roll'])
+
+const UP = new THREE.Vector3(0, 1, 0)
+
+/**
+ * The heading (radians, the yaw convention: 0 along +z, a quarter turn to +x) a tumbling clip rolls along: the axis the
+ * hips turn about from the last upright frame to the most upside-down one, less a quarter turn. Undefined for a clip
+ * that never tips past level.
+ */
+export function rollLine(clip: THREE.AnimationClip): number | undefined {
+  const track = clip.tracks.find((t) => t.name.endsWith('.quaternion') && clip.tracks.some((p) => p.name === t.name.replace('.quaternion', '.position')))
+  if (!track) return undefined
+  const q = (i: number) => new THREE.Quaternion().fromArray(track.values, i * 4).normalize()
+  const ups = Array.from({ length: track.times.length }, (_, i) => UP.clone().applyQuaternion(q(i)).y)
+  const low = ups.indexOf(Math.min(...ups))
+  if (ups[low] > 0) return undefined
+  let start = 0
+  for (let i = 0; i < low; i++) if (ups[i] > 0.85) start = i
+  const turn = q(low).multiply(q(start).invert())
+  const axis = new THREE.Vector3(turn.x, turn.y, turn.z)
+  if (axis.lengthSq() < 1e-9) return undefined
+  if (turn.w < 0) axis.negate()
+  return Math.atan2(axis.x, axis.z) - Math.PI / 2
+}
+
+/** `clip` turned `angle` radians round the vertical: the hips' facing and their path both. */
+export function turned(clip: THREE.AnimationClip, angle: number): THREE.AnimationClip {
+  const r = new THREE.Quaternion().setFromAxisAngle(UP, angle)
+  const q = new THREE.Quaternion()
+  const v = new THREE.Vector3()
+  const hips = clip.tracks.find((t) => t.name.endsWith('.position'))?.name.replace('.position', '')
+  const tracks = clip.tracks.map((track) => {
+    if (track.name !== `${hips}.quaternion` && track.name !== `${hips}.position`) return track
+    const values = new Float32Array(track.values)
+    const width = track.getValueSize()
+    for (let i = 0; i < values.length; i += width)
+      if (width === 4) q.fromArray(values, i).premultiply(r).toArray(values, i)
+      else v.fromArray(values, i).applyQuaternion(r).toArray(values, i)
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(track.times), values)
+  })
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks)
+}
+
+/**
+ * Moves whose hips the library puts in the wrong place for the engine. `ahead`: metres the hips go forward the whole
+ * clip; the ledge hang held the hands half a metre off the edge it hangs from (owner, 2026-11-04: "the ledge hold
+ * animation is completely distorted"). `down`: the hips' height the clip comes down to by its end, falling there over
+ * its second half; the dive's leap ends flat a metre up, and prone then dropped it to the floor in a blink.
+ */
+const MOVE_SHIFTS: Readonly<Record<string, { ahead?: number; down?: number }>> = {
+  dive: { down: 0.14 },
+  catch: { ahead: 0.4 },
+  hang: { ahead: 0.4 },
+  hang_left: { ahead: 0.4 },
+  hang_right: { ahead: 0.4 },
+}
+
+/** `clip` with its hips moved by `shift` (see MOVE_SHIFTS). */
+export function shifted(clip: THREE.AnimationClip, shift: { ahead?: number; down?: number }): THREE.AnimationClip {
+  const tracks = clip.tracks.map((track) => {
+    if (!track.name.endsWith('.position')) return track
+    const values = new Float32Array(track.values)
+    const last = values[values.length - 2]
+    for (let i = 0; i < track.times.length; i++) {
+      values[i * 3 + 2] += shift.ahead ?? 0
+      // falling: slow at the top of the arc, quickest as it lands
+      const u = Math.max(0, (track.times[i] / clip.duration - 0.5) / 0.5)
+      if (shift.down !== undefined) values[i * 3 + 1] -= (last - shift.down) * u * u
+    }
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(track.times), values)
+  })
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks)
+}
+
+/** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`. */
+function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number): THREE.AnimationClip {
   const k = seconds / (to - from)
   const tracks = clip.tracks.map((track) => {
     const width = track.getValueSize()
@@ -126,8 +213,6 @@ function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: numbe
     const times = Float32Array.from(keep, (i) => (track.times[i] - from) * k)
     const values = new Float32Array(keep.length * width)
     keep.forEach((i, n) => values.set(track.values.subarray(i * width, (i + 1) * width), n * width))
-    // the hips are the only bone that moves
-    if (lift && track.name.endsWith('.position')) for (let n = 1; n < values.length; n += 3) values[n] += lift
     const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
     return new Track(track.name, times, values)
   })
@@ -162,9 +247,12 @@ function baseMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.Anim
       const clips = await Promise.all(names.map(([, clip]) => animClip(gender, clip, rig).catch(() => undefined)))
       const out = new Map<string, THREE.AnimationClip>()
       names.forEach(([ours], k) => {
-        const clip = clips[k]
+        const line = ALIGNED.has(ours) && clips[k] ? rollLine(clips[k]!) : undefined
+        const clip = line === undefined ? clips[k] : turned(clips[k]!, -line)
         const cuts = MOVE_CUTS[ours]
-        if (clip) out.set(ours, cuts ? Object.assign(cut(clip, ...cuts), { name: ours }) : new THREE.AnimationClip(ours, clip.duration, clip.tracks))
+        const shift = MOVE_SHIFTS[ours]
+        const timed = clip && (cuts ? cut(clip, ...cuts) : clip)
+        if (timed) out.set(ours, Object.assign(shift ? shifted(timed, shift) : new THREE.AnimationClip(ours, timed.duration, timed.tracks), { name: ours }))
       })
       return out
     })()

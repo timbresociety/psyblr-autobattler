@@ -52,6 +52,21 @@ function arena(template: Template, enemies: { x?: number; y?: number; z: number;
   return { m, setups, ctx, events, fire, strike, run, hits, aimAt }
 }
 
+describe('casting low (owner, 2026-11-04)', () => {
+  it('a shot or a spell fires from a crouch or prone and leaves the hero there; a blow stands it up first', () => {
+    for (const stance of ['crouch', 'prone'] as const) {
+      const shot = arena(skill({ kind: 'projectile', range: 10, speed: 30, projectileRadius: 0.3 }), [{ z: 6 }])
+      shot.m.heroes[0].stance = stance
+      shot.fire()
+      expect(shot.m.heroes[0].stance).toBe(stance)
+      const blow = arena(skill({ kind: 'melee', range: 3, arcDegrees: 90 }), [{ z: 1.5 }])
+      blow.m.heroes[0].stance = stance
+      blow.fire()
+      expect(blow.m.heroes[0].stance).toBe('stand')
+    }
+  })
+})
+
 describe('a dash or leap carries the hero there over time (2026-11-04)', () => {
   it('a leap arcs across several ticks and lands its crater only when it arrives', () => {
     const a = arena(skill({ kind: 'leap', range: 9, radius: 3 }, [move(9), phys(100)]), [{ z: 10 }])

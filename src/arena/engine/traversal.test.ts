@@ -470,6 +470,97 @@ describe('ledge hang (§7, owner 2026-11-04)', () => {
   })
 })
 
+describe("a played hero's jump is the player's to steer (owner, 2026-11-04)", () => {
+  const played = (opts: Parameters<typeof solo>[0] = {}) => {
+    const s = solo(opts)
+    s.m.human = 0
+    s.step(go(0, 0), 3)
+    return s
+  }
+  const peak = (s: ReturnType<typeof solo>, held: number) => {
+    let top = s.h.position.y
+    for (let i = 0; i < 200 && (s.h.airborne || i < 2); i++) {
+      s.step(go(0, 0, i < held ? MOVES.jump : 0))
+      top = Math.max(top, s.h.position.y)
+    }
+    return top
+  }
+
+  it('let go early, the jump is cut short; held, it rises its full height; the AI always jumps full', () => {
+    expect(peak(played(), 1)).toBeLessThan(M.jump * 0.5)
+    expect(peak(played(), 60)).toBeCloseTo(M.jump, 0)
+    expect(peak(solo(), 1)).toBeCloseTo(M.jump, 0)
+  })
+
+  it('steered in the air it goes the new way, and let go of, it stops drifting on', () => {
+    const steered = played()
+    steered.step(go(0, 0, MOVES.jump))
+    steered.step(go(1, 0), 30)
+    expect(steered.h.position.x).toBeGreaterThan(2)
+    const runs = (letGo: boolean) => {
+      const s = played()
+      s.step(go(0, 1), 30)
+      s.step(go(0, 1, MOVES.jump))
+      for (let i = 0; i < 200 && s.h.airborne; i++) s.step(letGo ? go(0, 0) : go(0, 1))
+      return s.h.position.z
+    }
+    expect(runs(true)).toBeLessThan(runs(false) - 2)
+  })
+
+  it('a sprint jumps further than a jog', () => {
+    const across = (moves: number) => {
+      const s = played()
+      s.step(go(0, 1, moves), 40)
+      const from = s.h.position.z
+      s.step(go(0, 1, moves | MOVES.jump))
+      for (let i = 0; i < 200 && s.h.airborne; i++) s.step(go(0, 1, moves))
+      return s.h.position.z - from
+    }
+    expect(across(MOVES.dash)).toBeGreaterThan(across(0) * 1.15)
+  })
+
+  it('a jump that falls short of a wall\'s top catches its edge and hangs; one that clears it climbs on', () => {
+    const at = (held: number) => {
+      const s = played({ pieces: [block(0, 3, 3, 1.5, 4.5)] })
+      s.step(go(0, 1), 20)
+      s.step(go(0, 1, MOVES.jump), held)
+      for (let i = 0; i < 120 && !s.h.hang && !s.h.mantle; i++) s.step(go(0, 1))
+      return s
+    }
+    const short = at(9)
+    expect(short.h.hang).toBeDefined()
+    expect(short.h.hang!.y).toBe(4.5)
+    expect(at(60).moves()).toContain('mantle')
+  })
+
+  it('a double jump over flat ground just lands: no roll, no heavy landing', () => {
+    const s = played()
+    s.step(go(0, 1), 20)
+    s.step(go(0, 1, MOVES.jump), 25)
+    s.step(go(0, 1), 1)
+    s.step(go(0, 1, MOVES.jump), 25)
+    for (let i = 0; i < 200 && s.h.airborne; i++) s.step(go(0, 1))
+    expect(s.moves()).toContain('air-jump')
+    expect(s.moves()).toContain('land')
+    expect(s.moves().some((m) => m === 'land-roll' || m === 'land-heavy')).toBe(false)
+  })
+})
+
+describe('slide and dive (owner, 2026-11-04)', () => {
+  it('a slide ends crouched, and a dive at a run lies prone where it ends', () => {
+    for (const [press, stance, move] of [[MOVES.crouch, 'crouch', 'slide'], [MOVES.prone, 'prone', 'dive']] as const) {
+      const s = solo()
+      s.m.human = 0
+      s.step(go(0, 1), 40)
+      s.step(go(0, 1, press))
+      s.step(go(0, 1), 60)
+      expect(s.moves()).toContain(move)
+      expect(s.h.slide).toBeUndefined()
+      expect(s.h.stance).toBe(stance)
+    }
+  })
+})
+
 describe('landing a big fall (§7)', () => {
   const drop = (moves: number, moveZ: number) => {
     const s = solo({ y: 14 })

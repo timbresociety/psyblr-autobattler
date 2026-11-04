@@ -70,6 +70,13 @@ export const ENGINE = {
     // the House of Instinct's spacing is built on these measured heights instead (traversal.test.ts)
     jump: 4.2,
     airJump: 3.4,
+    /**
+     * A played hero's jumps are its own to steer (owner, 2026-11-04: a jump followed a fixed arc whatever the keys did,
+     * and a sprint's jump flew no further than a jog's). In the air it turns toward where it steers at `accel` m/s²,
+     * up to the speed it took off with, and with no key held it slows at `brake`; Space let go while still rising cuts
+     * the rise to `cut` of its speed, so a tap hops and a hold jumps full height. The AI's jumps stay as they were.
+     */
+    air: { accel: 45, brake: 18, cut: 0.5 },
     jumpScale: { tiny: 1.25, small: 1.12, medium: 1, large: 0.88, huge: 0.76, colossal: 0.66 },
     dash: { speed: 18, time: 0.2 },
     /**
@@ -97,6 +104,8 @@ export const ENGINE = {
     /** X holds a guard: melee from in front lands on it, at `speed` times run speed. */
     block: { speed: 0.35, arcDegrees: 140 },
     slide: { from: 0.8, boost: 1.4, end: 0.75, time: 0.9, steer: 1.5, height: 0.55 },
+    /** Ctrl at a run dives forward into prone (owner, 2026-11-04): `time` seconds, from `boost` to `end` of run speed. */
+    dive: { time: 0.45, boost: 1.25, end: 0.15 },
     stamina: { max: 3, regen: 3.5 },
     step: 0.4,
     /**
@@ -110,9 +119,10 @@ export const ENGINE = {
      * of sheer fall under it catches the edge and hangs, feet `below` body heights under the top. From there it climbs
      * up over `climb` seconds (jump, or steering into the wall), shimmies along the edge at `shimmy` m/s, lets go
      * (crouch or roll), or jumps away from the wall (jump while steering away). It can't catch a ledge again for
-     * `regrab` seconds after letting go.
+     * `regrab` seconds after letting go. A jump into a wall too tall to mantle catches its edge too, at the top of the
+     * jump or falling, when the hands reach it: up to `grab` metres over the head (owner, 2026-11-04).
      */
-    hang: { drop: 2, below: 1.22, climb: 0.75, shimmy: 1.6, regrab: 0.4 },
+    hang: { drop: 2, below: 1.22, climb: 0.75, shimmy: 1.6, regrab: 0.4, grab: 0.5 },
     /**
      * A dash skill carries the hero at `dash` m/s (at least `least` seconds); a leap takes `leap.base` seconds plus
      * `leap.per` a metre, arcing `leap.rise` of its length overhead, up to `leap.top` metres. A blink still lands at once.
@@ -120,9 +130,11 @@ export const ENGINE = {
     travel: { dash: 45, least: 0.06, leap: { base: 0.22, per: 0.022, rise: 0.3, top: 4 } },
     /**
      * Landing at `big` m/s or more (a fall well past a jump's own height) rolls when the hero steers, keeping its
-     * speed, and lands heavily, stopping, when it doesn't. Never any fall damage.
+     * speed, and lands heavily, stopping, when it doesn't. Never any fall damage. A played hero lands that way only
+     * from at least `drop` metres below where it left the ground (owner, 2026-11-04: a double jump on the flat landed
+     * in a roll).
      */
-    landing: { big: 20 },
+    landing: { big: 20, drop: 5 },
     /**
      * Ziplines and rails (§7): a hero in the air whose hands (a zipline) or feet (a rail) come within `grab` metres of
      * one rides it at `speed` m/s the way it was moving (away from the end, when caught within `endGrab` metres of

@@ -79,14 +79,19 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     return hanging(hero, match, mx, mz, steering, pressed, now, events)
   }
   let missed = 0
-  // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone, either again stands; a jump stands
-  // a low hero up rather than leaving the ground
+  const person = match?.human === hero.id
+  // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone (at a run it dives instead), either
+  // again stands; a jump stands a low hero up rather than leaving the ground
   const across0 = Math.sqrt(v.x * v.x + v.z * v.z)
-  if (pressed & MOVES.crouch && free && !hero.airborne && hero.stance === 'stand' && across0 >= M.slide.from * speed && now >= hero.dashUntil) {
+  const running = free && !hero.airborne && hero.stance === 'stand' && !hero.slide && across0 >= M.slide.from * speed && now >= hero.dashUntil
+  if (pressed & MOVES.crouch && running) {
     hero.slide = { from: now, until: now + ticks(M.slide.time), x: v.x / across0, z: v.z / across0 }
     events?.push({ type: 'move', hero: hero.id, move: 'slide' })
   } else if (pressed & MOVES.crouch && !hero.airborne) hero.stance = hero.stance === 'crouch' ? 'stand' : 'crouch'
-  if (pressed & MOVES.prone && !hero.airborne) hero.stance = hero.stance === 'prone' ? 'stand' : 'prone'
+  if (pressed & MOVES.prone && running) {
+    hero.slide = { from: now, until: now + ticks(M.dive.time), x: v.x / across0, z: v.z / across0, prone: true }
+    events?.push({ type: 'move', hero: hero.id, move: 'dive' })
+  } else if (pressed & MOVES.prone && !hero.airborne) hero.stance = hero.stance === 'prone' ? 'stand' : 'prone'
   const lowered = hero.stance !== 'stand'
   // Shift: pressed it dashes ahead at once, and held it sprints on once the dash is spent
   if (pressed & MOVES.dash) hero.shiftSince = now
@@ -124,12 +129,14 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
       v.y = Math.sqrt(2 * M.gravity * M.jump * jumpScale)
       hero.airborne = true
       hero.slide = undefined
+      if (person) takeOff(hero, Math.max(want, Math.sqrt(v.x * v.x + v.z * v.z)))
       events?.push({ type: 'move', hero: hero.id, move: 'jump' })
     } else if (hero.airJumps < 1 && hero.stamina >= 1) {
       v.y = Math.sqrt(2 * M.gravity * M.airJump * jumpScale)
       hero.airJumps++
       hero.stamina -= 1
       events?.push({ type: 'move', hero: hero.id, move: 'air-jump' })
+      if (person) hero.airSpeed = Math.max(hero.airSpeed ?? 0, want)
       // the second jump turns the momentum it carries toward where it steers
       if (steering) {
         const carried = Math.max(Math.sqrt(v.x * v.x + v.z * v.z), want)
@@ -140,6 +147,7 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     }
   }
   keep(missed)
+  if (person && released & MOVES.jump && hero.airborne && v.y > 0 && !hero.launch) v.y *= M.air.cut
   if (dashNow && free && hero.stamina >= 1 && now >= hero.dashUntil && !hero.roll) {
     const n = Math.sqrt(mx * mx + mz * mz)
     const [dx, dz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]
@@ -152,7 +160,12 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     hero.slide = undefined
     events?.push({ type: 'move', hero: hero.id, move: 'dash' })
   }
-  if (hero.slide && (now >= hero.slide.until || hero.airborne || !free)) hero.slide = undefined
+  if (hero.slide && (now >= hero.slide.until || hero.airborne || !free)) {
+    // run out on the ground, a dive lies prone, and a played hero's slide stays crouched (owner, 2026-11-04); the AI
+    // slides to dodge and runs on
+    if (now >= hero.slide.until && !hero.airborne && (hero.slide.prone || person)) hero.stance = hero.slide.prone ? 'prone' : 'crouch'
+    hero.slide = undefined
+  }
 
   // across the ground; a rooted wind-up plants the feet at once
   if (rooted || (acting === 0 && !hero.airborne)) {
@@ -181,17 +194,22 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
       const [c, n] = [cos(a), sin(a)]
       ;[s.x, s.z] = [s.x * c - s.z * n, s.x * n + s.z * c]
     }
-    const pace = speed * acting * (M.slide.boost + (M.slide.end - M.slide.boost) * t)
+    const { boost, end } = s.prone ? M.dive : M.slide
+    const pace = speed * acting * (boost + (end - boost) * t)
     v.x = s.x * pace
     v.z = s.z * pace
-  } else if (!hero.airborne || steering) {
-    // on the ground it eases to the speed it wants; in the air it keeps its momentum unless it steers
-    const tx = mx * want
-    const tz = mz * want
+  } else if (!hero.airborne || steering || (person && hero.airSpeed !== undefined)) {
+    // on the ground it eases to the speed it wants; in the air it keeps its momentum unless it steers. A played hero
+    // that left the ground itself (a jump, a walk off an edge, letting go of a ledge; not a knock into the air) steers
+    // hard there, up to the speed it took off with, and slows with no key held
+    const aloft = hero.airborne && person && hero.airSpeed !== undefined
+    const top = aloft ? Math.max(want, hero.airSpeed ?? 0) : want
+    const tx = mx * top
+    const tz = mz * top
     const dx = tx - v.x
     const dz = tz - v.z
     const gap = Math.sqrt(dx * dx + dz * dz)
-    const rate = (hero.airborne ? M.airAccel : M.accel) * DT
+    const rate = (aloft ? (steering ? M.air.accel : M.air.brake) : hero.airborne ? M.airAccel : M.accel) * DT
     if (gap <= rate) {
       v.x = tx
       v.z = tz
@@ -221,14 +239,21 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     standOn(hero, match, Math.max(from, p.y))
     const pressing = keepOut(hero, match)
     if (hero.airborne) {
-      // pressed against a ledge it can reach, it pulls itself up; near a line, it catches it
-      if (pressing && steering && free && !hero.launch) startMantle(hero, match, mx, mz, now, events)
-      else if (match?.lines && free && !hero.launch && now >= (hero.zipAfter ?? 0)) catchLine(hero, match.lines, mx, mz, steering, events)
+      // pressed against a ledge it can reach, it pulls itself up, or a played hero at the top of its jump or falling
+      // hangs from one its hands reach; near a line, it catches it
+      if (pressing && steering && free && !hero.launch) {
+        startMantle(hero, match, mx, mz, now, events)
+        if (!hero.mantle && person && v.y <= 0 && now >= (hero.hangAfter ?? 0) && match) grabLedge(hero, match, mx, mz, now, events)
+      } else if (match?.lines && free && !hero.launch && now >= (hero.zipAfter ?? 0)) catchLine(hero, match.lines, mx, mz, steering, events)
       return
     }
     standOn(hero, match)
-    // a big fall rolls on when the hero steers, keeping its speed, and lands heavily when it doesn't (§7)
-    const big = falling >= M.landing.big
+    // a big fall rolls on when the hero steers, keeping its speed, and lands heavily when it doesn't (§7); a played
+    // hero's only from well below where it left the ground
+    const dropped = (hero.airFrom ?? Infinity) - p.y
+    hero.airFrom = undefined
+    hero.airSpeed = undefined
+    const big = falling >= M.landing.big && (!person || dropped >= M.landing.drop)
     if (big && !(steering && free)) {
       v.x = 0
       v.z = 0
@@ -250,6 +275,12 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     if (catchEdge(hero, match, steering ? mx : v.x, steering ? mz : v.z, now, events)) return
   }
   if (pressing && steering && free && !hero.airborne && !hero.roll && now >= hero.dashUntil) startMantle(hero, match, mx, mz, now, events)
+}
+
+/** A played hero leaves the ground: where from, and how fast across it, for its landing and its steering in the air. */
+function takeOff(hero: HeroState, across: number) {
+  hero.airFrom = hero.position.y
+  hero.airSpeed = across
 }
 
 /** The top of a ledge just ahead along (dx, dz) that the hero can mantle onto, with room to stand there. */
@@ -320,6 +351,36 @@ function catchEdge(hero: HeroState, match: MatchState, dx: number, dz: number, n
     if (floorUnder(pieces, health, q, top + 1e-3) >= top - 1e-3) edge = q
   }
   if (!edge) return false
+  return hangOn(hero, match, edge, top, now, events)
+}
+
+/**
+ * A played hero jumping into a wall too tall to mantle: the edge of its top just ahead along (dx, dz), when the hands
+ * reach it (ENGINE.move.hang.grab over the head), caught and hung from. Searched from the body out to where the hands
+ * reach.
+ */
+function grabLedge(hero: HeroState, match: MatchState, dx: number, dz: number, now: number, events?: MatchEvent[]): boolean {
+  if (!match.cover) return false
+  const { pieces, health } = match.cover
+  const p = hero.position
+  const n = Math.sqrt(dx * dx + dz * dz)
+  if (n < 0.1) return false
+  const reach = p.y + capsule(hero).height + M.hang.grab
+  const out = bodyRadius(hero) + M.mantle.reach
+  for (let s = bodyRadius(hero) * 0.5; s <= out; s += 0.05) {
+    const q = { x: p.x + (dx / n) * s, y: 0, z: p.z + (dz / n) * s }
+    const top = floorUnder(pieces, health, q, reach)
+    if (top > p.y + M.mantle.height) return hangOn(hero, match, q, top, now, events)
+  }
+  return false
+}
+
+/**
+ * Hang from the edge at `edge` of a top at `top`: the drop faces the side round the edge the top isn't on. Nothing,
+ * unless a body has room to hang there.
+ */
+function hangOn(hero: HeroState, match: MatchState, edge: { x: number; z: number }, top: number, now: number, events?: MatchEvent[]): boolean {
+  const { pieces, health } = match.cover!
   let nx = 0
   let nz = 0
   for (let k = 0; k < 16; k++) {
@@ -417,9 +478,11 @@ function letGo(hero: HeroState, now: number, events: MatchEvent[] | undefined, a
   hero.hangAfter = now + ticks(M.hang.regrab)
   if (away) {
     const push = 5
+    takeOff(hero, push)
     hero.velocity = { x: g.nx * push, y: Math.sqrt(2 * M.gravity * M.jump * M.jumpScale[hero.size]), z: g.nz * push }
     events?.push({ type: 'move', hero: hero.id, move: 'jump' })
   } else {
+    takeOff(hero, 0)
     hero.velocity = { x: g.nx * 0.5, y: 0, z: g.nz * 0.5 }
     events?.push({ type: 'move', hero: hero.id, move: 'let-go' })
   }
@@ -543,6 +606,7 @@ export function standOn(hero: HeroState, match: MatchState | undefined, reach = 
     if (match?.human === hero.id) {
       hero.fellAt = match.tick
       hero.roll = undefined
+      takeOff(hero, Math.sqrt(hero.velocity.x * hero.velocity.x + hero.velocity.z * hero.velocity.z))
     }
   } else p.y = floor // down a ramp or a stair the feet follow the ground; off a ledge they fall
 }

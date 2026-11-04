@@ -12,7 +12,7 @@ import { COMBAT_RULES } from './deliveries.js'
 import type { MatchEvent } from './events.js'
 import { createMatch, matchRules } from './match.js'
 import { hashState } from './snapshot.js'
-import { AIM_STEPS, createHero, emptyMatch, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
+import { AIM_STEPS, createHero, emptyMatch, MOVES, prepareHero, slotBit, type Command, type HeroSetup, type MatchState } from './state.js'
 import { tick } from './tick.js'
 import { BASIC_SHARE, moveShare, timingOf, timingTicks } from './timing.js'
 import { land } from './testing.js'
@@ -200,6 +200,9 @@ describe('action timing (Forge goal, phase 1)', () => {
     let releases = 0
     for (let t = 0; t < 20 * ENGINE.tickHz; t++) {
       const commands = aiCommands(ai)
+      // a played hero steers its own jumps and cuts them short (ENGINE.move.air), its slides end crouched and a roll or
+      // jump pressed too soon waits for it (ENGINE.move.buffer), so hero 3 never jumps, slides or rolls here
+      if (commands[3]) commands[3] = { ...commands[3], moves: commands[3].moves & ~(MOVES.jump | MOVES.crouch | MOVES.dodge) }
       recorded.push(commands)
       releases += tick(ai.match, ai.setups, commands, rules).filter((e) => e.type === 'release').length
       hashes.push(fair(ai.match))

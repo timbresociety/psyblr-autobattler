@@ -52,7 +52,7 @@ const LOCOMOTION = new Set(['idle', 'run', 'air', 'stunned', ...HELD_KINDS])
 /** Clips that play once and hold their last pose, but give way the moment the hero runs, jumps or stands again. */
 const YIELDING = new Set(['fall', 'slide', 'land'])
 /** Seconds each movement blends in over: a jump or a dash snaps, a slide drops in. */
-const MOVE_FADE: Record<string, number> = { jump: 0.06, air_jump: 0.05, roll: 0.06, dash: 0.04, dash_back: 0.04, land: 0.06, slide: 0.1, air: 0.18 }
+const MOVE_FADE: Record<string, number> = { jump: 0.06, air_jump: 0.05, roll: 0.06, dive: 0.05, dash: 0.04, dash_back: 0.04, land: 0.06, slide: 0.1, air: 0.18 }
 
 /** How far each finger joint curls round a held piece, radians, and each thumb joint. */
 const GRIP = { finger: 1.1, thumb: 0.4 }
@@ -731,7 +731,9 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       ungrip()
       // a basic attack's blow plays its own step of the chain, or the charged heavy blow
       const blow = state.kind === 'cast' && state.melee ? meleeClip(build, state.melee) : undefined
-      const cast = state.kind !== 'cast' ? undefined : blow && actions.has(blow) ? { clip: blow, from: 0 } : (casts.get(state.slot) ?? castClip(build, state.slot, (clip) => actions.has(clip)))
+      // a shot or a spell from a crouch or prone fires from there, on that stance's own firing clip (owner, 2026-11-04)
+      const low = state.kind === 'cast' && state.low && !blow ? `${state.low}_fire` : undefined
+      const cast = state.kind !== 'cast' ? undefined : blow && actions.has(blow) ? { clip: blow, from: 0 } : low && actions.has(low) ? { clip: low, from: 0 } : (casts.get(state.slot) ?? castClip(build, state.slot, (clip) => actions.has(clip)))
       // a dash away from the aim hops backwards, where the model has the clip; a jump, a second jump or a roll plays its
       // way's clip (animation.ts, Way), where the model has it
       const wayed = 'way' in state && state.way && state.way !== 'forward' ? `${state.kind}_${state.way}` : undefined
@@ -741,7 +743,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       const charging = heavy && actions.has(heavy) ? heavy : undefined
       const wanted = cast ? cast.clip : (charging ?? (state.kind === 'hit' ? 'hurt' : state.kind === 'dead' ? 'fall' : named))
       const layered = layer > 0
-      const onFoot = ground !== undefined && ground > STANCE.stride
+      // crouched or prone, the cast's own legs carry it: nothing standing runs under it
+      const onFoot = ground !== undefined && ground > STANCE.stride && !(state.kind === 'cast' && state.low)
       const aloft = state.kind === 'cast' && !!state.air
       const prep = state.kind === 'cast' ? state.prep : charging && state.kind === 'charge' ? (state.wound ?? 0) : undefined
       const pair = prep !== undefined ? pairOf(wanted) : undefined

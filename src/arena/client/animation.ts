@@ -17,7 +17,7 @@ import type { HeroState } from '../engine/state.js'
 export type AnimState =
   | { kind: 'idle' | 'run' | 'air' | 'slide' | 'hit' | 'stunned' | 'dead' | HeldKind; wound?: number }
   | { kind: MoveKind; seq: number; way?: Way }
-  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean; melee?: MeleeBlow }
+  | { kind: 'cast'; slot: BuildSlot; seq?: number; prep?: number; recover?: number; air?: boolean; melee?: MeleeBlow; low?: 'crouch' | 'prone' }
 
 /**
  * Which way a jump, a second jump or a roll goes from where the hero aims, picked as it starts (owner, 2026-11-04: one
@@ -30,7 +30,7 @@ export type Way = 'up' | 'forward' | 'left' | 'right' | 'back'
 export const WAYED: ReadonlySet<string> = new Set(['jump', 'air_jump', 'roll'])
 
 /** The movements that play once as they happen (Forge goal, phase 2), named as their clips are. */
-export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy' | 'catch' | 'climb'
+export type MoveKind = 'jump' | 'air_jump' | 'dash' | 'land' | 'roll' | 'toggle' | 'mantle' | 'land_roll' | 'land_heavy' | 'catch' | 'climb' | 'dive'
 
 /**
  * The canon's held states, each looping its own clip while it lasts: a guard, crouched or prone (still or moving), a
@@ -46,7 +46,7 @@ export const HELD_KINDS: readonly HeldKind[] = ['block', 'crouch', 'crouch_move'
 /** The engine's move names that the animator spells differently. */
 const MOVE_KIND: Partial<Record<string, MoveKind>> = { 'air-jump': 'air_jump', 'land-roll': 'land_roll', 'land-heavy': 'land_heavy', hang: 'catch' }
 
-export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.42, air_jump: 0.4, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45, catch: 0.45, climb: ENGINE.move.hang.climb }
+export const MOVE_SECONDS: Record<MoveKind, number> = { jump: 0.42, air_jump: 0.4, dash: 0.24, land: 0.16, roll: ENGINE.move.roll.time, toggle: 0.5, mantle: ENGINE.move.mantle.time, land_roll: 0.55, land_heavy: 0.45, catch: 0.45, climb: ENGINE.move.hang.climb, dive: ENGINE.move.dive.time }
 const HARD_LANDING = { speed: 12, seconds: 0.34 }
 
 export interface Animator {
@@ -116,7 +116,9 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
     const from = c.melee?.heavy !== undefined ? (a.wound ?? 0) : 0
     const prep = from + (1 - from) * drawn
     const recover = now <= c.release ? 0 : Math.min(1, (now - c.release) / Math.max(1, c.ends - c.release))
-    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne, melee: c.melee }
+    // a shot or a spell from a crouch or prone stays down there (a blow stands the hero up in the engine)
+    const low = hero.stance === 'stand' ? undefined : hero.stance
+    a.state = { kind: 'cast', slot: c.slot, seq: a.casts, prep, recover, air: hero.airborne, melee: c.melee, ...(low ? { low } : {}) }
     return a.state
   }
   a.cast = undefined
@@ -150,7 +152,7 @@ export function settle(a: Animator, hero: HeroState, moved: number, now: number,
           : hero.airborne
             ? 'air'
           : hero.slide
-            ? 'slide'
+            ? hero.slide.prone ? 'prone' : 'slide'
             : hero.blocking
               ? 'block'
               : hero.stance === 'prone'

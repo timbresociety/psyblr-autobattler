@@ -257,6 +257,9 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
   const release = match.tick + prep
   caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}), ...(target ? { target: target.id } : {}) }
   caster.blocking = false
+  // a blow needs the body up on its feet; a shot or a spell is cast from wherever the hero crouches or lies (owner,
+  // 2026-11-04)
+  if (template.delivery.kind === 'melee') caster.stance = 'stand'
   ctx.events.push({ type: 'cast', hero: caster.id, slot, templateId: template.id, release, ends: release + recover, ...(blow ? { melee: blow } : {}) })
   return true
 }

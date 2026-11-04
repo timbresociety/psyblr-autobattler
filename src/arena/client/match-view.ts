@@ -658,7 +658,7 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[]; poses?: string[]; modes?: string[] },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[]; poses?: string[]; modes?: string[]; facing?: { hero: number; yaw: number; pitch: number } },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
@@ -725,10 +725,15 @@ function drawHeroes(
     // facing the aim and plays that way's clip instead (animation.ts, Way)
     const way = animators[i].way
     const sideways = way !== undefined && way !== 'forward' && !(pose.kind === 'roll' && way !== 'back')
-    const mode = pose.kind === 'slide' || ((pose.kind === 'roll' || flying) && !sideways) ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne || pose.kind === 'roll' ? 'square' : 'stand'
+    const mode = pose.kind === 'slide' || pose.kind === 'dive' || ((pose.kind === 'roll' || flying) && !sideways) ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne || pose.kind === 'roll' ? 'square' : 'stand'
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
-    const s = view.lean ? stance(stances[i], h.yaw, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
+    // the played hero faces along the camera's line, as MHUR's do, and looks along it; only a cast's arms reach for the
+    // point under the crosshair (aim.ts), which lies right of the hero's own line, nearer the closer it is, and jumps as
+    // the crosshair crosses things: faced, it turned the body and head off the line the hero walked (owner, 2026-11-04)
+    const own = ctx.facing?.hero === i ? ctx.facing : undefined
+    const faces = own?.yaw ?? h.yaw
+    const s = view.lean ? stance(stances[i], faces, moving ? { x: c.x - p.x, z: c.z - p.z } : undefined, mode, scaled, strafes) : undefined
     // hanging from a ledge, or climbing onto one, the body faces the wall it's on, whatever it aims at
     const climb = h.mantle && Math.hypot(h.mantle.x1 - h.mantle.x0, h.mantle.z1 - h.mantle.z0) > 0.05 ? h.mantle : undefined
     const wall = h.hang ? Math.atan2(-h.hang.nx, -h.hang.nz) : climb ? Math.atan2(climb.x1 - climb.x0, climb.z1 - climb.z0) : undefined
@@ -742,7 +747,8 @@ function drawHeroes(
     if (ctx.modes) ctx.modes[i] = mode
     // standing on the ground, the feet stay where they land
     if (s) view.lean!(s.twist, s.back, ground, mode === 'stand' && !moving && pose.kind !== 'dead', s.legs, s.heading, h.sprinting)
-    view.aim?.(h.yaw, h.pitch)
+    if (own && pose.kind !== 'cast') view.aim?.(own.yaw, own.pitch)
+    else view.aim?.(h.yaw, h.pitch)
     if (every && (frame.frameNo + i) % every === 0) view.pose(pose, frame.t + i, scaled * every, moving)
     // a view that animates its own fall stays where the engine left it; a stand-in lies where its physics body landed
     if (fallen) {
@@ -752,7 +758,7 @@ function drawHeroes(
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
-    yawQ.setFromAxisAngle(up, s?.body ?? h.yaw)
+    yawQ.setFromAxisAngle(up, s?.body ?? faces)
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
@@ -876,7 +882,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
   const props = propLods(scene)
-  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[], poses: [] as string[], modes: [] as string[] }
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[], poses: [] as string[], modes: [] as string[], facing: undefined as { hero: number; yaw: number; pitch: number } | undefined }
   if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
@@ -987,6 +993,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     ruins?.update(dt)
     for (const p of props) p.update(camera.position)
     houseView.update(arena.match, alpha)
+    drawCtx.facing = arena.match.human !== undefined && !feed && cameras.mode === 'hero' ? { hero: arena.match.human, yaw: cameras.yaw, pitch: cameras.pitch } : undefined
     drawn = drawHeroes(drawCtx, prev, { alpha, dt, t: shown, frameNo, timeScale: scale * speed, slowFar: quality.level('slow-animation'), clock: arena.match.tick + alpha - lag })
     drawRings(rings, arena, drawn)
     const follow = arena.match.human === undefined ? cameras.follow : undefined

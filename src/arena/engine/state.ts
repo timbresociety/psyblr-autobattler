@@ -87,12 +87,21 @@ export interface HeroState {
   held: number
   /** A dash carries it until this tick. */
   dashUntil: number
-  /** A slide in progress: from the tick it started until the tick it ends, along `x`, `z`. */
-  slide?: { from: number; until: number; x: number; z: number }
+  /**
+   * A slide in progress: from the tick it started until the tick it ends, along `x`, `z`. A `prone` one is a dive
+   * into prone (Ctrl at a run), lying prone where it ends.
+   */
+  slide?: { from: number; until: number; x: number; z: number; prone?: boolean }
   /** The tick it last landed. */
   landedAt: number
   /** The tick a played hero walked or rolled off an edge, while it hasn't jumped or landed since (ENGINE.move.coyote). */
   fellAt?: number
+  /**
+   * A played hero in the air: the height it left the ground at, and the speed across the ground it took off with, the
+   * most its steering in the air reaches (ENGINE.move.air), so a sprint's jump carries further than a jog's.
+   */
+  airFrom?: number
+  airSpeed?: number
   /**
    * A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. A melee launch (`regain`) carries
    * the hero `push` metres a tick across the ground, and any input takes control back (combat.ts).
