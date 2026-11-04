@@ -224,9 +224,9 @@ td code, p code { font-size:12px; color:var(--mute) }
 </section>
 
 <section id="plan" class="plan"><header class="slothead"><kbd>Plan</kbd><div><h2>Four sessions to close the game</h2><p>The owner's order, 2026-11-04. Each session ends with something the owner signs or plays. Movement feel is not matched to MHUR; we may differ. Every session runs the same gates (tsc, the fast suites, the balance gate alone, the build, the Vercel-shaped build, and a look with our own eyes) and records its decisions in GAME.md.</p></div></header>
-<div class="order"><div><b>Session 1</b>Clip audit, and a locked MECE kit library</div><div><b>Session 2</b>Build the kit, then the owner's check on today's map</div><div><b>Session 3</b>Rebuild the map around the kit</div><div><b>Session 4</b>The generative forge: bodies, weapons, projectiles</div></div>
+<div class="order"><div><b>Session 1</b>Clip audit, a locked MECE kit, and the first generated meshes on our skeleton</div><div><b>Session 2</b>Build the kit, then the owner's check on today's map</div><div><b>Session 3</b>Rebuild the map around the kit</div><div><b>Session 4</b>The generative forge: bodies, weapons, projectiles</div></div>
 
-<div id="s1" class="session"><h3>1 · Clip audit, and a locked kit library</h3>
+<div id="s1" class="session"><h3>1 · Clip audit, a locked kit library, and the first generated meshes</h3>
 <p class="goal">Know that every clip we play reads right on every body, and turn the six button libraries into one list with no overlaps and no genre gaps the owner cares about.</p>
 <div class="cols"><div><h4>Do</h4><ol>
 <li><b>An audit harness</b> that scores each clip without a person watching: root drift, hip sway, foot slide, bone pops, loop seams and the travel line. It renders a contact sheet per clip on tiny, medium and huge bodies, female and male.</li>
@@ -235,6 +235,8 @@ td code, p code { font-size:12px; color:var(--mute) }
 <li><b>Write the library as a grid</b> per button (delivery × effect group) so every item has exactly one cell, and list each gap as a new engine piece with a size and a yes or no.</li>
 <li><b>Attitude sets:</b> each hero can carry a walk, run and idle with character (a strut, a swagger, a hip sway, a heavy brute's roll) and Forge and victory poses. The library has one strutting walk and about 25 hand-on-hip poses; the rest come from the free libraries or our own recordings.</li>
 <li><b>Lock the weapon families</b> (the seven under LMB): every weapon belongs to one grip and one clip set; the bow gets its own set from the 16 bow clips we already have, and the heavy gun gets clips.</li>
+<li><b>The first generated meshes (owner, 2026-11-05: Meshy, from session 1):</b> three original test heroes (a giant, a slight caster, a mascot with a non-human head) generated, rebound to our skeleton by weight transfer, and run through the audit clips, so the audit judges clips on the bodies players will really have. Meshy's text-to-motion and video-to-motion are tried as a source for the attitude sets and the missing moves.</li>
+<li><b>Weapons and the body:</b> a carry table of every weapon family against every move, combat and traversal: in the hand, stowed on the back, hip or thigh, or hidden. A bow or an axe during a ledge hang is the first row to settle. Stowing and drawing get their own short clips.</li>
 <li><b>Map it to bodies and archetypes:</b> the clip each item plays per size class, the default kits per role, and which melee styles and ranged kinds each body may hold.</li></ol></div>
 <div><h4>The owner decides</h4><ul class="owner">
 <li>Which new pieces go in: teleport, counter, flight, clones and summons, moveset forms, grab and throw, air juggle, revive, charges, charge casts.</li>
@@ -242,7 +244,7 @@ td code, p code { font-size:12px; color:var(--mute) }
 <li>Whether E drops Wall Run, Combat Roll, Power Slide and Zipline.</li>
 <li>New melee styles: spear, whip or chain, dual blades or claws, scythe.</li></ul>
 <h4>Out of scope</h4><ul><li>Feel-matching to MHUR, map work, generated meshes.</li></ul></div></div>
-<div class="exit"><b>Exit:</b> the owner signs the locked library in GAME.md §4, with an audit report in which every clip in use passes or has its replacement named.</div></div>
+<div class="exit"><b>Exit:</b> the owner signs the locked library in GAME.md §4 and the weapon carry table, with an audit report in which every clip in use passes or has its replacement named, on our bodies and on the three generated test heroes.</div></div>
 
 <div id="s2" class="session"><h3>2 · Build the kit, then the owner's check on today's map</h3>
 <p class="goal">Everything signed in session 1 works in play, on every body, for players and bots, on the current map.</p>
@@ -288,7 +290,7 @@ td code, p code { font-size:12px; color:var(--mute) }
 <li><b>Cost and reliability:</b> a cap per player, caching, and a fallback to a library body when the service fails; the one content check is the hard line above.</li>
 <li>Close the Forge in GAME.md §13.</li></ol></div>
 <div><h4>The owner decides</h4><ul class="owner">
-<li>Which service, Tripo or Meshy, plus API keys and approval to send prompts out. Nothing is sent before that.</li>
+<li><b>Decided (owner, 2026-11-05):</b> Meshy, from session 1. The owner provides the API key; prompts and reference images go out only once it is set.</li>
 <li><b>Decided (owner, 2026-11-04):</b> players generate exactly what they ask for, real people and famous characters included, with no restrictions; legal questions go to the owner's lawyers. One hard line stays in the generator: no nude or sexual depictions of real, identifiable people, and nothing sexual involving minors.</li>
 <li><b>How the line is held (owner, 2026-11-04): explain, don't just refuse.</b> The Forge's chat says what crossed the line and why, and offers the nearest thing it can make. Creative intent gets help: a nude statue parody of a celebrity becomes a draped marble-statue parody, a provocative satire keeps its point by other means. Clear bad intent gets a firm no, with no alternatives: a private person's photo with a sexual ask, repeated attempts after the explanation, or anything sexual with a minor. Repeat attempts slow the account down and flag it for review.</li>
 <li>The cost cap.</li></ul>
