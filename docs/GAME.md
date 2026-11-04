@@ -830,6 +830,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Round 3 | Eyes, slide, jog/run, crosshair, charge meter, knockback | Fixed |
 | Round 3 | One Skill 2 clip turns the hero away from the camera; a pillar can block the reel's side view | Open; re-check after the rework |
 | Later | Likeness and cosmetics; Tripo export needs the owner's plan upgrade | Parked |
+| Plan | The kit library is not MECE yet (docs/reference/2026-11-04-kit-library-coverage.md): transformations in both F and R, four E skills repeating shared moves, Q bursts repeating LMB weapons, a summon family without summons, stun outside control; and the genre's flight, teleport, counters, clones, grabs, moveset forms and revives are missing | **Owner's order, 2026-11-04:** (1) clip audit and a locked MECE kit library across every body type and combat archetype; (2) build it, then the owner's combat and traversal check on the current map, with no feel-matching to MHUR for now; (3) rebuild the map around the locked kit; (4) the generative forge, meshes from Tripo or Meshy fitted to our rig per body type, with weapons and projectiles. One session each: docs/plans/2026-11-04-kit-library-and-four-sessions.html |
 
 ---
 
@@ -848,6 +849,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-04: Owner's order for closing the game recorded in §13 (Plan): lock a MECE kit library after a clip audit, build it and check it on the current map, rebuild the map, then the generative forge. Matching MHUR's movement feel is set aside for now; the game may differ. No rule changed.
 - 2026-11-04: Owner notes after the platforming fixes, recorded in §7: the crosshair is the centre of the camera's view in every stance and first person looks out of the head; a jump always rises full height (the jump cut is removed); S lets go of a ledge; the run dash drives straight ahead. §13 Engine row updated.
 - 2026-11-04: Owner decisions from the platforming bug report recorded in §7 (the jump is the player's to control, a sprint jumps further, the double jump adds range without a flip or a landing roll, a jump at a ledge catches it, the slide ends crouched and Ctrl at a run dives into prone, shots and spells fire from low stances, the body faces the camera). These replace the 2026-11-04 note that the double jump flips. §13 Engine row updated.
 - 2026-11-04: Owner decisions recorded: the map, traversal, platforming and animation are rebuilt completely to MHUR's traversal and combat at Hypercharge: Unboxed's art level, every clip checked in game (§7); every character is a bare body with no outfit, hair or beard, and the forge's wardrobe is removed until a forge rework after movement is locked, when weapons are offered only if the animations fit them (§9). Handoff for the next session: docs/plans/2026-11-04-handoff-map-and-animation-rework.md.
