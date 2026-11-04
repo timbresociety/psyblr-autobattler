@@ -67,9 +67,9 @@ td code, p code { font-size:12px; color:var(--mute) }
 </style></head><body><div class="wrap">
 <div class="top"><h1>Kit library, and four sessions to close the game</h1>
 <p>Every button's library as it stands in the code today (307 items, generated from <code>src/charter/templates</code>), what it overlaps and what it misses for third-person hero combat, then the plan in the owner's order: lock the kit, build it and check it on today's map, rebuild the map, then the generative forge. 2026-11-04.</p>
-<div class="stats"><a href="#v"><b>7</b>V melee</a><a href="#lmb"><b>33</b>LMB ranged</a><a href="#q"><b>107</b>Q spells</a><a href="#e"><b>22</b>E movement</a><a href="#f"><b>80</b>F passives</a><a href="#r"><b>58</b>R ultimates</a><a href="#plan"><b>4</b>sessions</a></div>
+<div class="stats"><a href="#v"><b>7</b>V melee</a><a href="#lmb"><b>33</b>LMB ranged</a><a href="#q"><b>107</b>Q spells</a><a href="#e"><b>22</b>E movement</a><a href="#f"><b>80</b>F passives</a><a href="#r"><b>58</b>R ultimates</a><a href="#mece"><b>7</b>buttons mapped</a><a href="#plan"><b>4</b>sessions</a></div>
 <div class="legend">Effects: <span class="chip dmg">damage</span><span class="chip ctl">control</span><span class="chip deb">debuff, vision</span><span class="chip sup">heal, shield, buff, state</span><span class="chip plc">placed</span><span class="chip utl">self, form, trick</span></div></div>
-<nav><a href="#v">V</a><a href="#lmb">LMB</a><a href="#q">Q</a><a href="#e">E</a><a href="#f">F</a><a href="#r">R</a><a href="#shared">Shared moves</a><a href="#bodies">Body types</a><span class="sep"></span><a href="#plan">Plan</a><a href="#s1">1 Kit</a><a href="#s2">2 Build</a><a href="#s3">3 Map</a><a href="#s4">4 Forge</a></nav>
+<nav><a href="#v">V</a><a href="#lmb">LMB</a><a href="#q">Q</a><a href="#e">E</a><a href="#f">F</a><a href="#r">R</a><a href="#shared">Shared moves</a><a href="#bodies">Body types</a><span class="sep"></span><a href="#mece">MECE map</a><a href="#plan">Plan</a><a href="#s1">1 Kit</a><a href="#s2">2 Build</a><a href="#s3">3 Map</a><a href="#s4">4 Forge</a></nav>
 <div class="verdict"><h2>Is the library MECE? Not yet.</h2>
 <ul><li><b>Not mutually exclusive.</b> Transformations sit in both F and R under the same names; four E skills repeat the shared moves; some Q bursts repeat LMB weapons; the summon family holds no summons; stun lives outside the other controls.</li>
 <li><b>Not collectively exhaustive</b> for the genre. The hero-shooter core is well covered. Missing is most of what the anime and superhero fandoms come for: flight, swinging, teleporting to a mark, counters, clones, minions, copying a kit, grabs and throws, moveset-changing forms, revives and team-ups. Most need a new engine piece, not just new entries.</li>
@@ -86,6 +86,143 @@ td code, p code { font-size:12px; color:var(--mute) }
 <section id="bodies" class="slot"><header class="slothead"><kbd>Body</kbd><div><h2>Body types the kit must play on</h2><p>Six size classes on one skeleton, and on top of them the physique dials (§9.3): height 1.0–2.6 m, head-to-body ratio from chibi to heroic, limb lengths, posture, fat and muscle. A clip passes the audit only if it reads right on a tiny chibi, a medium athlete and a huge brute, female and male.</p></div></header>
 <div class="scroll"><table class=""><thead><tr><th>Class</th><th>Scale</th><th>Speed</th><th>Reach</th><th>Jump ×</th><th>Who</th></tr></thead><tbody><tr><td><b>Tiny</b></td><td>0.8</td><td>+16%</td><td>−0.5 m</td><td>1.25</td><td>Chooseable</td></tr><tr><td><b>Small</b></td><td>0.9</td><td>+8%</td><td>−0.25 m</td><td>1.12</td><td>Chooseable</td></tr><tr><td><b>Medium</b></td><td>1.0</td><td>—</td><td>—</td><td>1.00</td><td>Baseline</td></tr><tr><td><b>Large</b></td><td>1.15</td><td>−12%</td><td>+0.4 m</td><td>0.88</td><td>Chooseable</td></tr><tr><td><b>Huge</b></td><td>1.3</td><td>−22%</td><td>+0.75 m</td><td>0.76</td><td>Chooseable</td></tr><tr><td><b>Colossal</b></td><td>1.6</td><td>−15%</td><td>+2 m</td><td>0.66</td><td>Transformation only</td></tr></tbody></table></div>
 <p class="note">Combat archetypes: 8 roles (tank, fighter, assassin, mage, marksman, support, controller, summoner), 7 melee styles, and the ranged kinds. Every role may take every melee style and size class.</p></section>
+<section id="mece" class="plan"><header class="slothead"><kbd>MECE</kbd><div><h2>Everything each button can hold</h2><p>A proposal for session 1: one sorting rule between the buttons, then a grid inside each button, so any ability from any game or anime lands in exactly one cell. Built from what the genre's fans expect; "have" counts what our catalogue holds today.</p></div></header>
+
+<div class="verdict"><h2>Animation sources: what we can and can't use</h2>
+<ul><li><b>Ripped game files are out.</b> Animation files taken from Marvel Rivals or My Hero Ultra Rumble belong to their studios and publishers. That includes a friend's Drive folder and Sketchfab uploads under those names: the uploaders don't own them, so a download button doesn't grant a licence. Shipping them would also risk the whole game. I haven't opened or downloaded them.</li>
+<li><b>What we can take from those games is reference:</b> watching gameplay to judge timing, weight and silhouettes, as we did for the MHUR camera study. Our own clips can then be made or chosen to hit the same beats.</li>
+<li><b>Where clips can come from:</b> the library we have (Mixamo, Quaternius, CMU, 100STYLE: 1,283 clips); free packs whose licence allows games (to be checked one by one in session 1); recording our own moves with a phone and video-to-motion; and hand-keying in Blender the few iconic moves nothing else covers.</li></ul></div>
+
+<h3>The rule between the buttons</h3>
+<p class="note">Two questions sort every ability: how is it paid for, and what is it for? Each answer belongs to exactly one button.</p>
+<div class="scroll"><table><thead><tr><th>Paid by</th><th>For</th><th>Button</th><th>So it never holds</th></tr></thead><tbody>
+<tr><td>Nothing; every hero has it</td><td>Moving and defending</td><td><b>Shared</b></td><td>Anything only some heroes have</td></tr>
+<tr><td>Nothing; the held weapon</td><td>Hitting up close</td><td><b>V</b></td><td>Shots, spells</td></tr>
+<tr><td>A magazine; the held weapon</td><td>Hitting at range, again and again</td><td><b>LMB</b></td><td>Cooldown nukes</td></tr>
+<tr><td>A cooldown</td><td>Moving the caster</td><td><b>E</b></td><td>Moves every hero already has</td></tr>
+<tr><td>A cooldown</td><td>Acting on others or the world</td><td><b>Q</b></td><td>Self-only buffs, movement</td></tr>
+<tr><td>An energy meter</td><td>Changing the caster while it's on</td><td><b>F</b></td><td>One-shot actions</td></tr>
+<tr><td>Ultimate charge</td><td>The one big moment</td><td><b>R</b></td><td>Anything a cooldown could pay for</td></tr>
+</tbody></table></div>
+<p class="note">Forms under this rule: a form held on the meter is F; a stronger, timed form bought with ultimate charge is R. Different names, and the R form changes the moveset.</p>
+
+<h3>Shared: every hero, no button</h3>
+<div class="scroll"><table><thead><tr><th>Group</th><th>Moves</th><th>State</th></tr></thead><tbody>
+<tr><td><b>Ground</b></td><td>Walk, jog, sprint; crouch, crouch-walk, slide; prone, crawl, dive</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Air</b></td><td>Jump by direction, double jump, air steering</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Edges</b></td><td>Mantle; ledge catch, hang, shimmy, climb, drop</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Walls</b></td><td>Wall-run on marked walls; wall-jump off them</td><td><span class="st warn">Decided, not built</span> (wall-jump needs a say)</td></tr>
+<tr><td><b>Map routes</b></td><td>Ziplines, rails; jump pads</td><td><span class="st ok">Built</span>; jump pads <span class="st no">New</span></td></tr>
+<tr><td><b>Evade</b></td><td>Dodge roll, dash</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Defend</b></td><td>Guard; a perfect guard on a tight window that staggers the attacker</td><td>Guard <span class="st ok">Built</span>; perfect guard <span class="st no">New</span></td></tr>
+<tr><td><b>Recover</b></td><td>Landing, landing roll, hard landing; knockdown, get-up, wake-up roll</td><td>Landings <span class="st ok">Built</span>; the rest <span class="st no">New</span></td></tr>
+<tr><td><b>Being hit</b></td><td>Flinch, stagger, launched, juggled, grabbed and thrown, death</td><td>Flinch, launch, death <span class="st ok">Built</span>; the rest <span class="st no">New</span></td></tr>
+<tr><td><b>Team</b></td><td>Revive a downed ally by holding a key beside them</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+
+<h3>V: melee families (grip and motion)</h3>
+<div class="scroll"><table><thead><tr><th>Family</th><th>Weapons</th><th>Our style now</th><th>State</th></tr></thead><tbody>
+<tr><td><b>Fists</b></td><td>Bare hands, gauntlets, knuckles</td><td>Unarmed</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Legs</b></td><td>Kicks, stomps, capoeira</td><td>Kicks</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Paired</b></td><td>Claws, dual daggers, dual swords, tonfa</td><td>Inside Unarmed and Blade</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>One-hand edge</b></td><td>Sword, katana, dagger, machete</td><td>Blade</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>One-hand blunt</b></td><td>Bat, mace, wrench, hammer, hand axe</td><td>Club</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Weapon and shield</b></td><td>Sword and board, shield bash</td><td>Sword and shield</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Two-hand heavy</b></td><td>Greatsword, great axe, warhammer, scythe</td><td>Greatsword (axes move here)</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Polearm thrust</b></td><td>Spear, lance, trident, naginata</td><td>Inside Axe or staff</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Staff spin</b></td><td>Bo, quarterstaff</td><td>Axe or staff</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Flexible</b></td><td>Whip, chain, kusarigama, rope dart</td><td>Inside Axe or staff</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+<p class="note">Every family fills the same moveset, so heroes with different weapons still play alike.</p>
+<div class="scroll"><table><thead><tr><th>Move</th><th>Input</th><th>State</th></tr></thead><tbody>
+<tr><td><b>Light chain</b>, three hits, the third knocks back</td><td>V, V, V</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Charged heavy</b></td><td>Hold V</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Guard</b> and guard hit</td><td>X</td><td><span class="st ok">Built</span></td></tr>
+<tr><td><b>Dash attack</b></td><td>V while sprinting</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Air attack</b> and <b>slam</b></td><td>V in the air; hold V in the air</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Launcher</b>, then a chase and an air juggle</td><td>Back + V</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Grab and throw</b></td><td>V + X close in</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+
+<h3>LMB: ranged families × how they fire</h3>
+<div class="scroll"><table><thead><tr><th>Family</th><th>Weapons</th><th>Have</th><th>State</th></tr></thead><tbody>
+<tr><td><b>One-hand gun</b></td><td>Pistol, revolver, blaster, nail gun</td><td>3</td><td><span class="st ok">Clips</span></td></tr>
+<tr><td><b>Paired guns</b></td><td>Akimbo pistols, twin blasters</td><td>0</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Long gun</b></td><td>Rifle, sniper, SMG, shotgun, railgun, crossbow</td><td>6</td><td><span class="st ok">Clips</span></td></tr>
+<tr><td><b>Heavy gun</b></td><td>Cannon, launcher, minigun, flamethrower</td><td>1</td><td><span class="st no">Needs clips</span></td></tr>
+<tr><td><b>Bow</b></td><td>Longbow, shortbow</td><td>1</td><td><span class="st warn">16 clips unused</span></td></tr>
+<tr><td><b>Thrown</b></td><td>Knives, kunai, shuriken, darts, bolas, grenades, a returning shield or hammer</td><td>4</td><td><span class="st warn">Thin</span></td></tr>
+<tr><td><b>Magic, one hand</b></td><td>Wand, rod, orb, bare palm, arm cannon</td><td>10</td><td><span class="st warn">Thin</span></td></tr>
+<tr><td><b>Magic, two hands</b></td><td>Staff, tome, both palms (energy waves)</td><td>8</td><td><span class="st warn">Thin</span></td></tr>
+<tr><td><b>Body emitter</b></td><td>Eye beams, breath, chest blast</td><td>0</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+<div class="scroll" style="margin-top:10px"><table><thead><tr><th>How it fires</th><th>Options</th><th>State</th></tr></thead><tbody>
+<tr><td><b>Trigger</b></td><td>Single shots, bursts, spread, beam</td><td><span class="st ok">Built</span></td></tr>
+<tr><td></td><td>Hold for full auto; hold to charge, release to fire</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Flight</b></td><td>Straight bolt, beam, cone</td><td><span class="st ok">Built</span></td></tr>
+<tr><td></td><td>Lobbed arc, bouncing, returning to the hand, homing or guided</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+
+<h3>Q: spell families, sorted by their strongest effect</h3>
+<p class="note">A spell takes the first family in this order that it fits, so it can never sit in two. Pure damage comes last.</p>
+<div class="scroll"><table><thead><tr><th>#</th><th>Family</th><th>Holds</th><th>Have</th><th>Missing</th></tr></thead><tbody>
+<tr><td>1</td><td><b>Counter</b></td><td>A short window that answers an incoming hit: a parry-strike, a substitution, reflect, absorb</td><td>0</td><td>The whole family (vanish, Substitution Jutsu, Magneto's absorb)</td></tr>
+<tr><td>2</td><td><b>Summon</b></td><td>Something that moves and acts: pets, minions, clones, decoys</td><td>0 real</td><td>Shadow Clone, Dark Shadow, Loki's illusions</td></tr>
+<tr><td>3</td><td><b>Construct</b></td><td>A placed thing that stays put: walls, a one-way barrier, turrets, traps, totems, ramps and platforms, portals</td><td>4, plus the 12 now in Summon</td><td>One-way barrier, walkable ice and platforms, portals</td></tr>
+<tr><td>4</td><td><b>Trick</b></td><td>Bends a rule: swap health, steal, rewind, copy a kit, possession, stop time</td><td>4</td><td>Copy a kit (Loki, Toga), possession (Shadow Possession)</td></tr>
+<tr><td>5</td><td><b>Control</b></td><td>Stops a target acting: stun, root, silence, disarm, sleep, blind, grounded, fear, taunt, break</td><td>23</td><td>Stun to join the control types</td></tr>
+<tr><td>6</td><td><b>Displacement</b></td><td>Moves others: push, pull, knock-up, grab and throw, swap an enemy</td><td>13</td><td>Grab and throw</td></tr>
+<tr><td>7</td><td><b>Support</b></td><td>Helps allies: heal, shield, buff, cleanse, revive at range</td><td>11</td><td>Revive</td></tr>
+<tr><td>8</td><td><b>Curse</b></td><td>Weakens over time: shred, wound, vulnerable, mark, damage over time</td><td>14</td><td>—</td></tr>
+<tr><td>9</td><td><b>Zone</b></td><td>An area that lingers and acts on whoever stands in it</td><td>7</td><td>—</td></tr>
+<tr><td>10</td><td><b>Vision</b></td><td>Information: reveal, scout, wards</td><td>6</td><td>—</td></tr>
+<tr><td>11</td><td><b>Burst</b></td><td>Damage now, with a wind-up or a charge that sets it apart from LMB</td><td>13</td><td>Charge casts (a charged Kamehameha)</td></tr>
+</tbody></table></div>
+
+<h3>E: movement skills, sorted by how they move the caster</h3>
+<div class="scroll"><table><thead><tr><th>How</th><th>Kind</th><th>Have</th><th>Fans know it from</th></tr></thead><tbody>
+<tr><td rowspan="3"><b>Instant</b></td><td>Blink a short way</td><td>5</td><td>Shadow Step, Teleport</td></tr>
+<tr><td>Teleport to a mark or target</td><td><span class="st no">New</span></td><td>Instant Transmission, Flying Thunder God</td></tr>
+<tr><td>Swap places with a hero</td><td><span class="st no">New</span></td><td>Paradox's swap</td></tr>
+<tr><td rowspan="2"><b>Line</b></td><td>Dash</td><td>10 (drop 2 repeats)</td><td>Bull Rush, Air Dash</td></tr>
+<tr><td>Homing dash to a target</td><td><span class="st no">New</span></td><td>Dragon Dash</td></tr>
+<tr><td><b>Arc</b></td><td>Leap</td><td>5</td><td>Rocket Jump, Crater Leap</td></tr>
+<tr><td rowspan="2"><b>Line attached</b></td><td>Grapple to a point</td><td>2 (drop Zipline)</td><td>Grapple Hook</td></tr>
+<tr><td>Swing on a line</td><td><span class="st no">New</span></td><td>Spider-Man</td></tr>
+<tr><td rowspan="5"><b>Held</b></td><td>Flight and hover</td><td><span class="st no">New</span></td><td>Sparking Zero, Iron Man, Storm</td></tr>
+<tr><td>Glide</td><td><span class="st no">New</span></td><td>Wings, capes</td></tr>
+<tr><td>Wall-crawl on any wall</td><td><span class="st no">New</span></td><td>Spider-Man, chakra wall-walking</td></tr>
+<tr><td>Burrow</td><td><span class="st no">New</span></td><td>Mo &amp; Krill</td></tr>
+<tr><td>Ride or carry an ally</td><td><span class="st no">New</span></td><td>Rocket on Groot</td></tr>
+</tbody></table></div>
+<p class="note">What happens on arrival (nothing, damage, control or a shield) is the skill's effects, not its kind. Wall Run, Combat Roll, Power Slide and Zipline leave E, because every hero already has them.</p>
+
+<h3>F: what it changes × when it fires</h3>
+<div class="scroll"><table><thead><tr><th>Changes</th><th>Holds</th><th>State</th></tr></thead><tbody>
+<tr><td><b>Numbers</b></td><td>Damage, attack speed, move speed, damage reduction, lifesteal, evasion</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>State</b></td><td>Stealth, unstoppable, invulnerable</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Aura</b></td><td>The same, given to allies nearby</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Form</b></td><td>Look and numbers (Super Form, Elemental Body)</td><td><span class="st ok">Have</span></td></tr>
+<tr><td><b>Moveset form</b></td><td>New clips and new skills while it's on, in stages</td><td><span class="st no">New</span></td></tr>
+<tr><td><b>Kit switch</b></td><td>Flip between two kits or stances</td><td><span class="st no">New</span></td></tr>
+</tbody></table></div>
+<p class="note">When it fires, the second axis: while on (35), on hit (14), every third hit (12), at low health (11), on a kill (8), and a new one, when hit.</p>
+
+<h3>R: the shape of the big moment</h3>
+<div class="scroll"><table><thead><tr><th>Shape</th><th>Holds</th><th>Ours, for example</th><th>Missing</th></tr></thead><tbody>
+<tr><td><b>Strike</b></td><td>One target, lands and plays out</td><td>Assassinate, Deadeye, Meteor Combo</td><td>The cinematic lock-on</td></tr>
+<tr><td><b>Devastation</b></td><td>Big area damage, now</td><td>Earthquake, Meteor Storm, Orbital Strike</td><td>—</td></tr>
+<tr><td><b>Domain</b></td><td>The area changes for a while</td><td>Inferno, Event Horizon, Labyrinth</td><td>—</td></tr>
+<tr><td><b>Rally</b></td><td>The whole team helped</td><td>Revival Wave, Sanctuary, Mass Haste</td><td>A mass revive</td></tr>
+<tr><td><b>Rampage</b></td><td>The caster empowered for a short time</td><td>Bloodbath, Gunslinger, Shadow Dance</td><td>—</td></tr>
+<tr><td><b>Ultimate form</b></td><td>A timed form with its own moveset</td><td>Titan, Super, Ascended, Avatar and Shrink Form (numbers only today)</td><td>The moveset change</td></tr>
+<tr><td><b>Titan summon</b></td><td>One big ally that fights for a while</td><td>None</td><td>The whole shape</td></tr>
+</tbody></table></div>
+
+<h3>Outside the buttons: systems</h3>
+<p class="note">Team-ups between two named heroes, fusion, beam clashes and a spendable power meter (ki, chakra, Plus Ultra) aren't abilities but rules about them. Each is a yes or no for the owner in session 1.</p>
+</section>
+
 <section id="plan" class="plan"><header class="slothead"><kbd>Plan</kbd><div><h2>Four sessions to close the game</h2><p>The owner's order, 2026-11-04. Each session ends with something the owner signs or plays. Movement feel is not matched to MHUR; we may differ. Every session runs the same gates (tsc, the fast suites, the balance gate alone, the build, the Vercel-shaped build, and a look with our own eyes) and records its decisions in GAME.md.</p></div></header>
 <div class="order"><div><b>Session 1</b>Clip audit, and a locked MECE kit library</div><div><b>Session 2</b>Build the kit, then the owner's check on today's map</div><div><b>Session 3</b>Rebuild the map around the kit</div><div><b>Session 4</b>The generative forge: bodies, weapons, projectiles</div></div>
 
