@@ -37,6 +37,7 @@ import { groundUnder } from './effects/anchors.js'
 import { atFloor, atLeast, basePixelRatio, createGuard, createScaler, observe, scaleFor, SCALER, type QualityLevel } from './quality.js'
 import { createRangeIndicator } from './range.js'
 import { createRenderer, forceWebGLFlag, gpuTimeFlag, type Backend } from './render/renderer.js'
+import { headBone } from './rig.js'
 import { createStore, type Store } from './store.js'
 import { statusesOf, type HeroStatus } from '../../ui/arena/hud/status.js'
 
@@ -920,6 +921,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   let lag = 0
   // the hero whose body the camera may hide when it's too close: the one played or followed
   let hiddenNear: number | undefined
+  const headAt = new THREE.Vector3()
   // the seat: held, nothing moves on wall time; `step` books ticks for the next frame
   let seatHeld = false
   let booked = 0
@@ -999,7 +1001,11 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     const follow = arena.match.human === undefined ? cameras.follow : undefined
     // hanging from a ledge, the played hero's camera turns to face the wall it hangs on (into the wall is against the drop)
     const hang = arena.match.human !== undefined && !feed ? arena.match.heroes[arena.match.human].hang : undefined
-    cameras.update(dt, arena.match.human !== undefined ? drawn[arena.match.human] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz))
+    // the shoulder camera rides at the played hero's eye height for its stance, and first person looks out of its head
+    const me = arena.match.human
+    const head = me !== undefined && cameras.scope > 0 ? headBone(views[me].root)?.getWorldPosition(headAt) : undefined
+    const sight = me !== undefined ? { eyes: capsule(arena.match.heroes[me]).height * (HERO_CAMERA.eyes / ENGINE.capsule.height), head } : undefined
+    cameras.update(dt, me !== undefined ? drawn[me] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz), sight)
     // in first person the camera looks out of the hero's eyes, so its own body isn't drawn; nor is the body of a hero
     // played or followed when a wall has pulled the camera into its head
     const near = arena.match.human ?? follow

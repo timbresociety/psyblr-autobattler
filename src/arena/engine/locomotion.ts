@@ -147,7 +147,6 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     }
   }
   keep(missed)
-  if (person && released & MOVES.jump && hero.airborne && v.y > 0 && !hero.launch) v.y *= M.air.cut
   if (dashNow && free && hero.stamina >= 1 && now >= hero.dashUntil && !hero.roll) {
     const n = Math.sqrt(mx * mx + mz * mz)
     const [dx, dz] = steering ? [mx / n, mz / n] : [sin(hero.yaw), cos(hero.yaw)]
@@ -425,7 +424,7 @@ function hangSpot(hero: HeroState, match: MatchState, x: number, top: number, z:
   return at
 }
 
-/** One tick hanging from a ledge: climb up, shimmy along it, let go, or jump away from the wall. */
+/** One tick hanging from a ledge: climb up, shimmy along it, let go (crouch, dodge or the stick pulled away), or jump away from the wall. */
 function hanging(hero: HeroState, match: MatchState, mx: number, mz: number, steering: boolean, pressed: number, now: number, events?: MatchEvent[]) {
   const g = hero.hang!
   const { pieces, health } = match.cover!
@@ -439,6 +438,8 @@ function hanging(hero: HeroState, match: MatchState, mx: number, mz: number, ste
   const here = hangSpot(hero, match, g.x, g.y, g.z, g.nx, g.nz)
   if (!here || hero.launch || hero.stunnedUntil > now || !hero.alive || pressed & (MOVES.crouch | MOVES.dodge)) return letGo(hero, now, events, false)
   if (pressed & MOVES.jump && into < -0.5) return letGo(hero, now, events, true)
+  // pulled away from the wall (S, the camera facing it), it lets go and drops (owner, 2026-11-04)
+  if (into < -0.7 && Math.abs(into) >= Math.abs(along) && settled) return letGo(hero, now, events, false)
   hero.velocity = { x: 0, y: 0, z: 0 }
   if ((pressed & MOVES.jump || into > 0.7) && settled) {
     // up onto the top, if a body has room to stand there

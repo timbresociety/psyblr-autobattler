@@ -45,7 +45,9 @@ export const LIBRARY_MOVES: Readonly<Record<string, string>> = {
   roll_back: 'standing_dodge_backward',
   land: 'ual_jump_land',
   air: 'falling',
-  dash: 'standing_dodge_forward',
+  // the drive out of a sprint start, leaning hard ahead (owner, 2026-11-04: the standing dodge swayed out and back,
+  // a C, before the run took over)
+  dash: 'idle_to_sprint',
   dash_back: 'standing_dodge_backward',
   slide: 'running_slide',
   // Ctrl at a run: the dive of a dive roll, up to the body lying flat, which prone then takes over from
@@ -107,7 +109,7 @@ const MOVE_CUTS: Readonly<Record<string, [from: number, to: number, seconds: num
   roll: [0.22, 1.25, ENGINE.move.roll.time],
   roll_back: [0.1, 0.95, ENGINE.move.roll.time],
   land: [0.05, 0.55, 0.3],
-  dash: [0.12, 0.75, 0.3],
+  dash: [0.17, 0.62, 0.3],
   dash_back: [0.1, 0.9, 0.34],
   toggle: [0.15, 1.0, 0.6],
   // the pull-up itself, from the hands taking the weight to the feet on top

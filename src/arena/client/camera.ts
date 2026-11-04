@@ -26,6 +26,13 @@ const BOOM_OUT = 4
  * camera into the hero's head: the heights it tries, metres, and how fast it rises and settles back, metres a second.
  */
 const BOOM_LIFT = { tries: [1, 2, 3], up: 8, down: 3 } as const
+/**
+ * How fast the shoulder camera follows the eyes up and down, per second: it sits as far over the eyes standing,
+ * crouched, sliding or prone, so the reticle keeps its place against the hero (owner, 2026-11-04: lying prone, the
+ * camera stayed at standing height and the hero sank out of the bottom of the view). How far over the head bone the
+ * eyes are, in first person.
+ */
+const EYES = { follow: 8, overHead: 0.08 }
 /** How fast the camera goes to first person and back, in whole zooms a second. */
 const SCOPE_SPEED = 6
 /** Past this much of the zoom, the hero's own body hides so the camera sees out of its eyes. */
@@ -77,6 +84,8 @@ export class Cameras {
   private boom: number | undefined
   /** How far the boom's root is lifted over something close behind the hero, metres. */
   private lift = 0
+  /** How high the played hero's eyes are over its feet, followed smoothly (see EYES). */
+  private eyes: number | undefined
   /**
    * First person (the canon: the right button held zooms in): `scoping` while it's held, and `scope` how far the
    * camera has gone from over the shoulder to the hero's eyes, 0 to 1. The hero's own body hides past FIRST_PERSON.
@@ -207,9 +216,10 @@ export class Cameras {
 
   /**
    * `hero` is the controlled hero, `followed` the hero the watching camera follows (its drawn position) and
-   * `followedYaw` the way it faces, if any.
+   * `followedYaw` the way it faces, if any. `sight` is the controlled hero's eyes: how high they are over its feet in
+   * the stance it is in, and where its head bone is as last posed, which first person looks out from.
    */
-  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number, wall?: number) {
+  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number, wall?: number, sight?: { eyes: number; head?: Vec3 }) {
     const following = this.mode === 'free' && this.followed !== undefined && followed !== undefined
     if (this.mode === 'hero' && wall !== undefined) {
       const k = 1 - Math.exp(-dt * HANG_CAMERA.turn)
@@ -230,7 +240,12 @@ export class Cameras {
     this.scope += Math.sign(toward - this.scope) * Math.min(Math.abs(toward - this.scope), dt * SCOPE_SPEED)
     if (this.mode === 'hero' && hero) {
       const s = this.scope * this.scope * (3 - 2 * this.scope)
-      const pivot = underRoof(new THREE.Vector3(hero.x, hero.y + HERO_CAMERA.up + (HERO_CAMERA.eyes - HERO_CAMERA.up) * s, hero.z), hero.y, proxies)
+      const eyes = sight?.eyes ?? HERO_CAMERA.eyes
+      this.eyes = this.eyes === undefined ? eyes : this.eyes + (eyes - this.eyes) * (1 - Math.exp(-dt * EYES.follow))
+      // over the shoulder the boom hangs as far over the eyes in every stance; in first person it is the head itself
+      const behind = new THREE.Vector3(hero.x, hero.y + this.eyes + HERO_CAMERA.up - HERO_CAMERA.eyes, hero.z)
+      const head = sight?.head ? new THREE.Vector3(sight.head.x, sight.head.y + EYES.overHead, sight.head.z) : new THREE.Vector3(hero.x, hero.y + this.eyes, hero.z)
+      const pivot = underRoof(behind.lerp(head, s), hero.y, proxies)
       target.copy(this.shoulder(dt, pivot, forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s, HERO_CAMERA.right * (1 - s), proxies))
     } else if (following) {
       const pivot = underRoof(new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up, followed.z), followed.y, proxies)

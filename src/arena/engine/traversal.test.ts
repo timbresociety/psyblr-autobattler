@@ -424,6 +424,21 @@ describe('ledge hang (§7, owner 2026-11-04)', () => {
     expect(s.moves().filter((x) => x === 'hang').length).toBe(1)
   })
 
+  it('the stick pulled away from the wall lets go and it drops, once the stick from the walk off was let go (owner, 2026-11-04)', () => {
+    const s = deck()
+    walkOff(s)
+    // still holding the walk off's stick (away from the wall): it keeps hanging
+    s.step(go(0, 1), ticksOf(0.5))
+    expect(s.h.hang).toBeDefined()
+    s.step(go(0, 0))
+    s.step(go(0, 1))
+    expect(s.h.hang).toBeUndefined()
+    expect(s.moves()).toContain('let-go')
+    expect(s.h.velocity.y).toBeLessThanOrEqual(0)
+    for (let i = 0; i < 200 && s.h.airborne; i++) s.step(go(0, 0))
+    expect(s.h.position.y).toBe(0)
+  })
+
   it('a stick still held from the walk off steers nothing until it is let go once', () => {
     const s = deck()
     walkOff(s)
@@ -486,10 +501,10 @@ describe("a played hero's jump is the player's to steer (owner, 2026-11-04)", ()
     return top
   }
 
-  it('let go early, the jump is cut short; held, it rises its full height; the AI always jumps full', () => {
-    expect(peak(played(), 1)).toBeLessThan(M.jump * 0.5)
+  it('a jump rises its full height however briefly Space is pressed (owner, 2026-11-04)', () => {
+    expect(peak(played(), 1)).toBeCloseTo(M.jump, 0)
+    expect(peak(played(), 6)).toBeCloseTo(M.jump, 0)
     expect(peak(played(), 60)).toBeCloseTo(M.jump, 0)
-    expect(peak(solo(), 1)).toBeCloseTo(M.jump, 0)
   })
 
   it('steered in the air it goes the new way, and let go of, it stops drifting on', () => {
@@ -520,17 +535,17 @@ describe("a played hero's jump is the player's to steer (owner, 2026-11-04)", ()
   })
 
   it('a jump that falls short of a wall\'s top catches its edge and hangs; one that clears it climbs on', () => {
-    const at = (held: number) => {
-      const s = played({ pieces: [block(0, 3, 3, 1.5, 4.5)] })
+    const at = (top: number) => {
+      const s = played({ pieces: [block(0, 3, 3, 1.5, top)] })
       s.step(go(0, 1), 20)
-      s.step(go(0, 1, MOVES.jump), held)
+      s.step(go(0, 1, MOVES.jump))
       for (let i = 0; i < 120 && !s.h.hang && !s.h.mantle; i++) s.step(go(0, 1))
       return s
     }
-    const short = at(9)
-    expect(short.h.hang).toBeDefined()
-    expect(short.h.hang!.y).toBe(4.5)
-    expect(at(60).moves()).toContain('mantle')
+    const high = at(6)
+    expect(high.h.hang).toBeDefined()
+    expect(high.h.hang!.y).toBe(6)
+    expect(at(4.5).moves()).toContain('mantle')
   })
 
   it('a double jump over flat ground just lands: no roll, no heavy landing', () => {

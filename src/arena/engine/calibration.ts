@@ -73,10 +73,11 @@ export const ENGINE = {
     /**
      * A played hero's jumps are its own to steer (owner, 2026-11-04: a jump followed a fixed arc whatever the keys did,
      * and a sprint's jump flew no further than a jog's). In the air it turns toward where it steers at `accel` m/s²,
-     * up to the speed it took off with, and with no key held it slows at `brake`; Space let go while still rising cuts
-     * the rise to `cut` of its speed, so a tap hops and a hold jumps full height. The AI's jumps stay as they were.
+     * up to the speed it took off with, and with no key held it slows at `brake`, so the keys say how far a jump goes.
+     * Its height is always the full jump (owner, 2026-11-04: cutting the rise when Space was let go made every
+     * ordinary press a low jump). The AI's jumps stay as they were.
      */
-    air: { accel: 45, brake: 18, cut: 0.5 },
+    air: { accel: 45, brake: 18 },
     jumpScale: { tiny: 1.25, small: 1.12, medium: 1, large: 0.88, huge: 0.76, colossal: 0.66 },
     dash: { speed: 18, time: 0.2 },
     /**
