@@ -818,6 +818,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | App | Loose screen switching | **Fixed (M6):** React Router routes for Home, Create, Forge, Lobby, Match, Range, Credits and the dev tools; every route lazy-loads; old `?flags` redirect. The 3D canvas does not yet persist across routes: each 3D route makes and disposes its own renderer (§11) |
 | Body | No helper bones or corrective morphs | **Fixed (M1):** muscle helpers, correctives and drivers added at load (§9.2–9.4) |
 | Body | Arms pass through bulky torsos | **Fixed (M1):** girth spread fix-up; on the bench, heavyweight run penetration fell from 9.6 to 1.6 cm (§9.6, §9.7) |
+| Body | A heavy body grew a hump behind the neck (owner, 2026-11-04) | **Fixed:** the heavy weight shape takes only 30% of its push on the back of the neck, so the nape tucks in under the skull while the upper back stays thick; at the neck joint it stands 1.6 cm behind the neutral body's instead of 4.1 cm. The stocky preset's hunched posture still shows a red speck at the nape: open |
 | Body | No hand IK | **Fixed (M1):** two-hand grip IK plus aim and look IK within joint limits (§9.6). Foot locking on tagged plants waits for the §12 tags |
 | Body | Googly eyes: the eyes show skin colour when they move in the Forge | **Fixed (M1):** the head is its own object with real eyeballs and 52 face shapes (§9.1). No dedicated 2K head texture yet |
 | Body | No jiggle or secondary motion; no root bone; no joint limits | **Fixed (M1):** Root bone, jiggle (off, realistic, anime), joint limits from the clip library (§9.2, §9.4) |
@@ -849,6 +850,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-04: §13 Body: the heavy body's neck hump fixed, after the owner's screenshot. No rule changed.
 - 2026-11-04: Owner's order for closing the game recorded in §13 (Plan): lock a MECE kit library after a clip audit, build it and check it on the current map, rebuild the map, then the generative forge. Matching MHUR's movement feel is set aside for now; the game may differ. No rule changed.
 - 2026-11-04: Owner notes after the platforming fixes, recorded in §7: the crosshair is the centre of the camera's view in every stance and first person looks out of the head; a jump always rises full height (the jump cut is removed); S lets go of a ledge; the run dash drives straight ahead. §13 Engine row updated.
 - 2026-11-04: Owner decisions from the platforming bug report recorded in §7 (the jump is the player's to control, a sprint jumps further, the double jump adds range without a flip or a landing roll, a jump at a ledge catches it, the slide ends crouched and Ctrl at a run dives into prone, shots and spells fire from low stances, the body faces the camera). These replace the 2026-11-04 note that the double jump flips. §13 Engine row updated.

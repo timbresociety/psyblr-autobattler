@@ -165,6 +165,21 @@ describe('physique: Structure × Volume (§9.3)', () => {
     expect(moved(a, b).most).toBe(0)
   })
 
+  it('keeps a heavy body from growing a hump behind the neck (owner, 2026-11-04)', () => {
+    const { base, skeleton } = bodies['m-medium']
+    const morphs = ['weight-', 'weight+', 'muscle-', 'muscle+', 'age']
+    const y = skeleton.rest.Neck[1]
+    // the side silhouette's back edge at the neck joint (glTF +z forward)
+    const nape = (p: Partial<PhysiqueDials>) => {
+      const pos = shapeBody(base, morphs, { ...N, ...p }, undefined, { skeleton, gender: 'm' }).positions
+      let z = Infinity
+      for (let i = 0; i < pos.length; i += 3) if (Math.abs(pos[i]) < 0.12 && Math.abs(pos[i + 1] - y) < 0.008) z = Math.min(z, pos[i + 2])
+      return z
+    }
+    // the heavy end swelled it 4.2 cm past the neutral neck; the upper back may stay thick, the nape may not
+    expect(nape(N) - nape({ weight: 1 })).toBeLessThan(0.025)
+  })
+
   it('moves positions only through sculptVolume, in place', () => {
     const { base, skeleton } = bodies['m-medium']
     const s = shapeBody(base, [], N)

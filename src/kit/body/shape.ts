@@ -79,6 +79,35 @@ export function skinOf(surface: BodySurface): Uint8Array {
   return Uint8Array.from({ length: surface.count }, (_, i) => (find(i) === biggest ? 1 : 0))
 }
 
+/**
+ * The heavy morph filled the back of the neck into a hump behind the skull (owner, 2026-11-04): it takes only part of
+ * its push there. `cut` is the share taken away; the nape runs from halfway up the upper back to the base of the skull,
+ * behind the neck, near the midline, each edge fading over the given metres.
+ */
+const NAPE = { cut: 0.7, inner: 0.09, outer: 0.15, behind: 0.01, fade: 0.03, aboveSkull: 0.04, skullFade: 0.06 }
+const napes = new WeakMap<BodyBase, Float32Array>()
+
+function napeOf(base: BodyBase, skeleton: Skeleton): Float32Array {
+  const known = napes.get(base)
+  if (known) return known
+  const { Spine2, Neck, Head } = skeleton.rest
+  const ramp = (v: number, from: number, to: number) => Math.min(1, Math.max(0, (v - from) / (to - from)))
+  const low = (Spine2[1] + Neck[1]) / 2
+  const top = Head[1] + NAPE.aboveSkull
+  const n = base.positions.length / 3
+  const out = new Float32Array(n)
+  for (let i = 0; i < n; i++) {
+    if (!base.skin[i]) continue
+    const [x, y, z] = [base.positions[i * 3], base.positions[i * 3 + 1], base.positions[i * 3 + 2]]
+    const up = ramp(y, low, Neck[1]) * (1 - ramp(y, top, top + NAPE.skullFade))
+    const back = ramp(Neck[2] + NAPE.behind - z, 0, NAPE.fade)
+    const mid = 1 - ramp(Math.abs(x - Neck[0]), NAPE.inner, NAPE.outer)
+    out[i] = up * back * mid
+  }
+  napes.set(base, out)
+  return out
+}
+
 export function bodyBase(arrays: BodyArrays): BodyBase {
   const surface = weldSurface(arrays.vid, arrays.index)
   const weights = weldValues(surface, arrays.weights, 4)
@@ -123,10 +152,12 @@ export interface BodyShape extends Omit<BodyBase, 'morphs'> {
 export function shapeBody(base: BodyBase, morphNames: readonly string[], physique: Partial<Physique> = {}, face?: FaceShape, body?: { skeleton: Skeleton; gender: Gender }): BodyShape {
   const positions = Float32Array.from(base.positions)
   const w = morphWeights(physique, morphNames)
+  const nape = body ? napeOf(base, body.skeleton) : undefined
   base.morphs.forEach((delta, i) => {
     const k = w[i]
     if (!k) return
-    for (let j = 0; j < positions.length; j++) positions[j] += delta[j] * k
+    if (morphNames[i] === 'weight+' && nape) for (let j = 0; j < positions.length; j++) positions[j] += delta[j] * k * (1 - NAPE.cut * nape[(j / 3) | 0])
+    else for (let j = 0; j < positions.length; j++) positions[j] += delta[j] * k
   })
   if (face) {
     const strength = Math.min(1, Math.max(0, face.strength ?? 1))
