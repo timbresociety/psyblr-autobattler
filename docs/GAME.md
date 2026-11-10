@@ -147,13 +147,256 @@ Every hero has exactly one item per row. Rows don't overlap, and together they c
 | X | **Block** | The style's guard | 1 custom |
 | LMB | **Ranged** | The ranged library: pistol, rifle, thrown, magic one- or two-handed. Ki Blast, Energy Wave and the like live here. | 1 custom, by ranged style |
 | Q | **Spell** | **Everything no other row covers** (§4, the spell universe): control, displacement, zones, constructs, summons, ally support, curses, burst spells, vision and tricks | 1 custom |
-| E | **Movement skill** | Dash, blink, leap or grapple | 1 shared clip, its own VFX |
-| F | **Passive toggle** | Every self-buff, state and **transformation** (forms, resizes), on an energy meter | 1 shared clip for on and off, its own VFX |
-| R | **Ultimate** | An overpowered move on a long cooldown. It can be any kind of effect, scaled up. | 1 custom clip, massive VFX |
+| E | **Movement skill** | Moves the caster: a way the shared moves lack, or a shared move done better (see the locked library) | 1 shared clip per kind, its own VFX |
+| F | **Aura toggle** | An aura switched on and off on its own meter: numbers, a state or an element on the caster, and on allies near it. Never a form (owner, 2026-11-07) | 1 shared clip for on and off, its own VFX |
+| R | **Ultimate** | An overpowered skill on a long cooldown, or a form with its own body and moves. It can be any kind of effect, scaled up | 1 custom clip, massive VFX |
 
 **Shared by every hero:** idle, walk, jog (normal movement), run (sprint), jump, double jump, mantle, fall, land, dodge roll, crouch slide, dash, crouch and crouch-walk, prone and crawl, hit reacts, knockdown and get-up.
 
 **Roles.** The 8 roles stay: tank, fighter, assassin, mage, marksman, support, controller, summoner. A role sets the stat sheet and which library items it may take.
+
+### The locked library (signed by the owner, 2026-11-10)
+
+**What the owner decided (2026-11-07).** These are the answers to session 1's six questions:
+
+1. **New mechanics: yes to all of them.** The library covers everything 3D hero games with melee, ranged and traversal offer, as long as it fits a button, with no overlaps and no gaps.
+2. **F is an aura, R is the ultimate.** F holds auras you switch on and off, each on its own meter. F never holds a form. R holds the ultimates: forms that bring new moves, and overpowered skills on a long cooldown.
+3. **E keeps enhanced versions of the shared moves.** E adds mobility, so it may hold a move every hero already has, as long as the E version does more (see E below).
+4. **Melee families come from the combat action, not the weapon's name.** A scythe plays the axe's swings.
+5. **Weapons have default carry slots that never clash.** A hero with a bow and dual swords keeps both, and the solver moves one of them (see "Where weapons are carried").
+6. **Attitude sets cover combat and traversal only for now.** Idles and poses can wait.
+
+**The rule between the buttons.** Two questions sort every ability: how it's paid for, and what it's for. Each pair of answers belongs to exactly one button.
+
+| Paid by | For | Button | So it never holds |
+| --- | --- | --- | --- |
+| Nothing; every hero has it | Moving, defending, recovering | Shared | Anything only some heroes have |
+| Nothing; the held weapon | Hitting up close | V | Shots, spells |
+| A magazine; the held weapon | Hitting at range, again and again | LMB | Cooldown nukes |
+| A cooldown | Moving the caster, including the shared moves done better | E | Anything that doesn't move the caster |
+| A cooldown | Acting on others or the world | Q | Self-only buffs, movement |
+| Its own meter, drained while on | An aura on the caster, and on allies near it | F | Forms, one-shot actions |
+| A long cooldown | The one big moment: an overpowered skill, or a form with new moves | R | Anything a short cooldown could pay for |
+
+#### Shared: every hero, no button
+
+| Group | Moves | State |
+| --- | --- | --- |
+| Ground | Walk, jog, sprint; crouch, crouch-walk, slide; prone, crawl, dive | Built |
+| Air | Jump by direction, double jump, air steering | Built |
+| Edges | Mantle; ledge catch, hang, shimmy, climb, drop | Built |
+| Walls | Wall-run on marked walls for a short stretch; wall-jump off them | New |
+| Map routes | Ziplines and rails; jump pads (owner, 2026-11-10) | Lines built; pads new |
+| Evade | Dodge roll, dash | Built |
+| Defend | Guard (X); a perfect guard, X on a tight window before a hit, staggers the attacker | Guard built; perfect guard new |
+| Recover | Landing, landing roll, heavy landing; knockdown, get-up, wake-up roll | Landings built; the rest new |
+| Being hit | Flinch, stagger, launched, juggled, grabbed and thrown, death | Flinch, launch and death built; the rest new |
+| Team | Revive a downed ally by holding a key beside them | New |
+
+#### V: melee families, by combat action
+
+A family is one clip set. Every weapon in it plays the same clips, so a new weapon only needs a family. A weapon takes the **first family in this order that fits it**, so it can never sit in two:
+
+1. **Paired:** a weapon in each hand.
+2. **With a shield:** a shield in the off hand.
+3. Otherwise, by how the weapon lands its hits.
+
+| # | Family | How it hits | Weapons | Clips today |
+| --- | --- | --- | --- | --- |
+| 1 | **Paired** | Alternating hands, fast | Dual swords, dual daggers, claws, tonfa, sai, twin axes | Thin: `dual_weapon_combo`, `double_dagger_stab` |
+| 2 | **With a shield** | Cut or bash with the shield up | Sword, mace or axe with a shield | Sword and shield set |
+| 3 | **Fists** | Punches, elbows and knees | Bare hands, gauntlets, knuckles, power gloves | Unarmed set |
+| 4 | **Kicks** | Legs | Kicks, stomps, capoeira | Kicks set |
+| 5 | **One-hand edge** | Slash and stab | Sword, katana, dagger, machete, rapier | Blade set |
+| 6 | **Two-hand edge** | Wide sweeps and spins | Greatsword, claymore, nodachi | Greatsword set |
+| 7 | **Chop and reap** | Hooked arcs that land with a pull | Axe, great axe, **scythe**, halberd, kama, pickaxe | `axe_*` set |
+| 8 | **Smash** | Overhead and home-run swings | Club, bat, mace, hammer, warhammer, maul, wrench, one or two hands | Club set (one- and two-hand combos) |
+| 9 | **Thrust** | Straight jabs at reach | Spear, lance, trident, naginata, pike | None; needs clips |
+| 10 | **Staff spin** | Both ends, twirled | Bo, quarterstaff, a mage's staff in melee | None; needs clips |
+| 11 | **Flexible** | Crack, wrap and pull | Whip, chain, kusarigama, rope dart, nunchaku, meteor hammer | None; needs clips |
+
+The audit's "Axe or staff" splits into Chop and reap, Thrust, Staff spin and Flexible. Club stays its own family as Smash, and warhammers and mauls join it. Claws move from Fists to Paired.
+
+**Every family fills the same moveset,** so heroes with different weapons still play alike:
+
+| Move | Input | State |
+| --- | --- | --- |
+| Light chain: three hits, the third knocks back | V, V, V | Built |
+| Charged heavy | Hold V | Built |
+| Guard and guard hit | X | Built |
+| Dash attack | V while sprinting | New |
+| Air attack; air slam | V in the air; hold V in the air | New |
+| Launcher, then a chase and an air juggle | Back + V | New |
+| Grab and throw, close in | V + X | New, one shared clip set |
+
+#### LMB: ranged families, how they fire, and how the shot flies
+
+Each weapon has one family (its grip), one way to fire and one way the shot flies. The family is picked in this order:
+
+1. **Body emitter:** the shot comes from the body.
+2. **Thrown:** the projectile leaves the hand.
+3. Otherwise, by the grip.
+
+| Family | Weapons | Clips today |
+| --- | --- | --- |
+| **Body emitter** | Eye beams, breath, chest blast | New |
+| **Thrown** | Knives, kunai, shuriken, darts, bolas, grenades, a returning shield or hammer | 14 throw clips, no set of its own |
+| **One-hand gun** | Pistol, revolver, blaster, nail gun | Pistol set, 45 clips |
+| **Paired guns** | Akimbo pistols, twin blasters | New |
+| **Long gun** | Rifle, sniper, SMG, shotgun, railgun, crossbow | Rifle set, 93 clips |
+| **Heavy gun** | Cannon, launcher, minigun, flamethrower | New; needs clips |
+| **Bow** | Longbow, shortbow | 16 bow clips, unused today |
+| **Magic, one hand** | Wand, rod, orb, bare palm, arm cannon (Ki Blast lives here) | Thin |
+| **Magic, two hands** | Staff, tome, both palms (energy waves) | Thin, and no held loop for a beam |
+
+| How it fires | How the shot flies |
+| --- | --- |
+| Single shots, bursts, spread, beam (built); hold for full auto, hold to charge and release (new) | Straight bolt, beam, cone (built); lobbed arc, bouncing, returning to the hand, homing or guided (new) |
+
+#### Q: spell families, by their strongest effect
+
+A spell takes the **first family in this order that it fits**, so it can never sit in two. Pure damage comes last.
+
+| # | Family | Holds | New pieces |
+| --- | --- | --- | --- |
+| 1 | **Counter** | A window that answers an incoming hit with an effect: a parry-strike, a substitution, reflect, absorb | The whole family |
+| 2 | **Summon** | Something that moves and acts: pets, minions, clones, decoys | Real summons and clones |
+| 3 | **Construct** | A placed thing that stays put: walls, a one-way barrier, turrets, traps, totems, ramps, platforms and ice paths you can walk on, portals | One-way barrier, walkable terrain, portals; turrets, traps and totems move here from Summon |
+| 4 | **Trick** | Bends a rule: swap health, steal a spell, rewind, copy a kit, possession, stop time | Copy a kit, possession |
+| 5 | **Control** | Stops a target acting: stun, root, silence, disarm, sleep, blind, grounded, fear, taunt | Stun joins the control types |
+| 6 | **Displacement** | Moves others: push, pull, knock-up, lift and throw at range, pull an ally to safety | Lift and throw |
+| 7 | **Support** | Helps allies: heal, shield, buff, cleanse, revive at range | Revive at range |
+| 8 | **Curse** | Weakens over time: shred, wound, vulnerable, mark, damage over time | — |
+| 9 | **Zone** | An area that lingers and acts on whoever stands in it | — |
+| 10 | **Vision** | Information: reveal, scout, wards | — |
+| 11 | **Burst** | Damage now, with a wind-up or a charge that sets it apart from LMB | Charge casts (a charged energy wave) |
+
+A swap of places moves the caster, so it belongs to E, not Displacement.
+
+#### E: movement skills, by how they move the caster
+
+An E skill is either a way of moving the shared moves lack, or a shared move done better. The better version must do something the shared one can't, and it carries its own name.
+
+| How | Kind | State |
+| --- | --- | --- |
+| Instant | Blink a short way | Have |
+| | Teleport to a mark or a target | New |
+| | Swap places with a hero | New |
+| Line | Dash | Have |
+| | Homing dash to a target | New |
+| Arc | Leap | Have |
+| Line attached | Grapple to a point | Have |
+| | Swing on a line | New |
+| Held | Flight and hover, with its own camera | New |
+| | Glide | New |
+| | Wall-crawl on any wall | New |
+| | Burrow | New |
+| | Ride or carry an ally | New |
+| Shared, done better | **Wall Run:** any wall, not only marked ones, for longer. **Combat Roll:** longer, invulnerable all the way, and reloads. **Power Slide:** a long slide that knocks down whoever it hits. **Zipline:** fire your own line to any point and ride it | Have as dashes; the enhancements are new |
+
+What happens on arrival (nothing, damage, control or a shield) is the skill's effect, not its kind.
+
+#### F: auras
+
+**An F skill is an aura** you switch on and off. While it's on, it drains its own meter and shows round the body; when the meter runs dry, it switches itself off. It never changes the mesh and never changes the moveset. Those changes are R's.
+
+| What the aura changes | Holds | State |
+| --- | --- | --- |
+| Numbers | Damage, attack speed, move speed, damage reduction, lifesteal, evasion | Have |
+| State | Stealth, unstoppable, invulnerable | Have |
+| Allies | The same, given to allies near the caster | Have |
+| Element | An elemental sheath (flame, frost, lightning) that adds its element to hits | Elemental Body becomes this |
+
+Each aura also has one trigger: while on, on hit, every third hit, at low health, on a kill, or when hit (new).
+
+**F's forms move to R:** Super Form, Titan Form, Giant Body and Shrink. Elemental Body stays in F as an elemental aura.
+
+**What an aura looks like:** a proper energy effect, such as a flame aura or a red power-up glow, not a tinted shell. That work is in session 4 (owner, 2026-11-07: today's auras "look gimmicky").
+
+#### R: the shape of the big moment
+
+| Shape | Holds | Ours, for example | New pieces |
+| --- | --- | --- | --- |
+| Strike | One target: it lands, then plays out | Assassinate, Deadeye, Meteor Combo | The cinematic lock-on |
+| Devastation | Big area damage, now | Earthquake, Meteor Storm, Orbital Strike | — |
+| Domain | The area changes for a while | Inferno, Event Horizon, Labyrinth | — |
+| Rally | The whole team is helped | Revival Wave, Sanctuary, Mass Haste | A mass revive |
+| Rampage | The caster is overpowered for a short time, on the same body and moves | Bloodbath, Gunslinger, Shadow Dance | — |
+| Ultimate form | A timed form with its own body and moveset, in stages | Titan, Super, Ascended, Avatar and Shrink Form, plus F's forms | The moveset change and stages |
+| Titan summon | One big ally that fights for a while | None | The whole shape |
+| Kit switch | The caster swaps to a second kit for a while, on the same body: a stance change (owner, 2026-11-10) | None | The whole shape |
+
+#### Systems: rules about abilities, not abilities
+
+The owner said yes to all of these, 2026-11-07. Each is designed in session 2.
+
+- **Team-ups** between two heroes, keyed to their kits, since heroes are generated, not named.
+- **Fusion:** two allies merge for a while.
+- **Beam clashes:** two beams that meet push against each other.
+- **A spendable power meter**, like ki or chakra.
+- **Ability charges:** two or three uses banked.
+- **Hold-to-charge casts** on LMB and Q.
+
+#### Where weapons are carried
+
+A hero holds at most one melee weapon (V) and one ranged weapon (LMB). The button in use has its weapon in hand, and the other weapon waits in its slot. A move that needs the hands stows both, as in the table under "Proposed defaults" in the session 1 handoff: a ledge hang, a climb, a zipline. Fists, kicks, worn weapons (gauntlets, claws, knuckles), bare palms and body emitters need no slot.
+
+**Slots:**
+- `back_r` and `back_l`: the two diagonals across the back, named for the shoulder the handle sits over;
+- `back_flat`: flat on the back, worn over the diagonals;
+- `lower_back`;
+- `hip_l` and `hip_r`;
+- `thigh_l` and `thigh_r`.
+
+**How slots are chosen.** Each carry kind lists its slots in order of preference. A pair always moves together, as a mirrored pair or crossed in one slot. The hero's two weapons get the assignment with the lowest total rank in which no slot is used twice.
+
+**Every pairing has been checked:** all 10 melee carry kinds against all 10 ranged ones, 100 pairs in all. None clashes, and 10 of them move one weapon off its first slot. The owner's case is one of those 10: with a bow and dual swords, the bow takes the back and the swords move to both hips.
+
+| Carry kind | Slots, in order |
+| --- | --- |
+| One-hand edge | `hip_l`, `back_r`, `lower_back` |
+| Short blade | `thigh_r`, `lower_back`, `hip_l`, `hip_r` |
+| One-hand smash or chop | `hip_r`, `hip_l`, `back_r` |
+| Blade or mace, and shield | blade `hip_l`, `back_r`; shield `back_flat` |
+| Long two-hand (greatsword, great axe, scythe, maul) | `back_r`, `back_l` |
+| Polearm or staff | `back_r`, `back_l` |
+| Flexible | `hip_r`, `hip_l`, `lower_back` |
+| Paired short | crossed on `lower_back`; both thighs; both hips |
+| Paired long | crossed on the back (`back_r` and `back_l`); both hips |
+| One-hand gun | `thigh_r`, `hip_r`, `lower_back` |
+| Paired guns | both thighs; both hips |
+| Long gun | `back_l`, `back_r` |
+| Heavy gun | `back_flat`, `hip_r` (slung low) |
+| Bow, and its quiver | bow `back_l`, `back_r`; quiver `hip_r`, `lower_back`, `back_flat` |
+| Thrown | `thigh_l`, `hip_r`, `lower_back` |
+| Wand or rod | `thigh_l`, `hip_r`, `lower_back` |
+| Mage's staff | `back_l`, `back_r` |
+| Tome | `hip_l`, `lower_back`, `thigh_l` |
+
+**Drawing and stowing.** A weapon comes out when its move starts, or at once when the player attacks with it. Each family gets a short stow clip and a draw clip, about 0.2 s, which the attack's wind-up covers.
+
+The rig needs these sockets added beside `hand_r`, `hand_l`, `back`, `hips`, `muzzle` and `weapon_tip` (`src/kit/rig/metarig.ts`): the two back diagonals, `back_flat`, `lower_back`, both hips and both thighs.
+
+#### Attitude sets: combat and traversal only
+
+An attitude changes how a hero moves and fights, not how it stands still. Each set covers the walk, jog and sprint, the strafe gait, take-off and landing weight, and the guard-up walk between strikes.
+
+The first sets are:
+- **Neutral**, today's;
+- **Brute**, a heavy roll;
+- **Swagger**;
+- **Low and quick**, for an assassin;
+- **Strut**, with a hip sway.
+
+Sources: `style_strutting_walk`, `style_heavyset_walk` and the shielded walks, and the 100STYLE locomotion styles we already credit. Tripo's motions don't fit our heroes (owner, 2026-11-10, after trying them on two bodies). Idles, Forge poses and victory poses wait.
+
+#### Settled with the signature (owner, 2026-11-10)
+
+1. **Jump pads:** in, as shared map pieces.
+2. **Kit switch:** R's eighth shape, apart from forms.
+3. **Alternate fire:** left out for now. Right mouse stays first-person aim.
+4. **Staff, thrust and flexible clips:** recorded on a phone and turned into clips through video-to-motion. Tripo's motions don't fit our heroes.
+5. **Bodies that sink into the floor** (audit call 5): session 2 builds the three fixes. Hips move by leg length, feet are levelled above the floor, and ground poses are lifted by each body's depth.
 
 ### Typing rules
 
@@ -162,7 +405,7 @@ The engine enforces these, so a wrong item can't be stored in a slot:
 - Melee holds only a weapon style.
 - Ranged holds only things that fire from the hand or a weapon, on repeat.
 - Q holds nothing melee and nothing self-only.
-- F holds nothing that reaches anyone else.
+- F holds nothing that reaches anyone else, except an aura given to allies near the caster, and never a form.
 - E holds only things that move the caster.
 
 ### Libraries, from the clips we have today
@@ -255,30 +498,17 @@ Names and effects are a proposal (open question 5).
 
 **Self-only actives move to the passive (F) library.** These are Berserk, Blood Rage, Counter Stance, Second Wind, Unstoppable Fury, Evasive Dance, Shadow Realm, Vanish, Arcane Surge, Mana Shield, Chrono Rewind, Overdrive, Rapid Reload, Overclock, Iron Skin, Shield Wall and Unbreakable Will. They join today's passives.
 
-**Passive energy meter (owner, 2026-11-02).**
+**Aura meter (owner, 2026-11-02; F is an aura since 2026-11-07).**
 
 - Each passive has its own meter, shown on the HUD. It drains while the passive is on and refills while it's off.
 - When the meter runs dry, the passive switches itself off.
 - It never costs health, and it never blocks an action.
 
-**Transformations are passives.** Forms and resizes are switched on with F and run on the same meter, so a transformation lasts as long as its energy does:
+**Transformations are ultimates (owner, 2026-11-07).** Forms and resizes leave F for R's ultimate form: a form changes the body and the moveset for a while, on R's long cooldown. F keeps auras only (see the locked library).
 
-- super forms, avatar forms and titan forms;
-- shrink;
-- a giant body;
-- an elemental body.
+**Movement skills (E):** today's movement library, with a clip family per kind and per-skill VFX, grown to the kinds in the locked library. Wall Run, Combat Roll, Power Slide and Zipline stay, each doing more than its shared move (owner, 2026-11-07).
 
-A transformation can carry several buffs at once:
-
-- a bigger or smaller size, which changes the hit capsule and reach;
-- speed, armour, damage or lifesteal;
-- a change in look.
-
-The ultimate can still hold a form that is stronger and short, on its long cooldown.
-
-**Movement skills (E):** today's movement library, with its common clip family and per-skill VFX. These are dash, blink, leap and grapple.
-
-**Ultimates (R):** an overpowered move on a long cooldown, with any kind of effect scaled up. Today's ultimates go here. Each gets a custom clip: the 6 "any" ultimate clips, 2 magic area attacks, the axe jump attack, and new ones from §12.
+**Ultimates (R):** an overpowered move on a long cooldown, or a form with its own moves, with any kind of effect scaled up. Today's ultimates go here, sorted by the shapes in the locked library. Each gets a custom clip: the 6 "any" ultimate clips, 2 magic area attacks, the axe jump attack, and new ones from §12.
 
 **Balance.** There are no hand-made heroes. Balance runs on **generated kits**: role × melee style × ranged × spell × move × passive × ultimate, sampled and simulated toward a 45–55% win band.
 
@@ -422,7 +652,7 @@ Size and mass scale jump height (§5).
 
 **Wall-run and ledge hang (owner, 2026-11-03).** On marked surfaces only (arcade yellow, §1):
 
-- **wall-run:** every character runs along a marked wall for a fixed short stretch; a passive (F) lets its holder wall-run without limit;
+- **wall-run:** every character runs along a marked wall for a fixed short stretch; E's Wall Run lets its holder run any wall for longer (owner, 2026-11-07);
 - **ledge hang and climb-up:** catch a marked ledge, hang from it and pull up; shimmy along the edge only if a smooth animation exists for it.
 
 **Walking off a ledge (owner, 2026-11-04).** A character just walking off a platform that has a ledge drops into a ledge hang instead of falling off.
@@ -439,7 +669,7 @@ Size and mass scale jump height (§5).
 - **the body faces where the camera looks**, and a roll goes straight the way it is pressed, not over a shoulder;
 - **the crosshair is the centre of the camera's view, always:** over the shoulder, the camera rides at the hero's eye height for its stance, so standing, crouched or prone the crosshair keeps its place against the hero; first person looks out of the hero's head, crosshair centred.
 
-Not included: jump pads ("rather than floating platforms or arbitrary jump pads"). Movement skills (E) can add shortcuts, but no important area may need one.
+**Jump pads are in (owner, 2026-11-10),** reversing the 2026-11-04 "rather than floating platforms or arbitrary jump pads": they are shared map pieces, like ziplines. Jump pads and movement skills (E) can add shortcuts, but no important area may need one.
 
 **Five design rules:**
 
@@ -523,7 +753,7 @@ Props: scratch cards, dice, slot machines, pachinko, gacha capsules and crash-st
 
 **Not now:** hair movement, cloth waves, outfits, tails, wings and beast skeletons.
 
-**Bare bodies until movement is locked (owner, 2026-11-04).** Every character is a bare body: no outfit, hair or beard, and the forge's wardrobe and garment making are removed. The work is the skeleton performing every traversal and combat action accurately. Once the map and movement are locked, the forge is reworked to generate a unique mesh, outfit included, fitting each size of skeleton, plus melee and ranged weapons. A weapon is offered only if the animations fit it, including ranged attacks while crouched or prone and on the move. **The foundation is settled (owner, 2026-11-05):** our Mixamo-compatible skeleton (§9.2) is the contract every animation plays on. The MakeHuman and MetaHuman questions are closed: every hero's mesh is generated with Meshy and rigged onto our skeleton, starting in session 1. Other games' rigs (MHUR, Deadlock, Marvel Rivals) are studied for their conventions, such as weapon sockets and carry rules, never copied from their files. **Weapons and the body (open, session 1):** every melee and ranged weapon needs its own animations across combat and traversal, and a rule for where it goes when the hands are busy, such as a bow or an axe during a ledge hang. **Any look, one skeleton (owner, 2026-11-04):** a player may ask for any hero, and the forge makes it human-like within our rig: joints in our places, anything on the surface (a block head, wood grain, a suit, cartoon proportions), never tails, wings, four legs or extra arms. The head can be its own generated mesh at the neck socket (§9.1). **Real people and famous characters (owner, 2026-11-04):** players generate exactly what they ask for, without restrictions, and the animation and gameplay must work for it; legal questions go to the owner's lawyers. One hard line stays in the generator: no nude or sexual depictions of real, identifiable people, and nothing sexual involving minors. When a request crosses it, the Forge explains what and why and offers the nearest thing it can make; creative intent gets help, clear bad intent (a private person's photo with a sexual ask, repeats after the explanation, anything sexual with a minor) gets a firm no and slows the account (owner, 2026-11-04). **Sex appeal is allowed for adult characters, never nudity (owner, 2026-11-05):** the generated mesh brings the figure, face, hair and fitted outfit; the game brings the skin and hair shading, tuned jiggle and walks, idles and poses with attitude. A hero that reads as a child gets none of it. **No real child, ever (owner, 2026-11-05):** a photo of a child or a named real child is refused outright. Fictional child characters may be made as fighters, with none of the sex appeal above. **The physique dials go (owner, 2026-11-04):** the prompt shapes the body instead; the size classes stay, and so do the jiggle and muscle helpers, placed on each generated mesh from its own skin.
+**Bare bodies until movement is locked (owner, 2026-11-04).** Every character is a bare body: no outfit, hair or beard, and the forge's wardrobe and garment making are removed. The work is the skeleton performing every traversal and combat action accurately. Once the map and movement are locked, the forge is reworked to generate a unique mesh, outfit included, fitting each size of skeleton, plus melee and ranged weapons. A weapon is offered only if the animations fit it, including ranged attacks while crouched or prone and on the move. **The foundation is settled (owner, 2026-11-05):** our Mixamo-compatible skeleton (§9.2) is the contract every animation plays on. The MakeHuman and MetaHuman questions are closed: every hero's mesh is generated and rigged onto our skeleton, starting in session 1. Meshes come from Tripo Max through the browser; there is no Meshy key (owner, 2026-11-05). Other games' rigs (MHUR, Deadlock, Marvel Rivals) are studied for their conventions, such as weapon sockets and carry rules, never copied from their files. **Weapons and the body (open, session 1):** every melee and ranged weapon needs its own animations across combat and traversal, and a rule for where it goes when the hands are busy, such as a bow or an axe during a ledge hang. **Any look, one skeleton (owner, 2026-11-04):** a player may ask for any hero, and the forge makes it human-like within our rig: joints in our places, anything on the surface (a block head, wood grain, a suit, cartoon proportions), never tails, wings, four legs or extra arms. The head can be its own generated mesh at the neck socket (§9.1). **Real people and famous characters (owner, 2026-11-04):** players generate exactly what they ask for, without restrictions, and the animation and gameplay must work for it; legal questions go to the owner's lawyers. One hard line stays in the generator: no nude or sexual depictions of real, identifiable people, and nothing sexual involving minors. When a request crosses it, the Forge explains what and why and offers the nearest thing it can make; creative intent gets help, clear bad intent (a private person's photo with a sexual ask, repeats after the explanation, anything sexual with a minor) gets a firm no and slows the account (owner, 2026-11-04). **Sex appeal is allowed for adult characters, never nudity (owner, 2026-11-05):** the generated mesh brings the figure, face, hair and fitted outfit; the game brings the skin and hair shading, tuned jiggle and walks, idles and poses with attitude. A hero that reads as a child gets none of it. **No real child, ever (owner, 2026-11-05):** a photo of a child or a named real child is refused outright. Fictional child characters may be made as fighters, with none of the sex appeal above. **The physique dials go (owner, 2026-11-04):** the prompt shapes the body instead; the size classes stay, and so do the jiggle and muscle helpers, placed on each generated mesh from its own skin.
 
 ### 9.1 The head is a separate, fixed object
 
@@ -833,7 +1063,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 | Round 3 | Eyes, slide, jog/run, crosshair, charge meter, knockback | Fixed |
 | Round 3 | One Skill 2 clip turns the hero away from the camera; a pillar can block the reel's side view | Open; re-check after the rework |
 | Later | Likeness and cosmetics; Tripo export needs the owner's plan upgrade | Parked |
-| Plan | The kit library is not MECE yet (docs/reference/2026-11-04-kit-library-coverage.md): transformations in both F and R, four E skills repeating shared moves, Q bursts repeating LMB weapons, a summon family without summons, stun outside control; and the genre's flight, teleport, counters, clones, grabs, moveset forms and revives are missing | **Owner's order, 2026-11-04:** (1) clip audit and a locked MECE kit library across every body type and combat archetype; (2) build it, then the owner's combat and traversal check on the current map, with no feel-matching to MHUR for now; (3) rebuild the map around the locked kit; (4) the generative forge, meshes from Meshy (chosen 2026-11-05; mesh generation and rigging on our skeleton are tested from session 1) fitted to our rig per body type, with weapons and projectiles. One session each: docs/plans/2026-11-04-kit-library-and-four-sessions.html |
+| Plan | **Signed 2026-11-10:** the locked library in §4, the weapon carry slots and stow table, and the clip audit report. Session 1's exit is met; session 2 builds the kit. Before that, the kit library was not MECE (docs/reference/2026-11-04-kit-library-coverage.md): transformations in both F and R, four E skills repeating shared moves, Q bursts repeating LMB weapons, a summon family without summons, stun outside control; and the genre's flight, teleport, counters, clones, grabs, moveset forms and revives are missing | **Owner's order, 2026-11-04:** (1) clip audit and a locked MECE kit library across every body type and combat archetype; (2) build it, then the owner's combat and traversal check on the current map, with no feel-matching to MHUR for now; (3) rebuild the map around the locked kit; (4) the generative forge, meshes from Tripo Max (owner, 2026-11-05, in place of Meshy; mesh generation and rigging on our skeleton are tested from session 1) fitted to our rig per body type, with weapons and projectiles. One session each: docs/plans/2026-11-04-kit-library-and-four-sessions.html |
 
 ---
 
@@ -852,6 +1082,10 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-10: The owner signed session 1: the locked library (§4), the weapon carry slots and stow table, and the clip audit report. Kit switch is R's eighth shape; alternate fire is out; staff, thrust and flexible clips come from phone recordings through video-to-motion; session 2 builds the fixes for bodies that sink into the floor.
+- 2026-11-10: Jump pads are in (§4, §7). Tripo's motions don't fit our heroes, so staff, thrust and flexible clips need another source. Kit switch and alternate fire put to the owner with recommendations.
+- 2026-11-07: Owner's answers to session 1's six questions recorded in §4: yes to every new mechanic, F is an aura (forms move to R), E keeps enhanced shared moves, melee families by combat action (a scythe plays the axe's swings), weapon carry slots that never clash, attitude sets for combat and traversal only. The locked library is drafted in §4 for signature. Proper aura and spell effects are session 4's.
+- 2026-11-05: Owner correction recorded in §9: there is no Meshy key; Tripo Max through the browser is the mesh source.
 - 2026-11-05: Owner decisions recorded: best quality on devices that can carry it (§10); our skeleton is the contract, Meshy generates every mesh from session 1, MetaHuman and MakeHuman closed (§9, §13); weapon carry rules open for session 1.
 - 2026-11-05: Owner decision recorded in §9: no real child may be generated; fictional child characters may fight, without sex appeal.
 - 2026-11-05: Owner decision recorded in §9: sex appeal for adult characters, never nudity; attitude sets join the session 1 clip audit.

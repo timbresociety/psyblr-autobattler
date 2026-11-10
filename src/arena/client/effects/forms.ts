@@ -39,6 +39,8 @@ interface Form {
   age: number
   /** Aura sprites owed to the rate, carried between frames. */
   debt: number
+  /** When the next sheath starts, by `age`. */
+  sheathAt: number
   /** Where the trail last left a mark, and when. */
   last?: THREE.Vector3
   lastAt: number
@@ -55,6 +57,8 @@ export const formColor = (r: EffectRecipe) => ([0, 1, 2] as const).map((k) => co
 
 /** Aura spawns a second, per style: flames lick constantly, steam rolls off slowly, a storm strikes now and then. */
 const AURA_RATE: Record<FormAura, number> = { flame: 70, steam: 9, chakra: 36, storm: 8, sparks: 22 }
+/** How long a sheath breathes out (see `sheath`), a fresh one starting halfway through the last. */
+const SHEATH = { seconds: 0.7, opacity: 0.6, from: 1.15, to: 1.5 }
 const TAILS = 9
 
 export function createForms(kit: FormKit) {
@@ -119,9 +123,27 @@ export function createForms(kit: FormKit) {
     }
   }
 
-  function aura(f: Form, dt: number) {
+  /** A shell of the aura's colour breathing out round the whole body: sprites alone wash out over a bright floor. */
+  function sheath(hero: number, f: Form) {
+    const fit = (m: THREE.Mesh, grown: number) => {
+      const { feet, cap } = parts(f.body)
+      m.position.set(feet.x, feet.y + cap.height / 2, feet.z)
+      m.scale.set(cap.radius * grown * 1.5, (cap.height / 2) * grown, cap.radius * grown * 1.5)
+    }
+    kit.show('form', formColor(f.r), SHEATH.seconds, (m) => fit(m, SHEATH.from), (p, m) => {
+      if (forms.get(hero) !== f) return setOpacity(m, 0)
+      fit(m, SHEATH.from + (SHEATH.to - SHEATH.from) * p)
+      setOpacity(m, SHEATH.opacity * Math.sin(Math.PI * p))
+    }, 0)
+  }
+
+  function aura(hero: number, f: Form, dt: number) {
     const style = f.look.aura
     if (!style) return
+    if ((style === 'flame' || style === 'chakra') && f.age >= f.sheathAt) {
+      f.sheathAt = f.age + SHEATH.seconds / 2
+      sheath(hero, f)
+    }
     f.debt += dt * AURA_RATE[style]
     const n = Math.min(8, Math.floor(f.debt))
     if (!n) return
@@ -237,7 +259,7 @@ export function createForms(kit: FormKit) {
   return {
     start(hero: number, look: TransformationLook, r: EffectRecipe, duration: number, body: FormBodyAt) {
       end(hero, true)
-      const f: Form = { look, r, body, age: 0, debt: 0, lastAt: 0 }
+      const f: Form = { look, r, body, age: 0, debt: 0, sheathAt: 0, lastAt: 0 }
       forms.set(hero, f)
       arrive(look, r, body)
       if (look.avatar === 'tails') wearTails(f, duration)
@@ -247,7 +269,7 @@ export function createForms(kit: FormKit) {
     frame(dt: number) {
       for (const [hero, f] of forms) {
         f.age += dt
-        aura(f, dt)
+        aura(hero, f, dt)
         trail(hero, f)
         if (f.tails) {
           const { cap } = parts(f.body)

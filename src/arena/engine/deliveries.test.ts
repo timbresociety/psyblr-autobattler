@@ -14,7 +14,7 @@ import { PI, atan2 } from './maths.js'
 import { IDLE, capsule, createHero, emptyMatch, prepareHero, slotBit, type HeroSetup, type MatchState } from './state.js'
 import { tick } from './tick.js'
 import { initHero } from './effects.js'
-import { initialCoverHealth } from './cover.js'
+import { initialCoverHealth, type CoverPiece } from './cover.js'
 
 const base = { id: 't', name: 'T', roles: ['mage' as const], tags: ['t'], cooldown: 5, ai: ai('poke', 1) }
 const skill = (delivery: Template['delivery'], effects: Template['effects'] = [phys(100)]) => spell({ ...base, family: 'burst', delivery, effects })
@@ -88,6 +88,27 @@ describe('a dash or leap carries the hero there over time (2026-11-04)', () => {
     expect(top).toBeGreaterThan(2)
     expect(h.position.z).toBeCloseTo(9, 0)
     expect(a.hits()).toEqual([1])
+  })
+
+  it('a played dash aimed down runs along the deck it stands on, and one in the air stops at it (owner, 2026-11-05)', () => {
+    const deck: CoverPiece = { shape: { kind: 'block', x: 0, z: 0, hx: 20, hz: 20 }, base: 0, top: 2, look: 'wall' }
+    const dash = (airborne: boolean) => {
+      const d = arena(skill({ kind: 'dash', range: 9 }, [move(9)]), [{ x: 30, z: 0 }])
+      d.m.cover = { pieces: [deck], health: initialCoverHealth([deck]) }
+      d.m.human = 0
+      const h = d.m.heroes[0]
+      h.position.y = airborne ? 3 : 2
+      h.airborne = airborne
+      h.yaw = 0
+      h.pitch = (-20 * PI) / 180
+      d.fire()
+      d.run(20)
+      return h
+    }
+    const ground = dash(false)
+    expect(ground.position.z).toBeGreaterThan(8)
+    expect(ground.position.y).toBeCloseTo(2, 3)
+    expect(dash(true).position.z).toBeLessThan(4)
   })
 
   it('a dash takes a few ticks rather than one, and a blink still lands at once', () => {

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS, type Build } from '../../charter/build.js'
 import type { HeroPackage } from '../../forge/package.js'
 import type { Preset } from '../../forge/motion/library.js'
@@ -95,15 +96,20 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   const l = await gltf(renderer)
   const load = (body: Parameters<typeof loadBuild>[0]) => loadBuild(body, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
   const color = new THREE.Color(TEAM_COLORS[team])
+  // `/dev/try`: the hero being tried wears a generated test mesh in place of its body (dev only; the file is under .scratch)
+  const mesh = import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('mesh') : null
+  const tried = mesh ? await import('../../kit/bench/hero-file.js') : undefined
+  const generated = (await tried?.triedHeroes())?.find((h) => h.label === mesh && h.file)
   // a photo face is painted into the hero's own atlas first; without one (or if it fails) the shared atlas serves
-  const dressed = async (shape: Build, body?: FormBody) => {
+  const dressed = async (shape: Build, body?: FormBody, worn = generated) => {
     const shapeLook = formCharacterLook(characterLook(shape, hue), body)
-    const file = await load(shapeLook.build)
+    const made = await load(shapeLook.build)
+    const file = worn ? await tried!.reboundFile(worn, cloneSkinned(made.scene), (await animIndex('standard'))!, (url) => l.load(url)) : made
     // it moves on the motion library's gait and stands in its chosen stance, where the library loads (Forge goal, phase B)
     const rig: RigKind = V2_BODIES.has(shapeLook.build) ? 'standard' : 'legacy'
     const gender = shapeLook.build.charAt(0) as Gender
     const [atlas, kit, gait, moves] = await Promise.all([
-      heroAtlas(file, shapeLook),
+      generated ? null : heroAtlas(file, shapeLook),
       loadKit(shapeLook.build, shapeLook.held, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
       libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build))),
       rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) })) : undefined,
@@ -112,14 +118,18 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
-  view.root.scale.setScalar(SIZE_SCALE[chosen] * heightFactor(build.look?.physique))
+  // a generated mesh is already its own height
+  view.root.scale.setScalar(generated ? 1 : SIZE_SCALE[chosen] * heightFactor(build.look?.physique))
   // a hero whose ultimate transforms it brings its form's own body (a titan, not the same hero scaled up), dressed in
   // the same look with the form's own changes (gold hair, a chakra cloak); if that fails, the hero grows instead
   const slot = formSlot(build)
   const formLook = slot ? formLookOf(skillLookOf(build, slot)) : undefined
   const form = formSize(build)
-  const formView = form || formLook?.body ? await dressed({ ...build, sizeClass: form ?? chosen }, formLook?.body).catch(() => undefined) : undefined
-  const formScale = SIZE_SCALE[form ?? chosen]
+  const formMesh = generated?.form
+  const formView = form || formLook?.body ? await dressed({ ...build, sizeClass: form ?? chosen }, formLook?.body, formMesh ? { ...generated!, ...formMesh } : generated).catch(() => undefined) : undefined
+  // a generated form is its own height too, and swells from the hero's; a generated hero without one grows as far as its size does
+  const ownScale = generated ? (formMesh ? generated.height / formMesh.height : 1) : SIZE_SCALE[chosen]
+  const formScale = generated ? (formMesh ? 1 : SIZE_SCALE[form ?? chosen] / SIZE_SCALE[chosen]) : SIZE_SCALE[form ?? chosen]
   const root = new THREE.Group()
   root.add(view.root)
   if (formView) {
@@ -138,7 +148,7 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     pose: (state, _t, dt, moving = false) => {
       if (grown < 1 && formView?.root.visible) {
         grown = Math.min(1, grown + dt / SWELL_SECONDS)
-        formView.root.scale.setScalar(SIZE_SCALE[chosen] + (formScale - SIZE_SCALE[chosen]) * (1 - (1 - grown) ** 3))
+        formView.root.scale.setScalar(ownScale + (formScale - ownScale) * (1 - (1 - grown) ** 3))
       }
       shown().pose(state, dt, moving)
     },

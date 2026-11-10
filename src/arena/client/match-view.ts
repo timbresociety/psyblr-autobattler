@@ -11,7 +11,7 @@ import type { Vec3 } from '../engine/maths.js'
 import { healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
 import { hashState } from '../engine/snapshot.js'
 import { advance, arenaFor, createRecorder, playback, type Recorder, type RecordedSetup, type Recording } from '../engine/replay.js'
-import { AIM_STEPS, capsule, type Command, type MatchState, type Team } from '../engine/state.js'
+import { AIM_STEPS, capsule, type Command, type HeroState, type MatchState, type Team } from '../engine/state.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
 import { Cameras, FIRST_PERSON, HERO_CAMERA } from './camera.js'
 import { TEAM_COLORS } from './map.js'
@@ -659,7 +659,7 @@ const HIT_STOP_LAG = { max: 12, catchUp: 0.5 }
  * engine's position, or where a fallen body lies (KTD12). Returns where each hero was drawn.
  */
 function drawHeroes(
-  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[]; poses?: string[]; modes?: string[]; facing?: { hero: number; yaw: number; pitch: number } },
+  ctx: { arena: Arena; views: HeroView[]; animators: Animator[]; stances: (Stance | undefined)[]; grips: Grip[]; physics: CosmeticPhysics | undefined; camera: THREE.Camera; lods?: HeroLod[]; tiers: Tier[]; impostors?: THREE.Sprite[]; hidden: number[]; sight: number[]; occlude: boolean; down: number[]; swinging: boolean[]; poses?: string[]; modes?: string[]; facing?: { hero: number; yaw: number; pitch: number } },
   prev: Vec3[],
   frame: { alpha: number; dt: number; t: number; frameNo: number; timeScale: number; slowFar: boolean; clock: number },
 ): Vec3[] {
@@ -763,10 +763,39 @@ function drawHeroes(
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
     else view.root.quaternion.copy(yawQ)
+    grip(ctx.grips, i, h, view, scaled, arena.match.tick)
     // the outfit's loose cloth swings once the hero stands where it's drawn
     ctx.swinging[i] = view.settle?.(scaled, far) ?? false
     return at
   })
+}
+
+const palms = new THREE.Vector3()
+const nowhere = new THREE.Vector3()
+/** How far in from the rim a hanging hero's palms lie, how much of a climb they stay there, and how fast the body comes to them and lets go. */
+const GRIP = { in: 0.05, pull: 0.4, on: 14, off: 6 }
+/** The rim a hero's hands are on, and how far its body has moved from the engine's to keep them there. */
+interface Grip {
+  rim?: { x: number; y: number; z: number }
+  by: THREE.Vector3
+}
+
+/**
+ * Hanging, the hands are on the rim whatever the body: the engine hangs its capsule, and a body taller or longer in the
+ * arm than that held on in the air above the edge (owner, 2026-11-05). The body moves to the hands, easing on as the
+ * catch settles, and they stay on the rim through the pull of a climb.
+ */
+function grip(grips: Grip[], i: number, h: HeroState, view: HeroView, dt: number, tick: number) {
+  const held = (grips[i] ??= { by: new THREE.Vector3() })
+  const g = h.hang
+  const m = h.mantle
+  if (g) held.rim = { x: g.x - g.nx * GRIP.in, y: g.y, z: g.z - g.nz * GRIP.in }
+  else if (!m || (tick - m.from) / (m.until - m.from) > GRIP.pull) held.rim = undefined
+  const at = held.rim && view.hand?.(nowhere, palms)
+  if (!at && held.by.lengthSq() < 1e-6) return
+  const wants = at ? palms.set(held.rim!.x - at.x, held.rim!.y - at.y, held.rim!.z - at.z) : nowhere
+  held.by.lerp(wants, 1 - Math.exp(-dt * (at ? GRIP.on : GRIP.off)))
+  view.root.position.add(held.by)
 }
 
 const place = new THREE.Object3D()
@@ -883,7 +912,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const animators: Animator[] = arena.match.heroes.map(createAnimator)
   const stances: (Stance | undefined)[] = []
   const props = propLods(scene)
-  const drawCtx = { arena, views, animators, stances, physics, camera, lods, tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[], poses: [] as string[], modes: [] as string[], facing: undefined as { hero: number; yaw: number; pitch: number } | undefined }
+  const drawCtx = { arena, views, animators, stances, physics, camera, lods, grips: [] as Grip[], tiers: [] as Tier[], impostors, hidden: [] as number[], sight: [] as number[], occlude: true, down: [] as number[], swinging: [] as boolean[], poses: [] as string[], modes: [] as string[], facing: undefined as { hero: number; yaw: number; pitch: number } | undefined }
   if (import.meta.env.DEV) Object.assign(window, { __lod: drawCtx })
   const rules = matchRules(arena)
   const clock = createClock()
@@ -1007,10 +1036,12 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     const sight = me !== undefined ? { eyes: capsule(arena.match.heroes[me]).height * (HERO_CAMERA.eyes / ENGINE.capsule.height), head } : undefined
     cameras.update(dt, me !== undefined ? drawn[me] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz), sight)
     // in first person the camera looks out of the hero's eyes, so its own body isn't drawn; nor is the body of a hero
-    // played or followed when a wall has pulled the camera into its head
+    // played or followed when a wall has pulled the camera into its head; on a ledge the body stays, or a hero hanging
+    // in a narrow gap leaves nothing on screen but the wall (owner, 2026-11-05)
     const near = arena.match.human ?? follow
+    const clinging = near !== undefined && (arena.match.heroes[near].hang || arena.match.heroes[near].mantle)
     if (hiddenNear !== undefined && hiddenNear !== near) views[hiddenNear].root.visible = true
-    if (near !== undefined) views[near].root.visible = cameras.scope < FIRST_PERSON && !cameras.tooClose()
+    if (near !== undefined) views[near].root.visible = cameras.scope < FIRST_PERSON && (!cameras.tooClose() || !!clinging)
     hiddenNear = near
     range.update(arena.match, arena.setups, drawn, cameras.yaw, cameras.pitch)
     hooks.emit.frame(dt * speed, alpha)

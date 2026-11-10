@@ -153,6 +153,20 @@ describe('transformations as the audience sees them (R23)', () => {
     expect((spirit.mesh.material as THREE.MeshBasicMaterial).opacity).toBe(0)
   })
 
+  it('wraps a flame or chakra aura in a shell that breathes out, and lets go of it when the aura ends', () => {
+    const { seen, forms } = recorder()
+    const { body } = hero()
+    forms.start(1, { aura: 'chakra' }, recipe, 0, body)
+    forms.frame(0.016)
+    const shell = seen.meshes.find((m) => m.kind === 'form')!
+    const opacity = () => (shell.mesh.material as THREE.MeshBasicMaterial).opacity
+    shell.update(0.5, shell.mesh)
+    expect(opacity()).toBeGreaterThan(0.3)
+    forms.end(1, true)
+    shell.update(0.6, shell.mesh)
+    expect(opacity()).toBe(0)
+  })
+
   it('draws a form in the richest colour of its palette, never in its pale core', () => {
     const hex = (move: string) => formColor(composeRecipe('self', lookFor(move, 'self'))).getHexString(THREE.SRGBColorSpace)
     expect(hex('Nine-Tails')).toBe('ff4a00')

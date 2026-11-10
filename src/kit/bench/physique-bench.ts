@@ -6,7 +6,7 @@ import { fixups } from '../../arena/client/metarig/fixups.js'
 import { applyPosture } from '../../arena/client/metarig/posture.js'
 import { meshRest } from '../../arena/client/metarig/upgrade.js'
 import { proportion } from '../../arena/client/proportions.js'
-import { preset, type ArchetypeId } from '../body/physique.js'
+import { preset, type Archetype, type ArchetypeId } from '../body/physique.js'
 import { boneSet, girth, share, type Skeleton, type Skin } from '../body/regions.js'
 import { bodyBase, shapeBody } from '../body/shape.js'
 import { bodySpread, extraSpread } from '../body/spread.js'
@@ -106,8 +106,9 @@ function segmentDistance(p1: THREE.Vector3, q1: THREE.Vector3, p2: THREE.Vector3
   return c1.distanceTo(c2)
 }
 
-export async function benchArchetype(id: ArchetypeId, clips: Readonly<Record<string, string | undefined>> = BENCH_CLIPS): Promise<ArchetypeScore> {
-  const p = preset(id)
+/** `as` plays the archetype on another body: its gender, size and dials (the clip audit's female tiny and huge). */
+export async function benchArchetype(id: ArchetypeId, clips: Readonly<Record<string, string | undefined>> = BENCH_CLIPS, as: Pick<Archetype, 'gender' | 'body' | 'dials'> = preset(id)): Promise<ArchetypeScore> {
+  const p = as
   const g = p.gender
   const body = `${g}-${p.body}`
   const { model, mesh, file, morphNames } = await benchModel(`public/heroes/v2/${body}.glb`)

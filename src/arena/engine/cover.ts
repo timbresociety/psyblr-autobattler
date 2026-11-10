@@ -489,6 +489,15 @@ export function floorUnder(pieces: readonly CoverPiece[], health: readonly Cover
   return floor
 }
 
+/** The standing column whose rim runs by (x, z) at the height `top`, or undefined on a straight edge. */
+export function roundTop(pieces: readonly CoverPiece[], health: readonly CoverHealth[], x: number, z: number, top: number) {
+  for (let i = 0; i < pieces.length; i++) {
+    const s = pieces[i].shape
+    if (s.kind === 'column' && health[i] !== 0 && Math.abs(pieces[i].top - top) < 1e-3 && Math.abs(Math.sqrt((x - s.x) * (x - s.x) + (z - s.z) * (z - s.z)) - s.r) < 0.2) return s
+  }
+  return undefined
+}
+
 /**
  * The lowest underside of a standing piece over a disc of `radius` at `p` that a head rising from `from` to `to`
  * passes, or undefined: a deck or a tunnel roof a jump bumps into.

@@ -18,7 +18,7 @@ import type { EffectRecipe, RecipeLayer } from '../../recipes/schema.js'
 import type { ArenaController } from '../match-view.js'
 import { skyFlashOf } from '../map.js'
 import { color, createDraw, fanShapes, hot, setOpacity, v3, vivid, type Kit, type MeshKind } from './draw.js'
-import { createForms } from './forms.js'
+import { createForms, type FormKit } from './forms.js'
 import { baseSize, hitFeel, layerSize, type ImpactEvent } from './sizing.js'
 import { cue, kitReady, playCast, playHit, type Cue, type Voice } from './sound.js'
 import { createWorldFx } from './world-fx.js'
@@ -522,12 +522,21 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
   const slides = new Map<number, THREE.Vector3>()
   let pinned: ScreenFeel | undefined
   // transformations: how each arrives, what surrounds it, what it leaves behind and what it wears (forms.ts)
-  const forms = createForms({
+  const formKit: FormKit = {
     ...kit,
     flash,
     sparks,
     tail: (path, c, width, life) => tailRibbons.spawn(path, c, width, life, clock, { taper: true, steady: true }),
     endTail: (ribbon) => tailRibbons.end(ribbon, clock),
+  }
+  const forms = createForms(formKit)
+  // a passive switched on wraps the hero in its colour until it's off (owner, 2026-11-05: it needs "an aura or some basic visual change")
+  const passives = createForms(formKit)
+  // read fresh each frame: a form hugs the capsule the engine gives it, so what's seen is what can be hit (R23)
+  const bodyOf = (id: number) => ({
+    feet: () => v3(ctrl.positions()[id] ?? arena.match.heroes[id].position),
+    capsule: () => capsule(arena.match.heroes[id]),
+    yaw: () => arena.match.heroes[id].yaw,
   })
   // the skill that transforms a hero: a form event names no slot, and a kit holds one transformation at most
   const formOf = (hero: number) => {
@@ -860,12 +869,7 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
           else {
             const { slot, duration } = formOf(e.hero)
             const id = e.hero
-            // read fresh each frame: the form hugs the capsule the engine gives it, so what's seen is what can be hit (R23)
-            forms.start(id, formLookOf(skillLookOf(arena.setups[id].build, slot)), recipe(id, slot), duration, {
-              feet: () => v3(ctrl.positions()[id] ?? arena.match.heroes[id].position),
-              capsule: () => capsule(arena.match.heroes[id]),
-              yaw: () => arena.match.heroes[id].yaw,
-            })
+            forms.start(id, formLookOf(skillLookOf(arena.setups[id].build, slot)), recipe(id, slot), duration, bodyOf(id))
           }
         } else if (e.type === 'melee') {
           // the canon's melee beats, loud enough to read from the broadcast camera: a launch bursts and kicks the camera,
@@ -997,6 +1001,12 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
       }
       // the forms step their tails before the ribbons are drawn down them
       forms.frame(dt)
+      for (const h of arena.match.heroes) {
+        const on = h.alive && h.passiveOn && !forms.has(h.id)
+        if (on && !passives.has(h.id)) passives.start(h.id, { aura: 'chakra' }, recipe(h.id, 'passive'), 0, bodyOf(h.id))
+        else if (!on && passives.has(h.id)) passives.end(h.id, true)
+      }
+      passives.frame(dt)
       glow.update(clock)
       smoke.update(clock)
       motifs.update(clock)

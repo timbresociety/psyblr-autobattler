@@ -1,7 +1,7 @@
 import { SIZES } from '../../charter/sizes.js'
 import { DT, ENGINE, ticks } from './calibration.js'
 import { atan2, clamp, cos, sin } from './maths.js'
-import { arenaExtent, ceilingOver, floorUnder, pushOut, type MapLine } from './cover.js'
+import { arenaExtent, ceilingOver, floorUnder, pushOut, roundTop, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
 import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import { moveShare } from './timing.js'
@@ -393,9 +393,10 @@ function hangOn(hero: HeroState, match: MatchState, edge: { x: number; z: number
   if (nn < 1e-6) return false
   nx /= nn
   nz /= nn
-  const at = hangSpot(hero, match, edge.x, top, edge.z, nx, nz)
+  const { x, z, nx: ox, nz: oz } = onRim(match, edge.x, top, edge.z, nx, nz)
+  const at = hangSpot(hero, match, x, top, z, ox, oz)
   if (!at) return false
-  hero.hang = { from: now, x: edge.x, y: top, z: edge.z, nx, nz }
+  hero.hang = { from: now, x, y: top, z, nx: ox, nz: oz }
   hero.position = at
   hero.velocity = { x: 0, y: 0, z: 0 }
   hero.airborne = false
@@ -406,6 +407,16 @@ function hangOn(hero: HeroState, match: MatchState, edge: { x: number; z: number
   hero.stance = 'stand'
   events?.push({ type: 'move', hero: hero.id, move: 'hang' })
   return true
+}
+
+/** The edge by (x, z) and the way its drop faces: a column's rim curves, so both come off its radius there. */
+function onRim(match: MatchState, x: number, top: number, z: number, nx: number, nz: number) {
+  const round = roundTop(match.cover!.pieces, match.cover!.health, x, z, top)
+  if (!round) return { x, z, nx, nz }
+  const d = Math.sqrt((x - round.x) * (x - round.x) + (z - round.z) * (z - round.z))
+  const ox = (x - round.x) / d
+  const oz = (z - round.z) / d
+  return { x: round.x + ox * round.r, z: round.z + oz * round.r, nx: ox, nz: oz }
 }
 
 /**
@@ -455,15 +466,13 @@ function hanging(hero: HeroState, match: MatchState, mx: number, mz: number, ste
     }
   }
   if (Math.abs(along) > 0.5 && Math.abs(along) > Math.abs(into)) {
-    // hand over hand along the edge, as far as it runs
+    // hand over hand along the edge, as far as it runs, and on round a column's rim
     const step = Math.sign(along) * M.hang.shimmy * DT
-    const x = g.x - g.nz * step
-    const z = g.z + g.nx * step
-    const next = hangSpot(hero, match, x, g.y, z, g.nx, g.nz)
+    const rim = onRim(match, g.x - g.nz * step, g.y, g.z + g.nx * step, g.nx, g.nz)
+    const next = hangSpot(hero, match, rim.x, g.y, rim.z, rim.nx, rim.nz)
     if (next) {
-      g.x = x
-      g.z = z
-      hero.velocity = { x: -g.nz * step / DT, y: 0, z: g.nx * step / DT }
+      Object.assign(g, rim)
+      hero.velocity = { x: (next.x - hero.position.x) / DT, y: 0, z: (next.z - hero.position.z) / DT }
       hero.position = next
       return
     }

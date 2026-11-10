@@ -303,12 +303,19 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
         // sweep the feet, the waist and the head, so a lintel overhead stops a dash as surely as a wall
         const h = capsule(caster).height
         const from = caster.position
+        // on the ground a played hero's dash runs along it: aimed down, its line would stop at the floor it stands on,
+        // and the camera looks a little down most of the time (owner, 2026-11-05: "E skill isn't doing any movement");
+        // the AI aims at what it fights, so its fights stay as they were
+        const level = match.human === caster.id && template.delivery.kind === 'dash' && !caster.airborne && p.y < startY
+        const end = level ? { ...p, y: startY } : p
         let t = 1
         for (const lift of template.delivery.kind === 'leap' ? [LEAP_CLEARS] : [0.05, h / 2, h - 0.05]) {
-          const wall = firstCover(match, { ...from, y: from.y + lift }, { ...p, y: p.y + lift }, bodyRadius(caster))
+          const wall = firstCover(match, { ...from, y: from.y + lift }, { ...end, y: end.y + lift }, bodyRadius(caster))
           if (wall && wall.t < t) t = wall.t
         }
         if (t < 1) p = add(from, scale(sub(p, from), Math.max(0, t - 0.02)))
+        // and it ends on what it ran along, however far down it was aimed
+        if (level && match.cover) p = { ...p, y: Math.max(p.y, floorUnder(match.cover.pieces, match.cover.health, p, startY + ENGINE.move.step)) }
       }
       // aimed a little down, it ends on the floor under where it lands, not sunk into it; aimed steeply down past a lip
       // (at an enemy in a trench), it goes over the edge, and the walls put it beside them

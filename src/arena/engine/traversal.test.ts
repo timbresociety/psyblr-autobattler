@@ -381,6 +381,26 @@ describe('ledge hang (§7, owner 2026-11-04)', () => {
     expect(s.h.hang).toBeDefined()
   })
 
+  it('hangs from a round top square to its rim, and shimmies on round it (owner, 2026-11-05)', () => {
+    const r = 1.4
+    const s = solo({ y: 4, pieces: [{ shape: { kind: 'column', x: 0, z: 0, r }, base: 0, top: 4, look: 'column' }] })
+    s.m.human = 0
+    s.step(go(0, 0), 3)
+    walkOff(s)
+    expect(s.h.hang).toBeDefined()
+    s.step(go(0, 0), 15)
+    const start = { ...s.h.hang! }
+    expect(Math.hypot(start.x, start.z)).toBeCloseTo(r, 5)
+    // the camera faces the wall, so steering along the rim follows it round: a quarter turn of the column's rim
+    for (let i = 0; i < ticksOf((r * Math.PI) / 2 / M.hang.shimmy); i++) s.step(go(-s.h.hang!.nz, s.h.hang!.nx))
+    const g = s.h.hang!
+    expect(Math.hypot(g.x, g.z)).toBeCloseTo(r, 5)
+    expect(g.nx).toBeCloseTo(g.x / r, 5)
+    expect(g.nz).toBeCloseTo(g.z / r, 5)
+    expect(Math.abs(g.nx * start.nx + g.nz * start.nz)).toBeLessThan(0.2)
+    expect(Math.hypot(s.h.position.x, s.h.position.z)).toBeCloseTo(r + capsule(s.h).radius + 0.05, 1)
+  })
+
   it('a sprint goes over the edge, and the AI never hangs', () => {
     const sprint = deck()
     walkOff(sprint, MOVES.dash)

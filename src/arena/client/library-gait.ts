@@ -177,10 +177,13 @@ export function turned(clip: THREE.AnimationClip, angle: number): THREE.Animatio
  * Moves whose hips the library puts in the wrong place for the engine. `ahead`: metres the hips go forward the whole
  * clip; the ledge hang held the hands half a metre off the edge it hangs from (owner, 2026-11-04: "the ledge hold
  * animation is completely distorted"). `down`: the hips' height the clip comes down to by its end, falling there over
- * its second half; the dive's leap ends flat a metre up, and prone then dropped it to the floor in a blink.
+ * its second half; the dive's leap ends flat a metre up, and prone then dropped it to the floor in a blink. `flat`: the
+ * hips stay at the height they start, as the engine carries the body; the climb rose off the top by its own height on
+ * top of the engine's rise, and fell back to the floor as it ended (owner, 2026-11-05).
  */
-const MOVE_SHIFTS: Readonly<Record<string, { ahead?: number; down?: number }>> = {
+const MOVE_SHIFTS: Readonly<Record<string, { ahead?: number; down?: number; flat?: boolean }>> = {
   dive: { down: 0.14 },
+  climb: { flat: true },
   catch: { ahead: 0.4 },
   hang: { ahead: 0.4 },
   hang_left: { ahead: 0.4 },
@@ -188,7 +191,7 @@ const MOVE_SHIFTS: Readonly<Record<string, { ahead?: number; down?: number }>> =
 }
 
 /** `clip` with its hips moved by `shift` (see MOVE_SHIFTS). */
-export function shifted(clip: THREE.AnimationClip, shift: { ahead?: number; down?: number }): THREE.AnimationClip {
+export function shifted(clip: THREE.AnimationClip, shift: { ahead?: number; down?: number; flat?: boolean }): THREE.AnimationClip {
   const tracks = clip.tracks.map((track) => {
     if (!track.name.endsWith('.position')) return track
     const values = new Float32Array(track.values)
@@ -198,6 +201,7 @@ export function shifted(clip: THREE.AnimationClip, shift: { ahead?: number; down
       // falling: slow at the top of the arc, quickest as it lands
       const u = Math.max(0, (track.times[i] / clip.duration - 0.5) / 0.5)
       if (shift.down !== undefined) values[i * 3 + 1] -= (last - shift.down) * u * u
+      if (shift.flat) values[i * 3 + 1] = values[1]
     }
     const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
     return new Track(track.name, Float32Array.from(track.times), values)

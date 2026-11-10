@@ -21,6 +21,11 @@ Out of scope: feel-matching to MHUR, map work, building the new mechanics (sessi
 
 ## Start of session: ask the owner first
 
+**Signed 2026-11-10:** the owner signed the locked library, the carry slots and stow table, and the audit report, so session 1's exit is met. Still to do from the steps below: best quality on capable devices (step 1), the new rig sockets (step 4) and the attitude clips (step 5).
+
+**Answered 2026-11-07:** the six questions below, and audit calls 1 to 4. The answers and the locked library built from them are in GAME.md §4 ("The locked library"), awaiting the owner's signature, with three open questions of their own. The carry slots were checked on all 100 melee and ranged pairs.
+
+
 The owner asked for these questions at the start of session 1, not before. Ask them in batches with
 AskUserQuestion, recommended option first, and record every answer in GAME.md with the date.
 
@@ -108,6 +113,9 @@ AskUserQuestion, recommended option first, and record every answer in GAME.md wi
   - a screenshot at native resolution on a Retina screen is visibly sharper.
 
 ### 2. Meshy: the first generated meshes on our skeleton
+
+**Superseded (owner, 2026-11-05):** there is no Meshy key. Tripo Max through the browser is the mesh source; read
+Meshy below as Tripo Max. The three test heroes and their rebind are in `src/kit/bench/rebind.ts` and the clip audit.
 
 - **Key:** the owner provides it. Put it in `.env.local` as `MESHY_API_KEY`; never commit it. External sends are
   approved once the key is set.
