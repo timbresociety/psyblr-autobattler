@@ -97,10 +97,29 @@ function sided(side: Side): MetaBone[] {
   ]
 }
 
-export const SOCKETS = ['hand_r', 'hand_l', 'back', 'hips', 'muzzle', 'weapon_tip'] as const
+/** Where a weapon waits while its hand is busy (GAME.md §4, "Where weapons are carried"); placed on the skin by carry.ts. */
+export const CARRY_SLOTS = ['back_r', 'back_l', 'back_flat', 'lower_back', 'hip_l', 'hip_r', 'thigh_l', 'thigh_r'] as const
+export type CarrySlot = (typeof CARRY_SLOTS)[number]
+
+export const SOCKETS = ['hand_r', 'hand_l', 'back', 'hips', 'muzzle', 'weapon_tip', ...CARRY_SLOTS] as const
 export type SocketName = (typeof SOCKETS)[number]
 /** Where each socket hangs: muzzle and weapon tip ride on the right hand until a held item says where they are. */
-export const SOCKET_BONE: Readonly<Record<SocketName, string>> = { hand_r: 'RightHand', hand_l: 'LeftHand', back: 'Spine2', hips: 'Hips', muzzle: 'RightHand', weapon_tip: 'RightHand' }
+export const SOCKET_BONE: Readonly<Record<SocketName, string>> = {
+  hand_r: 'RightHand',
+  hand_l: 'LeftHand',
+  back: 'Spine2',
+  hips: 'Hips',
+  muzzle: 'RightHand',
+  weapon_tip: 'RightHand',
+  back_r: 'Spine2',
+  back_l: 'Spine2',
+  back_flat: 'Spine2',
+  lower_back: 'Spine',
+  hip_l: 'Hips',
+  hip_r: 'Hips',
+  thigh_l: 'LeftUpLeg',
+  thigh_r: 'RightUpLeg',
+}
 
 export const IK_TARGETS = ['IK_Foot_L', 'IK_Foot_R', 'IK_Hand_L', 'IK_Hand_R'] as const
 

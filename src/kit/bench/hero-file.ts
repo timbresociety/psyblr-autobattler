@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import type { Build } from '../../charter/build'
+import { hangCarry, meshRest } from '../../arena/client/metarig/upgrade'
+import { carrySockets } from '../body/carry'
 import { AUDIT_HEROES_FILE, type AuditHero } from './clips'
 import { onFloor, ourBone, rebindMesh, rebuildSkeleton, standing, type Rebuilt } from './rebind'
 
@@ -44,7 +46,7 @@ export async function reboundFile(hero: TriedHero, ours: THREE.Object3D, idx: He
   const fit = standing(box, hero.height)
   const joints = new Map(mesh!.skeleton.bones.map((b) => [ourBone(b.name), onFloor(b.getWorldPosition(new THREE.Vector3()), fit)]))
   const rebuilt = rebuildSkeleton(ours, joints)
-  rebindMesh(mesh!, rebuilt, fit)
+  const skinned = rebindMesh(mesh!, rebuilt, fit)
   // the mesh has no eyes to turn: stand-ins keep the library's bone list whole
   for (const eye of ['LeftEye', 'RightEye']) {
     const o = new THREE.Bone()
@@ -52,5 +54,9 @@ export async function reboundFile(hero: TriedHero, ours: THREE.Object3D, idx: He
     o.quaternion.fromArray(ref.rest[idx.bones.indexOf(eye)] as number[])
     rebuilt.bones.get('Head')!.add(o)
   }
+  // the carry slots, measured off its own skin like any body's
+  const geo = skinned.geometry
+  const skin = { positions: geo.getAttribute('position').array, joints: geo.getAttribute('skinIndex').array, weights: geo.getAttribute('skinWeight').array }
+  hangCarry(skinned, carrySockets(skin, meshRest(skinned)))
   return { scene: rebuilt.root as THREE.Group, animations: [], rebuilt }
 }

@@ -6,10 +6,14 @@ import { animClip, animIndex, fitClip, restPose, type RestPose } from '../../are
 import { buildModel } from '../../arena/client/body-model'
 import { characterLook } from '../../arena/client/character-look'
 import { heroHue } from '../../arena/client/characters'
-import { libraryMoves } from '../../arena/client/library-gait'
+import { libraryMoves, swung } from '../../arena/client/library-gait'
+import { GAIT_CLIPS } from '../../arena/client/gait'
+import { applyAttitude } from '../../arena/client/metarig/attitude'
+import { ATTITUDE, SWING_TIER, isAttitude, type AttitudeId } from '../../kit/anim/attitude'
 import type { Build } from '../../charter/build'
 import { defaultLook } from '../../charter/look'
 import { AUDIT_BODIES } from '../../kit/bench/clips'
+import { CARRY_SLOTS, type CarrySlot } from '../../kit/rig/metarig'
 import { auditHeroes, reboundFile } from '../../kit/bench/hero-file'
 import { characterFile } from '../arena/staging/loadout'
 
@@ -32,10 +36,40 @@ interface SheetAsk {
   to?: number
   /** The hips by the legs' true length, not standing height: what the audit tries on the generated heroes. */
   byLegs?: boolean
+  /** A stand-in in each carry slot, as long as what it holds, its grip end marked: where stowed weapons ride. */
+  carry?: boolean
+}
+
+/** Each carry slot's stand-in: length in metres and colour. */
+const CARRY_LOOK: Record<CarrySlot, [number, number]> = {
+  back_r: [1.0, 0xe84a4a], back_l: [1.0, 0x4a8ae8], back_flat: [0.9, 0xe8c84a], lower_back: [0.45, 0x4ae88a],
+  hip_l: [0.75, 0xc84ae8], hip_r: [0.6, 0xe8884a], thigh_l: [0.28, 0x4ae8e8], thigh_r: [0.28, 0xffffff],
+}
+
+/** Stand-ins hung in a body's carry slots; take them off with removeFromParent. */
+function carryStandIns(model: THREE.Object3D): THREE.Object3D[] {
+  return CARRY_SLOTS.flatMap((slot) => {
+    const socket = model.getObjectByName(`socket:${slot}`)
+    if (!socket) return []
+    const [length, color] = CARRY_LOOK[slot]
+    const piece = new THREE.Group()
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.035, length, 0.035), new THREE.MeshStandardMaterial({ color }))
+    body.position.y = -0.2 * length
+    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.07), new THREE.MeshStandardMaterial({ color: 0x111111 }))
+    grip.position.y = 0.3 * length
+    piece.add(body, grip)
+    // the socket sits in a scaled bone's space; the stand-in keeps its true size
+    const s = socket.getWorldScale(new THREE.Vector3())
+    piece.scale.set(1 / s.x, 1 / s.y, 1 / s.z)
+    socket.add(piece)
+    return [piece]
+  })
 }
 
 interface SheetBody {
   label: string
+  /** `?attitudes=brute,low` builds the medium bodies again in each: labelled `m-medium+brute`. */
+  attitude?: AttitudeId
   gender: 'm' | 'f'
   model: THREE.Object3D
   rest: RestPose
@@ -62,29 +96,39 @@ async function loadBodies(): Promise<SheetBody[]> {
   if (!idx) throw new Error('no library')
   const out: SheetBody[] = []
   const reference = new Map<string, THREE.Object3D>()
-  for (const spec of AUDIT_BODIES) {
-    const look = { ...defaultLook('fighter', spec.label, heroHue(spec.label)), gender: spec.gender, physique: spec.dials }
+  const attitudes = (new URLSearchParams(location.search).get('attitudes') ?? '').split(',').filter(isAttitude)
+  const specs = [...AUDIT_BODIES.map((spec) => ({ spec, attitude: undefined as AttitudeId | undefined })), ...attitudes.flatMap((attitude) => AUDIT_BODIES.filter((b) => b.label.endsWith('medium')).map((spec) => ({ spec, attitude })))]
+  for (const { spec, attitude } of specs) {
+    const look = { ...defaultLook('fighter', spec.label, heroHue(spec.label)), gender: spec.gender, physique: spec.dials, ...(attitude ? { attitude } : {}) }
     const painted = characterLook({ heroName: spec.label, roleId: 'fighter', sizeClass: spec.body, look } as unknown as Build, 0.08)
     const file = await characterFile(painted.build)
     const model = cloneSkinned(file.scene)
-    if (spec.label.endsWith('medium')) reference.set(spec.gender, cloneSkinned(file.scene))
+    if (spec.label.endsWith('medium') && !attitude) reference.set(spec.gender, cloneSkinned(file.scene))
     const clay = new THREE.MeshStandardMaterial({ color: spec.gender === 'f' ? 0xc9a58f : 0xa9b4c2, roughness: 0.7 })
     buildModel(model, painted, undefined, () => clay)
     const rest = restPose(model, idx.bones)
     if (!rest) throw new Error(`${spec.label}: no rest`)
     model.updateMatrixWorld(true)
     const head = model.getObjectByName('Head')!.getWorldPosition(new THREE.Vector3())
-    out.push({ label: spec.label, gender: spec.gender, model, rest, height: head.y + 0.15, mixer: new THREE.AnimationMixer(model), build: painted.build })
+    out.push({ label: attitude ? `${spec.label}+${attitude}` : spec.label, gender: spec.gender, model, rest, height: head.y + 0.15, mixer: new THREE.AnimationMixer(model), build: painted.build, ...(attitude ? { attitude } : {}) })
   }
   if (new URLSearchParams(location.search).has('heroes')) {
+    // each hero plain, then again in each of `?attitudes=` (labelled `john+brute`), its attitude on the library's rest
     for (const hero of await auditHeroes()) {
-      const ours = reference.get(hero.gender)!
-      const ref = idx.genders[hero.gender]!
-      const { rebuilt } = await reboundFile(hero, ours, idx, (url) => new GLTFLoader().loadAsync(url))
-      const reach = (o: THREE.Object3D) => ['LeftLeg', 'LeftFoot'].reduce((sum, n) => sum + o.getObjectByName(n)!.position.length(), 0)
-      const legs = reach(rebuilt.root) / reach(ours) / (rebuilt.bones.get('Hips')!.position.y / ref.hips[1])
-      const rest = { rotations: new Map(idx.bones.map((name, k) => [name, new THREE.Quaternion().fromArray(ref.rest[k] as number[])])), hips: rebuilt.bones.get('Hips')!.position.clone() }
-      out.push({ label: hero.label, gender: hero.gender, model: rebuilt.root, rest, height: hero.height, mixer: new THREE.AnimationMixer(rebuilt.root), build: hero.label, legs })
+      for (const attitude of [undefined, ...attitudes]) {
+        const ours = reference.get(hero.gender)!
+        const ref = idx.genders[hero.gender]!
+        const { rebuilt } = await reboundFile(hero, ours, idx, (url) => new GLTFLoader().loadAsync(url))
+        const reach = (o: THREE.Object3D) => ['LeftLeg', 'LeftFoot'].reduce((sum, n) => sum + o.getObjectByName(n)!.position.length(), 0)
+        const legs = reach(rebuilt.root) / reach(ours) / (rebuilt.bones.get('Hips')!.position.y / ref.hips[1])
+        let rest: RestPose = { rotations: new Map(idx.bones.map((name, k) => [name, new THREE.Quaternion().fromArray(ref.rest[k] as number[])])), hips: rebuilt.bones.get('Hips')!.position.clone() }
+        if (attitude) {
+          idx.bones.forEach((name, k) => rebuilt.bones.get(name)?.quaternion.fromArray(ref.rest[k] as number[]))
+          applyAttitude(rebuilt.root, attitude)
+          rest = { ...restPose(rebuilt.root, idx.bones)!, hips: rest.hips }
+        }
+        out.push({ label: attitude ? `${hero.label}+${attitude}` : hero.label, gender: hero.gender, model: rebuilt.root, rest, height: hero.height, mixer: new THREE.AnimationMixer(rebuilt.root), build: hero.label, legs, ...(attitude ? { attitude } : {}) })
+      }
     }
   }
   return out
@@ -108,14 +152,17 @@ export function ClipSheet() {
     const blade = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.035, 1), new THREE.MeshStandardMaterial({ color: 0xff4f6a, roughness: 0.4 }))
     const bodies = loadBodies()
     const moves = new Map<string, Promise<Map<string, THREE.AnimationClip>>>()
-    const movesOf = (g: 'm' | 'f') => {
-      let m = moves.get(g)
-      if (!m) moves.set(g, (m = libraryMoves(g, 'standard')))
+    const movesOf = (g: 'm' | 'f', attitude: AttitudeId = 'neutral') => {
+      let m = moves.get(g + attitude)
+      if (!m) moves.set(g + attitude, (m = libraryMoves(g, 'standard', [], {}, attitude)))
       return m
     }
 
     const fitted = async (ask: SheetAsk, b: SheetBody) => {
-      const source = ask.move ? (await movesOf(b.gender)).get(ask.move) : await animClip(b.gender, ask.clip!, 'standard').catch(() => undefined)
+      const raw = ask.move ? (await movesOf(b.gender, b.attitude)).get(ask.move) : await animClip(b.gender, ask.clip!, 'standard').catch(() => undefined)
+      // a gait loop swings as the body's attitude swings it (library-gait.ts libraryGait)
+      const swing = b.attitude && ask.clip && (GAIT_CLIPS as readonly string[]).includes(ask.clip) ? ATTITUDE[b.attitude].swing : undefined
+      const source = raw && swing ? swung(raw, swing, SWING_TIER[ask.clip!.split('_')[0] as keyof typeof SWING_TIER] ?? 1) : raw
       if (!source) return undefined
       const clip = fitClip(source, b.gender, b.build, b.rest, 'standard')
       if (!ask.byLegs || !b.legs) return clip
@@ -128,7 +175,7 @@ export function ClipSheet() {
 
     /** The metres the skin itself goes under the floor at its worst, by body: bones can't say this for a deep chest or a big head. */
     const low = async (ask: SheetAsk) => {
-      const out: Record<string, { depth: number; at: number }> = {}
+      const out: Record<string, { depth: number; at: number; touch: number }> = {}
       const point = new THREE.Vector3()
       for (const b of (await bodies).filter((x) => !ask.bodies || ask.bodies.includes(x.label))) {
         const clip = await fitted(ask, b)
@@ -140,8 +187,10 @@ export function ClipSheet() {
         action.setLoop(THREE.LoopOnce, 1)
         action.clampWhenFinished = true
         action.play()
-        let depth = 0, at = 0
+        // touch: the lowest the skin gets at its highest frame, so feet that never reach the floor show
+        let depth = 0, at = 0, touch = -Infinity
         for (let time = 0; time < clip.duration; time += 1 / 12) {
+          let frame = Infinity
           action.time = time
           b.mixer.update(0)
           b.model.updateMatrixWorld(true)
@@ -151,10 +200,12 @@ export function ClipSheet() {
             for (let i = 0; i < count; i += 16) {
               mesh.getVertexPosition(i, point)
               if (point.y < depth) { depth = point.y; at = time }
+              frame = Math.min(frame, point.y)
             }
           }
+          touch = Math.max(touch, frame)
         }
-        out[b.label] = { depth: +depth.toFixed(3), at: +at.toFixed(2) }
+        out[b.label] = { depth: +depth.toFixed(3), at: +at.toFixed(2), touch: +touch.toFixed(3) }
         b.mixer.stopAllAction()
         b.mixer.uncacheClip(clip)
       }
@@ -190,6 +241,7 @@ export function ClipSheet() {
         action.clampWhenFinished = true
         action.play()
         scene.add(b.model)
+        const stowed = ask.carry ? carryStandIns(b.model) : []
         const hand = b.model.getObjectByName('RightHand')
         const from = ask.from ?? 0
         const to = Math.min(ask.to ?? clip.duration, clip.duration)
@@ -224,6 +276,7 @@ export function ClipSheet() {
         }
         scene.remove(b.model)
         scene.remove(blade)
+        for (const o of stowed) o.removeFromParent()
         b.mixer.stopAllAction()
         b.mixer.uncacheClip(clip)
       }

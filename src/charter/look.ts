@@ -1,4 +1,5 @@
 import type { Physique } from '../kit/body/shape.js'
+import { isAttitude, type AttitudeId } from '../kit/anim/attitude.js'
 import { hydratePhysique } from '../kit/body/physique.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
 import { hydrateSkillLook, type SkillLook } from './skill-look.js'
@@ -66,6 +67,8 @@ export interface HeroLook {
   sculpt?: Sculpt
   /** The idle the hero stands in, from the motion library (public/anim/index.json); its gender's first when absent. */
   idle?: string
+  /** How the hero carries itself moving and fighting (kit/anim/attitude.ts); neutral when absent. */
+  attitude?: AttitudeId
   /** Rigid pieces in the body's hand sockets: a weapon in each hand. */
   gear?: Partial<Record<GearSlot, GearPiece>>
   /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
@@ -116,6 +119,7 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
   const sculpt = hydrateSculpt(input.sculpt)
   if (sculpt) look.sculpt = sculpt
   if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle
+  if (isAttitude(input.attitude) && input.attitude !== 'neutral') look.attitude = input.attitude
   // only a style the library animates in full (GAME.md §12; coverage.test.ts holds the library to it)
   if (typeof input.style === 'string' && (STYLES as readonly string[]).includes(input.style) && coverageOf(input.style)?.offered !== false) look.style = input.style as Style
   if (input.motions && typeof input.motions === 'object') {

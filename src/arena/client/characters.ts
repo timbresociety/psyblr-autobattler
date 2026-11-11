@@ -17,6 +17,7 @@ import { GAIT_CLIPS, GAIT_TIERS, GAIT_WAYS, PACE_LIMITS, pickTier, strideSeconds
 import type { LibraryGait } from './library-gait.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { buildModel, rigsOf } from './body-model.js'
+import { applyAttitude } from './metarig/attitude.js'
 import type { LoadedKit } from './held.js'
 import { rigOf, RIGS, type RigNames } from './rig.js'
 import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
@@ -388,7 +389,8 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const scene = cloneSkinned(file.scene) as THREE.Group
   const rig = rigOf(scene)
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
-  buildModel(scene, look, kit, body, atlas)
+  // a body of ours takes its attitude with its posture; a generated hero's own skin takes it on its rest here
+  if (!buildModel(scene, look, kit, body, atlas)) applyAttitude(scene, look.attitude)
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh && !o.userData.noShadow) o.castShadow = true
   })

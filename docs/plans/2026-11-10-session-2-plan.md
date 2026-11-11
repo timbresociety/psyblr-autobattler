@@ -16,6 +16,11 @@ Generation tools the owner gave: ChatGPT for images, Gemini Omni Flash for video
 - **Mesh:** the owner's Tripo model `eb703f54-06d5-4bda-a001-d137fa657ecc`, rigged in Tripo (Humanoid, Mixamo
   preset) and rebound to our skeleton (`src/kit/bench/rebind.ts`), like the audit heroes. The file stays in
   `.scratch/tripo-in/john/`.
+- **Every size and set (owner, 2026-11-11):** "when I said John I meant a John character that covers all sizes and
+  sets so I can test each one." The lab switches John between all six size classes (tiny to colossal) in either gender,
+  each physique, and each attitude set (neutral, brute, swagger, low, strut), live, with no reload. The rebound mesh is
+  one of those bodies; our own bodies cover the rest. Every checklist row is run on at least the smallest, the medium
+  and the largest John, and on each attitude.
 - **Body checks:** the owner's local audit heroes stay switchable in the lab. A mechanic that works on John but breaks
   on a big or a small body gets fixed in session 2 too.
 
@@ -51,8 +56,10 @@ step) and sits in the carry slot the solver picked (GAME.md §4, "Where weapons 
 
 - **Where:** John on the current map, with a dummy, an enemy bot, an ally bot, a ledge, a column, a zipline, a wall
   and a jump pad within a few steps. The bots can be set to block, fire a beam, stand still or fight.
+- **Body panel:** size class, gender, physique and attitude set, as above.
 - **Loadout panel:** pick any V family, LMB family, Q family, E kind, F aura and R shape. The change applies at once,
-  with no rebuild, and weapons stow and draw through their slots.
+  with no rebuild, and weapons stow and draw through their carry slots (done 2026-11-11: eight slots measured off
+  each body's own skin, `src/kit/body/carry.ts`).
 - **Checklist:** one row per interaction. The owner marks each pass or fail with a note, and the marks persist locally.
   The rows:
   - V: each family × the full moveset (light chain, charged heavy, guard, dash attack, air attack and slam, launcher
@@ -82,8 +89,22 @@ step) and sits in the carry slot the solver picked (GAME.md §4, "Where weapons 
 4. Build the strafe splice, and make the audit's clip trims and swaps.
 5. Map it to bodies and roles: the clip per size class, default kits per role, and which weapon families each body may
    hold.
-6. Session 1 leftovers: rig sockets (first, as the weapons need them), combat and traversal attitude clips, and render
-   quality.
+6. Session 1 leftovers: rig sockets and attitude sets are done (2026-11-11, below); render quality remains.
+
+**Done 2026-11-11 (session 1 leftovers the owner closed first):**
+
+- Deep links: the deploy serves the app for `/range`, `/lobby`, `/match/...` on a reload (`vercel.json` fallback).
+- Carry slots: `back_r`, `back_l`, `back_flat`, `lower_back`, `hip_l`, `hip_r`, `thigh_l`, `thigh_r`, measured off
+  every body's skin and every generated hero's.
+- Attitude sets from the clips we have: the library's style walks don't carry their style (the 100STYLE takes slouch
+  and stop whatever their name), so an attitude is a layer on the rest pose (tips, arms, bent knees), bigger hip and
+  chest swing on the gait loops, a stride beat, and brute's heavy landing. Feet are kept on the floor frame by frame
+  under bent knees; moves down at the floor and hanging play without the layer. Floor sheets: every move on every set
+  within 2 cm of neutral, on the medium body and on John.
+
+**After session 4 (owner, 2026-11-11):** what the library can't give gets a custom animation pipeline: clips of each
+attitude's own (a brute's walk, not a walk with a brute's posture), idles and poses per set, styled strafes, and
+clean replacements for the broken style takes.
 
 **Clips still missing:** staff, thrust and flexible come from the owner's phone recordings through video-to-motion.
 Until those arrive, each family runs on the nearest stand-in clip, and its checklist rows stay "stand-in clip".

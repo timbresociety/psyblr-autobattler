@@ -375,7 +375,7 @@ A hero holds at most one melee weapon (V) and one ranged weapon (LMB). The butto
 
 **Drawing and stowing.** A weapon comes out when its move starts, or at once when the player attacks with it. Each family gets a short stow clip and a draw clip, about 0.2 s, which the attack's wind-up covers.
 
-The rig needs these sockets added beside `hand_r`, `hand_l`, `back`, `hips`, `muzzle` and `weapon_tip` (`src/kit/rig/metarig.ts`): the two back diagonals, `back_flat`, `lower_back`, both hips and both thighs.
+The rig has these sockets beside `hand_r`, `hand_l`, `back`, `hips`, `muzzle` and `weapon_tip` (`src/kit/rig/metarig.ts`, 2026-11-11). Each slot is measured off the body's own skin plus 3 cm, on the bone it rides (`src/kit/body/carry.ts`): every size class, physique and generated hero gets them the same way. A carried piece is modelled like a held one, its +y toward the grip and its +z away from the body; the diagonals lean their grips 35° over their shoulder.
 
 #### Attitude sets: combat and traversal only
 
@@ -388,7 +388,15 @@ The first sets are:
 - **Low and quick**, for an assassin;
 - **Strut**, with a hip sway.
 
-Sources: `style_strutting_walk`, `style_heavyset_walk` and the shielded walks, and the 100STYLE locomotion styles we already credit. Tripo's motions don't fit our heroes (owner, 2026-11-10, after trying them on two bodies). Idles, Forge poses and victory poses wait.
+**Built from the clips we have (2026-11-11).** The library's style walks don't carry their style: the 100STYLE takes are 4-second walks at about 0.4 m/s whose ends are 30 to 124° apart, and proud, heavyset and angry all play as the same slouched walk that stops. Tripo's motions don't fit our heroes either (owner, 2026-11-10, after trying them on two bodies). So an attitude is a layer over every clip (`src/kit/anim/attitude.ts`):
+- turns on the rest pose: the spine and head tipped, the arms held out, the knees bent;
+- the hips' and chest's own swing in the gait loops made bigger, by axis (all of it on the walk, 60% on the jog, 30% on the run, which already swings hard);
+- the stride's beat (a brute's slow planted steps, the low set's quick short ones);
+- brute lands every landing on the heavy landing.
+
+Bent knees lift the feet by more the more a clip already bends them, so every clip is put back on the floor at each frame. Moves down at the floor (landings, rolls, the slide, the dive, prone, the ultimate) and hanging and climbing play without the layer: a lean on a crouch put the hands and head through the floor (the low set's heavy landing 34 cm under), and arms held out miss a ledge. Measured on the medium body and on John: every move on every set sits within 2 cm of neutral's floor contact.
+
+Idles, Forge poses and victory poses wait. Each set's own clips, idles and styled strafes come with the custom animation pipeline after session 4 (owner, 2026-11-11).
 
 #### Settled with the signature (owner, 2026-11-10)
 

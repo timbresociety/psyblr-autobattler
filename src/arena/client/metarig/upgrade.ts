@@ -2,7 +2,9 @@ import * as THREE from 'three'
 import type { HelperPlan } from '../../../kit/body/helpers.js'
 import type { Skeleton } from '../../../kit/body/regions.js'
 import type { Spread } from '../../../kit/body/spread.js'
-import { bodyDirection, IK_TARGETS, SOCKET_BONE, SOCKETS, type SocketName } from '../../../kit/rig/metarig.js'
+import type { CarrySockets } from '../../../kit/body/carry.js'
+import { bodyDirection, CARRY_SLOTS, IK_TARGETS, SOCKET_BONE, SOCKETS, type CarrySlot, type SocketName } from '../../../kit/rig/metarig.js'
+import { socketMatrix } from '../gear.js'
 
 /**
  * The metarig put on a loaded body (GAME.md §9.2): Root under the hips, the helpers from planHelpers on their parent
@@ -12,6 +14,7 @@ import { bodyDirection, IK_TARGETS, SOCKET_BONE, SOCKETS, type SocketName } from
 
 /** The sockets a body kit hangs (gear.ts hangSockets). */
 const KIT_SOCKETS: ReadonlySet<SocketName> = new Set(['hand_r', 'hand_l', 'back'])
+const CARRY: ReadonlySet<SocketName> = new Set(CARRY_SLOTS)
 
 export interface HelperBone {
   plan: HelperPlan
@@ -25,7 +28,7 @@ export interface HelperBone {
 export interface Metarig {
   root: THREE.Bone
   helpers: HelperBone[]
-  /** A socket by name: the body kit's (hung by gear.ts) or one the metarig added (hips, muzzle, weapon tip). */
+  /** A socket by name: the body kit's (hung by gear.ts) or one the metarig added (hips, muzzle, weapon tip, carry slots). */
   socket: (name: SocketName) => THREE.Object3D | undefined
   ik: Record<(typeof IK_TARGETS)[number], THREE.Object3D>
   /** The body's skeleton at rest after the upgrade, in the mesh's own space (for measuring). */
@@ -48,9 +51,10 @@ export function meshRest(mesh: THREE.SkinnedMesh): Skeleton {
 
 /**
  * `model` is the hero's scene (sockets the body already hangs, from its kit, are found there); `plans` from
- * planHelpers on this hero's shaped, proportioned body. The caller puts helperSkin's weights on the geometry.
+ * planHelpers on this hero's shaped, proportioned body, and `carry` from carrySockets on the same. The caller puts
+ * helperSkin's weights on the geometry.
  */
-export function upgradeRig(model: THREE.Object3D, mesh: THREE.SkinnedMesh, plans: readonly HelperPlan[]): Metarig {
+export function upgradeRig(model: THREE.Object3D, mesh: THREE.SkinnedMesh, plans: readonly HelperPlan[], carry?: CarrySockets): Metarig {
   const skeleton = mesh.skeleton
   const bones = [...skeleton.bones]
   const inverses = skeleton.boneInverses.map((m) => m.clone())
@@ -101,8 +105,9 @@ export function upgradeRig(model: THREE.Object3D, mesh: THREE.SkinnedMesh, plans
   if (ordered.indexOf(helpers[0]?.bone) !== firstHelper && helpers.length) throw new Error('helper order')
   mesh.bind(new THREE.Skeleton(ordered, orderedInverses), mesh.bindMatrix)
   // the sockets a body kit doesn't bring, on their bones; the kit's own (hands, back) are hung with the gear
+  if (carry) hangCarry(mesh, carry)
   for (const s of SOCKETS) {
-    if (KIT_SOCKETS.has(s)) continue
+    if (KIT_SOCKETS.has(s) || CARRY.has(s)) continue
     const o = new THREE.Object3D()
     o.name = `socket:${s}`
     byName.get(SOCKET_BONE[s])?.add(o)
@@ -117,4 +122,25 @@ export function upgradeRig(model: THREE.Object3D, mesh: THREE.SkinnedMesh, plans
     }),
   ) as Metarig['ik']
   return { root, helpers, socket, ik, skeleton: meshRest(mesh) }
+}
+
+/**
+ * The carry slots (carry.ts) as empties on their bones, each at its rest place: the bone's inverse bind takes the rest
+ * pose into the bone's own space, so this works whatever pose the body is in. A generated hero, rebound to our
+ * skeleton without the metarig, gets them the same way.
+ */
+export function hangCarry(mesh: THREE.SkinnedMesh, carry: CarrySockets): Partial<Record<CarrySlot, THREE.Object3D>> {
+  const { bones, boneInverses } = mesh.skeleton
+  const out: Partial<Record<CarrySlot, THREE.Object3D>> = {}
+  for (const slot of CARRY_SLOTS) {
+    const s = carry[slot]
+    const i = bones.findIndex((b) => b.name === s.bone)
+    if (i < 0) continue
+    const o = new THREE.Object3D()
+    o.name = `socket:${slot}`
+    boneInverses[i].clone().multiply(socketMatrix(s)).decompose(o.position, o.quaternion, o.scale)
+    bones[i].add(o)
+    out[slot] = o
+  }
+  return out
 }

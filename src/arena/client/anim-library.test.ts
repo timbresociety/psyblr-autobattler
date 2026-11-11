@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import * as THREE from 'three'
-import { animClip, fitClip, restPose } from './anim-library.js'
+import { animClip, fitClip, groundClip, restPose } from './anim-library.js'
+import { applyAttitude } from './metarig/attitude.js'
 
 const sets = { idle: { idle: 1 / 24 }, fidget: {}, move: {}, dance: {}, talk: {} }
 const INDEX = {
@@ -79,5 +80,75 @@ describe('the motion library', () => {
     expect(rest.rotations.get('spine')!.equals(spine.quaternion)).toBe(true)
     expect(rest.rotations.get('spine')).not.toBe(spine.quaternion)
     expect(restPose(model, ['hips', 'head'])).toBeUndefined()
+  })
+})
+
+describe('an attitude\u2019s bent legs kept on the floor (2026-11-11)', () => {
+  const LEG = ['Hips', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase'] as const
+  /** A hips and one leg standing a metre tall, the toes ahead. */
+  const body = () => {
+    const root = new THREE.Group()
+    const at: Record<string, [number, number, number]> = { Hips: [0, 1, 0], LeftUpLeg: [0.1, -0.05, 0], LeftLeg: [0, -0.45, 0], LeftFoot: [0, -0.45, 0], LeftToeBase: [0, -0.05, 0.12] }
+    let parent: THREE.Object3D = root
+    for (const name of LEG) {
+      const bone = new THREE.Bone()
+      bone.name = name
+      bone.position.set(...at[name])
+      parent.add(bone)
+      parent = bone
+    }
+    return root
+  }
+  const lowest = (model: THREE.Object3D) => {
+    model.updateMatrixWorld(true)
+    return Math.min(...['LeftFoot', 'LeftToeBase'].map((n) => model.getObjectByName(n)!.getWorldPosition(new THREE.Vector3()).y))
+  }
+  // a crouch on the plain body: the thigh forward, the shin back, the hips down
+  const bend = (name: string, d: number) => new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (d * Math.PI) / 180)
+  const plain = new THREE.AnimationClip('crouch', 1, [
+    new THREE.VectorKeyframeTrack('Hips.position', [0, 1], [0, 1, 0, 0, 0.8, 0]),
+    new THREE.QuaternionKeyframeTrack('LeftUpLeg.quaternion', [0, 1], [0, 0, 0, 1, ...bend('LeftUpLeg', -50).toArray()]),
+    new THREE.QuaternionKeyframeTrack('LeftLeg.quaternion', [0, 1], [0, 0, 0, 1, ...bend('LeftLeg', 90).toArray()]),
+    new THREE.QuaternionKeyframeTrack('LeftFoot.quaternion', [0, 1], [0, 0, 0, 1, ...bend('LeftFoot', -40).toArray()]),
+  ])
+
+  it('lowers the hips each frame by as much as the bend lifts the feet, there and in a crouch alike', () => {
+    const neutral = body()
+    const low = body()
+    applyAttitude(low, 'low')
+    const turns = low.userData.attitudeTurns as Record<string, number[]>
+    expect(Object.keys(turns)).toEqual(expect.arrayContaining(['LeftUpLeg', 'LeftLeg', 'LeftFoot']))
+    const rest = restPose(low, [...LEG])!
+    expect(rest.ground).toBeDefined()
+    expect(rest.plain!.rotations.get('LeftLeg')!.angleTo(new THREE.Quaternion())).toBeLessThan(1e-6)
+    // the clip as fitting puts it on the low body: each leg key with the attitude's turn in front
+    const onLow = new THREE.AnimationClip('crouch', 1, plain.tracks.map((t) => {
+      const turn = turns[t.name.split('.')[0]]
+      if (!turn || !t.name.endsWith('quaternion')) return t
+      const v = Float32Array.from(t.values)
+      for (let i = 0; i < v.length; i += 4) new THREE.Quaternion().fromArray(v, i).premultiply(new THREE.Quaternion().fromArray(turn)).toArray(v, i)
+      return new THREE.QuaternionKeyframeTrack(t.name, Array.from(t.times), Array.from(v))
+    }))
+    const grounded = groundClip(onLow, rest.ground!)
+    const a = new THREE.AnimationMixer(neutral).clipAction(plain).play()
+    const b = new THREE.AnimationMixer(low).clipAction(grounded).play()
+    let lifted = 0
+    // at the hips' keys (a library clip keys every frame; between two keys a second apart the bend's lift isn't linear)
+    for (const time of [0, 1]) {
+      for (const action of [a, b]) {
+        action.time = time
+        action.getMixer().update(0)
+      }
+      expect(lowest(low)).toBeCloseTo(lowest(neutral), 4)
+      // ungrounded, the bend would have lifted the feet, more in the crouch than standing
+      b.stop()
+      const raw = new THREE.AnimationMixer(low).clipAction(onLow).play()
+      raw.time = time
+      raw.getMixer().update(0)
+      lifted = Math.max(lifted, lowest(low) - lowest(neutral))
+      raw.stop()
+      b.play()
+    }
+    expect(lifted).toBeGreaterThan(0.02)
   })
 })

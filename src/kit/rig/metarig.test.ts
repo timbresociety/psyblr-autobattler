@@ -129,7 +129,7 @@ describe('the metarig contract (§9.2)', () => {
     expect(count('ik')).toBe(IK_TARGETS.length)
     for (const name of ['Trapezius', 'Deltoid', 'Pectoral', 'Latissimus', 'Biceps', 'Triceps', 'Forearm', 'Glute', 'Quad', 'Calf']) expect(metaBone(`Left${name}Muscle`)).toBeDefined()
     for (const name of ['Shoulder', 'Elbow', 'Wrist', 'Hip', 'Knee', 'Ankle']) expect(metaBone(`Right${name}Corrective`)).toBeDefined()
-    for (const s of ['muzzle', 'weapon_tip', 'hips', 'back', 'hand_l', 'hand_r']) expect(metaBone(`socket:${s}`)).toBeDefined()
+    for (const s of ['muzzle', 'weapon_tip', 'hips', 'back', 'hand_l', 'hand_r', 'back_r', 'back_l', 'back_flat', 'lower_back', 'hip_l', 'hip_r', 'thigh_l', 'thigh_r']) expect(metaBone(`socket:${s}`)).toBeDefined()
   })
 
   it('drives each helper from a limited joint, places it between real bones and gives it skin to move', () => {

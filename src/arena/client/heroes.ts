@@ -10,7 +10,8 @@ import type { AnimState } from './animation.js'
 import type { SizeClass } from '../../charter/sizes.js'
 import { formSize, formSlot } from '../../forge/form.js'
 import type { FormBody } from '../../charter/skill-look.js'
-import type { Gender } from '../../charter/look.js'
+import { defaultLook, type Gender } from '../../charter/look.js'
+import { isAttitude, type AttitudeId } from '../../kit/anim/attitude.js'
 import { formLookOf, skillLookOf } from '../recipes/looks.js'
 import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
@@ -90,7 +91,14 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
   }
 }
 
-async function arenaCharacter(build: Build, index: number, team: number, renderer: unknown): Promise<HeroView> {
+/** How a hero carries itself (kit/anim/attitude.ts); `/dev/try?attitude=` tries one on the played hero (dev only). */
+function attitudeOf(build: Build): AttitudeId {
+  return build.look?.attitude ?? 'neutral'
+}
+
+async function arenaCharacter(given: Build, index: number, team: number, renderer: unknown): Promise<HeroView> {
+  const tryAttitude = import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('attitude') : null
+  const build: Build = isAttitude(tryAttitude) ? { ...given, look: { ...(given.look ?? defaultLook(given.roleId, given.heroName ?? given.roleId, heroHue(given.heroName))), attitude: tryAttitude } } : given
   const hue = heroHue(build.heroName)
   const look = characterLook(build, hue)
   const l = await gltf(renderer)
@@ -111,8 +119,8 @@ async function arenaCharacter(build: Build, index: number, team: number, rendere
     const [atlas, kit, gait, moves] = await Promise.all([
       generated ? null : heroAtlas(file, shapeLook),
       loadKit(shapeLook.build, shapeLook.held, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
-      libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build))),
-      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) })) : undefined,
+      libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build)), attitudeOf(build)),
+      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) }, attitudeOf(build))) : undefined,
     ])
     return characterView(file, shapeLook, color, build, atlas, kit, gait, moves)
   }

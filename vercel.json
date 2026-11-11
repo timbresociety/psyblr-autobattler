@@ -14,6 +14,10 @@
     {
       "source": "/api/:route*",
       "destination": "/api/router?__route=:route*"
+    },
+    {
+      "source": "/((?!api/|dev/)[^.]*)",
+      "destination": "/index.html"
     }
   ]
 }

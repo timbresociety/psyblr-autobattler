@@ -77,6 +77,24 @@ export interface RestPose {
   rotations: Map<string, THREE.Quaternion>
   /** Where the hips stand at rest: the file's, raised by however much longer its proportions made the legs. */
   hips: THREE.Vector3
+  /** An attitude's bent legs (metarig/attitude.ts), which every clip fitted to this rest is grounded for. */
+  ground?: Ground
+  /**
+   * The rest without the attitude's turns, for the moves down at the floor (a clip's `userData.plain`): a lean or a
+   * hunch on a landing's crouch, a roll or a slide puts the hands and head through the floor.
+   */
+  plain?: RestPose
+}
+
+/** The chain from the hips down each leg to the toes' tip, in order. */
+const LEG_CHAIN = ['UpLeg', 'Leg', 'Foot', 'ToeBase', 'Toe_End']
+
+export interface Ground {
+  /** The hips' bone, and each leg bone's local offset and scale (the chain, both sides). */
+  hips: string
+  bones: Map<string, { position: THREE.Vector3; scale: THREE.Vector3 }>
+  /** Each bone's turn the attitude put in front of its rest rotation (the legs' are the ones that count here). */
+  turns: Map<string, THREE.Quaternion>
 }
 
 const rests = new WeakMap<THREE.Object3D, Map<string, RestPose>>()
@@ -104,9 +122,72 @@ export function restPose(model: THREE.Object3D, bones: readonly string[]): RestP
   model.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh && typeof o.userData.legDrop === 'number') drop = Math.max(drop, o.userData.legDrop)
   })
-  const rest = { rotations, hips: hips.position.clone().add(new THREE.Vector3(0, drop, 0)) }
+  const rest: RestPose = { rotations, hips: hips.position.clone().add(new THREE.Vector3(0, drop, 0)) }
+  const given = model.userData.attitudeTurns as Record<string, number[]> | undefined
+  if (given) {
+    const bones = new Map<string, { position: THREE.Vector3; scale: THREE.Vector3 }>()
+    bones.set(hips.name, { position: new THREE.Vector3(), scale: hips.scale.clone() })
+    for (const side of ['Left', 'Right']) {
+      for (const part of LEG_CHAIN) {
+        const bone = model.getObjectByName(side + part)
+        if (bone) bones.set(bone.name, { position: bone.position.clone(), scale: bone.scale.clone() })
+      }
+    }
+    const turns = new Map(Object.entries(given).map(([name, q]) => [name, new THREE.Quaternion().fromArray(q)]))
+    rest.ground = { hips: hips.name, bones, turns }
+    const plain = new Map([...rotations].map(([name, q]) => [name, turns.has(name) ? q.clone().premultiply(turns.get(name)!.clone().invert()) : q]))
+    rest.plain = { rotations: plain, hips: rest.hips }
+  }
   mine.set(key, rest)
   return rest
+}
+
+/**
+ * A clip kept on the floor under an attitude's bent legs: at each of the hips' keys, how much higher the lowest point
+ * of the feet sits under the hips with the attitude's leg turns than without them, taken off the hips. A bent knee
+ * lifts the foot more the more the clip already bends it, so this is per frame, not one drop at rest; the clip's own
+ * contact with the floor (and its hips' travel, scaled by the straight legs) is what it had.
+ */
+export function groundClip(clip: THREE.AnimationClip, ground: Ground): THREE.AnimationClip {
+  const position = clip.tracks.find((t) => t.name === `${ground.hips}.position`)
+  if (!position) return clip
+  const sampled = new Map<string, THREE.Interpolant>()
+  for (const t of clip.tracks) {
+    const name = t.name.slice(0, t.name.lastIndexOf('.'))
+    if (t.name.endsWith('.quaternion') && ground.bones.has(name)) sampled.set(name, new THREE.QuaternionLinearInterpolant(t.times, t.values, 4, new Float32Array(4)))
+  }
+  const m = new THREE.Matrix4()
+  const local = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const at = new THREE.Vector3()
+  const lowest = (time: number, bent: boolean) => {
+    let low = Infinity
+    for (const side of ['Left', 'Right']) {
+      m.identity()
+      for (const name of [ground.hips, ...LEG_CHAIN.map((p) => side + p)]) {
+        const bone = ground.bones.get(name)
+        if (!bone) break
+        const keyed = sampled.get(name)
+        if (keyed) q.fromArray(keyed.evaluate(time) as Float32Array)
+        else q.identity()
+        const turn = ground.turns.get(name)
+        // the clip's keys carry the turn (own rest first); without it is the turn taken back off the front
+        if (turn && !bent) q.premultiply(turn.clone().invert())
+        m.multiply(local.compose(bone.position, q, bone.scale))
+        if (name !== ground.hips) low = Math.min(low, at.setFromMatrixPosition(m).y)
+      }
+    }
+    return low
+  }
+  const values = Float32Array.from(position.values)
+  for (let i = 0; i < position.times.length; i++) {
+    const time = position.times[i]
+    values[i * 3 + 1] -= lowest(time, true) - lowest(time, false)
+  }
+  const tracks = clip.tracks.map((t) => (t === position ? new THREE.VectorKeyframeTrack(t.name, Array.from(t.times), Array.from(values)) : t))
+  const out = new THREE.AnimationClip(clip.name, clip.duration, tracks)
+  out.userData = { ...clip.userData }
+  return out
 }
 
 const fitted = new WeakMap<THREE.AnimationClip, WeakMap<RestPose, THREE.AnimationClip>>()
@@ -119,13 +200,15 @@ const fitted = new WeakMap<THREE.AnimationClip, WeakMap<RestPose, THREE.Animatio
 export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string, rest: RestPose, rig: RigKind = 'legacy'): THREE.AnimationClip {
   const idx = animIndexNow(rig)
   if (!idx) return clip
+  if (clip.userData.plain && rest.plain) rest = rest.plain
   let mine = fitted.get(clip)
   if (!mine) fitted.set(clip, (mine = new WeakMap()))
   const done = mine.get(rest)
   if (done) return done
   const ref = idx.genders[gender]
   if (!ref) throw new Error(`${body}: no ${gender} clips`)
-  const out = retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips }, { rest: rest.rotations, hips: rest.hips.toArray() })
+  const fit = retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips }, { rest: rest.rotations, hips: rest.hips.toArray() })
+  const out = rest.ground ? groundClip(fit, rest.ground) : fit
   mine.set(rest, out)
   return out
 }

@@ -57,6 +57,12 @@ describe('a hero’s look', () => {
     expect(hydrateLook({ gender: 'm', colors: {}, physique: { weight: 2, muscle: 0, age: 0 } })).not.toHaveProperty('physique')
   })
 
+  it('keeps a known attitude, and none for neutral or one it doesn\u2019t know', () => {
+    expect(hydrateLook({ gender: 'm', colors: {}, attitude: 'brute' })?.attitude).toBe('brute')
+    expect(hydrateLook({ gender: 'm', colors: {}, attitude: 'neutral' })).not.toHaveProperty('attitude')
+    expect(hydrateLook({ gender: 'm', colors: {}, attitude: 'moonwalk' })).not.toHaveProperty('attitude')
+  })
+
   it('keeps how much of the photo the face takes', () => {
     expect(hydrateLook({ gender: 'm', colors: {}, face: { ...face, strength: 0.456 } })?.face?.strength).toBe(0.46)
     // all of the photo is the default, so it isn't written down

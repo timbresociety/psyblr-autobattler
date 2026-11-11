@@ -4,6 +4,7 @@ import { ENGINE } from '../engine/calibration.js'
 import { animClip, animIndex, setOf } from './anim-library.js'
 import { GAIT_CLIPS, type Gait } from './gait.js'
 import { WEAPON_GAIT, type Weapon } from '../../kit/anim/weapon-gait.js'
+import { ATTITUDE, SWING_TIER, type AttitudeId, type Swing } from '../../kit/anim/attitude.js'
 import type { RigKind } from './rig.js'
 
 /** What a hero moves and stands in from the motion library, not yet fitted to its body (characters.ts fits it). */
@@ -209,6 +210,55 @@ export function shifted(clip: THREE.AnimationClip, shift: { ahead?: number; down
   return new THREE.AnimationClip(clip.name, clip.duration, tracks)
 }
 
+/**
+ * `clip` with each named bone's own swing made bigger: every key's turn away from the bone's mean over the loop, as a
+ * rotation vector in the bone's frame, its pitch (x), twist (y) and side drop (z) scaled by `by`, each gain's excess
+ * over 1 taken `share` of. A loop stays a loop, since its first and last keys scale alike.
+ */
+export function swung(clip: THREE.AnimationClip, by: Readonly<Record<string, Swing>>, share = 1): THREE.AnimationClip {
+  const gain = (k: number | undefined) => 1 + ((k ?? 1) - 1) * share
+  const tracks = clip.tracks.map((track) => {
+    const swing = by[track.name.replace(/\.quaternion$/, '')]
+    if (!track.name.endsWith('.quaternion') || !swing) return track
+    const k = new THREE.Vector3(gain(swing.pitch), gain(swing.twist), gain(swing.drop))
+    const v = track.values
+    const n = v.length / 4
+    const sum = new THREE.Vector4()
+    const q = new THREE.Quaternion()
+    const first = new THREE.Quaternion().fromArray(v, 0)
+    for (let i = 0; i < n; i++) {
+      q.fromArray(v, i * 4)
+      // the same hemisphere as the first key, so the sum means something
+      const s = q.dot(first) < 0 ? -1 : 1
+      sum.x += q.x * s
+      sum.y += q.y * s
+      sum.z += q.z * s
+      sum.w += q.w * s
+    }
+    const centre = new THREE.Quaternion(sum.x, sum.y, sum.z, sum.w).normalize()
+    const back = centre.clone().invert()
+    const out = new Float32Array(v.length)
+    const turn = new THREE.Vector3()
+    for (let i = 0; i < n; i++) {
+      const d = back.clone().multiply(q.fromArray(v, i * 4))
+      if (d.w < 0) d.set(-d.x, -d.y, -d.z, -d.w)
+      // the turn as axis times angle, scaled axis by axis, and back
+      const angle = 2 * Math.acos(Math.min(1, d.w))
+      const s = Math.sqrt(Math.max(0, 1 - d.w * d.w))
+      if (s < 1e-6) {
+        centre.toArray(out, i * 4)
+        continue
+      }
+      turn.set(d.x / s, d.y / s, d.z / s).multiplyScalar(angle).multiply(k)
+      const a = turn.length()
+      const scaled = a < 1e-9 ? new THREE.Quaternion() : new THREE.Quaternion().setFromAxisAngle(turn.divideScalar(a), a)
+      centre.clone().multiply(scaled).toArray(out, i * 4)
+    }
+    return new THREE.QuaternionKeyframeTrack(track.name, Float32Array.from(track.times), out)
+  })
+  return new THREE.AnimationClip(clip.name, clip.duration, tracks)
+}
+
 /** The part of `clip` from `from` to `to` seconds, its keys spaced to play in `seconds`. */
 function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: number): THREE.AnimationClip {
   const k = seconds / (to - from)
@@ -228,10 +278,18 @@ function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: numbe
 const moveLoads = new Map<string, Promise<Map<string, THREE.AnimationClip>>>()
 
 /**
+ * The moves an attitude stays off (the clip's `userData.plain`, anim-library fitClip): down at the floor, where a lean
+ * or a hunch on the crouch puts the hands and head through it (floor sheets 2026-11-11: low's heavy landing 34 cm
+ * under, its roll 29, brute's 9 to 14 on landings and prone, every gait and attack within 1.5 cm of neutral), and
+ * hanging and climbing, where arms held out miss the ledge.
+ */
+const PLAIN = new Set(['land', 'land_heavy', 'land_roll', 'roll', 'slide', 'dive', 'fall', 'prone', 'prone_move', 'prone_fire', 'ultimate', 'zip', 'catch', 'hang', 'hang_left', 'hang_right', 'climb', 'mantle'])
+
+/**
  * The one-shots a gender's library has (LIBRARY_MOVES) by the engine's names, and `motions` (a hero's skills' clips) by
  * their own, fetched once each. `instead` puts a hero's own clip under an engine name (its guard as the `block`).
  */
-export async function libraryMoves(gender: Gender, rig: RigKind, motions: readonly string[] = [], instead: Readonly<Record<string, string>> = {}): Promise<Map<string, THREE.AnimationClip>> {
+export async function libraryMoves(gender: Gender, rig: RigKind, motions: readonly string[] = [], instead: Readonly<Record<string, string>> = {}, attitude: AttitudeId = 'neutral'): Promise<Map<string, THREE.AnimationClip>> {
   const base = await baseMoves(gender, rig)
   const names = [...new Set([...motions, ...Object.values(instead)])]
   const own = await Promise.all(names.map((name) => animClip(gender, name, rig).catch(() => undefined)))
@@ -239,8 +297,10 @@ export async function libraryMoves(gender: Gender, rig: RigKind, motions: readon
   own.forEach((clip, k) => clip && out.set(names[k], clip))
   for (const [ours, name] of Object.entries(instead)) {
     const clip = out.get(name)
-    if (clip) out.set(ours, new THREE.AnimationClip(ours, clip.duration, clip.tracks))
+    if (clip) out.set(ours, Object.assign(new THREE.AnimationClip(ours, clip.duration, clip.tracks), { userData: { ...clip.userData, plain: PLAIN.has(ours) } }))
   }
+  const heavy = ATTITUDE[attitude].heavyLanding && out.get('land_heavy')
+  if (heavy) out.set('land', Object.assign(new THREE.AnimationClip('land', heavy.duration, heavy.tracks), { userData: { ...heavy.userData } }))
   return out
 }
 
@@ -258,7 +318,7 @@ function baseMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.Anim
         const cuts = MOVE_CUTS[ours]
         const shift = MOVE_SHIFTS[ours]
         const timed = clip && (cuts ? cut(clip, ...cuts) : clip)
-        if (timed) out.set(ours, Object.assign(shift ? shifted(timed, shift) : new THREE.AnimationClip(ours, timed.duration, timed.tracks), { name: ours }))
+        if (timed) out.set(ours, Object.assign(shift ? shifted(timed, shift) : new THREE.AnimationClip(ours, timed.duration, timed.tracks), { name: ours, userData: { plain: PLAIN.has(ours) } }))
       })
       return out
     })()
@@ -273,8 +333,8 @@ function baseMoves(gender: Gender, rig: RigKind): Promise<Map<string, THREE.Anim
  * that weapon's own set and stands in its stance (GAME.md §12), where the library has the whole set; the clips go by
  * the gait's names, so the gait plays them as it plays the unarmed ones.
  */
-export function libraryGait(gender: Gender, stance = 'idle', rig: RigKind = 'legacy', weapon?: Weapon): Promise<LibraryGait | undefined> {
-  const key = `${rig}/${gender}/${stance}/${weapon ?? ''}`
+export function libraryGait(gender: Gender, stance = 'idle', rig: RigKind = 'legacy', weapon?: Weapon, attitude: AttitudeId = 'neutral'): Promise<LibraryGait | undefined> {
+  const key = `${rig}/${gender}/${stance}/${weapon ?? ''}/${attitude}`
   let load = loads.get(key)
   if (!load) {
     load = (async () => {
@@ -283,14 +343,18 @@ export function libraryGait(gender: Gender, stance = 'idle', rig: RigKind = 'leg
       if (!idx || !measured) return undefined
       const set = weapon && WEAPON_GAIT[weapon]
       const armed = set && GAIT_CLIPS.every((name) => measured[set.clips[name]]) ? set : undefined
-      if (weapon && !armed) return libraryGait(gender, stance, rig)
+      if (weapon && !armed) return libraryGait(gender, stance, rig, undefined, attitude)
       const source = (name: string) => armed?.clips[name] ?? name
       const still = armed && setOf(idx, gender, armed.stance) ? armed.stance : setOf(idx, gender, stance) === 'idle' ? stance : 'idle'
       const [clips, standing] = await Promise.all([Promise.all(GAIT_CLIPS.map((name) => animClip(gender, source(name), rig))), animClip(gender, still, rig)])
       if (clips.some((clip) => !clip || !measured[clip.name])) return undefined
       const gaits = armed ? { ...measured, ...Object.fromEntries(GAIT_CLIPS.map((name) => [name, measured[source(name)]])) } : measured
       const named = GAIT_CLIPS.map((name, k) => (armed ? new THREE.AnimationClip(name, clips[k]!.duration, clips[k]!.tracks) : clips[k]!))
-      return { gender, rig, clips: new Map(GAIT_CLIPS.map((name, k) => [name, named[k]])), gaits, bones: idx.bones, ...(standing ? { stance: standing } : {}) }
+      // an attitude swings the hips and chest wider and steps to its own beat (kit/anim/attitude.ts)
+      const a = ATTITUDE[attitude]
+      const carried = Object.keys(a.swing).length ? named.map((clip, k) => swung(clip, a.swing, SWING_TIER[GAIT_CLIPS[k].split('_')[0] as keyof typeof SWING_TIER] ?? 1)) : named
+      const beat = a.cadence === 1 ? gaits : Object.fromEntries(Object.entries(gaits).map(([name, g]) => [name, { ...g, speed: g.speed / a.cadence }]))
+      return { gender, rig, clips: new Map(GAIT_CLIPS.map((name, k) => [name, carried[k]])), gaits: beat, bones: idx.bones, ...(standing ? { stance: standing } : {}) }
     })().catch(() => undefined)
     loads.set(key, load)
   }

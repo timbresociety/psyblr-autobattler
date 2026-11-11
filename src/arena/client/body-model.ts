@@ -12,7 +12,9 @@ import { refineGeometry } from '../../kit/body/refine.js'
 import { helperSkin, planHelpers } from '../../kit/body/helpers.js'
 import { bodySpread } from '../../kit/body/spread.js'
 import { meshRest, upgradeRig, type Metarig } from './metarig/upgrade.js'
+import { carrySockets } from '../../kit/body/carry.js'
 import { applyPosture } from './metarig/posture.js'
+import { applyAttitude } from './metarig/attitude.js'
 import { buildHead, type HeadRig } from './head/build.js'
 
 /**
@@ -171,10 +173,11 @@ export function buildModel(model: THREE.Object3D, look: CharacterLook, kit: Load
   const plans = planHelpers(proportioned, restNow)
   const helped = helperSkin(proportioned, restNow, plans)
   const shape = { ...proportioned, joints: helped.joints, weights: helped.weights }
-  const metarig = upgradeRig(model, mesh, plans)
+  const metarig = upgradeRig(model, mesh, plans, carrySockets(proportioned, restNow))
   metarig.spread = bodySpread(proportioned, restNow)
   rigsOf(model).metarig = metarig
   applyPosture(model, look.physique)
+  applyAttitude(model, look.attitude)
   const source = mesh.geometry
   const map = atlas ?? characterMap(mesh)
   const normalMap = characterNormalMap(mesh)

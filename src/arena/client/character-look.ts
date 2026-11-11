@@ -1,3 +1,4 @@
+import type { AttitudeId } from '../../kit/anim/attitude.js'
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
 import { defaultLook, heldOf, ROLE_GENDER, type FacePhoto, type GearPiece, type GearSlot, type Gender } from '../../charter/look.js'
@@ -32,6 +33,8 @@ export interface CharacterLook {
   marks?: FormMark
   /** The head and face as sculpted by hand, on top of the photo's. */
   sculpt?: Sculpt
+  /** How the body carries itself (kit/anim/attitude.ts); neutral when absent. */
+  attitude?: AttitudeId
 }
 
 /** The look a form wears: the hero's own, with the form's eyes and marks. */
@@ -75,6 +78,7 @@ export function characterLook(build: Build, hue: number): CharacterLook {
   }
   if (look.face) out.face = look.face
   if (look.sculpt) out.sculpt = look.sculpt
+  if (look.attitude) out.attitude = look.attitude
   return out
 }
 

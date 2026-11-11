@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { toClip, type ClipFile } from './anim-library.js'
 import type { AnimIndex } from './anim-index.js'
-import { rollLine, shifted, turned } from './library-gait.js'
+import * as THREE from 'three'
+import { rollLine, shifted, swung, turned } from './library-gait.js'
 
 const index = JSON.parse(readFileSync('public/anim/standard/index.json', 'utf8')) as AnimIndex
 const clip = (name: string) => toClip(name, JSON.parse(readFileSync(`public/anim/standard/m/${name}.json`, 'utf8')) as ClipFile, index)
@@ -39,5 +40,38 @@ describe('hips moved where the engine wants them (owner, 2026-11-04)', () => {
     expect(after.values[after.values.length - 2]).toBeCloseTo(0.14, 5)
     const half = before.times.findIndex((t) => t > dive.duration / 2)
     for (let i = 0; i < half; i++) expect(after.values[i * 3 + 1]).toBe(before.values[i * 3 + 1])
+  })
+})
+
+describe('an attitude\u2019s swing on the gait loops (2026-11-11)', () => {
+  const walk = clip('walk')
+  /** A bone's swing about each of its own axes over the loop, degrees, and how far its last key is from its first. */
+  const range = (c: THREE.AnimationClip, bone: string) => {
+    const t = c.tracks.find((x) => x.name === `${bone}.quaternion`)!
+    const qs = Array.from({ length: t.values.length / 4 }, (_, i) => new THREE.Quaternion().fromArray(t.values, i * 4))
+    const e = qs.map((q) => new THREE.Euler().setFromQuaternion(qs[0].clone().invert().multiply(q), 'YXZ'))
+    const span = (k: 'x' | 'y' | 'z') => deg(Math.max(...e.map((v) => v[k])) - Math.min(...e.map((v) => v[k])))
+    return { pitch: span('x'), twist: span('y'), drop: span('z'), seam: deg(qs[0].angleTo(qs[qs.length - 1])) }
+  }
+
+  it('leaves a clip alone with no gains, and bones it isn\u2019t given', () => {
+    expect(range(swung(walk, {}), 'Hips')).toEqual(range(walk, 'Hips'))
+    expect(range(swung(walk, { Hips: { drop: 2 } }), 'Spine2')).toEqual(range(walk, 'Spine2'))
+  })
+
+  it('grows the axis it\u2019s given by about its gain, the others hardly, and keeps the loop closed', () => {
+    const before = range(walk, 'Hips')
+    const after = range(swung(walk, { Hips: { drop: 2.8 } }), 'Hips')
+    expect(after.drop / before.drop).toBeGreaterThan(2.4)
+    expect(after.drop / before.drop).toBeLessThan(3.2)
+    expect(Math.abs(after.twist - before.twist)).toBeLessThan(before.twist * 0.25)
+    expect(after.seam).toBeLessThan(0.2)
+  })
+
+  it('a share takes that much of the extra', () => {
+    const before = range(walk, 'Hips').drop
+    const half = range(swung(walk, { Hips: { drop: 3 } }, 0.5), 'Hips').drop
+    expect(half / before).toBeGreaterThan(1.7)
+    expect(half / before).toBeLessThan(2.3)
   })
 })
