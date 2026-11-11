@@ -1,6 +1,6 @@
 import type { BuildSlot, Delivery, Template } from '../../charter/types.js'
 import { ticks } from './calibration.js'
-import STYLE_TIMING from './style-timing.json'
+import STYLE_TIMING from './style-timing.json' with { type: 'json' }
 
 /**
  * Action timing (Forge goal, phase 1). Every cast winds up (prep), lands on its release tick, then recovers before the

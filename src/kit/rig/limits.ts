@@ -1,5 +1,5 @@
 import type { Quaternion } from 'three'
-import table from './limits.json'
+import table from './limits.json' with { type: 'json' }
 import { fromSwingTwist, swingTwist, type SwingTwist } from './swing-twist.js'
 
 /**

@@ -1,4 +1,4 @@
-import standard from './standard.json'
+import standard from './standard.json' with { type: 'json' }
 
 /**
  * The Psyblr Human rig: the one skeleton every body, clip, garment and piece targets (docs/plans/2026-10-31-canon-
