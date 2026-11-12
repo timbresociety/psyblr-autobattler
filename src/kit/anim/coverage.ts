@@ -57,7 +57,7 @@ const CASTS = {
   attack1h: ['magic_standing_1h_magic_attack_01', 'magic_standing_1h_magic_attack_02', 'magic_standing_1h_magic_attack_03'],
   attack2h: ['magic_standing_2h_magic_attack_01', 'magic_standing_2h_magic_attack_02', 'magic_standing_2h_magic_attack_03', 'magic_standing_2h_magic_attack_04', 'magic_standing_2h_magic_attack_05'],
   area: ['magic_standing_2h_magic_area_attack_01', 'magic_standing_2h_magic_area_attack_02'],
-  throws: ['throw', 'throwing', 'throw_object', 'throw_grenade', 'grenade_throw'],
+  throws: ['throw', 'throwing', 'rifle_toss_grenade', 'throw_object'],
   weapon: ['gs_great_sword_casting', 'ss_sword_and_shield_casting', 'ss_sword_and_shield_casting_2', 'gs_great_sword_power_up', 'ss_sword_and_shield_power_up'],
 }
 const spell = (id: string, label: string, clips: string[]): Coverage => ({ id, kind: 'spell', label, roles: { cast: { clips, min: 2 } } })
@@ -68,34 +68,40 @@ export const COVERAGE: readonly Coverage[] = [
   melee(
     'unarmed',
     'Unarmed',
-    ['lead_jab', 'jab_cross', 'body_jab_cross', 'cross_punch', 'hook_punch', 'right_hook', 'uppercut', 'uppercut_jab', 'elbow_punch', 'punch_combo', 'combo_punch', 'quad_punch', 'punch_to_elbow_combo', 'knee_jabs_to_uppercut', 'illegal_knee', 'mutant_punch'],
-    ['elbow_uppercut_combo', 'flying_knee_punch_combo', 'surprise_uppercut'],
+    ['lead_jab', 'cross_punch', 'hook_punch', 'jab_cross', 'body_jab_cross', 'right_hook', 'uppercut', 'uppercut_jab', 'elbow_punch', 'punch_combo', 'combo_punch', 'quad_punch', 'punch_to_elbow_combo', 'knee_jabs_to_uppercut', 'illegal_knee'],
+    ['elbow_uppercut_combo', 'flying_knee_punch_combo'],
   ),
-  melee('kicks', 'Kicks', ['roundhouse_kick', 'side_kick', 'inside_crescent_kick', 'mma_kick', 'knee_kick_lead', 'flip_kick', 'scissor_kick'], ['hurricane_kick', 'flying_kick', 'spin_flip_kick', 'back_flip_to_uppercut', 'drop_kick', 'flying_bicycle_kick']),
-  melee('blade', 'Blade', ['double_dagger_stab', 'stabbing', 'stable_sword_inward_slash', 'stable_sword_outward_slash', 'thrust_slash', 'slash_advance'], ['one_hand_sword_combo', 'dual_weapon_combo']),
+  melee('kicks', 'Kicks', ['mma_kick', 'roundhouse_kick', 'side_kick', 'inside_crescent_kick', 'knee_kick_lead'], ['spinning_back_kick_advancing', 'hurricane_kick', 'flying_kick', 'spin_flip_kick']),
+  melee('blade', 'One-hand edge', ['ual_sword_attack', 'stabbing', 'slash_advance'], ['one_hand_sword_combo']),
+  melee('paired', 'Paired', ['stable_sword_inward_slash', 'stable_sword_outward_slash', 'double_dagger_stab'], ['dual_weapon_combo']),
   melee(
     'greatsword',
     'Greatsword',
-    ['gs_great_sword_slash', 'gs_great_sword_slash_2', 'gs_great_sword_slash_3', 'gs_great_sword_slash_4', 'gs_great_sword_slash_5', 'gs_great_sword_attack', 'gs_great_sword_kick'],
-    ['gs_great_sword_high_spin_attack', 'gs_great_sword_jump_attack', 'gs_great_sword_slide_attack', 'two_hand_sword_combo'],
+    ['gs_great_sword_slash', 'gs_great_sword_slash_4', 'gs_great_sword_slash_3', 'gs_great_sword_slash_2', 'gs_great_sword_slash_5', 'gs_great_sword_kick'],
+    ['two_hand_sword_combo', 'gs_great_sword_jump_attack', 'gs_great_sword_slide_attack'],
     { block: ['gs_great_sword_blocking'], hit: ['gs_great_sword_impact'] },
   ),
   melee(
     'shield',
     'Sword and shield',
-    ['ss_sword_and_shield_slash', 'ss_sword_and_shield_slash_2', 'ss_sword_and_shield_slash_3', 'ss_sword_and_shield_slash_4', 'ss_sword_and_shield_slash_5', 'ss_sword_and_shield_attack', 'ss_sword_and_shield_attack_2'],
-    ['ss_sword_and_shield_attack_3', 'ss_sword_and_shield_attack_4', 'ss_sword_and_shield_kick'],
+    ['ss_sword_and_shield_slash', 'ss_sword_and_shield_attack_4', 'ss_sword_and_shield_attack_3', 'ss_sword_and_shield_slash_3', 'ss_sword_and_shield_slash_4', 'ss_sword_and_shield_slash_5', 'ss_sword_and_shield_attack_2'],
+    ['ss_sword_and_shield_slash_2', 'ss_sword_and_shield_attack', 'ss_sword_and_shield_kick'],
     { block: ['ss_sword_and_shield_block_idle'], hit: ['ss_sword_and_shield_impact'] },
   ),
+  // a pole in both hands: the staff jabs its end, sweeps its shaft and spins; the spear thrusts and impales
+  melee('staff', 'Staff spin', ['rifle_butt_smash', 'rifle_punch', 'butterfly_twirl'], ['gs_great_sword_high_spin_attack']),
+  melee('spear', 'Thrust', ['gs_great_sword_attack', 'thrust_slash', 'bayonet_stab'], ['charge']),
+  // the axe pack chops and reaps (its two kicks are no axe's blows)
   melee(
-    'staff',
-    'Axe or staff',
-    ['axe_standing_melee_attack_horizontal', 'axe_standing_melee_attack_downward', 'axe_standing_melee_attack_backhand', 'axe_standing_melee_attack_kick_ver_1', 'axe_standing_melee_attack_kick_ver_2'],
-    ['axe_standing_melee_attack_360_high', 'axe_standing_melee_attack_360_low', 'axe_standing_melee_combo_attack_ver_1', 'axe_standing_melee_combo_attack_ver_2', 'axe_standing_melee_combo_attack_ver_3'],
+    'axe',
+    'Chop and reap',
+    ['axe_standing_melee_attack_downward', 'axe_standing_melee_attack_horizontal', 'axe_standing_melee_attack_backhand'],
+    ['axe_standing_melee_attack_360_low', 'axe_standing_melee_attack_360_high', 'axe_standing_melee_combo_attack_ver_1', 'axe_standing_melee_combo_attack_ver_2', 'axe_standing_melee_combo_attack_ver_3'],
     { block: ['axe_standing_block_idle'], hit: ['axe_standing_block_react_large'] },
   ),
-  // §4: club folds into the staff until it has its own clips; the bat swings give it its own
-  melee('club', 'Club', ['one_hand_club_combo', 'club_swing_single', 'club_swing_double', 'club_swing_strike', 'club_knee_jab'], ['two_hand_club_combo', 'club_swing_homerun']),
+  // the bat swings, two-handed, for the maul
+  melee('club', 'Smash', ['club_swing_single', 'club_swing_double', 'two_hand_club_combo', 'club_swing_strike', 'one_hand_club_combo'], ['heavy_weapon_swing', 'club_swing_homerun']),
+  melee('whip', 'Flexible', ['bash', 'mutant_punch', 'goalie_throw'], ['russian_kettlebell_swing']),
   // ranged styles (§4 LMB); the weapons carry their own locomotion (§12)
   {
     id: 'pistol',
@@ -144,7 +150,20 @@ export const COVERAGE: readonly Coverage[] = [
       switch: ['rifle_pull_out', 'rifle_grab_from_back', 'rifle_put_away'],
     }),
   },
-  { id: 'thrown', kind: 'ranged', label: 'Thrown', roles: { fire: { clips: [...CASTS.throws, 'frisbee_throw', 'throwing_dice', 'run_and_throw_grenade'] } } },
+  {
+    id: 'bow',
+    kind: 'ranged',
+    label: 'Bow',
+    roles: {
+      fire: { clips: ['standing_aim_recoil', 'shooting_arrow'] },
+      draw: { clips: ['standing_draw_arrow', 'standing_aim_overdraw'] },
+      aimIdle: { clips: ['standing_aim_idle_01', 'standing_aim_overdraw'] },
+      walk: { clips: ['walking_forward_with_bow', 'standing_aim_walk_forward'] },
+      run: { clips: ['running_forward_with_bow'] },
+      switch: { clips: ['standing_equip_bow', 'standing_disarm_bow'] },
+    },
+  },
+  { id: 'thrown', kind: 'ranged', label: 'Thrown', roles: { fire: { clips: [...CASTS.throws, 'frisbee_throw', 'run_and_throw_grenade'] } } },
   { id: 'magic', kind: 'ranged', label: 'Magic, one- or two-handed', roles: { fire: { clips: ['fireball', ...CASTS.attack1h, ...CASTS.attack2h], min: 2 } } },
   // the spell families (§4 Q)
   spell('control', 'Control', [...CASTS.oneHand, ...CASTS.attack1h]),

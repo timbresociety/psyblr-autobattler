@@ -11,6 +11,17 @@ count yet. A plain mesh, stand-in effects and stand-in clips are fine, as long a
 
 Generation tools the owner gave: ChatGPT for images, Gemini Omni Flash for video, and Tripo for anything 3D.
 
+## The owner's calls at the start (2026-11-11)
+
+1. **A John per size, each a character of his own.** The medium John is the Tripo one. The owner's local heroes stand
+   in for the other sizes they fit (one 1.0 m, tiny; one 1.7 m, small; one 2.4 m, huge), and the missing sizes
+   (large, about 2.1 m, and colossal, about 3 m) are generated in Tripo as pop-culture characters that suit the size,
+   named so each is easy to tell apart. Like the audit heroes, they stay local in `.scratch` (memory:
+   named-character heroes), never committed or deployed.
+2. **All 18 weapons**, in the game's hyper-realistic live-action anime style. Check the credit balance first.
+3. **Order: mechanics, then weapons.** Everything is tested on the medium John first; then the other sizes are made
+   and every row is checked again on them.
+
 ## John
 
 - **Mesh:** the owner's Tripo model `eb703f54-06d5-4bda-a001-d137fa657ecc`, rigged in Tripo (Humanoid, Mixamo

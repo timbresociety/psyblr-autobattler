@@ -5,13 +5,14 @@ import { SIZES, type SizeClass } from '../../charter/sizes.js'
 import { deriveSheet } from '../../charter/stats.js'
 import { getTemplate } from '../../charter/templates/catalog.js'
 import type { TraitMods } from '../../charter/traits.js'
-import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template } from '../../charter/types.js'
+import type { BuffStat, BuildSlot, ControlType, DamageType, DebuffType, SecondarySheet, Template, TraverseKind } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import type { CoverHealth, CoverPiece, MapLine } from './cover.js'
 import type { MapId } from './maps.js'
 import type { Vec3 } from './maths.js'
 import { aiSeed, rngState, type RngState } from './rng.js'
 import type { HouseState } from './house-rules.js'
+import type { BlowKind } from './combat.js'
 import type { AiLevel } from '../ai/calibration.js'
 
 /**
@@ -41,7 +42,7 @@ export interface Command {
 export const AIM_STEPS = 4096
 export const IDLE: Command = { moveX: 0, moveZ: 0, moves: 0, aimYaw: 0, aimPitch: 0, buttons: 0 }
 /** Bits of `Command.moves` (Forge goal, phase 2). */
-export const MOVES = { jump: 1, dash: 2, crouch: 4, dodge: 8, prone: 16, block: 32 } as const
+export const MOVES = { jump: 1, dash: 2, crouch: 4, dodge: 8, prone: 16, block: 32, interact: 64 } as const
 export const slotBit = (slot: BuildSlot) => 1 << BUILD_SLOTS.indexOf(slot)
 
 export type Stat = BuffStat
@@ -106,7 +107,7 @@ export interface HeroState {
    * A knock-up in progress: launched at `from`, peaks at `height`, lands at `until`. A melee launch (`regain`) carries
    * the hero `push` metres a tick across the ground, and any input takes control back (combat.ts).
    */
-  launch?: { from: number; until: number; height: number; base: number; regain?: boolean; push?: { x: number; z: number } }
+  launch?: { from: number; until: number; height: number; base: number; regain?: boolean; push?: { x: number; z: number }; juggle?: boolean }
   /** Standing, crouched or prone (C and Ctrl toggle them). */
   stance: 'stand' | 'crouch' | 'prone'
   /** Sprinting while Shift stays held; `shiftSince` is the tick Shift went down (-1 when up). */
@@ -147,6 +148,12 @@ export interface HeroState {
    * the bloom the last shots built up (radians), and a burst's shots still to come.
    */
   ammo: number
+  /** A held beam (channel mode) shining to `end` until `until`; it can meet another and clash (§4 Systems). */
+  beam?: { since: number; until: number; from: Vec3; end: Vec3 }
+  /** Paired guns fire from each hand in turn: the left next when true. */
+  leftHand?: boolean
+  /** A hold-to-charge cast (§4 Systems) charging since `since`. */
+  charging?: { slot: BuildSlot; since: number }
   reloadUntil: number
   lastShot: number
   bloom: number
@@ -172,7 +179,7 @@ export interface HeroState {
    * The action in progress (Forge goal, phase 1): pressed at `started`, it lands at `release` and frees the hero at
    * `ends`. Control that lands first cuts it short, and what hasn't been released never lands.
    */
-  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number }; shot?: { share: number; rider: boolean }; target?: number }
+  action?: { slot: BuildSlot; started: number; release: number; ends: number; released: boolean; melee?: { step: number; heavy?: number; kind?: BlowKind }; shot?: { share: number; rider: boolean }; target?: number; power?: number }
   /**
    * A dash or leap carrying the hero from (x0, y0, z0) to (x1, y1, z1) over [from, until], a leap rising `arc` metres
    * over the middle; the skill that sent it (`slot`, with its blow, shot and target) lands when it arrives
@@ -190,11 +197,14 @@ export interface HeroState {
     arc: number
     startY: number
     arrived?: boolean
+    /** A move an E skill started (traverse.ts): lands nothing on arrival, or only the rest of the skill. */
+    land?: 'none' | 'rest' | 'teamup'
     slot: BuildSlot
     blow?: { step: number; heavy?: number }
     recovery: number
     shot?: { share: number; rider: boolean }
     target?: number
+    power?: number
   }
   chosenSize: SizeClass
   /** The current class, which a transformation can change until `formUntil` (KTD14). */
@@ -208,6 +218,65 @@ export interface HeroState {
    * across (falling at `vy` off a ledge), from tick `from`. `slammed` once it has struck a wall (§6b).
    */
   knockback?: { step: Vec3; until: number; grounded?: boolean; from?: number; hop?: number; y?: number; vy?: number; slammed?: boolean }
+  /**
+   * The locked library's fight moves (GAME.md §4, moveset.ts), all absent until used. `guardSince`: the tick X went
+   * down, for the perfect guard. `floored`: this flight ends in a knockdown when it lands. `down`: lying after a
+   * knockdown until `until`, when it gets up (or rolls out sooner). `downed`: out of the fight at no health, waiting
+   * for an ally to revive it (`revive` ticks of help so far, from hero `by`) before it bleeds out at `until`.
+   */
+  guardSince?: number
+  floored?: boolean
+  down?: { from: number; until: number }
+  downed?: { from: number; until: number; revive: number; by: number }
+  /** Holding an enemy it grabbed (V + X), throwing it at `until`; or held by hero `grabbedBy`. */
+  grab?: { target: number; from: number; until: number }
+  grabbedBy?: number
+  /** Plunging from the air in a slam (V held in the air), since `from`. */
+  slam?: { from: number }
+  /** After its launcher lands, a jump before `until` chases hero `target` into the air. */
+  chase?: { target: number; until: number }
+  /** Running along a wall (§4 shared, E Wall Run) until `until`, along (dx, dz), its face toward (nx, nz). */
+  wallRun?: { from: number; until: number; dx: number; dz: number; nx: number; nz: number; piece: number }
+  /** No wall run starts again before this tick. */
+  wallRunAfter?: number
+  /**
+   * The Q library's states (spells.ts), all absent until used. `counter`: the next enemy blow before `until` is
+   * answered (with the template in `slot`). `lifted`: held up by hero `by` from `base`, thrown along its aim at `until`.
+   * `kitFrom`: slots taken from another kit (a copy, a kit switch, a form's moveset) until `until`. `possessed`: driven
+   * by hero `by` until `until`, its own `team` given back after; `possessing` is the driver's side of it. `summon`: a
+   * reserve body hero `owner` calls in (`active` while it's out, until `until`), walking along (dx, dz) for a decoy.
+   * `portalAfter`: no portal takes it again before this tick.
+   */
+  counter?: { until: number; answer: 'strike' | 'substitute' | 'reflect' | 'absorb'; slot: BuildSlot }
+  lifted?: { by: number; from: number; until: number; base: number; height: number; distance: number }
+  kitFrom?: { slots: Partial<Record<BuildSlot, KitRef>>; until: number; why: 'copy' | 'switch' | 'form'; ammo?: number }
+  possessed?: { by: number; until: number; team: Team }
+  possessing?: number
+  summon?: { owner: number; what: 'minion' | 'clone' | 'decoy' | 'titan'; active: boolean; until: number; dx: number; dz: number }
+  portalAfter?: number
+  /**
+   * A held E move (traverse.ts) since `from` until `until`, from the skill in `slot`: a swing on a line of length `len`
+   * from `anchor`, riding hero `ally`, or a power slide that has bowled over the heroes in `struck`.
+   */
+  traverse?: { how: TraverseKind; from: number; until: number; slot: BuildSlot; anchor?: Vec3; len?: number; ally?: number; struck?: number[] }
+  /**
+   * The systems (systems.ts), all absent until used. `power`: the spendable meter, 0 to 1. `stock`: charges left of the
+   * skills that bank them. `formStage`: the stage a staged form has reached. `lockon`: a Strike landing `hits` blows on
+   * hero `target` (`done` so far) until `until`, which `lockedBy` marks on the target. `fusing`/`fused`: a fusion of
+   * this hero with hero `ally`, or taken into hero `into`. `teamUpAfter`: no team-up before this tick.
+   */
+  power?: number
+  stock?: Partial<Record<BuildSlot, number>>
+  formStage?: number
+  lockon?: { target: number; from: number; until: number; hits: number; done: number; slot: BuildSlot }
+  lockedBy?: number
+  fusing?: { ally: number; until: number }
+  fused?: { into: number; until: number }
+  teamUpAfter?: number
+  /** Until this tick, any wall can be run along, for longer (the E skill Wall Run). */
+  anyWallUntil?: number
+  /** Helping downed ally `ally` up since `from`, while the interact key stays held beside it. */
+  reviving?: { ally: number; from: number }
   hitCount: number
   lowHealthFired: boolean
   damageDealt: number
@@ -228,6 +297,12 @@ export interface ProjectileState {
   shot?: { share: number; rider: boolean }
   /** Whose kit the shot is, when a reflect turned it and `owner` is now the reflector. */
   source?: number
+  /**
+   * A shot that doesn't fly straight (§4 LMB flights): it falls (`fall`, m/s² for a lobbed one), bounces off walls
+   * (`bounces` left), comes back to its owner (`back` once it turned), or steers at hero `target` or along its owner's
+   * aim. A returning shot passes through who it hits (`struck`, once each way).
+   */
+  flight?: { kind: Exclude<import('../../charter/types.js').Flight, 'straight'>; fall?: number; bounces?: number; back?: boolean; target?: number; struck?: number[] }
 }
 
 export interface MatchState {
@@ -248,6 +323,19 @@ export interface MatchState {
   brains?: BrainState[]
   /** Each side's AI level (GAME.md §2); Hard when absent, the level the balance gate plays at. */
   aiLevels?: readonly [AiLevel, AiLevel]
+  /**
+   * The locked library's new rules (GAME.md §4): knockdowns, the perfect guard, the V moveset's dash, air, launcher,
+   * slam and grab, the downed state and reviving. The lab and played matches turn them on; the balance gate's AI-only
+   * fights run without them until they are retuned on them.
+   */
+  fullKit?: boolean
+  /**
+   * Beams that met (§4 Systems): hero `a`'s and hero `b`'s, pushing at the point `t` of the way from a to b; the
+   * weaker side's beam is driven back until it reaches its own caster.
+   */
+  clashes?: { a: number; b: number; t: number; since: number; ma?: number; mb?: number }[]
+  /** Jump pads (§4 map routes): stepping onto one throws the hero `height` metres up, pushed along `push` m/s. */
+  pads?: readonly JumpPad[]
   /** The ruins on this map and each piece's health; absent on an open test floor. Walls raised by skills join it. */
   cover?: { pieces: readonly CoverPiece[]; health: CoverHealth[] }
   /** The map's ziplines and rails (GAME.md §7): fast lines a hero rides, exposed. */
@@ -260,7 +348,18 @@ export interface MatchState {
   fields?: FieldState[]
   turrets?: TurretState[]
   walls?: { index: number; until: number }[]
+  portals?: PortalState[]
+  /** Lines an E skill hung (a Zipline), at `index` in `lines`, and when each comes down. */
+  ownLines?: { index: number; until: number }[]
   nextEntityId?: number
+}
+
+/** A jump pad: a disc of radius `r` on the floor at `at` (its top). */
+export interface JumpPad {
+  at: Vec3
+  r: number
+  height: number
+  push?: { x: number; z: number }
 }
 
 /** A lingering area or a trap: the template's effects land on whoever is inside, on a beat or on the first step. */
@@ -334,6 +433,22 @@ export interface BrainState {
   toggle: boolean
 }
 
+/** A template another kit lends a hero: hero `hero`'s `slot`, or that template's `switchTo[inner]`. */
+export interface KitRef {
+  hero: number
+  slot: BuildSlot
+  inner?: BuildSlot
+}
+
+/** A pair of portals a skill opened: stepping into either end comes out of the other, until `until`. */
+export interface PortalState {
+  id: number
+  owner: number
+  a: Vec3
+  b: Vec3
+  until: number
+}
+
 export interface HeroSetup {
   build: Build
   sheet: SecondarySheet
@@ -389,6 +504,9 @@ export function emptyMatch(seed: number): MatchState {
 
 /** The capsule a hero occupies now: base at its feet. */
 /** The body that bumps into walls: the hit capsule's radius, capped so big heroes still fit through gaps. */
+/** On its feet and in the fight: alive and not downed. */
+export const standing = (h: HeroState) => h.alive && !h.downed && !h.fused
+
 export const bodyRadius = (hero: HeroState) => Math.min(ENGINE.bodyRadiusCap, capsule(hero).radius)
 
 /**

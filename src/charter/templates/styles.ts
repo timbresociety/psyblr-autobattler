@@ -15,7 +15,30 @@ export const MELEE_STYLES: Record<MeleeStyle, { name: string; reach: number; arc
   shield: { name: 'Sword and shield', reach: 2.7, arc: 110, lunge: 1.1, tags: ['shield', 'knight', 'paladin', 'bash', 'guard', 'sword-and-board'] },
   staff: { name: 'Axe or staff', reach: 3.2, arc: 130, lunge: 1, tags: ['axe', 'staff', 'spear', 'polearm', 'whip', 'chain', 'halberd', 'bo'] },
   club: { name: 'Club', reach: 2.9, arc: 120, lunge: 1.1, tags: ['club', 'bat', 'hammer', 'mace', 'wrench', 'maul', 'smash'] },
+  // the locked library's other four families (GAME.md §4 V)
+  paired: { name: 'Paired', reach: 2.4, arc: 110, lunge: 1.5, tags: ['dual-wield', 'twin-blades', 'dual-daggers', 'tonfa', 'sai', 'twin-axes'] },
+  axe: { name: 'Chop and reap', reach: 3, arc: 130, lunge: 1.1, tags: ['great-axe', 'scythe', 'kama', 'pickaxe', 'reaper', 'hatchet'] },
+  spear: { name: 'Thrust', reach: 3.6, arc: 60, lunge: 1.4, tags: ['lance', 'trident', 'naginata', 'pike', 'javelin', 'impale'] },
+  whip: { name: 'Flexible', reach: 4.2, arc: 90, lunge: 0.8, tags: ['lash', 'kusarigama', 'rope-dart', 'nunchaku', 'meteor-hammer', 'flail'] },
 }
+
+/** The clip set each melee family plays (charter/motions.ts STYLES): every family has its own (owner, 2026-11-11). */
+export const CLIP_STYLE: Record<MeleeStyle, MeleeStyle> = {
+  unarmed: 'unarmed',
+  kicks: 'kicks',
+  blade: 'blade',
+  greatsword: 'greatsword',
+  shield: 'shield',
+  staff: 'staff',
+  club: 'club',
+  paired: 'paired',
+  axe: 'axe',
+  spear: 'spear',
+  whip: 'whip',
+}
+
+/** The styles added after the starters were drawn (the locked library's), left out of their draw. */
+export const LATER_STYLES: ReadonlySet<string> = new Set(['melee-paired', 'melee-axe', 'melee-spear', 'melee-whip'])
 
 const EVERY: RoleId[] = ['tank', 'fighter', 'assassin', 'mage', 'marksman', 'support', 'controller', 'summoner']
 

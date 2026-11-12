@@ -14,7 +14,7 @@ import type { BuildSlot, Template } from './types.js'
 export type MotionKind = 'light' | 'heavy' | 'ranged' | 'spell' | 'movement' | 'ultimate' | 'passive' | 'dodge' | 'block' | 'react' | 'knockdown' | 'jump' | 'move'
 
 /** How a hero fights: what it holds and how it strikes. `any` suits every style. */
-export const STYLES = ['unarmed', 'kicks', 'blade', 'greatsword', 'shield', 'staff', 'club', 'rifle', 'pistol', 'magic', 'any'] as const
+export const STYLES = ['unarmed', 'kicks', 'blade', 'greatsword', 'shield', 'staff', 'club', 'paired', 'axe', 'spear', 'whip', 'rifle', 'pistol', 'bow', 'magic', 'any'] as const
 export type Style = (typeof STYLES)[number]
 
 export interface Motion {
@@ -44,7 +44,6 @@ export const MOTIONS: readonly Motion[] = [
     punch_to_elbow_combo: 'Punch to elbow',
     knee_jabs_to_uppercut: 'Knees to uppercut',
     illegal_knee: 'Knee',
-    mutant_punch: 'Hammer fist',
   }),
   ...m('heavy', 'unarmed', {
     elbow_uppercut_combo: 'Elbow uppercut',
@@ -69,29 +68,33 @@ export const MOTIONS: readonly Motion[] = [
     flying_bicycle_kick: 'Bicycle kick',
   }),
   // melee, blades and clubs
-  ...m('light', 'blade', {
-    double_dagger_stab: 'Twin stab',
-    stabbing: 'Stab',
-    stable_sword_inward_slash: 'Inward slash',
-    stable_sword_outward_slash: 'Outward slash',
-    thrust_slash: 'Thrust',
-    slash_advance: 'Advancing slash',
-  }),
-  ...m('heavy', 'blade', { one_hand_sword_combo: 'Sword combo', dual_weapon_combo: 'Twin blade combo' }),
+  // a one-hand edge cuts wide and stabs; a pair of short blades fights close, inside and outside the guard
+  ...m('light', 'blade', { ual_sword_attack: 'Diagonal cut', stabbing: 'Stab', slash_advance: 'Advancing slash' }),
+  ...m('heavy', 'blade', { one_hand_sword_combo: 'Sword combo' }),
+  ...m('light', 'paired', { stable_sword_inward_slash: 'Inward slash', stable_sword_outward_slash: 'Outward slash', double_dagger_stab: 'Twin stab' }),
+  ...m('heavy', 'paired', { dual_weapon_combo: 'Twin blade combo' }),
   ...m('heavy', 'greatsword', { two_hand_sword_combo: 'Two-hand combo' }),
-  ...m('light', 'club', { one_hand_club_combo: 'Club combo', club_swing_single: 'Club swing', club_swing_double: 'Double swing', club_swing_strike: 'Club strike', club_knee_jab: 'Swing and knees' }),
-  ...m('heavy', 'club', { two_hand_club_combo: 'Two-hand club combo', club_swing_homerun: 'Home run' }),
-  // melee, the weapon packs (the axe pack's moves stand in for a staff)
+  // smash: the two-handed bat swings, for the maul
+  ...m('light', 'club', { club_swing_single: 'Club swing', club_swing_double: 'Double swing', two_hand_club_combo: 'Two-hand club combo', club_swing_strike: 'Club strike', one_hand_club_combo: 'Club combo' }),
+  ...m('heavy', 'club', { heavy_weapon_swing: 'Ground smash', club_swing_homerun: 'Home run' }),
+  // a pole held in both hands: the staff jabs with its end, sweeps its shaft and spins; the spear thrusts
+  ...m('light', 'staff', { rifle_butt_smash: 'End jab', rifle_punch: 'Shaft strike', butterfly_twirl: 'Spinning sweep' }),
+  ...m('light', 'spear', { gs_great_sword_attack: 'Thrust', thrust_slash: 'Thrust and sweep', bayonet_stab: 'Lunging impale' }),
+  ...m('heavy', 'spear', { charge: 'Charging thrust' }),
+  // a lash: rising, overhead and wound-up cracks of the arm, and a flail swung round in both hands
+  ...m('light', 'whip', { bash: 'Rising lash', mutant_punch: 'Overhead crack', goalie_throw: 'Wound-up crack' }),
+  ...m('heavy', 'whip', { russian_kettlebell_swing: 'Flail swing' }),
+  // melee, the weapon packs (the axe pack chops and reaps)
   ...m('light', 'greatsword', {
     gs_great_sword_slash: 'Great sword slash',
     gs_great_sword_slash_2: 'Rising slash',
     gs_great_sword_slash_3: 'Falling slash',
     gs_great_sword_slash_4: 'Backhand slash',
     gs_great_sword_slash_5: 'Sweeping slash',
-    gs_great_sword_attack: 'Great sword cut',
     gs_great_sword_kick: 'Hilt kick',
   }),
-  ...m('heavy', 'greatsword', { gs_great_sword_high_spin_attack: 'Spinning cleave', gs_great_sword_jump_attack: 'Leaping cleave', gs_great_sword_slide_attack: 'Sliding cut' }),
+  ...m('heavy', 'greatsword', { gs_great_sword_jump_attack: 'Leaping cleave', gs_great_sword_slide_attack: 'Sliding cut' }),
+  ...m('heavy', 'staff', { gs_great_sword_high_spin_attack: 'Spinning strike' }),
   ...m('spell', 'greatsword', { gs_great_sword_casting: 'Blade rite', gs_great_sword_power_up: 'Blade surge' }),
   ...m('light', 'shield', {
     ss_sword_and_shield_slash: 'Shield slash',
@@ -104,36 +107,34 @@ export const MOTIONS: readonly Motion[] = [
   }),
   ...m('heavy', 'shield', { ss_sword_and_shield_attack_3: 'Driving cut', ss_sword_and_shield_attack_4: 'Shield combo', ss_sword_and_shield_kick: 'Shield kick' }),
   ...m('spell', 'shield', { ss_sword_and_shield_casting: 'Oath', ss_sword_and_shield_casting_2: 'Rally', ss_sword_and_shield_power_up: 'Bulwark' }),
-  ...m('light', 'staff', {
-    axe_standing_melee_attack_horizontal: 'Staff sweep',
-    axe_standing_melee_attack_downward: 'Staff strike',
-    axe_standing_melee_attack_backhand: 'Backhand',
-    axe_standing_melee_attack_kick_ver_1: 'Staff kick',
-    axe_standing_melee_attack_kick_ver_2: 'Push kick',
+  // chop and reap: the axe pack's chops and sweeps (its two kicks are no axe's blows, owner 2026-11-11)
+  ...m('light', 'axe', {
+    axe_standing_melee_attack_downward: 'Chop',
+    axe_standing_melee_attack_horizontal: 'Reaping sweep',
+    axe_standing_melee_attack_backhand: 'Backhand chop',
   }),
-  ...m('heavy', 'staff', {
+  ...m('heavy', 'axe', {
+    axe_standing_melee_attack_360_low: 'Low reap',
     axe_standing_melee_attack_360_high: 'High whirl',
-    axe_standing_melee_attack_360_low: 'Low whirl',
-    axe_standing_melee_combo_attack_ver_1: 'Staff combo',
-    axe_standing_melee_combo_attack_ver_2: 'Staff flurry',
-    axe_standing_melee_combo_attack_ver_3: 'Staff onslaught',
+    axe_standing_melee_combo_attack_ver_1: 'Axe combo',
+    axe_standing_melee_combo_attack_ver_2: 'Axe flurry',
+    axe_standing_melee_combo_attack_ver_3: 'Axe onslaught',
   }),
-  ...m('ultimate', 'staff', { axe_standing_melee_run_jump_attack: 'Vaulting strike' }),
-  ...m('passive', 'staff', { axe_standing_taunt_battlecry: 'Staff cry', axe_standing_taunt_chest_thump: 'Staff thump' }),
+  ...m('ultimate', 'axe', { axe_standing_melee_run_jump_attack: 'Leaping chop' }),
+  ...m('passive', 'axe', { axe_standing_taunt_battlecry: 'Axe cry', axe_standing_taunt_chest_thump: 'Axe thump' }),
   // ranged
-  ...m('ranged', 'pistol', { shooting_pistol: 'Pistol shot', shooting_gun: 'Gun shot', gunplay: 'Gunplay', pistol_aim: 'Aimed shot' }),
+  ...m('ranged', 'pistol', { pistol_fire: 'Pistol shot', ual_pistol_shoot: 'Snap shot', shooting_pistol: 'Pistol volley', shooting_gun: 'Gun shot', gunplay: 'Gunplay', pistol_aim: 'Aimed shot' }),
   ...m('ranged', 'rifle', { firing_rifle: 'Rifle fire', fire_rifle: 'Rifle shot', shoot_rifle: 'Rifle burst', crouch_rapid_fire: 'Rapid fire' }),
-  ...m('light', 'rifle', { rifle_punch: 'Rifle butt', bayonet_stab: 'Bayonet', rifle_turn_and_kick: 'Turn and kick' }),
+  ...m('ranged', 'bow', { standing_aim_recoil: 'Loose', shooting_arrow: 'Draw and loose', standing_draw_arrow: 'Nock' }),
+  ...m('light', 'rifle', { rifle_turn_and_kick: 'Turn and kick' }),
   ...m('heavy', 'pistol', { pistol_whip: 'Pistol whip' }),
   ...m('ranged', 'any', {
     throw: 'Throw',
     throwing: 'Overhand throw',
     throw_object: 'Hurl',
-    throw_grenade: 'Grenade',
-    grenade_throw: 'Lobbed grenade',
+    rifle_toss_grenade: 'Lobbed toss',
     run_and_throw_grenade: 'Running throw',
     frisbee_throw: 'Disc throw',
-    throwing_dice: 'Dice throw',
   }),
   ...m('ranged', 'magic', {
     fireball: 'Fireball',
@@ -160,7 +161,6 @@ export const MOTIONS: readonly Motion[] = [
   }),
   // movement
   ...m('movement', 'any', {
-    charge: 'Charge',
     sprinting_forward_roll: 'Sprinting roll',
     running_dive_roll: 'Diving roll',
     dive_roll: 'Dive roll',

@@ -53,7 +53,7 @@ export function timingOf(template: Template, slot: BuildSlot, interval = Infinit
     const base = BASIC[kind] ?? BASIC_FALLBACK
     // a melee style keeps its clips' beat (§5): how much slower or quicker its blows land than the median style's
     // (scripts/style-timing.ts reads them off the clips' contact frames)
-    const beat = template.style ? STYLE_TIMING[template.style] : undefined
+    const beat = template.style ? (STYLE_TIMING as Partial<Record<string, { prep: number; recover: number }>>)[template.style] : undefined
     const t = beat ? { prep: base.prep * beat.prep, recover: base.recover * beat.recover } : base
     const fit = Math.min(1, (interval * BASIC_SHARE) / (t.prep + t.recover))
     return { prep: t.prep * fit, recover: t.recover * fit }

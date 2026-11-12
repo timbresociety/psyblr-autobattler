@@ -1,3 +1,4 @@
+import type * as THREE from 'three'
 import { GEAR_SLOTS, type GearPiece, type GearSlot } from '../../charter/look.js'
 import type { RigKind } from '../../kit/rig/names.js'
 import { bodyKit, bodyKitNow } from './body-kit.js'
@@ -38,12 +39,18 @@ export interface LoadedKit {
   sockets?: BodySockets
   /** The head kit (GAME.md §9.1) for a Psyblr Human body: its face shapes, eyes' parts, teeth, brows and lashes. */
   head?: HeadKit
+  /**
+   * Each hand socket in its bone's own space, for a generated hero rebound onto our skeleton: its skin is not the body
+   * the sockets were measured on, so they ride its hand bones where they ride ours (heroes.ts).
+   */
+  hands?: Partial<Record<GearSlot, THREE.Matrix4>>
 }
 
 const heldUrls = (held: Partial<Record<GearSlot, GearPiece>>) => [...new Set(GEAR_SLOTS.flatMap((slot) => (held[slot] ? [held[slot]!.url] : [])))]
 
-export async function loadKit(body: string, held: Partial<Record<GearSlot, GearPiece>>, load: (url: string) => Promise<Gltf>): Promise<LoadedKit> {
-  const urls = heldUrls(held)
+/** `more` are pieces it carries besides what is in its hands (arms.ts). */
+export async function loadKit(body: string, held: Partial<Record<GearSlot, GearPiece>>, load: (url: string) => Promise<Gltf>, more: readonly string[] = []): Promise<LoadedKit> {
+  const urls = [...new Set([...heldUrls(held), ...more])]
   const rig = bodyRig(body)
   const [kit, head, ...loaded] = await Promise.all([bodyKit(body), rig === 'standard' ? headKit(body) : undefined, ...urls.map((url) => loadPiece(url, load))])
   return { pieces: new Map(urls.flatMap((url, i) => (loaded[i] ? [[url, loaded[i]!] as const] : []))), ...(kit?.sockets ? { sockets: kit.sockets } : {}), ...(head ? { head } : {}) }

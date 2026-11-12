@@ -2,6 +2,8 @@ import { BUILD_SLOTS } from '../../charter/build.js'
 import type { MatchEvent } from './events.js'
 import { move } from './locomotion.js'
 import { regain } from './combat.js'
+import { crawlCommand, getUp } from './moveset.js'
+import { commandsFor, liveSetups } from './spells.js'
 import { TAU } from './maths.js'
 import { next } from './rng.js'
 import { AIM_STEPS, IDLE, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
@@ -19,10 +21,14 @@ export interface TickRules {
   after?: (match: MatchState, setups: readonly HeroSetup[], events: MatchEvent[]) => void
 }
 
-export function tick(match: MatchState, setups: readonly HeroSetup[], commands: readonly (Command | undefined)[], rules: TickRules = {}): MatchEvent[] {
+export function tick(match: MatchState, ownSetups: readonly HeroSetup[], given: readonly (Command | undefined)[], rules: TickRules = {}): MatchEvent[] {
   const events: MatchEvent[] = []
   if (match.paused || match.winner !== undefined) return events
   match.tick++
+  // a borrowed kit (a copy, a switch, a form's moveset) stands in for a hero's own; a possessed hero takes its
+  // possessor's command and a summon the engine's (spells.ts)
+  const setups = liveSetups(match, ownSetups)
+  const commands = commandsFor(match, setups, given)
   rules.statuses?.(match, setups, events)
   // a fresh seeded order each tick, so neither side always acts first
   const order = match.heroes.map((_, i) => i)
@@ -36,6 +42,16 @@ export function tick(match: MatchState, setups: readonly HeroSetup[], commands: 
     for (const slot of BUILD_SLOTS) if (hero.cooldowns[slot] > 0) hero.cooldowns[slot]--
     // a hero launched by a melee blow takes control back with any input (combat.ts)
     if (hero.launch?.regain) regain({ match, setups, events }, hero, commands[i])
+    // a knocked-down hero gets up, or rolls out on a dodge or a jump (moveset.ts)
+    if (hero.down) getUp({ match, setups, events }, hero, commands[i])
+    // taken into a fusion, it is carried along out of the fight (systems.ts)
+    if (hero.fused) continue
+    // a downed hero only crawls, waiting for an ally (moveset.ts)
+    if (hero.downed) {
+      hero.stance = 'prone'
+      if (!hero.knockback) move(hero, setups[i], crawlCommand(commands[i]), match, events)
+      continue
+    }
     // stunned, launched or asleep: nothing this tick but slowing to a stop and falling
     if (hero.stunnedUntil > match.tick || hero.cc.sleep > match.tick) {
       if (!hero.knockback) move(hero, setups[i], IDLE, match, events)

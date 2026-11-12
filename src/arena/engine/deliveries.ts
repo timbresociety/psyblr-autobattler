@@ -1,16 +1,24 @@
+import { scaleMagnitudes } from '../../charter/budget.js'
 import { geometryOf } from '../../charter/geometry.js'
 import type { RoleId } from '../../charter/types.js'
 import { SIZES } from '../../charter/sizes.js'
 import { MELEE_STYLES } from '../../charter/templates/styles.js'
-import type { BuildSlot, Effect, Template } from '../../charter/types.js'
+import type { BuildSlot, Effect, RangedStyle, Template } from '../../charter/types.js'
 import { DT, ENGINE, ticks } from './calibration.js'
-import { controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
+import { answered, controlled, enemiesOf, firePassive, resolve, sumBuff, tickStatuses, type Ctx } from './effects.js'
 import { next } from './rng.js'
 import { tickWorld } from './world.js'
 import { GRIDS, HeroGrid } from './grid.js'
 import { afterBlow, blowTemplate, guarded, meleeButtons, regain, shotSeconds, shotTemplate, SKILL_SLOTS, type MeleeBlow, type Shot } from './combat.js'
 import { coverHit, coverInDisc, floorUnder } from './cover.js'
 import { keepOut, standOn } from './locomotion.js'
+import { KIT } from './kit-tuning.js'
+import { chaseJump, grabAt, reviveButton, tickMoveset } from './moveset.js'
+import { tickSpells } from './spells.js'
+import { arrive } from './traverse.js'
+import { spend, stageUp, teamUpButton } from './systems.js'
+import { clashOf, mash, tickBeams } from './beams.js'
+import { bounceOffCover, bounceOffFloor, startFlight, steer, throughFloor, turnHome } from './flights.js'
 import { PI, add, clamp, cos, direction, distance, distanceToSegment, dot, length, normalize, scale, segmentToCapsuleAxis, sin, sub, yawPitch, type Vec3 } from './maths.js'
 import { bodyRadius, capsule, slotBit, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
 import type { TickRules } from './tick.js'
@@ -62,9 +70,9 @@ export function canSee(match: MatchState, a: Vec3, b: Vec3): boolean {
 }
 
 /** The first piece of cover along a→b, with the point it is struck, if any. */
-function firstCover(match: MatchState, a: Vec3, b: Vec3, radius = 0): { index: number; at: Vec3; t: number } | undefined {
+function firstCover(match: MatchState, a: Vec3, b: Vec3, radius = 0, side?: 0 | 1): { index: number; at: Vec3; t: number } | undefined {
   if (!match.cover) return undefined
-  const hit = coverHit(match.cover.pieces, match.cover.health, a, b, radius)
+  const hit = coverHit(match.cover.pieces, match.cover.health, a, b, radius, side)
   return hit ? { index: hit.index, t: hit.t, at: add(a, scale(sub(b, a), hit.t)) } : undefined
 }
 
@@ -123,7 +131,7 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template, aimed?:
   // a swing or a lunge that reaches no hero can still strike the wall in front of it
   const swing = (hit: HeroState[], range: number): Landing => {
     const end = add(from, scale(dir, range))
-    const wall = hit.length ? undefined : firstCover(m, from, end)
+    const wall = hit.length ? undefined : firstCover(m, from, end, 0, caster.team)
     return { hit, at: wall?.at ?? end, cover: wall ? [wall] : undefined }
   }
   // a leap with a radius brings what it carries down on everyone near where it lands
@@ -149,7 +157,7 @@ export function landing(ctx: Ctx, caster: HeroState, template: Template, aimed?:
     case 'beam': {
       // a beam stops at the first wall it meets
       const full = add(from, scale(dir, d.range))
-      const wall = firstCover(m, from, full, geometryOf(d).width / 2)
+      const wall = firstCover(m, from, full, geometryOf(d).width / 2, caster.team)
       const end = wall?.at ?? full
       return { hit: enemies.filter((e) => segmentToCapsuleAxis(from, end, e.position, capsule(e).height) <= geometryOf(d).width / 2 + capsule(e).radius), at: end, cover: wall ? [wall] : undefined }
     }
@@ -210,13 +218,13 @@ export function free(h: HeroState, slot: BuildSlot, now: number): boolean {
  * Cast a slot if it is ready (U4): pay for it now and start its wind-up. It lands on its release tick (`carryOn`), so
  * every hit follows a release and the client can show the wind-up first. Returns whether it started.
  */
-export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow): boolean {
+export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, power?: number): boolean {
   const { match, setups } = ctx
   const caster = match.heroes[index]
   const setup = setups[index]
   const template = setup.kit[slot]
-  // hands full: nothing is cast from a ledge hang
-  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick) || caster.roll || caster.hang || caster.travel) return false
+  // hands full: nothing is cast from a ledge hang, a grab or a slam
+  if (forbidden(match, caster, slot) || !free(caster, slot, match.tick) || caster.roll || caster.hang || caster.travel || caster.grab || caster.slam || caster.downed) return false
   let interval = Infinity
   let shot: Shot | undefined
   // a cripple slows basic attacks and shots the way a slow slows feet: the strongest one counts
@@ -234,6 +242,9 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
     caster.nextAttackAt = match.tick + between
     interval = between / ENGINE.tickHz
     target = lungeAt(ctx, caster, template)
+    if (blow?.kind === 'dash') dashLunge(ctx, caster)
+    // a swing in the air hangs the body there for its moment
+    if (blow?.kind === 'air') caster.velocity = { x: 0, y: Math.max(caster.velocity.y, 0), z: 0 }
   } else if (slot === 'active1') {
     // the ranged weapon fires on repeat at its fire rate, while its magazine lasts (§4 LMB, §5)
     const r = template.ranged
@@ -245,17 +256,21 @@ export function cast(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow)
     const between = Math.max(1, ticks(shotSeconds(r.rate, setup.sheet.fireRate, (1 + sumBuff(caster, 'attackSpeed')) * (1 - crippled()))))
     caster.cooldowns.active1 = between
     interval = between / ENGINE.tickHz
-    shot = { share: r.mode === 'pellets' ? 1 / (r.pellets ?? 1) : 1, rider: true }
+    // a charged shot carries its charge as a bigger share of the weapon's blast
+    shot = { share: (r.mode === 'pellets' ? 1 / (r.pellets ?? 1) : 1) * (power ?? 1), rider: true }
   } else {
-    if (slot === 'passive' || caster.cooldowns[slot] > 0) return false
-    caster.cooldowns[slot] = ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100))
+    if (slot === 'passive') return false
+    // R pressed again in a staged form steps it up a stage (systems.ts)
+    if (slot === 'ultimate' && stageUp(ctx, caster, template)) return true
+    // its cooldown, or one of its charges, and its share of the power meter
+    if (!spend(ctx, caster, template, slot, ticks(template.cooldown * (1 - Math.min(40, setup.sheet.cooldownReduction) / 100)))) return false
   }
   // a skill pressed during a basic attack's wind-up takes over, and that swing never lands
   const before = caster.action
   if (before && !before.released && match.tick < before.ends) ctx.events.push({ type: 'interrupt', hero: caster.id, slot: before.slot })
   const { prep, recover } = timingTicks(template, slot, interval)
   const release = match.tick + prep
-  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}), ...(target ? { target: target.id } : {}) }
+  caster.action = { slot, started: match.tick, release, ends: release + recover, released: false, ...(blow ? { melee: blow } : {}), ...(shot ? { shot } : {}), ...(target ? { target: target.id } : {}), ...(power !== undefined && slot !== 'active1' ? { power } : {}) }
   caster.blocking = false
   // a blow needs the body up on its feet; a shot or a spell is cast from wherever the hero crouches or lies (owner,
   // 2026-11-04)
@@ -271,13 +286,15 @@ export function carryOn(ctx: Ctx, index: number) {
   const tr = hero.travel
   if (tr?.arrived) {
     hero.travel = undefined
-    deliver(ctx, index, tr.slot, tr.blow, tr.recovery, tr.shot, tr.target)
+    // a move an E skill started lands nothing more, or only the rest of its skill (traverse.ts)
+    if (tr.land) arrive(ctx, hero, tr)
+    else deliver(ctx, index, tr.slot, tr.blow, tr.recovery, tr.shot, tr.target, tr.power)
   }
   const a = hero.action
   if (!a) return
   if (!a.released && ctx.match.tick >= a.release) {
     a.released = true
-    release(ctx, index, a.slot, a.melee, a.ends - a.release, a.shot, a.target)
+    release(ctx, index, a.slot, a.melee, a.ends - a.release, a.shot, a.target, a.power)
   }
   if (ctx.match.tick >= a.ends && hero.action === a) hero.action = undefined
 }
@@ -286,10 +303,17 @@ export function carryOn(ctx: Ctx, index: number) {
 /** How far under a floor's top a move aimed down may end and still land on it, rather than go over its edge. */
 const LIP = 1.5
 
-function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number) {
+/** The template a released cast lands: a blow's, a shot's share, or a charged spell's (scaled by its charge). */
+function castTemplate(setup: HeroSetup, slot: BuildSlot, blow?: MeleeBlow, shot?: Shot, power?: number): Template {
+  if (slot === 'basic') return blowTemplate(setup.kit[slot], blow)
+  const t = shotTemplate(setup.kit[slot], shot)
+  return power !== undefined && power !== 1 ? scaleMagnitudes(t, power) : t
+}
+
+function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number, power?: number) {
   const { match, setups } = ctx
   const caster = match.heroes[index]
-  const template = slot === 'basic' ? blowTemplate(setups[index].kit[slot], blow) : shotTemplate(setups[index].kit[slot], shot)
+  const template = castTemplate(setups[index], slot, blow, shot, power)
   ctx.events.push({ type: 'release', hero: caster.id, slot })
   if (slot === 'active1') return fire(ctx, caster, shot)
   for (const e of template.effects) {
@@ -331,7 +355,7 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
         const length = Math.sqrt((p.x - from.x) * (p.x - from.x) + (p.y - from.y) * (p.y - from.y) + (p.z - from.z) * (p.z - from.z))
         const seconds = kind === 'leap' ? T.leap.base + T.leap.per * length : Math.max(T.least, length / T.dash)
         const arc = kind === 'leap' ? Math.min(T.leap.top, T.leap.rise * length) : 0
-        caster.travel = { from: match.tick, until: match.tick + Math.max(1, ticks(seconds)), x0: from.x, y0: from.y, z0: from.z, x1: p.x, y1: p.y, z1: p.z, arc, startY, slot, ...(blow ? { blow } : {}), recovery, ...(shot ? { shot } : {}), ...(target !== undefined ? { target } : {}) }
+        caster.travel = { from: match.tick, until: match.tick + Math.max(1, ticks(seconds)), x0: from.x, y0: from.y, z0: from.z, x1: p.x, y1: p.y, z1: p.z, arc, startY, slot, ...(blow ? { blow } : {}), recovery, ...(shot ? { shot } : {}), ...(target !== undefined ? { target } : {}), ...(power !== undefined ? { power } : {}) }
         caster.airborne = arc > 0 || caster.airborne
         caster.roll = undefined
         caster.slide = undefined
@@ -343,26 +367,29 @@ function release(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, rec
       standOn(caster, match, Math.max(caster.position.y, startY))
     }
   }
-  deliver(ctx, index, slot, blow, recovery, shot, target)
+  deliver(ctx, index, slot, blow, recovery, shot, target, power)
 }
 
 /** The rest of a released cast, where the caster now stands: the delivery, then its effects. */
-function deliver(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number) {
+function deliver(ctx: Ctx, index: number, slot: BuildSlot, blow?: MeleeBlow, recovery = 0, shot?: Shot, target?: number, power?: number) {
   const { match, setups } = ctx
   const caster = match.heroes[index]
-  const template = slot === 'basic' ? blowTemplate(setups[index].kit[slot], blow) : shotTemplate(setups[index].kit[slot], shot)
+  const template = castTemplate(setups[index], slot, blow, shot, power)
   if (template.delivery.kind === 'projectile') {
     const d = template.delivery
     const { speed, projectileRadius } = geometryOf(d)
     const from = chest(caster)
-    match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: scale(aimOf(match, caster), speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(d.range / speed)), ...(shot ? { shot } : {}) })
+    const dir = aimOf(match, caster)
+    const flown = startFlight(ctx, caster, template, from, dir, speed, aimPoint(ctx, caster, d.range))
+    match.projectiles.push({ id: match.nextProjectileId++, owner: index, slot, position: from, step: flown?.step ?? scale(dir, speed / ENGINE.tickHz), ticksLeft: flown?.ticksLeft ?? Math.max(1, ticks(d.range / speed)), ...(shot ? { shot } : {}), ...(flown ? { flight: flown.flight } : {}) })
     ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: caster.id, slot, from, radius: projectileRadius, speed })
     return
   }
+  if (slot === 'basic' && blow?.kind === 'grab') return void grabAt(ctx, caster)
   const landed = landing(ctx, caster, template, undefined, target !== undefined ? match.heroes[target] : undefined)
   const { at, cover } = landed
   // a guard facing a close blow catches it, unless the blow is heavy (combat.ts)
-  const hit = guarded(ctx, caster, template, landed.hit, blow)
+  const hit = answered(ctx, caster, template, slot, guarded(ctx, caster, template, landed.hit, blow))
   if (template.delivery.kind !== 'self') impact(ctx, caster, slot, template, at)
   strikeCover(ctx, caster, template, cover)
   resolve(ctx, caster, template, slot, hit, at)
@@ -395,6 +422,15 @@ function lungeAt(ctx: Ctx, caster: HeroState, template: Template): HeroState | u
     caster.lunge = { x: (dx / flat) * (metres / n), z: (dz / flat) * (metres / n), until: ctx.match.tick + n, target: prey.id }
   }
   return prey
+}
+
+/** V at a sprint: the body carries on in, further than a swing's lunge, along its run or at the target it lunged for. */
+function dashLunge(ctx: Ctx, caster: HeroState) {
+  const n = Math.max(1, ticks(ENGINE.melee.lungeTime * 2))
+  const l = caster.lunge
+  const [x, z] = l ? [l.x, l.z] : [sin(caster.yaw), cos(caster.yaw)]
+  const len = Math.sqrt(x * x + z * z) || 1
+  caster.lunge = { x: (x / len) * (KIT.dashAttack.lunge / n), z: (z / len) * (KIT.dashAttack.lunge / n), until: ctx.match.tick + n, target: l?.target ?? -1 }
 }
 
 function moveLunges(ctx: Ctx) {
@@ -445,8 +481,10 @@ function tickWeapon(ctx: Ctx, hero: HeroState) {
  * Where the muzzle is (§5): the hand holding the weapon, by its style, a share of the body's height up, ahead and to the
  * right of the feet along the facing. The character faces +z at yaw 0, so its right is -x.
  */
-export function muzzle(hero: HeroState, style: keyof typeof ENGINE.ranged.muzzle): Vec3 {
-  const [up, ahead, right] = ENGINE.ranged.muzzle[style]
+export function muzzle(hero: HeroState, style: RangedStyle): Vec3 {
+  const [up, ahead, side] = style in ENGINE.ranged.muzzle ? ENGINE.ranged.muzzle[style as keyof typeof ENGINE.ranged.muzzle] : KIT.ranged.muzzle[style as keyof typeof KIT.ranged.muzzle]
+  // paired guns fire from each hand in turn: the left mirrors the right
+  const right = style === 'paired' && hero.leftHand ? -side : side
   const h = capsule(hero).height
   const fx = sin(hero.yaw)
   const fz = cos(hero.yaw)
@@ -457,7 +495,7 @@ export function muzzle(hero: HeroState, style: keyof typeof ENGINE.ranged.muzzle
  * What the crosshair covers (§5): the first enemy or wall along the aim from the eye, else the weapon's full range.
  * Shots fly from the muzzle at this point, so what the reticle sits on is what gets hit.
  */
-function aimPoint(ctx: Ctx, hero: HeroState, range: number): Vec3 {
+export function aimPoint(ctx: Ctx, hero: HeroState, range: number): Vec3 {
   const eye = chest(hero)
   const dir = aimOf(ctx.match, hero)
   let best = range
@@ -467,7 +505,7 @@ function aimPoint(ctx: Ctx, hero: HeroState, range: number): Vec3 {
     if (along <= 0 || along >= best) continue
     if (segmentToCapsuleAxis(eye, add(eye, scale(dir, along)), e.position, capsule(e).height) <= capsule(e).radius) best = along
   }
-  const wall = firstCover(ctx.match, eye, add(eye, scale(dir, best)))
+  const wall = firstCover(ctx.match, eye, add(eye, scale(dir, best)), 0, hero.team)
   return add(eye, scale(dir, wall ? wall.t * best : best))
 }
 
@@ -495,17 +533,36 @@ function fire(ctx: Ctx, hero: HeroState, shot: Shot | undefined, followUp = fals
   if (!followUp && r.mode === 'burst' && (r.burst ?? 1) > 1) hero.burst = { left: (r.burst ?? 1) - 1, next: now + Math.max(1, ticks(ENGINE.ranged.burstGap)) }
   const template = shotTemplate(weapon, shot)
   const from = muzzle(hero, r.style)
+  if (r.style === 'paired') hero.leftHand = !hero.leftHand
   const target = aimPoint(ctx, hero, template.delivery.range)
   const toTarget = sub(target, from)
   // a target nearer than the muzzle's reach is shot along the aim itself
   const straight = length(toTarget) > 1.5 ? normalize(toTarget) : aimOf(match, hero)
   const moving = hero.velocity.x * hero.velocity.x + hero.velocity.z * hero.velocity.z > 1.5 * 1.5
   const R = ENGINE.ranged
-  const spread = Math.min(R.max, R.base[r.style] + hero.bloom + (moving ? R.moving : 0) + (hero.airborne ? R.airborne : 0))
+  const base = r.style in R.base ? R.base[r.style as keyof typeof R.base] : KIT.ranged.base[r.style as keyof typeof KIT.ranged.base]
+  const spread = Math.min(R.max, base + hero.bloom + (moving ? R.moving : 0) + (hero.airborne ? R.airborne : 0))
   hero.bloom = Math.min(R.max, hero.bloom + R.perShot)
   if (hero.ammo === 0) startReload(ctx, hero)
   if (template.delivery.kind === 'beam') {
     const dir = spreadOut(ctx, straight, spread)
+    if (r.mode === 'channel') {
+      // a held beam stays on while it fires; caught in a clash it lands nothing, and pushes (beams.ts)
+      // on until the next shot is due and its wind-up is over, so a held trigger never flickers it
+      const until = now + Math.max(1, hero.cooldowns.active1) + ticks(0.3)
+      if (!hero.beam) ctx.events.push({ type: 'beam', hero: hero.id, phase: 'on' })
+      const clash = clashOf(match, hero.id)
+      if (clash) {
+        hero.beam = { since: hero.beam?.since ?? now, until, from, end: hero.beam?.end ?? from }
+        return
+      }
+      const landedNow = landing(ctx, hero, template, { from, dir })
+      hero.beam = { since: hero.beam?.since ?? now, until, from, end: landedNow.at }
+      strikeCover(ctx, hero, template, landedNow.cover)
+      resolve(ctx, hero, template, 'active1', landedNow.hit, landedNow.at)
+      if (landedNow.hit[0]) afterBasic(ctx, hero, landedNow.hit[0])
+      return
+    }
     const landed = landing(ctx, hero, template, { from, dir })
     impact(ctx, hero, 'active1', template, landed.at)
     strikeCover(ctx, hero, template, landed.cover)
@@ -520,9 +577,10 @@ function fire(ctx: Ctx, hero: HeroState, shot: Shot | undefined, followUp = fals
     // pellets fan evenly across the cone, each nudged by the bloom
     const fan = pellets > 1 ? (i / (pellets - 1)) * 2 - 1 : 0
     const aim0 = yawPitch(straight)
-    const base = fan ? direction(aim0.yaw + fan * cone * 0.5, aim0.pitch) : straight
-    const dir = spreadOut(ctx, base, spread)
-    match.projectiles.push({ id: match.nextProjectileId++, owner: hero.id, slot: 'active1', position: from, step: scale(dir, speed / ENGINE.tickHz), ticksLeft: Math.max(1, ticks(template.delivery.range / speed)), ...(shot ? { shot } : {}) })
+    const aimed = fan ? direction(aim0.yaw + fan * cone * 0.5, aim0.pitch) : straight
+    const dir = spreadOut(ctx, aimed, spread)
+    const flown = startFlight(ctx, hero, template, from, dir, speed, target)
+    match.projectiles.push({ id: match.nextProjectileId++, owner: hero.id, slot: 'active1', position: from, step: flown?.step ?? scale(dir, speed / ENGINE.tickHz), ticksLeft: flown?.ticksLeft ?? Math.max(1, ticks(template.delivery.range / speed)), ...(shot ? { shot } : {}), ...(flown ? { flight: flown.flight } : {}) })
     ctx.events.push({ type: 'projectile', id: match.nextProjectileId - 1, hero: hero.id, slot: 'active1', from, radius: projectileRadius, speed })
   }
 }
@@ -543,16 +601,42 @@ function flyProjectiles(ctx: Ctx) {
   for (const p of match.projectiles) {
     const owner = match.heroes[p.owner]
     const template = shotTemplate(setups[p.source ?? p.owner].kit[p.slot], p.shot)
+    // a shot that doesn't fly straight turns first; a returning one that reached its owner's hand is caught
+    if (!steer(ctx, p, (o) => aimPoint(ctx, o, template.delivery.range))) continue
+    const f = p.flight
     const size = geometryOf(template.delivery).projectileRadius
     const end = add(p.position, p.step)
     const r = widest + size
     const near = grid ? grid.within(Math.min(p.position.x, end.x) - r, Math.max(p.position.x, end.x) + r, Math.min(p.position.z, end.z) - r, Math.max(p.position.z, end.z) + r).filter((o) => o.team !== owner.team) : enemiesOf(match, owner)
-    const struck = near.filter((e) => segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
+    const struck = near.filter((e) => !f?.struck?.includes(e.id) && segmentToCapsuleAxis(p.position, end, e.position, capsule(e).height) <= capsule(e).radius + size)
     const first = struck.length ? struck.reduce((a, b) => (distance(p.position, chest(b)) < distance(p.position, chest(a)) ? b : a)) : undefined
-    const wall = firstCover(match, p.position, end, size)
+    const wall = firstCover(match, p.position, end, size, owner.team)
     // the shot meets whichever comes first along its path: a hero (its chest projected onto the path), or the cover
     const stepSq = dot(p.step, p.step) || 1
     const heroT = first ? clamp(dot(sub(chest(first), p.position), p.step) / stepSq, 0, 1) : 2
+    if (wall && wall.t < heroT && f?.kind === 'bouncing' && (f.bounces ?? 0) > 0) {
+      bounceOffCover(ctx, p, wall.index, wall.at)
+      if (--p.ticksLeft > 0) left.push(p)
+      continue
+    }
+    if (wall && wall.t < heroT && f?.kind === 'returning' && !f.back) {
+      strikeCover(ctx, owner, template, [{ index: wall.index, at: wall.at }])
+      p.position = sub(wall.at, scale(normalize(p.step), 0.1))
+      turnHome(ctx, p)
+      left.push(p)
+      continue
+    }
+    // a falling shot meets the floor: a bouncing one bounces, a lobbed one bursts there
+    const ground = f && (f.kind === 'lobbed' || f.kind === 'bouncing') ? throughFloor(ctx, p.position, end) : undefined
+    if (ground && (!wall || distance(p.position, ground) < distance(p.position, wall.at)) && (!first || distance(p.position, ground) < distance(p.position, chest(first)))) {
+      if (f!.kind === 'bouncing' && (f!.bounces ?? 0) > 0) {
+        bounceOffFloor(ctx, p, ground)
+        if (--p.ticksLeft > 0) left.push(p)
+        continue
+      }
+      burst(ctx, owner, p, template, ground)
+      continue
+    }
     if (wall && wall.t < heroT) {
       const area = template.delivery.radius
       impact(ctx, owner, p.slot, template, wall.at)
@@ -573,6 +657,16 @@ function flyProjectiles(ctx: Ctx) {
       if (--p.ticksLeft > 0) left.push(p)
       continue
     }
+    // a returning shot passes through whoever it strikes, once each way
+    if (first && f?.kind === 'returning') {
+      resolve(ctx, owner, template, p.slot, [first], chest(first))
+      impact(ctx, owner, p.slot, template, chest(first))
+      if ((p.slot === 'basic' || p.slot === 'active1') && p.source === undefined) afterBasic(ctx, owner, first)
+      ;(f.struck ??= []).push(first.id)
+      p.position = end
+      if (--p.ticksLeft > 0) left.push(p)
+      continue
+    }
     if (first) {
       const at = chest(first)
       const area = template.delivery.radius
@@ -585,10 +679,23 @@ function flyProjectiles(ctx: Ctx) {
     }
     p.position = end
     if (--p.ticksLeft > 0) left.push(p)
+    // at the end of its reach a returning shot turns for home, and a lobbed one bursts where it is
+    else if (f?.kind === 'returning' && !f.back) (turnHome(ctx, p), left.push(p))
+    else if (f?.kind === 'lobbed') burst(ctx, owner, p, template, end)
     // a thrown trap, turret or field that reaches the end of its range comes down where it is
     else if (raises(template)) resolve(ctx, owner, template, p.slot, [], { x: end.x, y: 0, z: end.z })
   }
   match.projectiles = left
+}
+
+/** A lobbed shot comes down at `at`: its blast catches everyone within its radius (or whoever is right there), and raises what it raises. */
+function burst(ctx: Ctx, owner: HeroState, p: MatchState['projectiles'][number], template: Template, at: Vec3) {
+  const area = Math.max(template.delivery.radius ?? 0, geometryOf(template.delivery).projectileRadius + 0.4)
+  impact(ctx, owner, p.slot, template, at)
+  strikeCover(ctx, owner, template, coverInBlast(ctx.match, at, area))
+  const hit = enemiesOf(ctx.match, owner).filter((e) => gap(at, e) <= area)
+  resolve(ctx, owner, template, p.slot, hit, at)
+  if (hit[0] && (p.slot === 'basic' || p.slot === 'active1') && p.source === undefined) afterBasic(ctx, owner, hit[0])
 }
 
 /** Whether a template raises something in the world (a field, wall, trap or turret) where it lands. */
@@ -653,6 +760,34 @@ function moveKnockbacks(ctx: Ctx) {
   }
 }
 
+/** With the full kit a played hero's single-shot weapon fires a shot a press (§4 LMB); the AI's fires as it always has. */
+const semiAuto = (match: MatchState, setup: HeroSetup, index: number) => !!match.fullKit && match.human === index && setup.kit.active1.ranged?.mode === 'single'
+
+/**
+ * Hold-to-charge casts (§4 Systems): pressing a charged slot starts it charging, letting go casts it at its charge,
+ * from `min` to `max` times its magnitudes over its `seconds`.
+ */
+function chargeButtons(ctx: Ctx, index: number, command: Command, before: number) {
+  const { match, setups } = ctx
+  const hero = match.heroes[index]
+  const now = match.tick
+  for (const slot of ['active1', 'active2'] as const) {
+    const charge = setups[index].kit[slot].charge
+    if (!charge) continue
+    const bit = slotBit(slot)
+    const held = (command.buttons & bit) !== 0
+    if (held && !(before & bit) && !hero.charging) {
+      hero.charging = { slot, since: now }
+      ctx.events.push({ type: 'charge', hero: hero.id, slot, phase: 'start' })
+    } else if (!held && hero.charging?.slot === slot) {
+      const t = Math.min(1, (now - hero.charging.since) / Math.max(1, ticks(charge.seconds)))
+      const power = charge.min + (charge.max - charge.min) * t
+      hero.charging = undefined
+      if (cast(ctx, index, slot, undefined, power)) ctx.events.push({ type: 'charge', hero: hero.id, slot, phase: 'release', power })
+    }
+  }
+}
+
 /** The combat rules for `tick`: statuses, casts from pressed buttons, then projectiles and knockback. */
 export const COMBAT_RULES: TickRules = {
   statuses: (match, setups, events) => {
@@ -663,18 +798,37 @@ export const COMBAT_RULES: TickRules = {
   },
   act: (match, setups, hero, command: Command, events) => {
     const ctx = { match, setups, events }
+    const before = match.heroes[hero].buttonsHeld
     carryOn(ctx, hero)
+    chaseJump(ctx, match.heroes[hero])
+    // holding the interact key beside a downed ally revives it, and nothing else happens meanwhile
+    if (reviveButton(ctx, hero, command)) return
+    // underground, a burrowing hero does nothing but move; a Strike's caster only lands its blows
+    if (match.heroes[hero].traverse?.how === 'burrow' || match.heroes[hero].lockon) return
+    // the interact key beside a standing ally gets it to throw the hero (systems.ts)
+    if (teamUpButton(ctx, hero, command)) return
     // the basic attack strikes on release and charges while held, the passive toggles (combat.ts); skills cast as pressed
     meleeButtons(ctx, hero, command, (blow) => cast(ctx, hero, 'basic', blow))
+    chargeButtons(ctx, hero, command, before)
+    const fresh = command.buttons & ~before
+    // in a beam clash every fresh pull of the trigger pushes harder (beams.ts)
+    if (fresh & slotBit('active1')) mash(match, hero)
     if (!command.buttons) return
-    for (const slot of SKILL_SLOTS) if (command.buttons & slotBit(slot) && cast(ctx, hero, slot)) return
+    for (const slot of SKILL_SLOTS) {
+      if (!(command.buttons & slotBit(slot)) || setups[hero].kit[slot].charge) continue
+      if (slot === 'active1' && !(fresh & slotBit(slot)) && semiAuto(match, setups[hero], hero)) continue
+      if (cast(ctx, hero, slot)) return
+    }
   },
   after: (match, setups, events) => {
     const ctx = { match, setups, events }
     moveLunges(ctx)
     flyProjectiles(ctx)
+    tickBeams(ctx)
     moveKnockbacks(ctx)
     tickWorld(ctx)
+    tickMoveset(ctx)
+    tickSpells(ctx)
   },
 }
 

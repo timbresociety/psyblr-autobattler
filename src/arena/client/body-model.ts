@@ -6,7 +6,7 @@ import { splitValues } from '../../kit/body/surface.js'
 import { bodyKitLoaded } from './body-kit.js'
 import { characterMap, characterNormalMap, metaChannel, type CharacterLook } from './character-look.js'
 import { faceShape } from './face/shape.js'
-import { hangPieces, shapedSockets, type Piece } from './gear.js'
+import { hangPieces, hangSockets, shapedSockets, type Piece } from './gear.js'
 import type { LoadedKit } from './held.js'
 import { refineGeometry } from '../../kit/body/refine.js'
 import { helperSkin, planHelpers } from '../../kit/body/helpers.js'
@@ -143,14 +143,17 @@ function bodyGeometry(source: THREE.BufferGeometry, cache: BodyCache, shape: Bod
  * Hang each held piece on its hand's socket, its colour tinting the piece's 'primary' material. The sockets move with
  * the hero's shape (`shaped`, from the built body's `rest` positions), so a grip sits in the hand the hero has.
  */
-function hangHeld(model: THREE.Object3D, held: Partial<Record<GearSlot, GearPiece>>, kit: LoadedKit, rest: ArrayLike<number>, shaped: ArrayLike<number>): THREE.Object3D[] {
+function hangHeld(model: THREE.Object3D, held: Partial<Record<GearSlot, GearPiece>>, kit: LoadedKit, rest: ArrayLike<number>, shaped: ArrayLike<number>, armed = false): THREE.Object3D[] {
   if (!kit.sockets) return []
   const pieces: Piece[] = []
   for (const [slot, piece] of Object.entries(held) as [GearSlot, GearPiece][]) {
     const file = kit.pieces.get(piece.url)
     if (file) pieces.push({ name: slot, socket: slot, file, ...(piece.color ? { color: piece.color } : {}) })
   }
-  return pieces.length ? hangPieces(model, pieces, shapedSockets(kit.sockets, rest, shaped)) : []
+  if (pieces.length) return hangPieces(model, pieces, shapedSockets(kit.sockets, rest, shaped))
+  // a hero who swaps weapons in and out (arms.ts) needs its hands' sockets even while they hold nothing
+  if (armed) hangSockets(model, shapedSockets(kit.sockets, rest, shaped))
+  return []
 }
 
 /**
@@ -207,7 +210,7 @@ export function buildModel(model: THREE.Object3D, look: CharacterLook, kit: Load
     })
   }
   if (refine) mesh.geometry = refineGeometry(mesh.geometry, refine)
-  if (kit) hangHeld(model, look.held, kit, cache.base.positions, shape.positions)
+  if (kit) hangHeld(model, look.held, kit, cache.base.positions, shape.positions, !!look.arms?.length)
   return true
 }
 

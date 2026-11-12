@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Psyblr Kit Library</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+/* The same cabinet card as the fighter's manual: each button keeps its colour, and every family sits in exactly one
+   table under exactly one button. */
+:root {
+  --bg: #eceef3; --surface: #ffffff; --sunk: #f5f6f9; --ink: #151821; --muted: #586074; --line: #d4d8e1;
+  --keycap: #1c2030; --on-btn: #ffffff;
+  --shared: #2f7a55; --v: #cc2238; --lmb: #1679b3; --q: #6d3fd0; --e: #b98300; --f: #d65c12; --r: #b3146f; --sys: #4a5266;
+  --marker: #f2b705; --marker-ink: #1b1600;
+  --display: 'Bungee', 'Arial Black', Impact, sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218; --surface: #171b24; --sunk: #12151d; --ink: #e9ecf3; --muted: #9ba3b6; --line: #2a3041;
+    --keycap: #262c3d; --on-btn: #10131a;
+    --shared: #5cc08a; --v: #ff5a6c; --lmb: #52b9f0; --q: #a983ff; --e: #ffc83d; --f: #ff8c4a; --r: #f052a8; --sys: #aab3c7;
+    --marker: #ffc83d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1218; --surface: #171b24; --sunk: #12151d; --ink: #e9ecf3; --muted: #9ba3b6; --line: #2a3041;
+  --keycap: #262c3d; --on-btn: #10131a;
+  --shared: #5cc08a; --v: #ff5a6c; --lmb: #52b9f0; --q: #a983ff; --e: #ffc83d; --f: #ff8c4a; --r: #f052a8; --sys: #aab3c7;
+  --marker: #ffc83d; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; margin: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-bottom: 64px;
+}
+a { color: inherit; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+a:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; border-radius: 3px; }
+h1, h2, h3 { margin: 0; text-wrap: balance; }
+p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.86em; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; overflow-wrap: anywhere; }
+.page { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
+.mast { grid-column: 1 / -1; padding-block: 40px 8px; display: grid; gap: 14px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mast h1 { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 6vw, 62px); line-height: 1; }
+.mast h1 .tape { background: var(--marker); color: var(--marker-ink); padding: 0 0.12em; }
+.lede { max-width: 70ch; font-size: 18px; }
+.basis { max-width: 70ch; color: var(--muted); font-size: 14px; }
+.index { position: sticky; top: 20px; align-self: start; display: grid; gap: 2px; font-size: 14px; padding-top: 6px; }
+.index a { text-decoration: none; padding: 4px 8px; border-radius: 4px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.index a:hover { color: var(--ink); background: var(--surface); }
+.index i { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--btn, var(--muted)); }
+.index .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 12px 8px 4px; }
+main { display: grid; gap: 64px; min-width: 0; }
+section { display: grid; gap: 18px; min-width: 0; scroll-margin-top: 24px; }
+section > header { display: grid; gap: 6px; }
+.tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.chip { font-family: var(--display); font-size: 13px; letter-spacing: 0.02em; color: var(--on-btn); background: var(--btn, var(--keycap)); padding: 2px 8px; border-radius: 4px; text-transform: none; white-space: nowrap; }
+.shared { --btn: var(--shared); } .v { --btn: var(--v); } .lmb { --btn: var(--lmb); } .q { --btn: var(--q); } .e { --btn: var(--e); } .f { --btn: var(--f); } .r { --btn: var(--r); } .sys { --btn: var(--sys); }
+h2 { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.1; }
+h3 { font-size: 17px; font-weight: 700; }
+.prose { display: grid; gap: 12px; max-width: 72ch; }
+p.prose { display: block; }
+.muted { color: var(--muted); } .small { font-size: 14px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); border-left: 4px solid var(--btn, var(--line)); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 12px; vertical-align: top; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--sunk); white-space: nowrap; }
+td.n { font-family: var(--mono); color: var(--muted); width: 2.5em; }
+td b { font-weight: 700; }
+td .lab { color: var(--muted); font-size: 13.5px; }
+.order { margin: 0; padding: 12px 14px 12px 34px; display: grid; gap: 4px; background: var(--sunk); border: 1px dashed var(--line); border-radius: 8px; max-width: 76ch; font-size: 14.5px; }
+.order li::marker { font-family: var(--mono); color: var(--btn, var(--muted)); font-weight: 600; }
+.callout { border: 1px dashed var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; background: var(--sunk); max-width: 76ch; }
+ol.plain, ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 76ch; }
+.state { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.state.built { border-color: var(--shared); color: var(--shared); }
+.state.new { border-color: var(--f); color: var(--f); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+@media (max-width: 860px) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .index { position: sticky; top: 0; z-index: 5; display: flex; overflow-x: auto; gap: 4px; padding: 8px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .index .label { display: none; }
+  .index a { white-space: nowrap; background: var(--surface); }
+  .mast { padding-block: 24px 0; }
+  main { gap: 48px; }
+  .table-wrap table { min-width: 620px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="mast">
+    <span class="eyebrow">Psyblr · GAME.md §4 · signed by the owner 10 November 2026</span>
+    <h1>The Kit <span class="tape">Library</span></h1>
+    <p class="lede">Every ability a Psyblr hero can have, sorted so that nothing sits in two places and nothing is left out. Two questions put each ability on exactly one button. Inside each button, a fixed order puts it in exactly one family.</p>
+    <p class="basis">This is the library as signed at the end of session 1 (GAME.md §4, 10 November 2026), with the six calls of 7 November and the five settled at the signature. Each family also lists its options in John’s lab, where every one of them can be tried, and the animation it plays. For how each move plays and its numbers, see <a href="fighters-manual.html">the Fighter’s Manual</a>.</p>
+  </header>
+
+  <nav class="index" aria-label="Sections">
+    <span class="label">How it sorts</span>
+    <a href="#rule"><i></i>The rule between buttons</a>
+    <a href="#decisions"><i></i>What was decided</a>
+    <span class="label">The buttons</span>
+    <a href="#shared" class="shared"><i></i>Shared</a>
+    <a href="#v" class="v"><i></i>V · Melee</a>
+    <a href="#lmb" class="lmb"><i></i>LMB · Ranged</a>
+    <a href="#q" class="q"><i></i>Q · Spell</a>
+    <a href="#e" class="e"><i></i>E · Movement</a>
+    <a href="#f" class="f"><i></i>F · Aura</a>
+    <a href="#r" class="r"><i></i>R · Ultimate</a>
+    <span class="label">Around them</span>
+    <a href="#systems" class="sys"><i></i>Systems</a>
+    <a href="#typing"><i></i>Typing rules</a>
+    <a href="#mece"><i></i>Why it’s MECE</a>
+  </nav>
+
+  <main>
+    <section id="rule">
+      <header><span class="tag">How it sorts</span><h2>The rule between the buttons</h2></header>
+      <p class="prose">Two questions sort every ability: how it’s paid for, and what it’s for. Each pair of answers belongs to exactly one button.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Paid by</th><th>For</th><th>Button</th><th>So it never holds</th></tr></thead>
+          <tbody>
+            <tr><td>Nothing; every hero has it</td><td>Moving, defending, recovering</td><td class="shared"><span class="chip">Shared</span></td><td>Anything only some heroes have</td></tr>
+            <tr><td>Nothing; the held weapon</td><td>Hitting up close</td><td class="v"><span class="chip">V</span></td><td>Shots, spells</td></tr>
+            <tr><td>A magazine; the held weapon</td><td>Hitting at range, again and again</td><td class="lmb"><span class="chip">LMB</span></td><td>Cooldown nukes</td></tr>
+            <tr><td>A cooldown</td><td>Moving the caster, including the shared moves done better</td><td class="e"><span class="chip">E</span></td><td>Anything that doesn’t move the caster</td></tr>
+            <tr><td>A cooldown</td><td>Acting on others or the world</td><td class="q"><span class="chip">Q</span></td><td>Self-only buffs, movement</td></tr>
+            <tr><td>Its own meter, drained while on</td><td>An aura on the caster, and on allies near it</td><td class="f"><span class="chip">F</span></td><td>Forms, one-shot actions</td></tr>
+            <tr><td>A long cooldown</td><td>The one big moment: an overpowered skill, or a form with new moves</td><td class="r"><span class="chip">R</span></td><td>Anything a short cooldown could pay for</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Every hero has exactly one item per button. The 8 roles (tank, fighter, assassin, mage, marksman, support, controller, summoner) set the stat sheet and which items a role may take.</p>
+    </section>
+
+    <section id="decisions">
+      <header><span class="tag">How it sorts</span><h2>What was decided</h2></header>
+      <div class="grid2">
+        <div class="prose">
+          <h3>The owner’s six calls, 7 November</h3>
+          <ol class="plain">
+            <li><b>New mechanics: yes to all of them,</b> as long as each fits a button, with no overlaps and no gaps.</li>
+            <li><b>F is an aura, R is the ultimate.</b> F never holds a form.</li>
+            <li><b>E keeps enhanced shared moves,</b> as long as the E version does more and carries its own name.</li>
+            <li><b>Melee families come from the combat action,</b> not the weapon’s name: a scythe plays the axe’s swings.</li>
+            <li><b>Weapons have default carry slots that never clash.</b></li>
+            <li><b>Attitude sets cover combat and traversal only</b> for now; idles and poses wait.</li>
+          </ol>
+        </div>
+        <div class="prose">
+          <h3>Settled with the signature, 10 November</h3>
+          <ol class="plain">
+            <li><b>Jump pads:</b> in, as shared map pieces.</li>
+            <li><b>Kit switch:</b> R’s eighth shape, apart from forms.</li>
+            <li><b>Alternate fire:</b> left out for now; right mouse stays first-person aim.</li>
+            <li><b>Staff, thrust and flexible clips:</b> recorded on a phone and turned into clips.</li>
+            <li><b>Bodies that sink into the floor:</b> fixed in session 2.</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section id="shared" class="shared">
+      <header><span class="tag"><span class="chip">Shared</span>Every hero, no button</span><h2>Shared moves</h2></header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Group</th><th>Moves</th><th>Signed as</th></tr></thead>
+          <tbody>
+            <tr><td><b>Ground</b></td><td>Walk, jog, sprint; crouch, crouch-walk, slide; prone, crawl, dive</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Air</b></td><td>Jump by direction, double jump, air steering</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Edges</b></td><td>Mantle; ledge catch, hang, shimmy, climb, drop</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Walls</b></td><td>Wall-run on marked walls for a short stretch; wall-jump off them</td><td><span class="state new">New</span></td></tr>
+            <tr><td><b>Map routes</b></td><td>Ziplines and rails; jump pads</td><td><span class="state built">Lines built</span> <span class="state new">Pads new</span></td></tr>
+            <tr><td><b>Evade</b></td><td>Dodge roll, dash</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Defend</b></td><td>Guard (X); a perfect guard, X on a tight window before a hit, staggers the attacker</td><td><span class="state built">Guard built</span> <span class="state new">Perfect guard new</span></td></tr>
+            <tr><td><b>Recover</b></td><td>Landing, landing roll, heavy landing; knockdown, get-up, wake-up roll</td><td><span class="state built">Landings built</span> <span class="state new">Rest new</span></td></tr>
+            <tr><td><b>Being hit</b></td><td>Flinch, stagger, launched, juggled, grabbed and thrown, death</td><td><span class="state built">Flinch, launch, death built</span> <span class="state new">Rest new</span></td></tr>
+            <tr><td><b>Team</b></td><td>Revive a downed ally by holding a key beside them</td><td><span class="state new">New</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="v" class="v">
+      <header><span class="tag"><span class="chip">V</span>Melee</span><h2>Melee families, by combat action</h2></header>
+      <p class="prose">A family is one clip set: every weapon in it plays the same clips, so a new weapon only needs a family. A weapon takes the first family in this order that fits it:</p>
+      <ol class="order"><li><b>Paired:</b> a weapon in each hand.</li><li><b>With a shield:</b> a shield in the off hand.</li><li>Otherwise, <b>by how the weapon lands its hits.</b></li></ol>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Family</th><th>How it hits</th><th>Weapons</th><th>Its own chain and heavy</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td><b>Paired</b></td><td>Alternating hands, fast</td><td>Dual swords, dual daggers, claws, tonfa, sai, twin axes</td><td><code>stable_sword_inward_slash → stable_sword_outward_slash → double_dagger_stab</code>; heavy <code>dual_weapon_combo</code></td></tr>
+            <tr><td class="n">2</td><td><b>With a shield</b></td><td>Cut or bash with the shield up</td><td>Sword, mace or axe with a shield</td><td><code>ss_sword_and_shield_slash → ss_sword_and_shield_attack_4 → ss_sword_and_shield_attack_3</code>; heavy <code>ss_sword_and_shield_slash_2</code></td></tr>
+            <tr><td class="n">3</td><td><b>Fists</b></td><td>Punches, elbows and knees</td><td>Bare hands, gauntlets, knuckles, power gloves</td><td><code>lead_jab → cross_punch → hook_punch</code>; heavy <code>elbow_uppercut_combo</code></td></tr>
+            <tr><td class="n">4</td><td><b>Kicks</b></td><td>Legs</td><td>Kicks, stomps, capoeira</td><td><code>mma_kick → roundhouse_kick → side_kick</code>; heavy <code>spinning_back_kick_advancing</code></td></tr>
+            <tr><td class="n">5</td><td><b>One-hand edge</b></td><td>Slash and stab</td><td>Sword, katana, dagger, machete, rapier</td><td><code>ual_sword_attack → stabbing → slash_advance</code>; heavy <code>one_hand_sword_combo</code></td></tr>
+            <tr><td class="n">6</td><td><b>Two-hand edge</b></td><td>Wide sweeps and spins</td><td>Greatsword, claymore, nodachi</td><td><code>gs_great_sword_slash → gs_great_sword_slash_4 → gs_great_sword_slash_3</code>; heavy <code>two_hand_sword_combo</code></td></tr>
+            <tr><td class="n">7</td><td><b>Chop and reap</b></td><td>Hooked arcs that land with a pull</td><td>Axe, great axe, scythe, halberd, kama, pickaxe</td><td><code>axe_standing_melee_attack_downward → axe_standing_melee_attack_horizontal → axe_standing_melee_attack_backhand</code>; heavy <code>axe_standing_melee_attack_360_low</code></td></tr>
+            <tr><td class="n">8</td><td><b>Smash</b></td><td>Overhead and home-run swings</td><td>Club, bat, mace, hammer, warhammer, maul, wrench</td><td><code>club_swing_single → club_swing_double → two_hand_club_combo</code>; heavy <code>heavy_weapon_swing</code></td></tr>
+            <tr><td class="n">9</td><td><b>Thrust</b></td><td>Straight jabs at reach</td><td>Spear, lance, trident, naginata, pike</td><td><code>gs_great_sword_attack → thrust_slash → bayonet_stab</code>; heavy <code>charge</code></td></tr>
+            <tr><td class="n">10</td><td><b>Staff spin</b></td><td>Both ends, twirled</td><td>Bo, quarterstaff, a mage’s staff in melee</td><td><code>rifle_butt_smash → rifle_punch → butterfly_twirl</code>; heavy <code>gs_great_sword_high_spin_attack</code></td></tr>
+            <tr><td class="n">11</td><td><b>Flexible</b></td><td>Crack, wrap and pull</td><td>Whip, chain, kusarigama, rope dart, nunchaku, meteor hammer</td><td><code>bash → mutant_punch → goalie_throw</code>; heavy <code>russian_kettlebell_swing</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Every family fills the same moveset</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Move</th><th>Input</th><th>Signed as</th></tr></thead>
+          <tbody>
+            <tr><td><b>Light chain</b>: three hits, the third knocks back</td><td>V, V, V</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Charged heavy</b></td><td>Hold V</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Guard</b> and guard hit</td><td>X</td><td><span class="state built">Built</span></td></tr>
+            <tr><td><b>Dash attack</b></td><td>V while sprinting</td><td><span class="state new">New</span></td></tr>
+            <tr><td><b>Air attack; air slam</b></td><td>V in the air; hold V in the air</td><td><span class="state new">New</span></td></tr>
+            <tr><td><b>Launcher</b>, then a chase and an air juggle</td><td>Back + V</td><td><span class="state new">New</span></td></tr>
+            <tr><td><b>Grab and throw</b>, close in</td><td>V + X</td><td><span class="state new">New</span>, one shared clip set</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Each family plays its own clip for every move here but the grab; the Fighter’s Manual shows them all, family by family.</p>
+    </section>
+
+    <section id="lmb" class="lmb">
+      <header><span class="tag"><span class="chip">LMB</span>Ranged</span><h2>Ranged: a family, a way to fire, a way to fly</h2></header>
+      <p class="prose">Each weapon has one family (its grip), one way to fire and one way its shot flies. The family is picked in this order:</p>
+      <ol class="order"><li><b>Body emitter:</b> the shot comes from the body.</li><li><b>Thrown:</b> the projectile leaves the hand.</li><li>Otherwise, <b>by the grip.</b></li></ol>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Family</th><th>Weapons</th><th>Shot animations</th></tr></thead>
+          <tbody>
+            <tr><td><b>Body emitter</b></td><td>Eye beams, breath, chest blast</td><td>single <code>ual_spell_simple_shoot</code> · burst <code>ual_spell_simple_shoot</code> · auto <code>ual_spell_simple_shoot</code> · spread <code>ual_push_loop</code> · beam <code>ual_push_loop</code> · charge <code>ual_push_loop</code></td></tr>
+            <tr><td><b>Thrown</b></td><td>Knives, kunai, shuriken, darts, bolas, grenades, a returning shield or hammer</td><td>single <code>throw</code> · burst <code>throwing</code> · auto <code>throw_object</code> · spread <code>frisbee_throw</code> · beam <code>throwing</code> · charge <code>goalie_throw</code> · lobbed <code>rifle_toss_grenade</code></td></tr>
+            <tr><td><b>One-hand gun</b></td><td>Pistol, revolver, blaster, nail gun</td><td>single <code>pistol_fire</code> · burst <code>shooting_pistol</code> · auto <code>ual_pistol_shoot</code> · spread <code>shooting_pistol</code> · beam <code>pistol_aim_idle</code> · charge <code>pistol_aim_idle</code></td></tr>
+            <tr><td><b>Paired guns</b></td><td>Akimbo pistols, twin blasters</td><td>single <code>pistol_fire</code> · beam <code>pistol_aim_idle</code> · charge <code>pistol_aim_idle</code>, fired akimbo (the off arm mirrors the main one, half a beat behind)</td></tr>
+            <tr><td><b>Long gun</b></td><td>Rifle, sniper, SMG, shotgun, railgun, crossbow</td><td>single <code>shoot_rifle</code> · burst <code>firing_rifle</code> · auto <code>firing_rifle</code> · beam <code>rifle_aiming_idle</code> · charge <code>rifle_aiming_idle</code></td></tr>
+            <tr><td><b>Heavy gun</b></td><td>Cannon, launcher, minigun, flamethrower</td><td>single <code>fire_rifle</code> · burst <code>crouch_rapid_fire</code> · auto <code>firing_rifle</code> · beam <code>rifle_aiming_idle</code> · charge <code>rifle_aiming_idle</code></td></tr>
+            <tr><td><b>Bow</b></td><td>Longbow, shortbow</td><td>single <code>standing_aim_recoil</code> · burst <code>standing_draw_arrow</code> · auto <code>standing_draw_arrow</code> · beam <code>standing_aim_idle_01</code> · charge <code>standing_aim_overdraw</code></td></tr>
+            <tr><td><b>Magic, one hand</b></td><td>Wand, rod, orb, bare palm, arm cannon</td><td>single <code>magic_standing_1h_magic_attack_01</code> · burst <code>magic_standing_1h_magic_attack_01</code> · auto <code>ual_spell_simple_shoot</code> · spread <code>magic_standing_1h_magic_attack_02</code> · beam <code>ual_spell_simple_idle_loop</code> · charge <code>ual_spell_simple_idle_loop</code></td></tr>
+            <tr><td><b>Magic, two hands</b></td><td>Staff, tome, both palms (energy waves)</td><td>single <code>magic_standing_2h_magic_attack_01</code> · burst <code>magic_standing_2h_magic_attack_01</code> · auto <code>magic_standing_2h_magic_attack_01</code> · spread <code>magic_standing_2h_magic_area_attack_02</code> · beam <code>magic_standing_2h_magic_attack_03</code> · charge <code>magic_standing_2h_magic_attack_03</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="grid2">
+        <div class="table-wrap"><table><thead><tr><th>How it fires</th></tr></thead><tbody><tr><td>Single shots · burst · spread · beam</td></tr><tr><td>Held beam, which can clash with another</td></tr><tr><td>Hold for full auto · hold to charge and release</td></tr></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>How the shot flies</th></tr></thead><tbody><tr><td>Straight bolt · beam · cone</td></tr><tr><td>Lobbed arc · bouncing · returning to the hand</td></tr><tr><td>Homing · guided</td></tr></tbody></table></div>
+      </div>
+    </section>
+
+    <section id="q" class="q">
+      <header><span class="tag"><span class="chip">Q</span>Spell</span><h2>Spell families, by their strongest effect</h2></header>
+      <p class="prose">Q holds everything no other button covers. A spell takes the <b>first family in this order that it fits</b>, so it can never sit in two. Pure damage comes last. A swap of places moves the caster, so it belongs to E, not Displacement.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Family</th><th>Holds</th><th>In John’s lab</th><th>Cast animation, shape by shape</th></tr></thead>
+          <tbody>
+            <tr><td class="n">1</td><td><b>Counter</b></td><td>A window that answers an incoming hit: parry-strike, substitution, reflect, absorb</td><td class="lab">Riposte · Substitution · Mirror guard · Drink the blow</td><td>Riposte <code>inward_block</code> · Substitution <code>standing_dodge_backward</code> · Mirror guard <code>magic_standing_block_idle</code> · Drink the blow <code>high_center_block</code></td></tr>
+            <tr><td class="n">2</td><td><b>Summon</b></td><td>Something that moves and acts: pets, minions, clones, decoys</td><td class="lab">Minions · Clone · Decoy</td><td>Minions <code>magic_spell_casting</code> · Clone <code>two_hand_spell_casting</code> · Decoy <code>spell_cast</code></td></tr>
+            <tr><td class="n">3</td><td><b>Construct</b></td><td>A placed thing that stays put: walls, a one-way barrier, turrets, traps, totems, ramps, platforms, ice paths, portals</td><td class="lab">Wall · One-way barrier · Ramp · Platform · Ice path · Portal · Turret · Trap · Totem</td><td>Wall <code>stomp</code> · One-way barrier <code>outward_block</code> · Ramp, platform, path <code>magic_standing_2h_magic_attack_05</code> · Portal <code>wide_arm_spell_casting</code> · Turret <code>ual_fixing_kneeling</code> · Trap <code>stomping</code> · Totem <code>ss_sword_and_shield_casting</code></td></tr>
+            <tr><td class="n">4</td><td><b>Trick</b></td><td>Bends a rule: swap health, steal a spell, rewind, copy a kit, possession, stop time</td><td class="lab">Swap health · Steal a spell · Rewind · Copy a kit · Possession</td><td>Swap health <code>magic_standing_2h_magic_attack_04</code> · Steal a spell <code>magic_standing_1h_magic_attack_03</code> · Rewind <code>spell_casting</code> · Copy a kit <code>magic_standing_1h_magic_attack_02</code> · Possession <code>pointing_forward</code></td></tr>
+            <tr><td class="n">5</td><td><b>Control</b></td><td>Stops a target acting: stun, root, silence, disarm, sleep, blind, grounded, fear, taunt</td><td class="lab">Stun · Root and grip</td><td>Stun <code>magic_standing_2h_magic_area_attack_01</code> · Root and grip <code>magic_standing_2h_cast_spell_01</code></td></tr>
+            <tr><td class="n">6</td><td><b>Displacement</b></td><td>Moves others: push, pull, knock-up, lift and throw at range, pull an ally to safety</td><td class="lab">Pull (hook) · Push · Lift and throw</td><td>Pull <code>throwing</code> · Push <code>magic_standing_2h_magic_attack_02</code> · Lift and throw <code>russian_kettlebell_swing</code></td></tr>
+            <tr><td class="n">7</td><td><b>Support</b></td><td>Helps allies: heal, shield, buff, cleanse, revive at range</td><td class="lab">Heal · Shield an ally · Revive at range</td><td>Heal <code>magic_heal</code> · Shield an ally <code>ss_sword_and_shield_casting_2</code> · Revive at range <code>waving_with_both_hands</code></td></tr>
+            <tr><td class="n">8</td><td><b>Curse</b></td><td>Weakens over time: shred, wound, vulnerable, mark, damage over time</td><td class="lab">Mark and bleed</td><td>Mark and bleed <code>big_vegas_pointing_gesture</code></td></tr>
+            <tr><td class="n">9</td><td><b>Zone</b></td><td>An area that lingers and acts on whoever stands in it</td><td class="lab">Blizzard</td><td>Blizzard <code>magic_standing_1h_cast_spell_01</code></td></tr>
+            <tr><td class="n">10</td><td><b>Vision</b></td><td>Information: reveal, scout, wards</td><td class="lab">Reveal pulse</td><td>Reveal pulse <code>magic_standing_2h_magic_area_attack_02</code></td></tr>
+            <tr><td class="n">11</td><td><b>Burst</b></td><td>Damage now, with a wind-up or a charge that sets it apart from LMB</td><td class="lab">Fireball · Charged energy wave (hold Q)</td><td>Fireball <code>fireball</code> · Charged energy wave <code>magic_standing_2h_magic_attack_03</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="e" class="e">
+      <header><span class="tag"><span class="chip">E</span>Movement skill</span><h2>Movement skills, by how they move the caster</h2></header>
+      <p class="prose">An E skill is either a way of moving the shared moves lack, or a shared move done better. The better version must do something the shared one can’t, and carries its own name. What happens on arrival (nothing, damage, control or a shield) is the skill’s effect, not its kind. Each kind has one clip, the same for every hero that moves that way.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>How</th><th>Kind</th><th>Signed as</th><th>Animation</th></tr></thead>
+          <tbody>
+            <tr><td rowspan="3"><b>Instant</b></td><td>Blink a short way</td><td><span class="state built">Have</span></td><td><code>ual_spell_simple_exit</code></td></tr>
+            <tr><td>Teleport to a mark or a target</td><td><span class="state new">New</span></td><td><code>ual_spell_simple_enter</code></td></tr>
+            <tr><td>Swap places with a hero</td><td><span class="state new">New</span></td><td><code>standing_dodge_left</code></td></tr>
+            <tr><td rowspan="2"><b>Line</b></td><td>Dash</td><td><span class="state built">Have</span></td><td><code>idle_to_sprint</code></td></tr>
+            <tr><td>Homing dash to a target</td><td><span class="state new">New</span></td><td><code>flying_kick</code></td></tr>
+            <tr><td><b>Arc</b></td><td>Leap</td><td><span class="state built">Have</span></td><td><code>cmu_standing_long_jump</code></td></tr>
+            <tr><td rowspan="2"><b>Line attached</b></td><td>Grapple to a point</td><td><span class="state built">Have</span></td><td><code>jump_to_hang</code></td></tr>
+            <tr><td>Swing on a line</td><td><span class="state new">New</span></td><td><code>start_swinging</code></td></tr>
+            <tr><td rowspan="5"><b>Held</b></td><td>Flight and hover, with its own camera</td><td><span class="state new">New</span></td><td><code>flying</code></td></tr>
+            <tr><td>Glide</td><td><span class="state new">New</span></td><td><code>falling_in_the_air_idle</code></td></tr>
+            <tr><td>Wall-crawl on any wall</td><td><span class="state new">New</span></td><td><code>climbing_up_wall</code></td></tr>
+            <tr><td>Burrow</td><td><span class="state new">New</span></td><td><code>jump_away</code></td></tr>
+            <tr><td>Ride or carry an ally</td><td><span class="state new">New</span></td><td><code>ual_driving_loop</code></td></tr>
+            <tr><td rowspan="4"><b>Shared, done better</b></td><td><b>Wall Run:</b> any wall, not only marked ones, for longer</td><td><span class="state new">New</span></td><td><code>diagonal_wall_run</code></td></tr>
+            <tr><td><b>Combat Roll:</b> longer, invulnerable all the way, and reloads</td><td><span class="state new">New</span></td><td><code>dive_roll</code></td></tr>
+            <tr><td><b>Power Slide:</b> a long slide that knocks down whoever it hits</td><td><span class="state new">New</span></td><td><code>running_slide</code></td></tr>
+            <tr><td><b>Zipline:</b> fire your own line to any point and ride it</td><td><span class="state new">New</span></td><td><code>jumping_to_hanging</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Every kind is an option in John’s lab.</p>
+    </section>
+
+    <section id="f" class="f">
+      <header><span class="tag"><span class="chip">F</span>Aura</span><h2>Auras</h2></header>
+      <p class="prose">An F skill is an aura you switch on and off. While on, it drains its own meter and shows round the body; when the meter runs dry it switches itself off. It never changes the body or the moveset; those are R’s. Each aura has one trigger: while on, on hit, every third hit, at low health, on a kill, or when hit.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>What it changes</th><th>Holds</th><th>In John’s lab</th><th>Switch-on animation</th></tr></thead>
+          <tbody>
+            <tr><td><b>Numbers</b></td><td>Damage, attack speed, move speed, lifesteal, evasion</td><td class="lab">Berserk</td><td><code>ss_sword_and_shield_power_up</code></td></tr>
+            <tr><td><b>Guard</b></td><td>A shield, less damage taken, or an answer when hit (thorns)</td><td class="lab">Mana shield · Thorns</td><td><code>standing_block_start</code></td></tr>
+            <tr><td><b>Stealth</b></td><td>Out of sight</td><td class="lab">Vanish</td><td><code>standing_idle_to_crouch</code></td></tr>
+            <tr><td><b>State</b></td><td>Unstoppable, invulnerable, reflect</td><td class="lab">— (no catalogue aura yet)</td><td><code>axe_standing_taunt_chest_thump</code></td></tr>
+            <tr><td><b>Allies</b></td><td>Any of these, given to allies near the caster</td><td class="lab">Blessing (allies near you)</td><td><code>male_cheering_with_two_fists_pump</code></td></tr>
+            <tr><td><b>Element</b></td><td>A sheath (flame, frost, lightning) that adds its element to every hit</td><td class="lab">Flame · Frost · Lightning sheath</td><td><code>axe_standing_taunt_battlecry</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">The signed library gave F one shared clip for on and off. Since 11 November each kind switches on with its own flourish, cut to its peak, so an aura reads before its effect does. An aura’s first match wins, in the order element, allies, stealth, another state, guard, numbers.</p>
+    </section>
+
+    <section id="r" class="r">
+      <header><span class="tag"><span class="chip">R</span>Ultimate</span><h2>The shape of the big moment</h2></header>
+      <p class="prose">R holds an overpowered skill on a long cooldown, or a form with its own body and moves. Every R has one of eight shapes.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Shape</th><th>Holds</th><th>For example</th><th>In John’s lab</th><th>Animation</th></tr></thead>
+          <tbody>
+            <tr><td><b>Strike</b></td><td>One target: it lands, then plays out</td><td>Assassinate, Deadeye, Meteor Combo</td><td class="lab">Strike: the lock-on</td><td>the V family’s own flurry (one-hand edge <code>dual_weapon_combo</code>, fists <code>quad_punch</code> …)</td></tr>
+            <tr><td><b>Devastation</b></td><td>Big area damage, now</td><td>Earthquake, Meteor Storm, Orbital Strike</td><td class="lab">Earthquake</td><td><code>jump_attack</code></td></tr>
+            <tr><td><b>Domain</b></td><td>The area changes for a while</td><td>Inferno, Event Horizon, Labyrinth</td><td class="lab">Inferno</td><td><code>gs_great_sword_casting</code></td></tr>
+            <tr><td><b>Rally</b></td><td>The whole team is helped</td><td>Revival Wave, Sanctuary, Mass Haste</td><td class="lab">Mass revive</td><td><code>rallying</code></td></tr>
+            <tr><td><b>Rampage</b></td><td>The caster is overpowered for a short time, on the same body and moves</td><td>Bloodbath, Gunslinger, Shadow Dance</td><td class="lab">Bloodbath</td><td><code>standing_taunt_battlecry</code></td></tr>
+            <tr><td><b>Ultimate form</b></td><td>A timed form with its own body and moveset, in stages</td><td>Titan, Super, Ascended, Avatar and Shrink Form</td><td class="lab">Staged form · Titan form</td><td>staged <code>gs_great_sword_power_up</code> · titan form (grows) <code>standing_taunt_chest_thump</code></td></tr>
+            <tr><td><b>Titan summon</b></td><td>One big ally that fights for a while</td><td>—</td><td class="lab">Titan summon</td><td><code>casting_spell</code></td></tr>
+            <tr><td><b>Kit switch</b></td><td>A second kit for a while, on the same body: a stance change</td><td>—</td><td class="lab">Kit switch (spear and rifle)</td><td><code>withdrawing_sword</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="systems" class="sys">
+      <header><span class="tag"><span class="chip">Systems</span>Rules about abilities</span><h2>Systems</h2></header>
+      <p class="prose">These aren’t abilities, so they hold no button of their own. They change how abilities work.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>System</th><th>What it is</th><th>In John’s lab</th></tr></thead>
+          <tbody>
+            <tr><td><b>Team-ups</b></td><td>Between two heroes, keyed to their kits, since heroes are generated, not named</td><td class="lab">The throw (interact beside an ally)</td></tr>
+            <tr><td><b>Fusion</b></td><td>Two allies merge for a while</td><td class="lab">R: Fusion with the ally (<code>clap_while_standing</code>)</td></tr>
+            <tr><td><b>Beam clashes</b></td><td>Two beams that meet push against each other</td><td class="lab">LMB: Held beam</td></tr>
+            <tr><td><b>Power meter</b></td><td>A spendable meter, like ki or chakra</td><td class="lab">Q: Spends half the power meter</td></tr>
+            <tr><td><b>Ability charges</b></td><td>Two or three uses banked</td><td class="lab">Q: Two charges</td></tr>
+            <tr><td><b>Hold to charge</b></td><td>On LMB and Q</td><td class="lab">LMB: Hold to charge · Q: Charged energy wave</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="typing">
+      <header><span class="tag">Enforced</span><h2>Typing rules</h2></header>
+      <p class="prose">The engine enforces these, so a wrong item can’t be stored on a button:</p>
+      <ul class="plain">
+        <li><b>V</b> holds only a weapon family.</li>
+        <li><b>LMB</b> holds only things that fire from the hand or a weapon, on repeat.</li>
+        <li><b>Q</b> holds nothing melee and nothing self-only.</li>
+        <li><b>F</b> holds nothing that reaches anyone else, except an aura given to allies near the caster, and never a form.</li>
+        <li><b>E</b> holds only things that move the caster.</li>
+      </ul>
+    </section>
+
+    <section id="mece">
+      <header><span class="tag">Check</span><h2>Why it’s MECE</h2></header>
+      <div class="prose">
+        <p><b>Mutually exclusive.</b> The two questions (paid by, and for) have one answer each, and each pair belongs to one button. Inside a button, every family list is an ordered test: an item takes the first family it fits, so even an item that could fit two lands in exactly one. A scythe is Chop and reap, never Two-hand edge. A stun with damage is Control, never Burst. A swap of places is E, never Displacement.</p>
+        <p><b>Collectively exhaustive.</b> Every list ends in a catch-all: V by how the weapon hits, LMB by the grip, Q with Burst (pure damage), and R with eight shapes that between them cover one target, an area now, an area over time, the team, the caster, a new body, a new ally and a new kit. What no button may hold (a self-buff on Q, a form on F) is named in the rule table, so it has a home elsewhere.</p>
+        <p class="muted small">The engine sorts the same way: lab options are checked in tests to land in their own family, kind or shape, and no two families on a button start with the same animation.</p>
+      </div>
+    </section>
+  </main>
+</div>
+</body>
+</html>

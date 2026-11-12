@@ -4,7 +4,7 @@ import { roleSymbol, starterEntry } from './loadout'
 import type { StagingResult } from './Staging'
 
 /** What the training dummy is: a plain tank the colour of a wooden mannequin. */
-const DUMMY: Build = {
+export const DUMMY: Build = {
   ...proposeBuild({ heroName: 'Training dummy', roleId: 'tank', skills: {} }).build,
   look: { gender: 'm', colors: { skin: '#c9b28b', iris: '#3a2e22', brow: '#c9b28b' } },
 }

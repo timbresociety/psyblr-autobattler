@@ -7,6 +7,8 @@ const SoakScreen = lazy(() => import('../arena/SoakScreen').then((m) => ({ defau
 const PhysiqueBench = import.meta.env.DEV ? lazy(() => import('./PhysiqueBench').then((m) => ({ default: m.PhysiqueBench }))) : undefined
 const ClipSheet = import.meta.env.DEV ? lazy(() => import('./ClipSheet').then((m) => ({ default: m.ClipSheet }))) : undefined
 const TryMesh = import.meta.env.DEV ? lazy(() => import('./TryMesh').then((m) => ({ default: m.TryMesh }))) : undefined
+const JohnLab = import.meta.env.DEV ? lazy(() => import('./JohnLab').then((m) => ({ default: m.JohnLab }))) : undefined
+const JohnMoves = import.meta.env.DEV ? lazy(() => import('./JohnMoves').then((m) => ({ default: m.JohnMoves }))) : undefined
 const ReplayScreen = import.meta.env.DEV ? lazy(() => import('./ReplayScreen').then((m) => ({ default: m.ReplayScreen }))) : undefined
 
 const TOOLS: readonly { path: string; label: string; hint: string; dev?: boolean }[] = [
@@ -15,6 +17,8 @@ const TOOLS: readonly { path: string; label: string; hint: string; dev?: boolean
   { path: 'physique', label: 'Physique bench', hint: 'Twelve archetypes, face close-up and jiggle', dev: true },
   { path: 'clips', label: 'Clip sheets', hint: 'One clip on six bodies, frame by frame (the clip audit)', dev: true },
   { path: 'try', label: 'Try a generated hero', hint: 'A generated mesh on our skeleton, in the arena against a dummy', dev: true },
+  { path: 'john', label: "John's lab", hint: 'Every kit interaction on John, every size and attitude, with the checklist', dev: true },
+  { path: 'moves', label: "John's moves", hint: 'John alone, the camera circling him, a button for every move he plays', dev: true },
   { path: 'replay', label: 'Replays', hint: 'Matches played here, tick for tick, with their F9 marks', dev: true },
   { path: 'probe', label: 'Probe', hint: 'Scene rays and sound recording from a script, in any match', dev: true },
 ]
@@ -31,6 +35,8 @@ export function DevRoutes() {
       {PhysiqueBench && <Route path="physique" element={<Suspense fallback={wait('the physique bench')}>{<PhysiqueBench />}</Suspense>} />}
       {ClipSheet && <Route path="clips" element={<Suspense fallback={wait('the clip sheets')}>{<ClipSheet />}</Suspense>} />}
       {TryMesh && <Route path="try" element={<Suspense fallback={wait('the hero')}>{<TryMesh />}</Suspense>} />}
+      {JohnLab && <Route path="john" element={<Suspense fallback={wait("John's lab")}>{<JohnLab />}</Suspense>} />}
+      {JohnMoves && <Route path="moves" element={<Suspense fallback={wait("John's moves")}>{<JohnMoves />}</Suspense>} />}
       {ReplayScreen && <Route path="replay/:name?" element={<Suspense fallback={wait('the replays')}>{<ReplayScreen />}</Suspense>} />}
       <Route path="probe" element={<ProbeHelp />} />
       <Route path="*" element={<DevIndex />} />

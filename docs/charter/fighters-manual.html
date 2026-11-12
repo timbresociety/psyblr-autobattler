@@ -1,0 +1,1333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Psyblr Fighter's Manual</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap">
+<style>
+/* Layout: an arcade cabinet's instruction card. Every button keeps one colour from the key map to its own section,
+   so a reader can follow V, LMB, Q, E, F and R through the page. A sticky index on the left on wide screens; on a
+   phone it becomes a strip across the top. */
+:root {
+  --bg: #eceef3;
+  --surface: #ffffff;
+  --sunk: #f5f6f9;
+  --ink: #151821;
+  --muted: #586074;
+  --line: #d4d8e1;
+  --keycap: #1c2030;
+  --keycap-ink: #f4f5f8;
+  --on-btn: #ffffff;
+  --shared: #2f7a55;
+  --v: #cc2238;
+  --lmb: #1679b3;
+  --q: #6d3fd0;
+  --e: #b98300;
+  --f: #d65c12;
+  --r: #b3146f;
+  --marker: #f2b705;
+  --marker-ink: #1b1600;
+  --display: 'Bungee', 'Arial Black', Impact, sans-serif;
+  --body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1218;
+    --surface: #171b24;
+    --sunk: #12151d;
+    --ink: #e9ecf3;
+    --muted: #9ba3b6;
+    --line: #2a3041;
+    --keycap: #262c3d;
+    --keycap-ink: #f4f5f8;
+    --on-btn: #10131a;
+    --shared: #5cc08a;
+    --v: #ff5a6c;
+    --lmb: #52b9f0;
+    --q: #a983ff;
+    --e: #ffc83d;
+    --f: #ff8c4a;
+    --r: #f052a8;
+    --marker: #ffc83d;
+    --marker-ink: #1b1600;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1218;
+  --surface: #171b24;
+  --sunk: #12151d;
+  --ink: #e9ecf3;
+  --muted: #9ba3b6;
+  --line: #2a3041;
+  --keycap: #262c3d;
+  --keycap-ink: #f4f5f8;
+  --on-btn: #10131a;
+  --shared: #5cc08a;
+  --v: #ff5a6c;
+  --lmb: #52b9f0;
+  --q: #a983ff;
+  --e: #ffc83d;
+  --f: #ff8c4a;
+  --r: #f052a8;
+  --marker: #ffc83d;
+  --marker-ink: #1b1600;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 16px;
+  line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+a { color: inherit; text-decoration-color: var(--muted); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px; border-radius: 3px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+code, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+code { font-size: 0.88em; background: var(--sunk); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+.page { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 48px; }
+
+/* the masthead */
+.mast { grid-column: 1 / -1; padding-block: 40px 8px; display: grid; gap: 14px; }
+.mast .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.mast h1 { font-family: var(--display); font-weight: 400; font-size: clamp(34px, 6vw, 62px); line-height: 1; letter-spacing: 0.01em; }
+.mast h1 .tape { background: var(--marker); color: var(--marker-ink); padding: 0 0.12em; }
+.mast .lede { max-width: 68ch; font-size: 18px; color: var(--ink); }
+.mast .basis { max-width: 68ch; color: var(--muted); font-size: 14px; }
+
+/* the index */
+.index { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 20px); align-self: start; display: grid; gap: 2px; font-size: 14px; padding-top: 6px; }
+.index a { text-decoration: none; padding: 4px 8px; border-radius: 4px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+.index a:hover { color: var(--ink); background: var(--surface); }
+.index .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; background: var(--muted); }
+.index .label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 12px 8px 4px; }
+
+main { display: grid; gap: 64px; min-width: 0; }
+section { display: grid; gap: 18px; min-width: 0; scroll-margin-top: 24px; }
+section > header { display: grid; gap: 6px; }
+.tag { display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.tag .chip { font-family: var(--display); font-size: 13px; letter-spacing: 0.02em; color: var(--on-btn); background: var(--btn, var(--keycap)); padding: 2px 8px; border-radius: 4px; text-transform: none; }
+.v { --btn: var(--v); } .lmb { --btn: var(--lmb); } .q { --btn: var(--q); } .e { --btn: var(--e); } .f { --btn: var(--f); } .r { --btn: var(--r); } .shared { --btn: var(--shared); }
+.e .tag .chip, .chip.on-yellow { color: var(--marker-ink); }
+h2 { font-family: var(--display); font-weight: 400; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.1; }
+h3 { font-size: 17px; font-weight: 700; }
+.prose { display: grid; gap: 12px; max-width: 70ch; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+
+/* tables */
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+th, td { text-align: left; padding: 9px 12px; vertical-align: top; border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+th { font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--sunk); white-space: nowrap; }
+td .num, td.num { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+td.plain:first-child, .plain td:first-child { font-weight: 400; }
+
+/* the key map */
+.keymap { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.key { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.cap { min-width: 44px; height: 40px; padding: 0 8px; display: grid; place-items: center; font-family: var(--display); font-size: 15px; color: var(--on-btn); background: var(--btn, var(--keycap)); border-radius: 6px; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.28); white-space: nowrap; }
+.e .cap { color: var(--marker-ink); }
+.key b { display: block; font-size: 14.5px; }
+.key div span { display: block; font-size: 13px; color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--btn); vertical-align: -1px; }
+
+/* fact rows: a number and what it means */
+.facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 2px; align-content: start; }
+.fact .val { font-family: var(--mono); font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fact .val small { font-size: 13px; font-weight: 400; color: var(--muted); }
+.fact .what { font-size: 13.5px; color: var(--muted); }
+
+.figure { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.figure .chart { overflow-x: auto; }
+.figure svg { display: block; width: 100%; min-width: 520px; height: auto; }
+.figure figcaption, .figure .cap-text { font-size: 13.5px; color: var(--muted); max-width: 70ch; }
+svg text { font-family: var(--mono); font-size: 12px; fill: var(--muted); }
+svg .strong { fill: var(--ink); font-weight: 600; }
+svg .axis { stroke: var(--line); stroke-width: 1; }
+svg .grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 4; }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.callout { border: 1px dashed var(--line); border-radius: 8px; padding: 12px 14px; font-size: 14.5px; background: var(--sunk); max-width: 76ch; }
+.callout b { font-weight: 700; }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.state { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.state.ok { border-color: var(--shared); color: var(--shared); }
+.state.stand { border-color: var(--f); color: var(--f); }
+.marker { background: var(--marker); color: var(--marker-ink); padding: 0 4px; border-radius: 2px; }
+
+/* the clips: each move as the character view plays it, looping while it's on screen */
+.clips-block { display: grid; gap: 10px; min-width: 0; }
+.clips-block h3 { font-family: var(--mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.clips { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.clip { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: grid; align-content: start; }
+.clip video { display: block; width: 100%; aspect-ratio: 1; background: #161a22; cursor: pointer; }
+.clip figcaption { padding: 7px 9px 9px; display: grid; gap: 3px; font-size: 13px; }
+.clip figcaption code { background: none; border: 0; padding: 0; font-size: 10.5px; color: var(--muted); overflow-wrap: anywhere; }
+.speed { display: inline-flex; gap: 4px; align-items: center; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.speed button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 3px 9px; cursor: pointer; }
+.speed button[aria-pressed="true"] { background: var(--marker); color: var(--marker-ink); border-color: var(--marker); }
+
+@media (max-width: 860px) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .index { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; overflow-x: auto; gap: 4px; padding: 8px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .index .label { display: none; }
+  .index a { white-space: nowrap; background: var(--surface); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .mast { padding-block: 24px 0; }
+  main { gap: 48px; }
+  .table-wrap table:not(.plain) { min-width: 640px; }
+  td .num, td.num { white-space: normal; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="mast">
+    <span class="eyebrow">Psyblr · how a fighter works · 11 November 2026</span>
+    <h1>The Fighter’s <span class="tape">Manual</span></h1>
+    <p class="lede">Every hero in Psyblr runs on the same body of shared moves and seven buttons. Each button holds exactly one thing, and nothing sits on two buttons. This manual walks through all of it: how a fighter moves, climbs and rides the map, and how each button fights.</p>
+    <p class="basis">The numbers are the engine’s own values for a medium hero, at 60 ticks a second, in metres and seconds. Bigger and smaller heroes scale as the Sizes section shows. Anything marked <span class="state stand">stand-in</span> works but still borrows another family’s animation. For the sorted list of every family on every button, see <a href="kit-library.html">the Kit Library</a>.</p>
+    <p class="basis">Each “See it” clip is the move as the game’s character view plays it, recorded on our own medium body with a one-hand edge and a one-hand gun, one frame every 1/30 s. Under each clip are the animation clips it plays. Click a clip to pause it.</p>
+    <div class="speed" role="group" aria-label="Clip speed">Clip speed <button type="button" data-rate="1" aria-pressed="true">1×</button><button type="button" data-rate="0.5" aria-pressed="false">½×</button><button type="button" data-rate="0.25" aria-pressed="false">¼×</button></div>
+  </header>
+
+  <nav class="index" aria-label="Sections">
+    <span class="label">Basics</span>
+    <a href="#controls"><span class="dot"></span>Controls</a>
+    <a href="#buttons"><span class="dot"></span>The button rule</a>
+    <span class="label">Traversal</span>
+    <a href="#ground" class="shared"><span class="dot" style="background:var(--shared)"></span>On the ground</a>
+    <a href="#air" class="shared"><span class="dot" style="background:var(--shared)"></span>In the air</a>
+    <a href="#evade" class="shared"><span class="dot" style="background:var(--shared)"></span>Roll and dash</a>
+    <a href="#edges" class="shared"><span class="dot" style="background:var(--shared)"></span>Edges, walls, routes</a>
+    <span class="label">Combat</span>
+    <a href="#melee"><span class="dot" style="background:var(--v)"></span>V · Melee</a>
+    <a href="#guard"><span class="dot" style="background:var(--shared)"></span>Guard and getting hit</a>
+    <a href="#ranged"><span class="dot" style="background:var(--lmb)"></span>LMB · Ranged</a>
+    <a href="#spell"><span class="dot" style="background:var(--q)"></span>Q · Spell</a>
+    <a href="#movement"><span class="dot" style="background:var(--e)"></span>E · Movement skill</a>
+    <a href="#aura"><span class="dot" style="background:var(--f)"></span>F · Aura</a>
+    <a href="#ultimate"><span class="dot" style="background:var(--r)"></span>R · Ultimate</a>
+    <a href="#systems"><span class="dot"></span>Systems</a>
+    <span class="label">The body</span>
+    <a href="#weapons"><span class="dot"></span>Weapons and carry</a>
+    <a href="#sizes"><span class="dot"></span>Sizes and attitudes</a>
+    <a href="#status"><span class="dot"></span>Where it stands</a>
+  </nav>
+
+  <main>
+    <!-- CONTROLS -->
+    <section id="controls">
+      <header>
+        <span class="tag">Basics</span>
+        <h2>Controls</h2>
+      </header>
+      <div class="legend">
+        <span class="shared"><i></i>Shared, every hero</span>
+        <span class="v"><i></i>V melee</span>
+        <span class="lmb"><i></i>LMB ranged</span>
+        <span class="q"><i></i>Q spell</span>
+        <span class="e"><i></i>E movement skill</span>
+        <span class="f"><i></i>F aura</span>
+        <span class="r"><i></i>R ultimate</span>
+      </div>
+      <div class="keymap">
+        <div class="key shared"><span class="cap">WASD</span><div><b>Move</b><span>Relative to the camera; arrow keys work too</span></div></div>
+        <div class="key shared"><span class="cap">Space</span><div><b>Jump, double jump</b><span>Press again in the air for the second jump</span></div></div>
+        <div class="key shared"><span class="cap">Shift</span><div><b>Dash, sprint</b><span>Tap to dash; hold to sprint once the dash is spent</span></div></div>
+        <div class="key shared"><span class="cap">Z</span><div><b>Dodge roll</b><span>The way you steer, straight ahead with no key held</span></div></div>
+        <div class="key shared"><span class="cap">C</span><div><b>Crouch, slide</b><span>At a run, crouching slides</span></div></div>
+        <div class="key shared"><span class="cap">Ctrl</span><div><b>Prone, dive</b><span>At a run, it dives into prone</span></div></div>
+        <div class="key shared"><span class="cap">X</span><div><b>Guard</b><span>Held; pressed just before a hit, it parries</span></div></div>
+        <div class="key v"><span class="cap">V</span><div><b>Melee</b><span>Tap to chain three hits; hold for the heavy</span></div></div>
+        <div class="key lmb"><span class="cap">LMB</span><div><b>Ranged weapon</b><span>Fires from the weapon’s muzzle</span></div></div>
+        <div class="key shared"><span class="cap">RMB</span><div><b>First-person aim</b><span>Held; the crosshair stays centred</span></div></div>
+        <div class="key q"><span class="cap">Q</span><div><b>Spell</b><span>One cast on a cooldown</span></div></div>
+        <div class="key e"><span class="cap">E</span><div><b>Movement skill</b><span>Moves you, on a cooldown</span></div></div>
+        <div class="key f"><span class="cap">F</span><div><b>Aura on and off</b><span>Drains its own meter while on</span></div></div>
+        <div class="key r"><span class="cap">R</span><div><b>Ultimate</b><span>The big moment, on a long cooldown</span></div></div>
+      </div>
+      <p class="small muted">Combinations: <b>back + V</b> is the launcher, <b>V + X</b> close in is a grab, <b>V</b> while sprinting is a dash attack, and <b>V</b> in the air is an air attack (held, an air slam).</p>
+    </section>
+
+    <!-- THE BUTTON RULE -->
+    <section id="buttons">
+      <header>
+        <span class="tag">Basics</span>
+        <h2>One rule sorts every ability</h2>
+      </header>
+      <div class="prose">
+        <p>Two questions decide which button an ability lives on: what it costs to use, and what it’s for. Each pair of answers belongs to exactly one button, so there are no overlaps and no gaps.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Button</th><th>Paid for by</th><th>Used for</th><th>Never holds</th></tr></thead>
+          <tbody>
+            <tr class="shared"><td><span class="tag"><span class="chip">Shared</span></span></td><td>Nothing; every hero has it</td><td>Moving, defending, recovering</td><td>Anything only some heroes have</td></tr>
+            <tr class="v"><td><span class="tag"><span class="chip">V</span></span></td><td>Nothing; the held weapon</td><td>Hitting up close</td><td>Shots, spells</td></tr>
+            <tr class="lmb"><td><span class="tag"><span class="chip">LMB</span></span></td><td>A magazine; the held weapon</td><td>Hitting at range, again and again</td><td>Cooldown nukes</td></tr>
+            <tr class="e"><td><span class="tag"><span class="chip">E</span></span></td><td>A cooldown</td><td>Moving the caster, including shared moves done better</td><td>Anything that doesn’t move the caster</td></tr>
+            <tr class="q"><td><span class="tag"><span class="chip">Q</span></span></td><td>A cooldown</td><td>Acting on others or on the world</td><td>Self-only buffs, movement</td></tr>
+            <tr class="f"><td><span class="tag"><span class="chip">F</span></span></td><td>Its own meter, drained while on</td><td>An aura on the caster and on allies near it</td><td>Forms, one-shot actions</td></tr>
+            <tr class="r"><td><span class="tag"><span class="chip">R</span></span></td><td>A long cooldown</td><td>The one big moment: an overpowered skill, or a form with new moves</td><td>Anything a short cooldown could pay for</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">The engine enforces this. A melee slot holds only a weapon style, ranged holds only repeat fire from the hand or a weapon, Q holds nothing melee or self-only, E holds only things that move the caster, and F never holds a form.</p>
+    </section>
+
+    <!-- ON THE GROUND -->
+    <section id="ground" class="shared">
+      <header>
+        <span class="tag"><span class="chip">Shared</span>Traversal</span>
+        <h2>On the ground</h2>
+      </header>
+      <div class="facts">
+        <div class="fact"><span class="val">6.5 <small>m/s</small></span><span class="what">Jog, the normal pace</span></div>
+        <div class="fact"><span class="val">8 <small>m/s</small></span><span class="what">Sprint (Shift held), 1.23× the jog</span></div>
+        <div class="fact"><span class="val">60 <small>m/s²</small></span><span class="what">How fast the body reaches the speed you steer for</span></div>
+        <div class="fact"><span class="val">0.4 <small>m</small></span><span class="what">Steps up anything this high without a jump</span></div>
+        <div class="fact"><span class="val">3 <small>pips</small></span><span class="what">Stamina; one comes back every 3.5 s</span></div>
+      </div>
+      <div class="prose">
+        <p><b>Stamina</b> pays for the burst moves. The double jump, the dash and the dodge roll each spend one pip.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Stance</th><th>How you get there</th><th>Speed</th><th>Body height</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Crouch, crouch-walk</td><td>C</td><td class="num">55% of the jog</td><td class="num">70%</td><td>Shots and spells fire from the crouch on its own firing animation</td></tr>
+            <tr><td>Slide</td><td>C at 80% of run speed or more</td><td class="num">1.4× run speed, easing to 0.75× over 0.9 s</td><td class="num">55%</td><td>Steers up to 1.5 rad/s; low enough for a chest-high shot to pass over; ends crouched</td></tr>
+            <tr><td>Prone, crawl</td><td>Ctrl</td><td class="num">22% of the jog</td><td class="num">35%</td><td>Shots and spells fire from prone; only a melee blow stands you up first</td></tr>
+            <tr><td>Dive</td><td>Ctrl at a run</td><td class="num">1.25× run speed down to 0.15× in 0.45 s</td><td class="num">Lands prone</td><td>A forward dive straight into prone</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-idle.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Stand</b><code>idle → land</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-run.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Run</b><code>walk → run</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-crouch.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Crouch</b><code>crouch</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-crouch-move.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Crouch walk</b><code>crouch_move</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-slide.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Slide</b><code>slide</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-prone.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Prone</b><code>prone</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-prone-move.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Crawl</b><code>prone_move</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-dive.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dive</b><code>dive</code></figcaption></figure>
+        </div>
+      </div>
+      <p class="small muted">The body faces where the camera looks. Over the shoulder, the camera rides at the hero’s eye height for its stance, so the crosshair keeps its place whether you stand, crouch or lie prone.</p>
+    </section>
+
+    <!-- IN THE AIR -->
+    <section id="air" class="shared">
+      <header>
+        <span class="tag"><span class="chip">Shared</span>Traversal</span>
+        <h2>In the air</h2>
+      </header>
+      <div class="prose">
+        <p>Jumps are big and anime-sized, and the player steers them. Keys steer the body in the air, and letting go brakes the drift, so you decide how far a jump goes. A jump always rises its full height, however briefly Space is pressed. A sprint’s jump keeps its take-off speed, so it flies further than a jog’s.</p>
+        <p>The double jump adds height and range and nothing else: no flip, and no roll on landing. Every attack works in the air, and ordinary map heights never deal fall damage.</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><span class="val">4.2 <small>m</small></span><span class="what">First jump’s rise, medium hero</span></div>
+        <div class="fact"><span class="val">+3.4 <small>m</small></span><span class="what">Second jump, from wherever it starts</span></div>
+        <div class="fact"><span class="val">34 <small>m/s²</small></span><span class="what">Gravity, heavier than Earth’s, so a big jump still takes about a second</span></div>
+        <div class="fact"><span class="val">0.2 <small>s</small></span><span class="what">An early jump or roll press waits this long, then happens</span></div>
+        <div class="fact"><span class="val">0.1 <small>s</small></span><span class="what">Coyote time: a jump just after leaving an edge is still the ground jump</span></div>
+      </div>
+      <figure class="figure" style="margin:0">
+        <div class="chart">
+          <svg viewBox="0 0 640 270" role="img" aria-label="Jump heights by size class: first jump plus double jump, from 9.5 metres for tiny down to 5.0 metres for colossal">
+            <!-- scale: 0 to 10 m over 200 px, baseline y = 220 -->
+            <line class="grid" x1="70" y1="20" x2="630" y2="20"/>
+            <line class="grid" x1="70" y1="60" x2="630" y2="60"/>
+            <line class="grid" x1="70" y1="100" x2="630" y2="100"/>
+            <line class="grid" x1="70" y1="140" x2="630" y2="140"/>
+            <line class="grid" x1="70" y1="180" x2="630" y2="180"/>
+            <line class="axis" x1="70" y1="220" x2="630" y2="220"/>
+            <text x="60" y="224" text-anchor="end">0 m</text>
+            <text x="60" y="184" text-anchor="end">2</text>
+            <text x="60" y="144" text-anchor="end">4</text>
+            <text x="60" y="104" text-anchor="end">6</text>
+            <text x="60" y="64" text-anchor="end">8</text>
+            <text x="60" y="24" text-anchor="end">10</text>
+            <!-- bars: first jump (shared green) from baseline; double jump (yellow) stacked. h = metres × 20 -->
+            <g>
+              <rect x="95" y="115" width="56" height="105" style="fill:var(--shared)"/>
+              <rect x="95" y="30" width="56" height="85" style="fill:var(--marker)"/>
+              <text class="strong" x="123" y="24" text-anchor="middle">9.50</text>
+              <text x="123" y="240" text-anchor="middle">Tiny</text>
+              <text x="123" y="256" text-anchor="middle">×1.25</text>
+            </g>
+            <g>
+              <rect x="185" y="126" width="56" height="94" style="fill:var(--shared)"/>
+              <rect x="185" y="50" width="56" height="76" style="fill:var(--marker)"/>
+              <text class="strong" x="213" y="44" text-anchor="middle">8.51</text>
+              <text x="213" y="240" text-anchor="middle">Small</text>
+              <text x="213" y="256" text-anchor="middle">×1.12</text>
+            </g>
+            <g>
+              <rect x="275" y="136" width="56" height="84" style="fill:var(--shared)"/>
+              <rect x="275" y="68" width="56" height="68" style="fill:var(--marker)"/>
+              <text class="strong" x="303" y="62" text-anchor="middle">7.60</text>
+              <text x="303" y="240" text-anchor="middle">Medium</text>
+              <text x="303" y="256" text-anchor="middle">×1</text>
+            </g>
+            <g>
+              <rect x="365" y="146" width="56" height="74" style="fill:var(--shared)"/>
+              <rect x="365" y="86" width="56" height="60" style="fill:var(--marker)"/>
+              <text class="strong" x="393" y="80" text-anchor="middle">6.69</text>
+              <text x="393" y="240" text-anchor="middle">Large</text>
+              <text x="393" y="256" text-anchor="middle">×0.88</text>
+            </g>
+            <g>
+              <rect x="455" y="156" width="56" height="64" style="fill:var(--shared)"/>
+              <rect x="455" y="104" width="56" height="52" style="fill:var(--marker)"/>
+              <text class="strong" x="483" y="98" text-anchor="middle">5.78</text>
+              <text x="483" y="240" text-anchor="middle">Huge</text>
+              <text x="483" y="256" text-anchor="middle">×0.76</text>
+            </g>
+            <g>
+              <rect x="545" y="165" width="56" height="55" style="fill:var(--shared)"/>
+              <rect x="545" y="120" width="56" height="45" style="fill:var(--marker)"/>
+              <text class="strong" x="573" y="114" text-anchor="middle">5.02</text>
+              <text x="573" y="240" text-anchor="middle">Colossal</text>
+              <text x="573" y="256" text-anchor="middle">×0.66</text>
+            </g>
+          </svg>
+        </div>
+        <figcaption><span style="color:var(--shared);font-weight:600">■</span> first jump &nbsp;<span style="color:var(--marker);font-weight:600">■</span> double jump. Total rise by size class, in metres. Smaller bodies jump higher and heavier ones lower; each size scales both jumps by the factor under its name.</figcaption>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Landing</th><th>When</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td>Land</td><td>Any ordinary landing</td><td>Gives way at once to running or the next move</td></tr>
+            <tr><td>Landing roll</td><td>Landing at 20 m/s or more, from at least 5 m below take-off, while steering</td><td>Rolls through and keeps your speed</td></tr>
+            <tr><td>Heavy landing</td><td>The same fall with no key held</td><td>Lands hard and stops; never any damage</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it: jumps</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-jump-up.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Jump up</b><code>jump_up → air → land → idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-jump-forward.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Jump forward</b><code>jump → air → land → idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-jump-left.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Jump left</b><code>jump_left → air → land → idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-jump-right.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Jump right</b><code>jump_right → air → land → idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-jump-back.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Jump back</b><code>jump_back → air → land → idle</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>See it: double jumps</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-air-jump-up.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Double jump up</b><code>jump_up → air_jump_up → air</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-air-jump-forward.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Double jump forward</b><code>jump_up → air_jump → air</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-air-jump-left.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Double jump left</b><code>jump_up → air_jump_left → air</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-air-jump-right.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Double jump right</b><code>jump_up → air_jump_right → air</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-air-jump-back.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Double jump back</b><code>jump_up → air_jump_back → air</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>See it: falling and landing</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-air.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Fall</b><code>air</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-land.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Land</b><code>idle → land</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-land_roll.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Landing roll</b><code>land_roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-land_heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Heavy landing</b><code>land_heavy</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- ROLL AND DASH -->
+    <section id="evade" class="shared">
+      <header>
+        <span class="tag"><span class="chip">Shared</span>Traversal</span>
+        <h2>Roll and dash</h2>
+      </header>
+      <div class="two">
+        <div class="table-wrap">
+          <table class="plain">
+            <thead><tr><th colspan="2">Dodge roll · Z · one pip</th></tr></thead>
+            <tbody>
+              <tr><td>Distance</td><td class="num">5 m in 0.55 s</td></tr>
+              <tr><td>Untouchable</td><td class="num">first 0.3 s</td></tr>
+              <tr><td>Direction</td><td>Straight the way you steer, not over a shoulder; ahead with no key held</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table class="plain">
+            <thead><tr><th colspan="2">Dash · Shift tap · one pip</th></tr></thead>
+            <tbody>
+              <tr><td>Speed</td><td class="num">18 m/s for 0.2 s (about 3.6 m)</td></tr>
+              <tr><td>Direction</td><td>The way you steer, or face; stays level in the air too</td></tr>
+              <tr><td>At a run</td><td>Drives straight ahead, leaning into it, and runs on; held Shift then sprints</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-roll-up.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Roll up</b><code>roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-roll-forward.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Roll forward</b><code>roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-roll-left.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Roll left</b><code>roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-roll-right.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Roll right</b><code>roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-roll-back.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Roll back</b><code>roll_back</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-dash.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash</b><code>dash</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- EDGES, WALLS, ROUTES -->
+    <section id="edges" class="shared">
+      <header>
+        <span class="tag"><span class="chip">Shared</span>Traversal</span>
+        <h2>Edges, walls and map routes</h2>
+      </header>
+      <div class="prose">
+        <p>The map marks what you can climb, run and ride in <span class="marker">arcade yellow</span>. While you hang, climb or ride a line, both weapons are stowed, because the move needs your hands.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Move</th><th>How it starts</th><th>Numbers</th><th>Getting out</th></tr></thead>
+          <tbody>
+            <tr><td>Mantle</td><td>Press into a ledge with room on top, on the ground or in the air</td><td class="num">Up to 1.4 m above the feet; 0.5 s, out of control</td><td>Ends standing on top</td></tr>
+            <tr><td>Ledge catch</td><td>Walk (not sprint) off an edge with at least 2 m of sheer drop, or jump into a wall too tall to mantle</td><td class="num">A jump grabs edges up to 0.5 m over the head</td><td>Drops into the hang</td></tr>
+            <tr><td>Hang and shimmy</td><td>From a catch; holds still from both hands, no bobbing</td><td class="num">Shimmy 1.6 m/s along the edge</td><td>Jump or steer into the wall to climb (0.75 s); S, crouch or roll to let go; jump steering away to leap off. No re-catch for 0.4 s.</td></tr>
+            <tr><td>Wall-run</td><td>In the air, moving at least 4 m/s across into a marked wall</td><td class="num">9 m/s along it for 1.1 s, sinking 0.6 m/s</td><td>Jump kicks off at 7 m/s with a full jump and gives the double jump back</td></tr>
+            <tr><td>Zipline</td><td>Hands come within 0.8 m of the line in the air</td><td class="num">15 m/s the way you were going</td><td>Jump lets go with a jump; the end lets go at speed</td></tr>
+            <tr><td>Rail</td><td>Feet come within 0.8 m of the rail in the air</td><td class="num">15 m/s</td><td>As the zipline</td></tr>
+            <tr><td>Jump pad</td><td>Step on it</td><td>Launches you along its route</td><td>A shared map piece, like ziplines</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-mantle.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Mantle</b><code>mantle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-catch.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Ledge catch</b><code>catch → hang</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-hang.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hang</b><code>hang</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-hang-left.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shimmy left</b><code>hang_left</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-hang-right.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shimmy right</b><code>hang_right</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-climb.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Climb up</b><code>climb</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-zip.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Zipline</b><code>zip</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-rail.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Rail</b><code>rail</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="callout">
+        <b>How the map is built around these moves.</b> Baseline movement reaches every major platform. Every strong position has two or three routes in (stairs, a jump chain and a side flank). Levels overlook each other. Platforms read at a glance. The riskier route is the faster one. Jump pads and E skills add shortcuts, but no important area needs one.
+      </div>
+    </section>
+
+    <!-- MELEE -->
+    <section id="melee" class="v">
+      <header>
+        <span class="tag"><span class="chip">V</span>Combat</span>
+        <h2>V · Melee</h2>
+      </header>
+      <div class="prose">
+        <p>V holds a <b>weapon family</b>, chosen by how the weapon lands its hits rather than by its name, so a scythe swings like an axe. The family sets the animations, reach, contact frames and lunge. Damage comes from the role’s weapon damage. Every family fills the same moveset, so heroes with different weapons still play alike.</p>
+        <p>Blows home in on the target in front (up to 70° off your aim, lunging over 0.12 s), and stop briefly on contact so the hit lands with weight.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Move</th><th>Input</th><th>Worth</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>Light chain</td><td>V, V, V</td><td class="num">1×, 1×, 1.4×</td><td>Each strike chains if the next follows within 0.7 s; an early tap is held 0.45 s, never dropped. The third is the finisher and launches the target as high as a double jump.</td></tr>
+            <tr><td>Charged heavy</td><td>Hold V</td><td class="num">1.25× → 1.8×</td><td>Held past 0.28 s it starts charging, reaching full power after a 1 s charge, and lands on release. It breaks a guard and launches the target as high as a jump.</td></tr>
+            <tr><td>Dash attack</td><td>V while sprinting</td><td class="num">1.3×</td><td>Carries you 3 m in and pushes the target 3 m.</td></tr>
+            <tr><td>Air attack</td><td>V in the air</td><td class="num">0.8×</td><td>Holds an airborne target in place for 0.45 s, and you with it. The third air hit spikes it down at 26 m/s.</td></tr>
+            <tr><td>Air slam</td><td>Hold V in the air</td><td class="num">1.6×</td><td>Plunges at 32 m/s; the landing hits everyone within 2.8 m and pops them 1.2 m up.</td></tr>
+            <tr><td>Launcher</td><td>Back + V</td><td class="num">1×</td><td>Throws the target 6.5 m straight up. Jump within 0.8 s to chase it into an air juggle.</td></tr>
+            <tr><td>Grab and throw</td><td>V + X, close in</td><td class="num">1.5×</td><td>Catches the nearest enemy within 1.4 m ahead (a 100° arc), holds it 0.45 s, then throws it 7 m.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="figure" style="margin:0">
+        <div class="chart">
+          <svg viewBox="0 0 640 190" role="img" aria-label="Timing of the V chain and the held heavy over two seconds">
+            <!-- time scale: 0 to 2 s over 520 px from x = 100: 260 px a second -->
+            <line class="axis" x1="100" y1="160" x2="620" y2="160"/>
+            <text x="100" y="178" text-anchor="middle">0 s</text>
+            <text x="230" y="178" text-anchor="middle">0.5</text>
+            <text x="360" y="178" text-anchor="middle">1.0</text>
+            <text x="490" y="178" text-anchor="middle">1.5</text>
+            <text x="620" y="178" text-anchor="middle">2.0</text>
+            <line class="grid" x1="230" y1="20" x2="230" y2="160"/>
+            <line class="grid" x1="360" y1="20" x2="360" y2="160"/>
+            <line class="grid" x1="490" y1="20" x2="490" y2="160"/>
+            <!-- lane 1: the chain at its 0.37 s beat; each window 0.7 s -->
+            <text class="strong" x="90" y="52" text-anchor="end">Tap V</text>
+            <rect x="100" y="60" width="182" height="8" rx="2" style="fill:var(--v);opacity:.22"/>
+            <rect x="196" y="72" width="182" height="8" rx="2" style="fill:var(--v);opacity:.22"/>
+            <circle cx="100" cy="46" r="9" style="fill:var(--v)"/>
+            <circle cx="196" cy="46" r="9" style="fill:var(--v)"/>
+            <circle cx="292" cy="46" r="12" style="fill:var(--v)"/>
+            <text x="100" y="30" text-anchor="middle">1</text>
+            <text x="196" y="30" text-anchor="middle">2</text>
+            <text class="strong" x="292" y="28" text-anchor="middle">3 · 1.4×</text>
+            <text x="388" y="68">window to the next strike: 0.7 s</text>
+            <!-- lane 2: hold V -->
+            <text class="strong" x="90" y="124" text-anchor="end">Hold V</text>
+            <rect x="100" y="114" width="73" height="16" rx="3" style="fill:var(--line)"/>
+            <rect x="173" y="114" width="260" height="16" rx="3" style="fill:var(--v);opacity:.55"/>
+            <line x1="433" y1="106" x2="433" y2="138" style="stroke:var(--v);stroke-width:3"/>
+            <text x="136" y="148" text-anchor="middle">a tap</text>
+            <text x="173" y="102" text-anchor="middle">0.28 s</text>
+            <text x="303" y="148" text-anchor="middle">charging · 1.25× rising</text>
+            <text class="strong" x="440" y="126">full · 1.8×, release any time</text>
+          </svg>
+        </div>
+        <figcaption>To scale. Light hits chain at the weapon family’s own beat, about 0.37 s a step, and attack speed doesn’t slow it: attack speed sets how much each hit carries. Holding V shows the heavy’s wind-up from early in the hold.</figcaption>
+      </figure>
+      <div class="clips-block">
+        <h3>See it, with a one-hand edge</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-v1.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Combo 1</b><code>ual_sword_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-v2.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Combo 2</b><code>stabbing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-v3.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Combo 3, finisher</b><code>slash_advance</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>ual_sword_attack → stabbing → slash_advance</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>one_hand_sword_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>thrust_slash</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>ss_sword_and_shield_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>ss_sword_and_shield_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-grab.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Grab and throw</b><code>grab_and_slam</code></figcaption></figure>
+        </div>
+      </div>
+      <h3>The eleven families</h3>
+      <p class="small muted">A weapon takes the first family that fits: paired weapons first, then a weapon with a shield, then by how it hits.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Family</th><th>How it hits</th><th>Weapons</th><th>Animations</th></tr></thead>
+          <tbody>
+            <tr><td>Paired</td><td>Alternating hands, fast</td><td>Dual swords, daggers, claws, tonfa, sai, twin axes</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>With a shield</td><td>Cut or bash, shield up</td><td>Sword, mace or axe with a shield</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Fists</td><td>Punches, elbows, knees</td><td>Bare hands, gauntlets, knuckles</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Kicks</td><td>Legs</td><td>Kicks, stomps, capoeira</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>One-hand edge</td><td>Slash and stab</td><td>Sword, katana, dagger, machete, rapier</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Two-hand edge</td><td>Wide sweeps and spins</td><td>Greatsword, claymore, nodachi</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Chop and reap</td><td>Hooked arcs that pull</td><td>Axe, great axe, scythe, halberd, kama</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Smash</td><td>Overhead and home-run swings</td><td>Club, bat, mace, hammer, warhammer, maul</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Thrust</td><td>Straight jabs at reach</td><td>Spear, lance, trident, naginata</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Staff spin</td><td>Both ends, twirled</td><td>Bo, quarterstaff, a mage’s staff</td><td><span class="state ok">own set</span></td></tr>
+            <tr><td>Flexible</td><td>Crack, wrap and pull</td><td>Whip, chain, kusarigama, nunchaku</td><td><span class="state ok">own set</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Every family’s moves</h3>
+      <p class="small muted">Each family plays its own clips for every blow. The grab plays <code>grab_and_slam</code> for every family, as one body throws another the same way whatever it holds. The R lock-on strikes with the family’s flurry.</p>
+      <div class="clips-block">
+        <h3>Paired</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-paired.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>stable_sword_inward_slash → stable_sword_outward_slash → double_dagger_stab</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>dual_weapon_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>slash_advance</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>ss_sword_and_shield_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>ss_sword_and_shield_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-paired.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>one_hand_sword_combo</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>With a shield</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-shield.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>ss_sword_and_shield_slash → ss_sword_and_shield_attack_4 → ss_sword_and_shield_attack_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>ss_sword_and_shield_slash_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>ss_sword_and_shield_attack_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>ss_sword_and_shield_slash_4</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>ss_sword_and_shield_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>ss_sword_and_shield_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-shield.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>ss_sword_and_shield_slash_5</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Fists</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-unarmed.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>lead_jab → cross_punch → hook_punch</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>elbow_uppercut_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>flying_knee_punch_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>mutant_punch</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>mutant_jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>uppercut</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-unarmed.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>quad_punch</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Kicks</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-kicks.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>mma_kick → roundhouse_kick → side_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>spinning_back_kick_advancing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>flying_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>hurricane_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>drop_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>flip_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-kicks.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>butterfly_kick_advancing</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>One-hand edge</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-blade.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>ual_sword_attack → stabbing → slash_advance</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>one_hand_sword_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>thrust_slash</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>ss_sword_and_shield_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>ss_sword_and_shield_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-blade.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>dual_weapon_combo</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Two-hand edge</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-greatsword.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>gs_great_sword_slash → gs_great_sword_slash_4 → gs_great_sword_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>two_hand_sword_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>gs_great_sword_slide_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>gs_great_sword_high_spin_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>gs_great_sword_jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>gs_great_sword_slash_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-greatsword.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>gs_great_sword_slash_5</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Chop and reap</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-axe.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>axe_standing_melee_attack_downward → axe_standing_melee_attack_horizontal → axe_standing_melee_attack_backhand</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>axe_standing_melee_attack_360_low</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>axe_standing_melee_combo_attack_ver_1</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>axe_standing_melee_combo_attack_ver_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>axe_standing_melee_run_jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>axe_standing_melee_attack_360_high</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-axe.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>axe_standing_melee_combo_attack_ver_2</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Smash</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-club.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>club_swing_single → club_swing_double → two_hand_club_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>heavy_weapon_swing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>club_swing_strike</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>mutant_jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>club_swing_homerun</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-club.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>one_hand_club_combo</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Thrust</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-spear.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>gs_great_sword_attack → thrust_slash → bayonet_stab</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>charge</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>ss_sword_and_shield_attack_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>stabbing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>gs_great_sword_slash_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-spear.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>double_dagger_stab</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Staff spin</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-staff.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>rifle_butt_smash → rifle_punch → butterfly_twirl</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>gs_great_sword_high_spin_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>—</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>gs_great_sword_slash_3</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>gs_great_sword_slash_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-staff.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>axe_standing_melee_combo_attack_ver_1</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Flexible</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/v-v-whip.chain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Chain V V V</b><code>bash → mutant_punch → goalie_throw</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.heavy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Charged heavy</b><code>russian_kettlebell_swing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.dash-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Dash attack</b><code>—</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.air-blow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air attack</b><code>throw</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.slam.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Air slam</b><code>jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.launcher.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launcher</b><code>uppercut</code></figcaption></figure>
+        <figure class="clip"><video src="moves/v-v-whip.flurry.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R lock-on flurry</b><code>pistol_whip</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- GUARD AND GETTING HIT -->
+    <section id="guard" class="shared">
+      <header>
+        <span class="tag"><span class="chip">Shared</span>Combat</span>
+        <h2>Guard, and getting hit</h2>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Situation</th><th>What happens</th></tr></thead>
+          <tbody>
+            <tr><td>Guard (hold X)</td><td>Blows from the front 140° land on the guard. You move at 35% speed. A guarded strike breaks the attacker’s chain and staggers them 0.4 s. A heavy blow breaks the guard.</td></tr>
+            <tr><td>Perfect guard</td><td>X pressed within 0.15 s before a blow lands: no damage, and the attacker staggers for 0.8 s.</td></tr>
+            <tr><td>Flinch</td><td>A hit worth 12% or more of your health makes you flinch.</td></tr>
+            <tr><td>Launched</td><td>Out of control and untouchable while you fly. Any key after 0.2 s takes control back, ends the protection, and you come down as from a normal jump.</td></tr>
+            <tr><td>Knockdown</td><td>After a finisher, heavy, launcher, spike or throw lands: 0.9 s down, then 0.4 s getting up, untouchable. A roll or jump after 0.2 s rolls you out at once.</td></tr>
+            <tr><td>Downed</td><td>At no health with an ally still standing, you go down for 12 s. An ally holding interact within 1.9 m for 2.5 s brings you back at 30% health. Nobody respawns.</td></tr>
+            <tr><td>Knockback</td><td>Arcs; mass changes how far a hit pushes. Bodies stop against walls, ledges and props, and knock props apart.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-guard.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Guard</b><code>block</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-hit.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Flinch</b><code>hurt</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-launched.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Launched</b><code>launched</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-stunned.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Stunned</b><code>stunned</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-dead.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Down</b><code>fall</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- RANGED -->
+    <section id="ranged" class="lmb">
+      <header>
+        <span class="tag"><span class="chip">LMB</span>Combat</span>
+        <h2>LMB · Ranged</h2>
+      </header>
+      <div class="prose">
+        <p>LMB fires again and again at the weapon’s rate, from a magazine. Each ranged weapon combines three choices: a <b>family</b> (its grip), a <b>way to fire</b> and a <b>way the shot flies</b>.</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><span class="val">0.16 <small>s</small></span><span class="what">Fastest gap between shots, however fast the hero</span></div>
+        <div class="fact"><span class="val">2.5 <small>s</small></span><span class="what">Unfired this long, the magazine reloads; an empty one reloads at once</span></div>
+        <div class="fact"><span class="val">Muzzle</span><span class="what">Shots leave the weapon’s muzzle, and the crosshair converges on what it covers</span></div>
+        <div class="fact"><span class="val">Bloom</span><span class="what">Spread grows with each shot, at a run and in the air, and settles back</span></div>
+      </div>
+      <div class="two">
+        <div class="table-wrap">
+          <table class="plain">
+            <thead><tr><th>Family</th><th>Weapons</th></tr></thead>
+            <tbody>
+              <tr><td><b>Body emitter</b></td><td>Eye beams, breath, chest blast; fires from the eyes</td></tr>
+              <tr><td><b>Thrown</b></td><td>Knives, kunai, shuriken, grenades, a returning shield</td></tr>
+              <tr><td><b>One-hand gun</b></td><td>Pistol, revolver, blaster</td></tr>
+              <tr><td><b>Paired guns</b></td><td>Two pistols, firing from each hand in turn</td></tr>
+              <tr><td><b>Long gun</b></td><td>Rifle, sniper, shotgun, crossbow</td></tr>
+              <tr><td><b>Heavy gun</b></td><td>Cannon, launcher, minigun</td></tr>
+              <tr><td><b>Bow</b></td><td>Longbow, shortbow, with a quiver</td></tr>
+              <tr><td><b>Magic, one hand</b></td><td>Wand, rod, orb, bare palm</td></tr>
+              <tr><td><b>Magic, two hands</b></td><td>Staff, tome, both palms for energy waves</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:grid;gap:16px;align-content:start">
+          <div class="table-wrap">
+            <table class="plain">
+              <thead><tr><th>How it fires</th></tr></thead>
+              <tbody>
+                <tr><td>Single shots · burst · spread</td></tr>
+                <tr><td>Beam · held beam (two held beams can clash)</td></tr>
+                <tr><td>Hold for full auto · hold to charge and release</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-wrap">
+            <table class="plain">
+              <thead><tr><th>How the shot flies</th><th>Numbers</th></tr></thead>
+              <tbody>
+                <tr><td>Straight</td><td>A bolt along the crosshair</td></tr>
+                <tr><td>Lobbed arc</td><td class="num">Falls at 22 m/s², thrown to land on the aim</td></tr>
+                <tr><td>Bouncing</td><td class="num">3 bounces</td></tr>
+                <tr><td>Returning</td><td>Comes back to the hand</td></tr>
+                <tr><td>Homing</td><td class="num">Locks within 30° of the aim, turns 3.5 rad/s</td></tr>
+                <tr><td>Guided</td><td class="num">Follows your aim, turns 6 rad/s</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>See it, with a one-hand gun</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-lmb.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shoot</b><code>pistol_fire</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-lmb-charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>pistol_fire</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-lmb-crouch.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shoot crouched</b><code>crouch_fire → crouch</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-lmb-prone.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shoot prone</b><code>prone_fire → prone</code></figcaption></figure>
+        </div>
+      </div>
+      <h3>Every grip, every way of firing</h3>
+      <p class="small muted">A way of firing missing from a grip below plays that grip’s single shot. A beam or a held beam holds the aim, and a charge holds it until release.</p>
+      <div class="clips-block">
+        <h3>Body emitter</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-emitter.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>ual_spell_simple_shoot</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-emitter.spread.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Spread</b><code>ual_push_loop</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-emitter.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>ual_push_loop</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-emitter.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>ual_push_loop</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Thrown</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-thrown.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>throw</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.burst.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst</b><code>throwing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>throw_object</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.spread.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Spread</b><code>frisbee_throw</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>throwing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>goalie_throw</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-thrown.lobbed.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Lobbed</b><code>rifle_toss_grenade</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>One-hand gun</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-pistol.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>pistol_fire</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-pistol.burst.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst</b><code>shooting_pistol</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-pistol.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>ual_pistol_shoot</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-pistol.spread.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Spread</b><code>shooting_pistol</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-pistol.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>pistol_aim_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-pistol.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>pistol_aim_idle</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Paired guns</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-paired.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>pistol_fire</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-paired.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>pistol_aim_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-paired.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>pistol_aim_idle</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Long gun</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-rifle.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>shoot_rifle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-rifle.burst.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst</b><code>firing_rifle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-rifle.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>firing_rifle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-rifle.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>rifle_aiming_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-rifle.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>rifle_aiming_idle</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Heavy gun</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-heavy.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>fire_rifle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-heavy.burst.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst</b><code>crouch_rapid_fire</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-heavy.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>firing_rifle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-heavy.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>rifle_aiming_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-heavy.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>rifle_aiming_idle</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Bow</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-bow.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>standing_aim_recoil</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-bow.burst.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst</b><code>standing_draw_arrow</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-bow.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>standing_draw_arrow</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-bow.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>standing_aim_idle_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-bow.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>standing_aim_overdraw</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Magic, one hand</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-magic1.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>magic_standing_1h_magic_attack_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic1.auto.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Full auto</b><code>ual_spell_simple_shoot</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic1.spread.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Spread</b><code>magic_standing_1h_magic_attack_02</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic1.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>ual_spell_simple_idle_loop</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic1.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>ual_spell_simple_idle_loop</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Magic, two hands</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/lmb-magic2.single.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Single shots</b><code>magic_standing_2h_magic_attack_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic2.spread.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Spread</b><code>magic_standing_2h_magic_area_attack_02</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic2.held.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Beam, held</b><code>magic_standing_2h_magic_attack_03</code></figcaption></figure>
+        <figure class="clip"><video src="moves/lmb-magic2.charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Hold to charge</b><code>magic_standing_2h_magic_attack_03</code></figcaption></figure>
+        </div>
+      </div>
+      <p class="small muted">Right mouse gives first-person aim. Shots and spells fire from a crouch or prone without standing up.</p>
+    </section>
+
+    <!-- Q -->
+    <section id="spell" class="q">
+      <header>
+        <span class="tag"><span class="chip">Q</span>Combat</span>
+        <h2>Q · Spell</h2>
+      </header>
+      <div class="prose">
+        <p>Q holds every ability that isn’t melee, repeat fire, movement, an aura or an ultimate. It’s one cast on a cooldown, even when that cast is a damaging bolt. A spell takes the first family in this order that fits its strongest effect, so it can never sit in two, and pure damage comes last.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Family</th><th>What it holds</th><th>In the lab</th></tr></thead>
+          <tbody class="plain">
+            <tr><td class="num">1</td><td><b>Counter</b></td><td>A window that answers an incoming hit</td><td>Riposte, substitution, mirror guard (reflect), drink the blow (absorb)</td></tr>
+            <tr><td class="num">2</td><td><b>Summon</b></td><td>Something that moves and acts</td><td>Minions, clone, decoy</td></tr>
+            <tr><td class="num">3</td><td><b>Construct</b></td><td>A placed thing that stays put</td><td>Wall, one-way barrier, ramp, platform, ice path, portal, turret, trap, totem</td></tr>
+            <tr><td class="num">4</td><td><b>Trick</b></td><td>Bends a rule of the fight</td><td>Swap health, steal a spell, rewind, copy a kit, possession</td></tr>
+            <tr><td class="num">5</td><td><b>Control</b></td><td>Stops a target acting</td><td>Stun, root</td></tr>
+            <tr><td class="num">6</td><td><b>Displacement</b></td><td>Moves others</td><td>Pull, push, lift and throw</td></tr>
+            <tr><td class="num">7</td><td><b>Support</b></td><td>Helps allies</td><td>Heal, shield an ally, revive at range</td></tr>
+            <tr><td class="num">8</td><td><b>Curse</b></td><td>Weakens over time</td><td>Mark and bleed</td></tr>
+            <tr><td class="num">9</td><td><b>Zone</b></td><td>An area that lingers and acts on whoever stands in it</td><td>Blizzard</td></tr>
+            <tr><td class="num">10</td><td><b>Vision</b></td><td>Information</td><td>Reveal pulse</td></tr>
+            <tr><td class="num">11</td><td><b>Burst</b></td><td>Damage now, with a wind-up or charge that sets it apart from LMB</td><td>Fireball, charged energy wave (hold Q)</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-q.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Q</b><code>magic_standing_2h_magic_area_attack_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/main-q-charge.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Q held to charge</b><code>magic_standing_2h_magic_area_attack_01</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Every cast, shape by shape</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/q-q-riposte.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Counter · Riposte (parry-strike)</b><code>inward_block</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-substitution.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Counter · Substitution</b><code>standing_dodge_backward</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-mirror.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Counter · Mirror guard (reflect)</b><code>magic_standing_block_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-drink.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Counter · Drink the blow (absorb)</b><code>high_center_block</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-minions.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Summon · Minions</b><code>magic_spell_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-clone.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Summon · Clone</b><code>two_hand_spell_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-decoy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Summon · Decoy</b><code>spell_cast</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-wall.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Wall</b><code>stomp</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-barrier.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · One-way barrier</b><code>outward_block</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-ramp.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Ramp, platform or path</b><code>magic_standing_2h_magic_attack_05</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-portal.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Portal</b><code>wide_arm_spell_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-turret.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Turret</b><code>ual_fixing_kneeling</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-trap.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Trap</b><code>stomping</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-totem.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Construct · Totem</b><code>ss_sword_and_shield_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-swap-health.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Trick · Swap health</b><code>magic_standing_2h_magic_attack_04</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-steal.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Trick · Steal a spell</b><code>magic_standing_1h_magic_attack_03</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-rewind.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Trick · Rewind</b><code>spell_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-copy.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Trick · Copy a kit</b><code>magic_standing_1h_magic_attack_02</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-possess.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Trick · Possession</b><code>pointing_forward</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-stun.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Control · Stun</b><code>magic_standing_2h_magic_area_attack_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-root.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Control · Root and grip</b><code>magic_standing_2h_cast_spell_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-hook.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Displacement · Pull (hook)</b><code>throwing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-push.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Displacement · Push</b><code>magic_standing_2h_magic_attack_02</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-lift.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Displacement · Lift and throw</b><code>russian_kettlebell_swing</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-heal.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Support · Heal</b><code>magic_heal</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-shield.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Support · Shield an ally</b><code>ss_sword_and_shield_casting_2</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-revive.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Support · Revive at range</b><code>waving_with_both_hands</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-curse.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Curse · Mark and bleed</b><code>big_vegas_pointing_gesture</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-zone.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Zone · Blizzard</b><code>magic_standing_1h_cast_spell_01</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-reveal.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Vision · Reveal pulse</b><code>magic_standing_2h_magic_area_attack_02</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-fireball.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst · Fireball</b><code>fireball</code></figcaption></figure>
+        <figure class="clip"><video src="moves/q-q-wave.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Burst · Charged energy wave (hold Q)</b><code>magic_standing_2h_magic_attack_03</code></figcaption></figure>
+        </div>
+      </div>
+      <p class="small muted">Swapping places with someone moves the caster, so it lives on E, not under Displacement.</p>
+    </section>
+
+    <!-- E -->
+    <section id="movement" class="e">
+      <header>
+        <span class="tag"><span class="chip">E</span>Combat</span>
+        <h2>E · Movement skill</h2>
+      </header>
+      <div class="prose">
+        <p>An E skill is either a way of moving that the shared moves lack, or a shared move done better under its own name. What happens on arrival (nothing, damage, control or a shield) is the skill’s effect, not its kind.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>How it moves</th><th>Kinds</th><th>Numbers</th></tr></thead>
+          <tbody>
+            <tr><td>Instant</td><td>Blink a short way; teleport to a mark or a target; swap places with a hero</td><td class="num">Targets within 12° of the crosshair</td></tr>
+            <tr><td>Line</td><td>Dash; homing dash to a target</td><td class="num">45 m/s; homing locks within 25°</td></tr>
+            <tr><td>Arc</td><td>Leap</td><td class="num">Arcs 30% of its length overhead</td></tr>
+            <tr><td>Line attached</td><td>Grapple to a point; swing on a line</td><td class="num">Swing: 6 m/s kick, lets go 4 m/s upward</td></tr>
+            <tr><td>Held</td><td>Flight and hover; glide; wall-crawl on any wall; burrow; ride an ally</td><td class="num">Flight 1.4× run speed, climbing 5 m/s; glide 1.35×, sinking ≤ 2 m/s; crawl 0.7×; burrow 1.2×</td></tr>
+            <tr><td>Shared, done better</td><td><b>Wall Run</b> on any wall, for longer · <b>Combat Roll</b>, invulnerable throughout, and reloads · <b>Power Slide</b>, knocks down whoever it hits · <b>Zipline</b>, fire your own line and ride it</td><td class="num">Combat Roll 0.45 s; Power Slide 14 m/s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-e.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>E</b><code>idle_to_sprint</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Every kind, one clip each</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/e-e-blink.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Instant · Blink</b><code>ual_spell_simple_exit</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-teleport.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Instant · Teleport to a mark or a target</b><code>ual_spell_simple_enter</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-swap.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Instant · Swap places</b><code>standing_dodge_left</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-dash.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Line · Dash</b><code>idle_to_sprint</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-homing.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Line · Homing dash</b><code>flying_kick</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-leap.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Arc · Leap</b><code>cmu_standing_long_jump</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-grapple.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Line attached · Grapple to a point</b><code>jump_to_hang</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-swing.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Line attached · Swing on a line</b><code>start_swinging</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-flight.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Held · Flight and hover</b><code>flying</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-glide.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Held · Glide</b><code>falling_in_the_air_idle</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-crawl.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Held · Wall-crawl</b><code>climbing_up_wall</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-burrow.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Held · Burrow</b><code>jump_away</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-ride.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Held · Ride an ally</b><code>ual_driving_loop</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-wall-run.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shared, done better · Wall Run (any wall)</b><code>diagonal_wall_run</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-roll.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shared, done better · Combat Roll</b><code>dive_roll</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-slide.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shared, done better · Power Slide</b><code>running_slide</code></figcaption></figure>
+        <figure class="clip"><video src="moves/e-e-zipline.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Shared, done better · Zipline (fire your own)</b><code>jumping_to_hanging</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- F -->
+    <section id="aura" class="f">
+      <header>
+        <span class="tag"><span class="chip">F</span>Combat</span>
+        <h2>F · Aura</h2>
+      </header>
+      <div class="prose">
+        <p>F switches an aura on and off. While on, it drains its own meter, shown on the HUD, and shows round the body. It refills while off and switches itself off when dry. It never costs health and never blocks an action. An aura never changes the body or the moveset; that belongs to R.</p>
+      </div>
+      <div class="two">
+        <div class="table-wrap">
+          <table class="plain">
+            <thead><tr><th>What it changes</th><th>Holds</th></tr></thead>
+            <tbody>
+              <tr><td><b>Numbers</b></td><td>Damage, attack speed, move speed, damage reduction, lifesteal, evasion</td></tr>
+              <tr><td><b>State</b></td><td>Stealth, unstoppable, invulnerable</td></tr>
+              <tr><td><b>Allies</b></td><td>The same, given to allies near the caster</td></tr>
+              <tr><td><b>Element</b></td><td>A sheath that adds its element to every hit</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-wrap">
+          <table class="plain">
+            <thead><tr><th>Element sheath</th><th>Each hit</th></tr></thead>
+            <tbody>
+              <tr><td><b>Flame</b></td><td class="num">Burns on for 30% of the hit over 2 s</td></tr>
+              <tr><td><b>Frost</b></td><td class="num">Slows 30% for 1.5 s</td></tr>
+              <tr><td><b>Lightning</b></td><td class="num">Leaps 35% of the hit to the next enemy within 5 m</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="small muted">Each aura has one trigger: while on, on hit, every third hit, at low health, on a kill, or when hit.</p>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-f.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>F, switching on (flame sheath)</b><code>axe_standing_taunt_battlecry (cut to its peak)</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Each kind of aura switching on</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/f-f-flame.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Element · Flame sheath</b><code>axe_standing_taunt_battlecry (cut to its peak)</code></figcaption></figure>
+        <figure class="clip"><video src="moves/f-f-berserk.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Numbers · Berserk (numbers)</b><code>ss_sword_and_shield_power_up (cut to its peak)</code></figcaption></figure>
+        <figure class="clip"><video src="moves/f-f-vanish.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Stealth · Vanish (state)</b><code>standing_idle_to_crouch (cut to its peak)</code></figcaption></figure>
+        <figure class="clip"><video src="moves/f-f-mana-shield.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Guard · Mana shield</b><code>standing_block_start (cut to its peak)</code></figcaption></figure>
+        <figure class="clip"><video src="moves/f-f-thorns.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Guard · Thorns (when hit)</b><code>standing_block_start (cut to its peak)</code></figcaption></figure>
+        <figure class="clip"><video src="moves/f-f-allies.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Allies · Blessing (allies near you)</b><code>male_cheering_with_two_fists_pump (cut to its peak)</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- R -->
+    <section id="ultimate" class="r">
+      <header>
+        <span class="tag"><span class="chip">R</span>Combat</span>
+        <h2>R · Ultimate</h2>
+      </header>
+      <div class="prose">
+        <p>R is the one big moment, on a long cooldown: either an overpowered skill or a form with its own body and moves. Every ultimate has one of eight shapes.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Shape</th><th>What it is</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td>Strike</td><td>Locks onto one target, lands, then plays out; the last blow throws the target 5 m</td><td>The lock-on</td></tr>
+            <tr><td>Devastation</td><td>Big area damage, now</td><td>Earthquake</td></tr>
+            <tr><td>Domain</td><td>The area changes for a while</td><td>Inferno</td></tr>
+            <tr><td>Rally</td><td>The whole team is helped</td><td>Mass revive</td></tr>
+            <tr><td>Rampage</td><td>The caster is overpowered for a while, on the same body and moves</td><td>Bloodbath</td></tr>
+            <tr><td>Ultimate form</td><td>A timed form with its own body and moveset, in stages; press R again to step up, each stage adding 15% damage and a size class</td><td>Titan form, staged form</td></tr>
+            <tr><td>Titan summon</td><td>One big ally that fights for a while</td><td>Titan summon</td></tr>
+            <tr><td>Kit switch</td><td>A stance change: a second kit for a while, on the same body</td><td>Spear and rifle</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="clips-block">
+        <h3>See it</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/main-r.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>R</b><code>dual_weapon_combo</code></figcaption></figure>
+        </div>
+      </div>
+      <div class="clips-block">
+        <h3>Every shape</h3>
+        <div class="clips">
+        <figure class="clip"><video src="moves/r-r-strike.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Strike · Strike: the lock-on</b><code>dual_weapon_combo</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-devastation.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Devastation · Earthquake</b><code>axe_standing_melee_run_jump_attack</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-domain.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Domain · Inferno</b><code>gs_great_sword_casting</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-rally.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Rally · Mass revive</b><code>rallying</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-rampage.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Rampage · Bloodbath</b><code>standing_taunt_battlecry</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-form.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Ultimate form · Staged form (R again to step up)</b><code>gs_great_sword_power_up</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-titan-form.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Ultimate form · Titan form</b><code>standing_taunt_chest_thump</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-titan.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Titan summon · Titan summon</b><code>casting_spell</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-switch.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Kit switch · Kit switch (spear and rifle)</b><code>withdrawing_sword</code></figcaption></figure>
+        <figure class="clip"><video src="moves/r-r-fuse.mp4" muted loop playsinline preload="metadata"></video><figcaption><b>Systems · Fusion (with the ally)</b><code>clap_while_standing</code></figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- SYSTEMS -->
+    <section id="systems">
+      <header>
+        <span class="tag">Combat</span>
+        <h2>Systems</h2>
+        <p class="muted">These are rules about abilities, not abilities in their own right.</p>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>System</th><th>How it works</th></tr></thead>
+          <tbody>
+            <tr><td>Team-up</td><td>Stand by an ally (within 2.2 m) and press interact: they throw you 12 m along your aim over 0.7 s, in a 3 m arc. You land for 80 damage on everyone within 2.5 m. Once every 10 s.</td></tr>
+            <tr><td>Fusion</td><td>An R that merges you with the nearest ally within 4 m for a while: hits land 50% harder, with a shield worth half the ally’s health.</td></tr>
+            <tr><td>Beam clash</td><td>Two held beams that meet push against each other. The clash point moves toward the weaker side at 35% of the way a second, and every fresh press adds 12%. When it reaches a caster, that beam breaks and its caster takes 3× the winner’s beam damage.</td></tr>
+            <tr><td>Power meter</td><td>A spendable meter that fills as you deal damage (a full bar for your own health’s worth) and take it (one and a half times that). Some Q casts spend it.</td></tr>
+            <tr><td>Ability charges</td><td>Two or three uses banked: two go off back to back, the third waits.</td></tr>
+            <tr><td>Hold to charge</td><td>On LMB and on Q: hold to draw the cast back, release to let go. A Counter can cancel a charge in progress.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- WEAPONS AND CARRY -->
+    <section id="weapons">
+      <header>
+        <span class="tag">The body</span>
+        <h2>Weapons, and where they’re carried</h2>
+      </header>
+      <div class="prose">
+        <p>A hero holds at most one melee weapon (V) and one ranged weapon (LMB). The button in use has its weapon in hand, and the other waits in its carry slot: a blow brings the melee weapon out, and a shot brings the ranged one. Hangs, climbs and ziplines stow both. Fists, kicks, worn weapons such as gauntlets or claws, bare palms and body emitters need no slot.</p>
+        <p>Each carry kind ranks its slots. The hero’s two weapons get the assignment with the lowest total rank in which no slot is used twice, and a pair always moves together. All 100 pairings of the ten melee carry kinds against the ten ranged ones place without a clash. A bow with dual swords puts the bow on the back and moves the swords to the hips.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Carry kind</th><th>Slots, best first</th></tr></thead>
+          <tbody class="plain">
+            <tr><td><b>One-hand edge</b></td><td><code>hip_l</code> · <code>back_r</code> · <code>lower_back</code></td></tr>
+            <tr><td><b>Long two-hand</b> (greatsword, scythe, maul)</td><td><code>back_r</code> · <code>back_l</code></td></tr>
+            <tr><td><b>Polearm or staff</b></td><td><code>back_r</code> · <code>back_l</code></td></tr>
+            <tr><td><b>Blade and shield</b></td><td>blade <code>hip_l</code> · <code>back_r</code>; shield <code>back_flat</code></td></tr>
+            <tr><td><b>Flexible</b></td><td><code>hip_r</code> · <code>hip_l</code> · <code>lower_back</code></td></tr>
+            <tr><td><b>Paired short</b></td><td>crossed on <code>lower_back</code> · both thighs · both hips</td></tr>
+            <tr><td><b>One-hand gun</b></td><td><code>thigh_r</code> · <code>hip_r</code> · <code>lower_back</code></td></tr>
+            <tr><td><b>Paired guns</b></td><td>both thighs · both hips</td></tr>
+            <tr><td><b>Long gun</b></td><td><code>back_l</code> · <code>back_r</code></td></tr>
+            <tr><td><b>Heavy gun</b></td><td><code>back_flat</code> · <code>hip_r</code></td></tr>
+            <tr><td><b>Bow and quiver</b></td><td>bow <code>back_l</code> · <code>back_r</code>; quiver <code>hip_r</code> · <code>lower_back</code> · <code>back_flat</code></td></tr>
+            <tr><td><b>Thrown, wand or rod</b></td><td><code>thigh_l</code> · <code>hip_r</code> · <code>lower_back</code></td></tr>
+            <tr><td><b>Mage’s staff</b></td><td><code>back_l</code> · <code>back_r</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Every slot is measured off the body’s own skin plus 3 cm, so every size, physique and generated hero carries the same way. The back diagonals lean their grips 35° over the shoulder they’re named for.</p>
+    </section>
+
+    <!-- SIZES AND ATTITUDES -->
+    <section id="sizes">
+      <header>
+        <span class="tag">The body</span>
+        <h2>Sizes and attitudes</h2>
+      </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Size class</th><th>Body scale</th><th>Reach</th><th>Move speed</th><th>Jump height</th><th>Health</th></tr></thead>
+          <tbody>
+            <tr><td>Tiny</td><td class="num">0.8×</td><td class="num">−0.5 m</td><td class="num">1.16×</td><td class="num">1.25×</td><td class="num">1×</td></tr>
+            <tr><td>Small</td><td class="num">0.9×</td><td class="num">−0.25 m</td><td class="num">1.08×</td><td class="num">1.12×</td><td class="num">1×</td></tr>
+            <tr><td>Medium</td><td class="num">1×</td><td class="num">±0</td><td class="num">1×</td><td class="num">1×</td><td class="num">1×</td></tr>
+            <tr><td>Large</td><td class="num">1.15×</td><td class="num">+0.4 m</td><td class="num">0.88×</td><td class="num">0.88×</td><td class="num">1×</td></tr>
+            <tr><td>Huge</td><td class="num">1.3×</td><td class="num">+0.75 m</td><td class="num">0.78×</td><td class="num">0.76×</td><td class="num">1×</td></tr>
+            <tr><td>Colossal</td><td class="num">1.6×</td><td class="num">+2 m</td><td class="num">0.85×</td><td class="num">0.66×</td><td class="num">1.37×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">Each role then pays its own health price per size, tuned so every size of a role does as well in 3 v 3 skirmishes as the same role at medium.</p>
+      <div class="prose">
+        <p><b>Attitude sets</b> change how a hero moves and fights, not how it stands still. Each set covers the walk, jog and sprint, the strafe, take-off and landing weight, and the guard-up walk between strikes. It’s a layer over every animation: a tipped spine and head, arms held out, bent knees, a bigger hip and chest swing on the walk, and the set’s own stride beat. Moves at the floor (landings, rolls, the slide, the dive, prone) and hanging and climbing play without the layer, so hands and feet still meet the ground and the ledge.</p>
+      </div>
+      <div class="facts">
+        <div class="fact"><span class="val" style="font-size:18px">Neutral</span><span class="what">The baseline</span></div>
+        <div class="fact"><span class="val" style="font-size:18px">Brute</span><span class="what">A heavy roll, slow planted steps; every landing is a heavy landing</span></div>
+        <div class="fact"><span class="val" style="font-size:18px">Swagger</span><span class="what">A loose, confident carry</span></div>
+        <div class="fact"><span class="val" style="font-size:18px">Low and quick</span><span class="what">Short quick steps, for an assassin</span></div>
+        <div class="fact"><span class="val" style="font-size:18px">Strut</span><span class="what">A hip sway</span></div>
+      </div>
+    </section>
+
+    <!-- STATUS -->
+    <section id="status">
+      <header>
+        <span class="tag">11 November 2026</span>
+        <h2>Where it stands</h2>
+      </header>
+      <div class="prose">
+        <p>Every mechanic above runs in John’s lab, the test room where one character carries every weapon, button pick, size and attitude. The newer pieces (the dash, air, slam, launcher and grab blows, the perfect guard, knockdowns and revives, wall-runs, the new ranged families and flights, and the Systems) are switched on there. The automated balance runs don’t use them yet.</p>
+        <p>Where the animation work stands, and what’s left for looks in the next two sessions:</p>
+      </div>
+      <ul class="plain" style="max-width:76ch">
+        <li><b>Every action has its own animation.</b> Each of the eleven melee families plays its own chain, heavy, dash, air, slam and launcher blows and its own R flurry (the grab is one throw for all). Each gun and spell grip fires its own way for single shots, bursts, full auto, spreads, beams and charges. Each Q shape casts its own way, each E kind moves its own way, each aura kind switches on with its own flourish, and each R shape starts its own way. The galleries above show every one; <a href="kit-library.html">the Kit Library</a> lists them.</li>
+        <li><b>Fixed along the way:</b> Chop and reap no longer opens on a kick (the axe set’s kicks are gone from it). The lab’s allies aura now really reaches the allies near you, so it switches on as an allies aura. A skill’s or blow’s clip no longer carries the body off its spot while the engine moves it too: the hips are held near where the clip starts.</li>
+        <li><b>Fixed on 12 November:</b> summons now appear in John’s lab (minions, a clone, a decoy, the titan): the lab gave John his kit after the match had already set aside its summons’ bodies. The one-hand gun fires <code>pistol_fire</code>. Paired guns fire with a gun in each hand: the off arm mirrors the main one half a beat behind, each arm turned out to its own side and each barrel straight ahead. A long motion-captured clip (a combo, a long cast) plays only round its blow instead of being squeezed whole into one cast. Possession reaches out and holds the target (<code>pointing_forward</code>), a turret is knelt down and built (<code>ual_fixing_kneeling</code>), the mirror guard holds its ward up (<code>magic_standing_block_idle</code>), swapping places is a quick step aside (<code>standing_dodge_left</code>) instead of an evade that ended flat on the ground, and a leap lands on its feet (<code>cmu_standing_long_jump</code>) instead of diving into a roll.</li>
+        <li><b>The whip</b> is rigid; it has no rope physics yet.</li>
+        <li><b>Team-ups</b> are one generic throw for now, and <b>flight</b> doesn’t have a camera of its own yet.</li>
+        <li><b>Fixed while recording these clips:</b> until a hero first ran, the walk was blended half-and-half into every other move (a hang held its arms out straight; a jump kept a walking stride), and a finished held cast stayed blended into the next held cast. Both are fixed in the character view.</li>
+        <li><b>Carry looks:</b> a spear stows head-down, a bow lies flat on the back, and held blades cross the body in the idle stance.</li>
+      </ul>
+    </section>
+  </main>
+</div>
+<script>
+// clips play only while on screen, at the chosen speed; a click pauses or resumes one
+(() => {
+  const videos = [...document.querySelectorAll('.clip video')]
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches
+  let rate = 1
+  const seen = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      const v = e.target
+      if (e.isIntersecting && !still && !v.dataset.held) { v.playbackRate = rate; v.play().catch(() => {}) }
+      else v.pause()
+    }
+  }, { rootMargin: '100px' })
+  videos.forEach((v) => {
+    seen.observe(v)
+    v.addEventListener('click', () => {
+      if (v.paused) { delete v.dataset.held; v.playbackRate = rate; v.play().catch(() => {}) }
+      else { v.dataset.held = '1'; v.pause() }
+    })
+  })
+  for (const b of document.querySelectorAll('.speed button')) {
+    b.addEventListener('click', () => {
+      rate = Number(b.dataset.rate)
+      for (const o of document.querySelectorAll('.speed button')) o.setAttribute('aria-pressed', String(o === b))
+      videos.forEach((v) => (v.playbackRate = rate))
+    })
+  }
+})()
+</script>
+</body>
+</html>

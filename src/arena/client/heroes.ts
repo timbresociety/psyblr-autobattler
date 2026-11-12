@@ -16,11 +16,12 @@ import { formLookOf, skillLookOf } from '../recipes/looks.js'
 import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
-import { libraryGait, libraryMoves } from './library-gait.js'
+import { akimboed, libraryGait, libraryMoves } from './library-gait.js'
 import { WEAPON_MOVES, weaponOf } from '../../kit/anim/weapon-gait.js'
 import { animIndex } from './anim-index.js'
 import { blockMotion, carriedStyle, meleeSet, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
+import { akimbo, handFrames } from './arms.js'
 import { loadKit } from './held.js'
 import { TEAM_COLORS } from './map.js'
 
@@ -33,6 +34,20 @@ import { TEAM_COLORS } from './map.js'
 const weaponMoves = (build: Build): Record<string, string> => {
   const weapon = weaponOf(carriedStyle(build))
   return weapon ? { ...WEAPON_MOVES[weapon] } : {}
+}
+
+/** The F toggle plays the hero's own aura's flourish (recipes/motions AURA_CLIPS), not one every hero shares. */
+const toggleMove = (build: Build): Record<string, string> => {
+  const clip = build.slots.passive ? skillMotion(build, 'passive') : undefined
+  return clip ? { toggle: clip } : {}
+}
+
+/** A hero with a gun in each hand fires its shot akimbo: the off arm mirrors the main one, half a beat behind (characters.ts turns them out). */
+function akimboShot(build: Build, moves: Map<string, THREE.AnimationClip>): Map<string, THREE.AnimationClip> {
+  const shot = akimbo(build.look?.arms) ? skillMotion(build, 'active1') : undefined
+  const clip = shot && moves.get(shot)
+  if (clip) moves.set(shot, akimboed(clip))
+  return moves
 }
 
 export type HeroSource = { kind: 'glb'; url: string; motions: string[] } | { kind: 'procedural' }
@@ -118,10 +133,12 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
     const gender = shapeLook.build.charAt(0) as Gender
     const [atlas, kit, gait, moves] = await Promise.all([
       generated ? null : heroAtlas(file, shapeLook),
-      loadKit(shapeLook.build, shapeLook.held, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>),
+      loadKit(shapeLook.build, shapeLook.held, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>, shapeLook.arms?.map((a) => a.piece.url)),
       libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build)), attitudeOf(build)),
-      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build) }, attitudeOf(build))) : undefined,
+      rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build), ...toggleMove(build) }, attitudeOf(build)).then((m) => akimboShot(build, m))) : undefined,
     ])
+    // a generated hero's hands take their sockets where our body of its gender has them, on its own hand bones
+    if (worn && kit.sockets && shapeLook.arms) kit.hands = handFrames(made.scene, kit.sockets)
     return characterView(file, shapeLook, color, build, atlas, kit, gait, moves)
   }
   const chosen = build.sizeClass ?? 'medium'

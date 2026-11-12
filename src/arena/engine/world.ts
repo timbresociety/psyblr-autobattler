@@ -181,7 +181,7 @@ export function tickWorld(ctx: Ctx) {
         cover.health[w.index] = 0
         const p = cover.pieces[w.index]
         const s = p.shape as Extract<CoverPiece['shape'], { kind: 'block' }>
-        ctx.events.push({ type: 'wall', index: w.index, owner: -1, phase: 'down', at: { x: s.x, y: 0, z: s.z }, hx: s.hx, hz: s.hz, top: p.top })
+        ctx.events.push({ type: 'wall', index: w.index, owner: -1, phase: 'down', at: { x: s.x, y: p.base, z: s.z }, hx: s.hx, hz: s.hz, top: p.top, look: p.look })
       }
       return false
     })

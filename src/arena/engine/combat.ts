@@ -3,8 +3,9 @@ import { GEOMETRY_DEFAULTS } from '../../charter/geometry.js'
 import type { BuildSlot, Delivery, Effect, Template } from '../../charter/types.js'
 import { ENGINE, ticks } from './calibration.js'
 import { cos, sin } from './maths.js'
-import { slotBit, type Command, type HeroState } from './state.js'
-import { interrupt, immune, togglePassive, type Ctx } from './effects.js'
+import { MOVES, slotBit, type Command, type HeroState } from './state.js'
+import { displace, interrupt, immune, togglePassive, type Ctx } from './effects.js'
+import { KIT } from './kit-tuning.js'
 
 /**
  * Melee as the canon has it (docs/plans/2026-10-31-canon-psyblr-human.md): the basic attack button tapped strikes,
@@ -30,7 +31,17 @@ export interface MeleeBlow {
   step: number
   heavy?: number
   pace?: number
+  /**
+   * The V moveset's other blows (GAME.md §4, full kit only): at a sprint, in the air, a slam's landing, the launcher
+   * (back + V), and the grab (V + X), whose throw lands as a blow too.
+   */
+  kind?: BlowKind
 }
+
+export type BlowKind = 'dash' | 'air' | 'slam' | 'launcher' | 'grab'
+
+/** Whether a command steers away from where the hero faces: back + V is the launcher. */
+const backward = (hero: HeroState, command: Command) => command.moveX * sin(hero.yaw) + command.moveZ * cos(hero.yaw) < -0.5
 
 /**
  * Read this tick's basic attack and passive buttons: a press starts the hold, a release strikes (a light strike, or
@@ -44,19 +55,45 @@ export function meleeButtons(ctx: Ctx, index: number, command: Command, strike: 
   if (command.buttons & PASSIVE && !(hero.buttonsHeld & PASSIVE)) togglePassive(ctx, hero)
   hero.buttonsHeld = command.buttons
   if (held && !was) hero.basicSince = now
+  const full = ctx.match.fullKit
+  // V pressed with X held grabs, at once: its release strikes nothing more
+  if (full && held && !was && command.moves & MOVES.block && !hero.airborne) {
+    hero.basicSince = -1
+    strike({ step: 0, kind: 'grab' })
+    return
+  }
+  // V held in the air past the heavy hold plunges into a slam
+  if (full && held && hero.airborne && hero.basicSince >= 0 && now - hero.basicSince === ticks(MELEE.heavyHold)) {
+    hero.basicSince = -1
+    if (!hero.slam && !hero.launch && !hero.hang && !hero.zip && !hero.travel) startSlam(ctx, hero)
+    return
+  }
   if (held && hero.basicSince >= 0 && now - hero.basicSince === ticks(MELEE.heavyHold)) ctx.events.push({ type: 'melee', hero: hero.id, what: 'charge' })
   // a strike tapped a moment before the last one let go waits for it, rather than being lost
-  if (hero.queued && (now > hero.queued.until || strike({ step: hero.combo.until >= now ? hero.combo.step : 0 }))) hero.queued = undefined
+  // a light strike's kind: in the air, at a sprint, or steering back (the launcher)
+  const kind: BlowKind | undefined = !full ? undefined : hero.airborne ? 'air' : hero.sprinting ? 'dash' : backward(hero, command) ? 'launcher' : undefined
+  const light = () => ({ step: kind === 'dash' || kind === 'launcher' ? 0 : hero.combo.until >= now ? hero.combo.step : 0, ...(kind ? { kind } : {}) })
+  if (hero.queued && (now > hero.queued.until || strike(light()))) hero.queued = undefined
   if (!held && was && hero.basicSince >= 0) {
     const heldFor = now - hero.basicSince
     hero.basicSince = -1
     if (heldFor >= ticks(MELEE.heavyHold)) strike({ step: 0, heavy: Math.min(1, (heldFor - ticks(MELEE.heavyHold)) / ticks(MELEE.chargeFull)) })
-    else if (!strike({ step: hero.combo.until >= now ? hero.combo.step : 0 })) hero.queued = { until: now + ticks(MELEE.buffer) }
+    else if (!strike(light())) hero.queued = { until: now + ticks(MELEE.buffer) }
   }
 }
 
+/** V held in the air: the hero plunges straight down, and strikes where it lands (moveset.ts). */
+export function startSlam(ctx: Ctx, hero: HeroState) {
+  hero.slam = { from: ctx.match.tick }
+  hero.velocity = { x: 0, y: -KIT.slam.speed, z: 0 }
+  hero.airJumps = 1
+  interrupt(ctx, hero)
+  ctx.events.push({ type: 'melee', hero: hero.id, what: 'slam' })
+}
+
 /** How much a blow is worth against a light strike: the finisher more, a heavy blow more again the longer it charged. */
-export const blowWorth = (blow: MeleeBlow | undefined) => (!blow ? 1 : blow.heavy !== undefined ? MELEE.heavy + (MELEE.heavyFull - MELEE.heavy) * blow.heavy : (blow.step === 2 ? MELEE.finisher : 1) * (blow.pace ?? 1))
+export const blowWorth = (blow: MeleeBlow | undefined) => (!blow ? 1 : blow.heavy !== undefined ? MELEE.heavy + (MELEE.heavyFull - MELEE.heavy) * blow.heavy : (blow.step === 2 ? MELEE.finisher : 1) * (blow.pace ?? 1) * (blow.kind ? KIND_WORTH[blow.kind] : 1))
+const KIND_WORTH: Record<BlowKind, number> = { dash: KIT.dashAttack.worth, air: KIT.air.worth, slam: KIT.slam.worth, launcher: KIT.launcher.worth, grab: KIT.grab.worth }
 
 /** The basic attack's template for a blow, its magnitudes scaled by what the blow is worth. */
 export const blowTemplate = (template: Template, blow: MeleeBlow | undefined) => {
@@ -114,6 +151,7 @@ export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: He
   if (!CLOSE.has(template.delivery.kind)) return hit
   const now = ctx.match.tick
   const half = ((MELEE_BLOCK_ARC / 2) * Math.PI) / 180
+  let parried = false
   const kept = hit.filter((u) => {
     if (!u.blocking) return true
     const dx = caster.position.x - u.position.x
@@ -121,6 +159,13 @@ export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: He
     const len = Math.sqrt(dx * dx + dz * dz) || 1
     // the caster within the arc the guard faces
     if ((dx / len) * sin(u.yaw) + (dz / len) * cos(u.yaw) < cos(half)) return true
+    // a guard raised just before the blow lands is a perfect guard: it catches even a heavy blow, and the striker
+    // staggers for longer (GAME.md §4 Defend)
+    if (ctx.match.fullKit && u.guardSince !== undefined && now - u.guardSince <= ticks(KIT.parry.window)) {
+      parried = true
+      ctx.events.push({ type: 'melee', hero: u.id, what: 'parry', by: caster.id })
+      return false
+    }
     // a heavy blow breaks the guard (§5): the guard drops, the guard staggers, and the blow lands
     if (blow?.heavy !== undefined) {
       u.blocking = false
@@ -134,8 +179,9 @@ export function guarded(ctx: Ctx, caster: HeroState, template: Template, hit: He
   })
   if (kept.length < hit.length) {
     caster.combo = { step: 0, until: 0 }
-    caster.stunnedUntil = Math.max(caster.stunnedUntil, now + ticks(MELEE.blockStagger))
+    caster.stunnedUntil = Math.max(caster.stunnedUntil, now + ticks(parried ? KIT.parry.stagger : MELEE.blockStagger))
     interrupt(ctx, caster)
+    if (parried) ctx.events.push({ type: 'melee', hero: caster.id, what: 'stagger' })
   }
   return kept
 }
@@ -148,6 +194,8 @@ const MELEE_BLOCK_ARC = M.block.arcDegrees
 export function afterBlow(ctx: Ctx, caster: HeroState, blow: MeleeBlow | undefined, hit: HeroState[], recovery: number) {
   if (!blow) return
   const now = ctx.match.tick
+  const full = ctx.match.fullKit
+  if (full && blow.kind && afterKind(ctx, caster, blow, hit, recovery)) return
   const launches = blow.heavy !== undefined || blow.step === 2
   if (blow.heavy !== undefined || !hit.length) caster.combo = { step: 0, until: 0 }
   // the chain stays open for a while after the next strike is allowed, however slowly the hero swings
@@ -173,8 +221,80 @@ export function afterBlow(ctx: Ctx, caster: HeroState, blow: MeleeBlow | undefin
     u.slide = undefined
     u.roll = undefined
     u.combo = { step: 0, until: 0 }
+    // with the full kit, a launch that isn't recovered from in the air lands in a knockdown
+    if (full) u.floored = true
     interrupt(ctx, u)
     ctx.events.push({ type: 'melee', hero: u.id, what: 'launch', by: caster.id })
+  }
+}
+
+/**
+ * What the V moveset's other blows do once they land (full kit). Returns true when the blow is fully handled; false
+ * lets the usual chain and launch run.
+ */
+function afterKind(ctx: Ctx, caster: HeroState, blow: MeleeBlow, hit: HeroState[], recovery: number): boolean {
+  const now = ctx.match.tick
+  const live = hit.filter((u) => u.alive && !u.downed && !immune(u, now))
+  const template = ctx.setups[caster.id].kit.basic
+  switch (blow.kind) {
+    case 'dash':
+      for (const u of live) displace(ctx, caster, u, template, KIT.dashAttack.push)
+      caster.combo = hit.length ? { step: 1, until: Math.max(now + recovery, caster.nextAttackAt) + ticks(MELEE.chain) } : { step: 0, until: 0 }
+      return true
+    case 'launcher': {
+      caster.combo = { step: 0, until: 0 }
+      for (const u of live) {
+        const height = KIT.launcher.height * M.jumpScale[u.size]
+        const n = Math.max(2, ticks(2 * Math.sqrt((2 * height) / M.gravity)))
+        u.knockback = undefined
+        // no taking control back and not untouchable: it's there to be chased and juggled
+        u.launch = { from: now, until: now + n, height, base: u.position.y, juggle: true }
+        u.stunnedUntil = Math.max(u.stunnedUntil, now + n)
+        u.airborne = true
+        u.velocity = { x: 0, y: 0, z: 0 }
+        u.slide = undefined
+        u.roll = undefined
+        u.floored = true
+        interrupt(ctx, u)
+        ctx.events.push({ type: 'melee', hero: u.id, what: 'launch', by: caster.id })
+      }
+      if (live.length) caster.chase = { target: live[0].id, until: now + ticks(KIT.launcher.chase) }
+      return true
+    }
+    case 'air': {
+      if (!hit.length) {
+        caster.combo = { step: 0, until: 0 }
+        return true
+      }
+      // held up too: rising and falling back to where it struck over the target's hold, so the next hit meets it
+      caster.velocity.y = Math.max(caster.velocity.y, (M.gravity * KIT.air.hold) / 2)
+      const spike = blow.step === 2
+      caster.combo = spike ? { step: 0, until: 0 } : { step: blow.step + 1, until: Math.max(now + recovery, caster.nextAttackAt) + ticks(MELEE.chain) }
+      for (const u of live) {
+        if (!u.airborne && !u.launch) continue
+        u.knockback = undefined
+        u.floored = true
+        interrupt(ctx, u)
+        if (spike) {
+          // the third air hit drives it into the floor
+          u.launch = undefined
+          u.airborne = true
+          u.velocity = { x: 0, y: -KIT.air.spike, z: 0 }
+          u.stunnedUntil = Math.max(u.stunnedUntil, now + ticks(0.6))
+          ctx.events.push({ type: 'melee', hero: u.id, what: 'spike', by: caster.id })
+        } else {
+          // held where it is, a little bump, for the next hit to land
+          const n = ticks(KIT.air.hold)
+          u.launch = { from: now, until: now + n, height: KIT.air.bump, base: u.position.y, juggle: true }
+          u.stunnedUntil = Math.max(u.stunnedUntil, now + n)
+          u.velocity = { x: 0, y: 0, z: 0 }
+          ctx.events.push({ type: 'melee', hero: u.id, what: 'juggle', by: caster.id })
+        }
+      }
+      return true
+    }
+    default:
+      return false
   }
 }
 
@@ -189,6 +309,7 @@ export function regain(ctx: Ctx, hero: HeroState, command: Command | undefined):
   const input = command.moves !== 0 || command.buttons !== 0 || Math.abs(command.moveX) + Math.abs(command.moveZ) > 0.1
   if (!input) return false
   hero.launch = undefined
+  hero.floored = undefined
   hero.stunnedUntil = Math.min(hero.stunnedUntil, now)
   hero.invulnerableUntil = Math.min(hero.invulnerableUntil, now)
   hero.airborne = true

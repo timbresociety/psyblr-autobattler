@@ -1,7 +1,7 @@
 import type { AttitudeId } from '../../kit/anim/attitude.js'
 import * as THREE from 'three'
 import type { Build } from '../../charter/build.js'
-import { defaultLook, heldOf, ROLE_GENDER, type FacePhoto, type GearPiece, type GearSlot, type Gender } from '../../charter/look.js'
+import { defaultLook, heldOf, ROLE_GENDER, type ArmPiece, type FacePhoto, type GearPiece, type GearSlot, type Gender } from '../../charter/look.js'
 import type { FormBody, FormMark } from '../../charter/skill-look.js'
 import { NEUTRAL_PHYSIQUE, type Physique } from '../../kit/body/shape.js'
 import type { Sculpt } from '../../kit/body/sculpt.js'
@@ -25,6 +25,8 @@ export interface CharacterLook {
   physique: Physique
   /** The weapons in its hands. */
   held: Partial<Record<GearSlot, GearPiece>>
+  /** Weapons it swaps between its hands and its carry slots (arms.ts). */
+  arms?: readonly ArmPiece[]
   /** The body's own colours: its skin (baked into the hero's atlas under a photo face), the whites of its eyes, its irises and its brows. */
   colors: { skin: THREE.Color; eye: THREE.Color; iris: THREE.Color; brow: THREE.Color }
   /** A photo face to warp onto the body's own; its skin colour is then baked into the hero's atlas (face/composite). */
@@ -76,6 +78,7 @@ export function characterLook(build: Build, hue: number): CharacterLook {
       brow: new THREE.Color().setStyle(look.colors.brow ?? base.colors.brow, THREE.SRGBColorSpace),
     },
   }
+  if (look.arms?.length) out.arms = look.arms
   if (look.face) out.face = look.face
   if (look.sculpt) out.sculpt = look.sculpt
   if (look.attitude) out.attitude = look.attitude

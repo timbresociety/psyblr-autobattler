@@ -83,6 +83,34 @@ function magnitude(effect: Effect, sheet: SecondarySheet, factor: number): Headl
       return { label: 'Rewind', value: n(effect.seconds), unit: 's' }
     case 'turret':
       return { label: 'Turret', value: String(Math.round((effect.amount + effect.ratio * sheet[effect.scaling]) * factor)), unit: `every ${n(effect.interval)} s` }
+    case 'counter':
+      return { label: 'Counter', value: n(effect.duration), unit: 's' }
+    case 'summon':
+      return { label: effect.what === 'titan' ? 'Titan' : 'Summons', value: String(effect.count), unit: `${n(effect.duration)} s` }
+    case 'barrier':
+      return { label: 'Barrier', value: n(effect.length), unit: 'm' }
+    case 'terrain':
+      return { label: 'Terrain', value: n(effect.length), unit: 'm' }
+    case 'portal':
+      return { label: 'Portals', value: n(effect.duration), unit: 's' }
+    case 'copyKit':
+      return { label: 'Copies kit', value: n(effect.duration), unit: 's' }
+    case 'possess':
+      return { label: 'Possess', value: n(effect.duration), unit: 's' }
+    case 'lift':
+      return { label: 'Lift', value: n(effect.hold), unit: 's' }
+    case 'revive':
+      return { label: 'Revive', value: n(effect.share * 100), unit: '%' }
+    case 'element':
+      return { label: 'Element', value: effect.element }
+    case 'lockon':
+      return { label: 'Blows', value: String(effect.hits) }
+    case 'kitSwitch':
+      return { label: 'Kit switch', value: n(effect.duration), unit: 's' }
+    case 'fuse':
+      return { label: 'Fusion', value: n(effect.duration), unit: 's' }
+    case 'traverse':
+      return { label: 'Moves', value: n(effect.distance || effect.duration), unit: effect.distance ? 'm' : 's' }
   }
 }
 

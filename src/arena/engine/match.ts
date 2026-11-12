@@ -1,10 +1,12 @@
 import { arenaExtent, initialCoverHealth, type CoverPiece } from './cover.js'
+import type { LabState } from './lab.js'
 import type { TraitMods } from '../../charter/traits.js'
 import { keepOut } from './locomotion.js'
 import type { Build } from '../../charter/build.js'
 import { ENGINE, ticks } from './calibration.js'
 import { COMBAT_RULES } from './deliveries.js'
 import { initHero } from './effects.js'
+import { addReserves } from './spells.js'
 import { MAPS, standingHeight, type ArenaMap, type MapId } from './maps.js'
 import { clamp, type Vec3 } from './maths.js'
 import { next } from './rng.js'
@@ -48,6 +50,8 @@ export interface Arena {
   setups: HeroSetup[]
   profile: Profile
   timerTicks: number
+  /** John's lab (lab.ts): its bots' modes. */
+  lab?: LabState
 }
 
 /** Starting gap between the two sides and between teammates in the default line, metres. */
@@ -103,6 +107,8 @@ export function createMatch(
     })
   add(teamA, 0)
   add(teamB, 1)
+  // bodies for any summons the kits call in (spells.ts)
+  addReserves(match, setups)
   const rules = profile.house ? map?.rules : undefined
   if (rules) match.house = houseState(rules, seed)
   else if (profile.damageRamp) match.damageRamp = { fromTick: ticks(profile.damageRamp.fromSeconds), perSecond: profile.damageRamp.perSecond }
@@ -115,7 +121,7 @@ export function healthShare(match: MatchState, side: Team): number {
   let hp = 0
   let max = 0
   for (const h of match.heroes) {
-    if (h.team !== side) continue
+    if ((h.possessed?.team ?? h.team) !== side || h.summon) continue
     max += h.maxHp
     if (h.alive) hp += h.hp
   }
@@ -129,7 +135,10 @@ export function healthShare(match: MatchState, side: Team): number {
 export function endCheck(arena: Arena): TickRules['after'] {
   return (match, _setups, events) => {
     if (match.winner !== undefined) return
-    const alive = [0, 1].map((side) => match.heroes.filter((h) => h.alive && h.team === side).length)
+    // a downed hero isn't standing: a squad all down has lost
+    // a summon doesn't keep its side in the fight, and a possessed hero still counts for its own
+    const sideOf = (h: (typeof match.heroes)[number]) => h.possessed?.team ?? h.team
+    const alive = [0, 1].map((side) => match.heroes.filter((h) => h.alive && !h.downed && !h.summon && sideOf(h) === side).length)
     const standing = alive.filter((n) => n > 0).length
     if (standing <= 1) {
       match.winner = alive[0] ? 0 : alive[1] ? 1 : 'draw'

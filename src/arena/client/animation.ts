@@ -91,7 +91,7 @@ export function onEvents(a: Animator, hero: number, events: readonly MatchEvent[
       a.state = { kind: 'hit' }
       a.hold = HIT_SECONDS
     } else if (e.type === 'passive' && e.hero === hero && !a.cast) {
-      // the passive's toggle, on or off, is one flourish every hero shares (COMMON_MOTIONS); its effects say which
+      // the passive's toggle, on or off, plays its aura's own flourish (heroes.ts toggleMove); its effects say which
       a.state = { kind: 'toggle', seq: ++a.moves }
       a.hold = MOVE_SECONDS.toggle
     } else if (e.type === 'move' && e.hero === hero && e.move !== 'slide' && e.move !== 'zip-on' && e.move !== 'zip-off' && e.move !== 'let-go') {

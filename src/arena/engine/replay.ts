@@ -1,6 +1,7 @@
 import { aiCommands } from '../ai/brain.js'
 import type { AiLevel } from '../ai/calibration.js'
 import type { MatchEvent } from './events.js'
+import { labArena, labCommands, labTeams, type LabSetup } from './lab.js'
 import { LIVE_PROFILE, PRACTICE_PROFILE, createMatch, matchRules, type Arena, type Combatant } from './match.js'
 import type { MapId } from './maps.js'
 import type { Vec3 } from './maths.js'
@@ -32,6 +33,8 @@ export interface RecordedSetup {
   aiLevels?: [AiLevel, AiLevel]
   side: Team
   map: MapId
+  /** John's lab (lab.ts): the house's blue deck set up for the checklist, and John's buttons. */
+  lab?: LabSetup
 }
 
 /**
@@ -63,12 +66,14 @@ export interface Recording {
 
 /** The match a recorded setup makes; the same call the live arena makes. */
 export function arenaFor(setup: RecordedSetup): Arena {
-  const arena = createMatch(setup.teams[0], setup.teams[1], setup.seed, {
-    profile: setup.idle?.length ? PRACTICE_PROFILE : LIVE_PROFILE,
+  const teams = setup.lab ? labTeams(setup.teams) : setup.teams
+  const arena = createMatch(teams[0], teams[1], setup.seed, {
+    profile: setup.idle?.length || setup.lab ? PRACTICE_PROFILE : LIVE_PROFILE,
     formations: setup.formations,
     map: setup.map,
   })
   if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
+  if (setup.lab) labArena(arena, setup.lab)
   return arena
 }
 
@@ -82,6 +87,7 @@ export function advance(arena: Arena, rules: TickRules, idle: readonly number[] 
   if (m.paused || m.winner !== undefined) return { events: [], released: false }
   const commands = aiCommands(arena)
   for (const i of idle ?? []) commands[i] = undefined
+  labCommands(arena, commands)
   if (m.human !== undefined) commands[m.human] = human
   const events = tick(m, arena.setups, commands, rules)
   const released = m.human !== undefined && !m.heroes[m.human].alive

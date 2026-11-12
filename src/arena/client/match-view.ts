@@ -11,6 +11,7 @@ import type { Vec3 } from '../engine/maths.js'
 import { healthShare, matchRules, type Arena, type Combatant } from '../engine/match.js'
 import { hashState } from '../engine/snapshot.js'
 import { advance, arenaFor, createRecorder, playback, type Recorder, type RecordedSetup, type Recording } from '../engine/replay.js'
+import type { LabSetup } from '../engine/lab.js'
 import { AIM_STEPS, capsule, type Command, type HeroState, type MatchState, type Team } from '../engine/state.js'
 import { createAnimator, onEvents, settle, STANCE, stance, type Animator, type Stance } from './animation.js'
 import { Cameras, FIRST_PERSON, HERO_CAMERA } from './camera.js'
@@ -60,6 +61,8 @@ export interface MatchSetup {
   aiLevels?: [AiLevel, AiLevel]
   /** Play this recording back instead of a live match: its player's inputs, nobody else's (see engine/replay.ts). */
   replay?: Recording
+  /** John's lab (engine/lab.ts). */
+  lab?: LabSetup
 }
 
 export interface HudHero {
@@ -838,7 +841,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   const { renderer, scene, camera, map } = stage
   // the range's drills (a dummy standing idle) play without the house's edge and vault
   // every live match is recorded from its setup, so it can be played again tick for tick (engine/replay.ts)
-  const recorded: RecordedSetup = setup.replay?.setup ?? { teams: setup.teams, seed: setup.seed, formations: setup.formations, idle: setup.idle, aiLevels: setup.aiLevels, side: setup.side, map: LIVE_MAP }
+  const recorded: RecordedSetup = setup.replay?.setup ?? { teams: setup.teams, seed: setup.seed, formations: setup.formations, idle: setup.idle, aiLevels: setup.aiLevels, side: setup.side, map: LIVE_MAP, ...(setup.lab ? { lab: setup.lab } : {}) }
   const arena = arenaFor(recorded)
   const recorder: Recorder | undefined = setup.replay ? undefined : createRecorder(recorded, import.meta.env.MODE)
   const feed = setup.replay ? playback(setup.replay) : undefined

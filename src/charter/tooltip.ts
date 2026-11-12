@@ -80,9 +80,54 @@ function effectLine(effect: Effect, sheet: SecondarySheet, factor: number, perma
       return `Waits up to ${num(effect.lifetime)} s for an enemy to step in, armed after ${num(effect.arm)} s`
     case 'turret':
       return `Turret: ${effect.type === 'spirit' ? 'spirit' : 'physical'} damage ${scaled(effect.amount, effect.ratio, effect.scaling, sheet, factor)} every ${num(effect.interval)} s for ${num(effect.duration)} s, ${num(effect.range)} m range`
+    case 'counter':
+      return `For ${num(effect.duration)} s the next hit is ${COUNTER_LINE[effect.answer]}`
+    case 'summon':
+      return `Summons ${effect.count > 1 ? `${effect.count} ` : 'a '}${SUMMON_LINE[effect.what]}${effect.count > 1 ? 's' : ''} for ${num(effect.duration)} s`
+    case 'barrier':
+      return `Raises a one-way barrier ${num(effect.length)} m long for ${num(effect.duration)} s: enemy shots stop, your side's pass`
+    case 'terrain':
+      return `Raises a ${effect.shape} ${num(effect.length)} m long to walk on for ${num(effect.duration)} s`
+    case 'portal':
+      return `Opens a pair of portals for ${num(effect.duration)} s`
+    case 'copyKit':
+      return `Takes the target's kit for ${num(effect.duration)} s`
+    case 'possess':
+      return `Takes control of the target for ${num(effect.duration)} s`
+    case 'lift':
+      return `Lifts the target ${num(effect.height)} m, holds it ${num(effect.hold)} s, then throws it ${num(effect.distance)} m`
+    case 'revive':
+      return `Revives ${effect.target === 'ally' ? 'a downed ally' : 'every downed ally in reach'} at ${num(effect.share * 100)}% health`
+    case 'element':
+      return `Every hit carries ${effect.element}`
+    case 'lockon':
+      return `Locks on and lands ${effect.hits} blows over ${num(effect.duration)} s`
+    case 'kitSwitch':
+      return `Switches to a second kit for ${num(effect.duration)} s`
+    case 'fuse':
+      return `Merges with the nearest ally for ${num(effect.duration)} s`
+    case 'traverse':
+      return TRAVERSE_LINE[effect.how](num(effect.distance), num(effect.duration))
   }
 }
 
+const COUNTER_LINE = { strike: 'answered with a strike', substitute: 'dodged by slipping behind the striker', reflect: 'turned back on the striker', absorb: 'drunk as health' } as const
+const SUMMON_LINE = { minion: 'minion', clone: 'clone', decoy: 'decoy', titan: 'titan' } as const
+const TRAVERSE_LINE: Record<import('./types.js').TraverseKind, (d: string, s: string) => string> = {
+  teleport: (d) => `Teleports to a mark or a target up to ${d} m away`,
+  swap: (d) => `Swaps places with a hero up to ${d} m away`,
+  homing: (d) => `Dashes onto a target up to ${d} m away`,
+  swing: (d, s) => `Swings on a line from a point up to ${d} m away, for up to ${s} s`,
+  flight: (_d, s) => `Flies for up to ${s} s`,
+  glide: (_d, s) => `Glides for up to ${s} s`,
+  wallCrawl: (_d, s) => `Crawls on any wall for up to ${s} s`,
+  burrow: (_d, s) => `Burrows underground for up to ${s} s`,
+  ride: (_d, s) => `Rides an ally for up to ${s} s`,
+  wallRun: (_d, s) => `Runs along any wall, for longer, for ${s} s`,
+  combatRoll: (d) => `A ${d} m roll, untouchable all the way, that reloads`,
+  powerSlide: (d) => `A ${d} m slide that knocks down whoever it hits`,
+  zipline: (d) => `Fires a line up to ${d} m and rides it`,
+}
 const CONTROL_LINE = { root: 'Root', silence: 'Silence', disarm: 'Disarm', sleep: 'Sleep', blind: 'Blind', grounded: 'Ground', fear: 'Fear', taunt: 'Taunt', break: 'Break its passive for' } as const
 const CONTROL_NOTE: Partial<Record<keyof typeof CONTROL_LINE, string>> = {
   root: ' (it can still fight)',

@@ -20,6 +20,12 @@ export const SPELLS = [
   spell({ id: 'fighter-rend', family: 'curse', name: 'Rend', roles: ['fighter'], tags: ['rend', 'wound', 'bleed', 'gash', 'anti-heal', 'claw'], delivery: at.cone(5, 3), effects: [wound(40, 3), shred(5, 3), phys(30, 0.5)], cooldown: 9, ai: ai('engage', 6) }),
   spell({ id: 'tank-ground-sunder', family: 'curse', shape: 'line', name: 'Ground Sunder', roles: ['tank', 'fighter'], tags: ['sunder', 'armor-break', 'shatter', 'fissure', 'ground', 'shred'], delivery: at.beam(9, 1.6), effects: [shred(10, 4), slow(25, 2), phys(35, 0.5)], cooldown: 9, ai: ai('engage', 6) }),
 
+  // counter: the next blow is answered instead of taken (§4 Q Counter)
+  spell({ id: 'fighter-riposte', family: 'counter', name: 'Riposte', roles: ['fighter', 'assassin', 'tank'], tags: ['counter', 'riposte', 'parry', 'answer', 'retaliate', 'stance'], delivery: at.self(), effects: [{ kind: 'counter', duration: 1.2, answer: 'strike' }, phys(50, 0.8)], cooldown: 8, ai: ai('peel', 6) }),
+  spell({ id: 'assassin-substitution', family: 'counter', name: 'Substitution', roles: ['assassin', 'fighter'], tags: ['substitute', 'log', 'decoy', 'vanish', 'swap', 'escape'], delivery: at.self(), effects: [{ kind: 'counter', duration: 2.5, answer: 'substitute' }], cooldown: 8, ai: ai('peel', 6) }),
+  spell({ id: 'tank-mirror-guard', family: 'counter', name: 'Mirror Guard', roles: ['tank', 'controller'], tags: ['mirror', 'reflect', 'rebound', 'guard', 'return', 'deflect'], delivery: at.self(), effects: [{ kind: 'counter', duration: 2.5, answer: 'reflect' }], cooldown: 8, ai: ai('peel', 6) }),
+  spell({ id: 'support-drink-the-blow', family: 'counter', name: 'Drink the Blow', roles: ['support', 'mage', 'tank'], tags: ['absorb', 'drink', 'siphon', 'soak', 'feed', 'sponge'], delivery: at.self(), effects: [{ kind: 'counter', duration: 2, answer: 'absorb' }, heal(20, 0.2)], cooldown: 8, ai: ai('peel', 6) }),
+
   // construct: geometry on the map
   spell({ id: 'controller-ice-pillar', family: 'construct', name: 'Ice Pillar', roles: ['controller', 'mage', 'tank'], tags: ['ice', 'pillar', 'column', 'ramp', 'iceman', 'block'], delivery: at.zone(10, 1.5), effects: [wall(2.4, 7, 500, 3.5), knockup(0.4, 1.5), spirit(25, 0.3)], cooldown: 12, ai: ai('peel', 5) }),
 

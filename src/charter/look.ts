@@ -1,4 +1,5 @@
 import type { Physique } from '../kit/body/shape.js'
+import type { CarrySlot } from '../kit/rig/metarig.js'
 import { isAttitude, type AttitudeId } from '../kit/anim/attitude.js'
 import { hydratePhysique } from '../kit/body/physique.js'
 import { hydrateSculpt, type Sculpt } from '../kit/body/sculpt.js'
@@ -45,6 +46,17 @@ export interface GearPiece {
   color?: string
 }
 
+/**
+ * A weapon a hero swaps between a hand and a carry slot (kit/body/carry.ts): out for the attacks of its `use`, waiting
+ * on `stow` while the other set is out. One without a hand (a quiver) only ever waits.
+ */
+export interface ArmPiece {
+  piece: GearPiece
+  use: 'melee' | 'ranged'
+  hand?: GearSlot
+  stow: CarrySlot
+}
+
 /** A photo face: where it is stored, its size, and its landmarks as x, y pairs in its own pixels. */
 export interface FacePhoto {
   url: string
@@ -71,12 +83,17 @@ export interface HeroLook {
   attitude?: AttitudeId
   /** Rigid pieces in the body's hand sockets: a weapon in each hand. */
   gear?: Partial<Record<GearSlot, GearPiece>>
+  /** Weapons swapped in and out of the hands by what the hero does (the dev lab's John); not saved with a hero. */
+  arms?: readonly ArmPiece[]
   /** How each skill looks (skill-look.ts); a skill without one takes a look from its words. */
   skills?: Partial<Record<BuildSlot, SkillLook>>
   /** How the hero fights (motions.ts): what its melee and skills are picked from; its role's style when absent. */
   style?: Style
-  /** The hero's own motions by clip (MOTION_SLOTS, motions.ts); the catalogue's pick for each in its style when absent. */
-  motions?: Partial<Record<MotionSlot, string>>
+  /**
+   * The hero's own motions by clip (MOTION_SLOTS, motions.ts); the catalogue's pick for each in its style when absent.
+   * The movement skill's and the passive's come from a dev lab only: a saved look drops them (their kinds pick them).
+   */
+  motions?: Partial<Record<MotionSlot | 'movement' | 'passive', string>>
 }
 
 export const FACE_POINTS = 478

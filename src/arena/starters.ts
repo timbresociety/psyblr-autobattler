@@ -3,6 +3,7 @@ import { defaultLook, type HeroLook } from '../charter/look.js'
 import { ELEMENTS, type Element, type SkillLook } from '../charter/skill-look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import { poolFor } from '../charter/templates/catalog.js'
+import { LATER_STYLES } from '../charter/templates/styles.js'
 import type { BuildSlot, RoleId } from '../charter/types.js'
 import { skillLookOf } from './recipes/looks.js'
 
@@ -79,7 +80,9 @@ function generate(seed: number): Starter[] {
       if (!proposal.ok) throw new Error(`starter build failed for ${heroName}`)
       const slots = Object.fromEntries(
         BUILD_SLOTS.map((slot) => {
-          const pool = poolFor(roleId, SLOT_KIND[slot])
+          // the counter family and the new melee families came after the starters were drawn: left out, so every
+          // starter keeps the skills it had
+          const pool = poolFor(roleId, SLOT_KIND[slot]).filter((t) => t.family !== 'counter' && !LATER_STYLES.has(t.id))
           return [slot, { ...proposal.build.slots[slot], templateId: pick(rng, pool).id }]
         }),
       ) as Build['slots']

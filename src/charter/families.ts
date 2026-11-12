@@ -61,7 +61,28 @@ export function familyOf(effect: Effect): Family {
     case 'form':
       return 'transform'
     case 'mobility':
+    case 'traverse':
       return 'mobility'
+    case 'counter':
+    case 'revive':
+      return 'protect'
+    case 'summon':
+    case 'barrier':
+    case 'terrain':
+    case 'portal':
+      return 'construct'
+    case 'possess':
+    case 'lift':
+      return 'control'
+    case 'copyKit':
+      return 'tempo'
+    case 'element':
+      return 'buff'
+    case 'lockon':
+      return 'damage'
+    case 'kitSwitch':
+    case 'fuse':
+      return 'transform'
   }
 }
 
@@ -81,9 +102,10 @@ export function primaryFamily(template: Pick<Template, 'effects'>): Family {
  * The spell universe (GAME.md §4 Q): ten families, each spell in exactly one, its main purpose. These sort the Q row;
  * the effect families above describe what any template does, across rows.
  */
-export const SPELL_FAMILIES: readonly SpellFamily[] = ['control', 'displacement', 'zone', 'construct', 'summon', 'support', 'curse', 'burst', 'vision', 'trick']
+export const SPELL_FAMILIES: readonly SpellFamily[] = ['counter', 'control', 'displacement', 'zone', 'construct', 'summon', 'support', 'curse', 'burst', 'vision', 'trick']
 
 export const SPELL_FAMILY_LABEL: Record<SpellFamily, string> = {
+  counter: 'Counter',
   control: 'Control',
   displacement: 'Displacement',
   zone: 'Zone',

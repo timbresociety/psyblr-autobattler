@@ -275,6 +275,93 @@ function cut(clip: THREE.AnimationClip, from: number, to: number, seconds: numbe
   return new THREE.AnimationClip(clip.name, seconds, tracks)
 }
 
+/**
+ * Each F aura's own flourish (recipes/motions AURA_CLIPS) cut to its peak, to play as the toggle: [from, to, seconds]
+ * as MOVE_CUTS. Sheets 2026-11-11: the power-up's wind to its roar, the guard coming up whole, the dip into the
+ * crouch, the chest thump, the fists pumped, the battlecry's throw back.
+ */
+const TOGGLE_CUTS: Readonly<Record<string, [number, number, number]>> = {
+  ss_sword_and_shield_power_up: [0.3, 1.6, 0.9],
+  standing_block_start: [0, 0.5, 0.5],
+  standing_idle_to_crouch: [0, 1.0, 0.6],
+  axe_standing_taunt_chest_thump: [0.3, 1.9, 1.0],
+  male_cheering_with_two_fists_pump: [0, 1.4, 0.9],
+  axe_standing_taunt_battlecry: [0.3, 1.9, 1.0],
+}
+
+/**
+ * How far a skill's or a blow's clip may carry the hips from where it starts, in metres: across, and up. The engine
+ * moves the hero itself (a dash, a leap, a lunge), so a clip's own travel would walk the body out of its place and snap
+ * it back; within the reach it eases off (tanh) rather than stopping dead. Down stays whole, so a kneel or a slam
+ * still gets low.
+ */
+const ANCHOR = { across: 0.35, up: 0.5 }
+
+/**
+ * `clip`, a one-gun shot, fired with a gun in each hand (paired guns): the left arm (shoulder to fingertips) plays the
+ * right arm's shot mirrored, `share` of the clip later and wrapping round, so the off hand's gun fires between the main
+ * hand's shots; the hips, spine and head are squared to the front (each turn met halfway by its mirror), since a
+ * one-gun shot stands side-on. The standard rig's sides mirror a turn as (x, -y, -z, w).
+ */
+export function akimboed(clip: THREE.AnimationClip, share = 0.5): THREE.AnimationClip {
+  const by = clip.duration * share
+  const named = new Map(clip.tracks.map((t) => [t.name, t]))
+  const mirror = (v: Float32Array, i: number) => {
+    v[i + 1] = -v[i + 1]
+    v[i + 2] = -v[i + 2]
+  }
+  const tracks = clip.tracks.map((track) => {
+    if (!track.name.endsWith('.quaternion') || clip.duration <= 0) return track
+    const bone = track.name.slice(0, -'.quaternion'.length)
+    if (/^Left(Shoulder|Arm|ForeArm|Hand)/.test(bone)) {
+      const right = named.get(`Right${bone.slice('Left'.length)}.quaternion`)
+      if (!right) return track
+      // the right arm's own blend: a turn slerps
+      const at = right.InterpolantFactoryMethodLinear(new Float32Array(4)) as THREE.Interpolant
+      const values = new Float32Array(right.times.length * 4)
+      right.times.forEach((t, i) => {
+        values.set(at.evaluate((t + clip.duration - by) % clip.duration) as Float32Array, i * 4)
+        mirror(values, i * 4)
+      })
+      return new THREE.QuaternionKeyframeTrack(track.name, Float32Array.from(right.times), values)
+    }
+    if (!/^(Hips|Spine\d?|Neck|Head)$/.test(bone)) return track
+    const values = new Float32Array(track.values)
+    const q = new THREE.Quaternion()
+    const m = new THREE.Quaternion()
+    for (let i = 0; i < values.length; i += 4) {
+      q.fromArray(values, i)
+      m.set(q.x, -q.y, -q.z, q.w)
+      q.slerp(m, 0.5).toArray(values, i)
+    }
+    return new THREE.QuaternionKeyframeTrack(track.name, Float32Array.from(track.times), values)
+  })
+  return Object.assign(new THREE.AnimationClip(clip.name, clip.duration, tracks), { userData: { ...clip.userData } })
+}
+
+/** `clip` with its hips held near where they start (ANCHOR). */
+export function anchored(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const soft = (d: number, reach: number) => reach * Math.tanh(d / reach)
+  const tracks = clip.tracks.map((track) => {
+    if (!track.name.endsWith('.position') || track.values.length < 3) return track
+    const values = new Float32Array(track.values)
+    const [x0, y0, z0] = [values[0], values[1], values[2]]
+    for (let i = 0; i < track.times.length; i++) {
+      const dx = values[i * 3] - x0
+      const dz = values[i * 3 + 2] - z0
+      const d = Math.hypot(dx, dz)
+      const k = d > 1e-6 ? soft(d, ANCHOR.across) / d : 1
+      values[i * 3] = x0 + dx * k
+      values[i * 3 + 2] = z0 + dz * k
+      const dy = values[i * 3 + 1] - y0
+      if (dy > 0) values[i * 3 + 1] = y0 + soft(dy, ANCHOR.up)
+    }
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(track.times), values)
+  })
+  return Object.assign(new THREE.AnimationClip(clip.name, clip.duration, tracks), { userData: { ...clip.userData } })
+}
+
 const moveLoads = new Map<string, Promise<Map<string, THREE.AnimationClip>>>()
 
 /**
@@ -294,10 +381,13 @@ export async function libraryMoves(gender: Gender, rig: RigKind, motions: readon
   const names = [...new Set([...motions, ...Object.values(instead)])]
   const own = await Promise.all(names.map((name) => animClip(gender, name, rig).catch(() => undefined)))
   const out = new Map(base)
-  own.forEach((clip, k) => clip && out.set(names[k], clip))
+  const moving = new Set(motions)
+  own.forEach((clip, k) => clip && out.set(names[k], moving.has(names[k]) ? anchored(clip) : clip))
   for (const [ours, name] of Object.entries(instead)) {
-    const clip = out.get(name)
-    if (clip) out.set(ours, Object.assign(new THREE.AnimationClip(ours, clip.duration, clip.tracks), { userData: { ...clip.userData, plain: PLAIN.has(ours) } }))
+    const found = out.get(name)
+    const cuts = ours === 'toggle' ? TOGGLE_CUTS[name] : undefined
+    const clip = found && cuts ? cut(found, ...cuts) : found
+    if (clip) out.set(ours, Object.assign(new THREE.AnimationClip(ours, clip.duration, clip.tracks), { userData: { ...found!.userData, plain: PLAIN.has(ours) } }))
   }
   const heavy = ATTITUDE[attitude].heavyLanding && out.get('land_heavy')
   if (heavy) out.set('land', Object.assign(new THREE.AnimationClip('land', heavy.duration, heavy.tracks), { userData: { ...heavy.userData } }))

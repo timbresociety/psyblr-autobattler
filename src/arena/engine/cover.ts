@@ -25,8 +25,12 @@ export interface CoverPiece {
    * from the low end, and its sides are as high as the slope where they stand (GAME.md §8 card ramps, stairs).
    */
   slope?: { rise: 'x+' | 'x-' | 'z+' | 'z-'; low: number }
+  /** A marked wall (§4 shared walls): any hero can run along its faces. */
+  run?: boolean
+  /** A one-way barrier (a Q construct): shots from this side pass through it; everything else stops. */
+  pass?: 0 | 1
   /** What the renderer builds here; the engine ignores it. */
-  look: 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step' | 'grey' | 'ramp' | 'chip' | 'rail' | 'glass' | 'card'
+  look: 'barrier' | 'terrain' | 'wall' | 'column' | 'fallen' | 'barricade' | 'lintel' | 'plinth' | 'pillar' | 'pier' | 'arch' | 'terrace' | 'step' | 'grey' | 'ramp' | 'chip' | 'rail' | 'glass' | 'card'
 }
 
 /**
@@ -318,7 +322,7 @@ function entry(p: CoverPiece, a: Vec3, dx: number, dy: number, dz: number, radiu
  * the stone itself (a body pressed flat against a wall) is tested against the bare stone instead, so moving, dashing
  * or shooting away from a wall stays free while shooting into it still stops at it.
  */
-export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHealth[], a: Vec3, b: Vec3, radius = 0): { t: number; index: number } | undefined {
+export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHealth[], a: Vec3, b: Vec3, radius = 0, side?: 0 | 1): { t: number; index: number } | undefined {
   const bounds = boundsOf(pieces)
   let bestT = 2
   let bestIndex = -1
@@ -341,6 +345,7 @@ export function coverHit(pieces: readonly CoverPiece[], health: readonly CoverHe
     if (maxX < bounds.minX[i] || minX > bounds.maxX[i] || maxZ < bounds.minZ[i] || minZ > bounds.maxZ[i]) continue
     const p = pieces[i]
     if (maxY < p.base || minY > p.top) continue
+    if (side !== undefined && p.pass === side) continue
     let t = entry(p, a, dx, dy, dz, radius, w)
     if (t === undefined) continue
     if (t <= 0 && radius > 0) {

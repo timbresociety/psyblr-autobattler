@@ -23,6 +23,30 @@ export interface FxKit {
 }
 
 const TEAM = [new THREE.Color(0.31, 0.64, 1), new THREE.Color(1, 0.42, 0.29)]
+const PAD = new THREE.Color(0.25, 1, 0.85)
+
+/** How a raised piece is drawn, by its look: the colour it leans to (and how far), its glow, roughness and opacity. */
+const LOOKS: Record<string, { base: THREE.Color; mix: number; glow: number; rough: number; opacity: number }> = {
+  wall: { base: new THREE.Color(0.55, 0.55, 0.6), mix: 0.6, glow: 0.35, rough: 0.35, opacity: 0.88 },
+  terrain: { base: new THREE.Color(0.78, 0.8, 0.84), mix: 0.85, glow: 0.12, rough: 0.6, opacity: 1 },
+  barrier: { base: new THREE.Color(0.9, 0.95, 1), mix: 0.3, glow: 0.8, rough: 0.2, opacity: 0.4 },
+}
+
+/** Slope a box's top from `low` (above its foot) at one end up to its full height at the `rise` end, as a ramp is. */
+function slopeTop(geometry: THREE.BoxGeometry, rise: 'x+' | 'x-' | 'z+' | 'z-', low: number, hx: number, hz: number) {
+  const pos = geometry.attributes.position as THREE.BufferAttribute
+  let top = 0
+  for (let i = 0; i < pos.count; i++) top = Math.max(top, pos.getY(i))
+  const half = rise[0] === 'x' ? hx : hz
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) < top - 1e-4) continue
+    const c = rise[0] === 'x' ? pos.getX(i) : pos.getZ(i)
+    const u = ((rise[1] === '+' ? c : -c) + half) / (2 * half)
+    pos.setY(i, low + (top - low) * u)
+  }
+  pos.needsUpdate = true
+  geometry.computeVertexNormals()
+}
 const RISE = 0.3
 const FADE = 0.45
 
@@ -96,16 +120,23 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
   function raiseWall(e: Extract<MatchEvent, { type: 'wall' }>) {
     const color = e.owner >= 0 ? TEAM[teamOf(e.owner)] : new THREE.Color(0.8, 0.8, 0.8)
     const root = new THREE.Group()
-    // a slab of hard light over a stone foot: solid enough to read as cover, tinted so you know whose it is
+    // a Q construct (spells.ts) stands on its own base, up to its top; a wall from the floor, its height tall
+    const base = e.base ?? floorAt(e.at)
+    const height = e.base !== undefined ? e.top - e.base : e.top
+    const geometry = new THREE.BoxGeometry(e.hx * 2, height, e.hz * 2).translate(0, height / 2, 0)
+    if (e.slope) slopeTop(geometry, e.slope.rise, e.slope.low - base, e.hx, e.hz)
+    // a slab of hard light over a stone foot: solid enough to read as cover, tinted so you know whose it is; ground to
+    // walk on is pale stone with a faint tint, and a one-way barrier is thin light you can see through
+    const look = LOOKS[e.look ?? 'wall'] ?? LOOKS.wall
     const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(e.hx * 2, e.top, e.hz * 2).translate(0, e.top / 2, 0),
-      new THREE.MeshStandardMaterial({ color: color.clone().lerp(new THREE.Color(0.55, 0.55, 0.6), 0.6), emissive: color, emissiveIntensity: 0.35, roughness: 0.35, metalness: 0.1, transparent: true, opacity: 0.88 }),
+      geometry,
+      new THREE.MeshStandardMaterial({ color: color.clone().lerp(look.base, look.mix), emissive: color, emissiveIntensity: look.glow, roughness: look.rough, metalness: 0.1, transparent: true, opacity: look.opacity, depthWrite: look.opacity > 0.6 }),
     )
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(slab.geometry), new THREE.LineBasicMaterial({ color: color.clone().multiplyScalar(1.6), transparent: true, opacity: 0.9 }))
     slab.add(edges)
     slab.castShadow = true
     root.add(slab)
-    root.position.set(e.at.x, floorAt(e.at), e.at.z)
+    root.position.set(e.at.x, base, e.at.z)
     root.scale.y = 0.02
     group.add(root)
     walls.set(e.index, { root, slab, born: clock })
@@ -120,6 +151,51 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     w.dying = clock
     const at = w.root.position
     kit.puff({ at: { x: at.x, y: floorAt(at) + 1, z: at.z }, count: 22, kind: 'smoke', life: 1.5, size: [0.7, 2.2], color: new THREE.Color(0.72, 0.68, 0.62), speed: 3, spread: 1.5, drag: 1.8, up: 0.4, alpha: 0.5 })
+  }
+
+  // the map's jump pads (GAME.md §4 map routes): a glowing disc with a ring, pulsing upward
+  const pads = (arena.match.pads ?? []).map((pad) => {
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(pad.r, pad.r, 0.08, 32), new THREE.MeshStandardMaterial({ color: 0x1b2a33, emissive: PAD, emissiveIntensity: 0.9, roughness: 0.4 }))
+    disc.position.set(pad.at.x, pad.at.y + 0.04, pad.at.z)
+    const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: PAD, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }))
+    ring.position.set(pad.at.x, pad.at.y + 0.1, pad.at.z)
+    ring.scale.setScalar(pad.r)
+    group.add(disc, ring)
+    return { ring, at: pad.at, r: pad.r }
+  })
+  const portals = new Map<number, THREE.Group>()
+  const ownLines = new Map<number, THREE.Mesh>()
+
+  function openPortal(e: Extract<MatchEvent, { type: 'portal' }>) {
+    const color = TEAM[teamOf(e.owner)]
+    const pair = new THREE.Group()
+    for (const end of [e.a, e.b]) {
+      // an upright ring of light, a body tall, facing the other end
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.08, 10, 40), new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2), toneMapped: false }))
+      const fill = new THREE.Mesh(new THREE.CircleGeometry(0.85, 32), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }))
+      const gate = new THREE.Group()
+      gate.add(ring, fill)
+      gate.position.set(end.x, floorAt(end) + 1.1, end.z)
+      const other = end === e.a ? e.b : e.a
+      gate.lookAt(other.x, floorAt(end) + 1.1, other.z)
+      pair.add(gate)
+    }
+    group.add(pair)
+    portals.set(e.id, pair)
+  }
+
+  function hangLine(e: Extract<MatchEvent, { type: 'line' }>) {
+    const a = v3(e.a)
+    const b = v3(e.b)
+    const len = a.distanceTo(b)
+    if (len < 0.01) return
+    // a yellow cable, like the house's ziplines, tinted toward its owner's side
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, len, 6), new THREE.MeshStandardMaterial({ color: new THREE.Color(0xf2c230).lerp(TEAM[teamOf(e.owner)], 0.35), roughness: 0.5, metalness: 0.4 }))
+    cable.position.copy(a).add(b).multiplyScalar(0.5)
+    cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize())
+    group.add(cable)
+    ownLines.set(e.index, cable)
+    kit.flash(b, TEAM[teamOf(e.owner)], 0.6)
   }
 
   function placeTurret(e: Extract<MatchEvent, { type: 'turret' }>) {
@@ -203,6 +279,19 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     events(list: readonly MatchEvent[]) {
       for (const e of list) {
         if (e.type === 'wall') e.phase === 'up' ? raiseWall(e) : dropWall(e.index)
+        else if (e.type === 'portal') {
+          if (e.phase === 'open') openPortal(e)
+          else if (e.phase === 'close') {
+            const p = portals.get(e.id)
+            if (p) (release(p), portals.delete(e.id))
+          } else kit.flash(v3(e.b), TEAM[teamOf(e.owner)], 1.2)
+        } else if (e.type === 'line') {
+          if (e.phase === 'up') hangLine(e)
+          else {
+            const l = ownLines.get(e.index)
+            if (l) (release(l), ownLines.delete(e.index))
+          }
+        }
         else if (e.type === 'cover-broken') dropWall(e.index)
         else if (e.type === 'turret') {
           if (e.phase === 'start') placeTurret(e)
@@ -224,6 +313,12 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
       clock += dt
       const me = viewer()
       const drawn = ctrl.positions()
+      for (const p of pads) {
+        const beat = (clock * 1.2) % 1
+        p.ring.position.y = p.at.y + 0.1 + beat * 1.2
+        ;(p.ring.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - beat)
+      }
+      for (const p of portals.values()) p.children.forEach((g) => (g.rotation.z += dt * 1.5))
       for (const [index, w] of walls) {
         const age = clock - w.born
         if (w.dying !== undefined) {
@@ -288,8 +383,14 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
       const now = arena.match.tick
       arena.match.heroes.forEach((h, i) => {
         const view = ctrl.views[i]
-        const hiddenNow = h.alive && (h.stealthUntil ?? 0) > now
         let s = shimmer.get(i)
+        // a summon's body waiting to be called in, or a hero taken into a fusion, is not drawn at all (spells.ts)
+        if ((h.summon && !h.summon.active) || h.fused) {
+          if (view) (view.root.visible = false, cloaked.add(i))
+          if (s) s.visible = false
+          return
+        }
+        const hiddenNow = h.alive && (h.stealthUntil ?? 0) > now
         if (!hiddenNow) {
           // only a body this module hid is shown again
           if (cloaked.delete(i) && view) view.root.visible = true
@@ -316,6 +417,9 @@ export function createWorldFx(ctrl: ArenaController, kit: FxKit) {
     },
     dispose() {
       for (const w of walls.values()) release(w.root)
+      for (const p of portals.values()) release(p)
+      for (const l of ownLines.values()) release(l)
+      for (const p of pads) p.ring.removeFromParent()
       for (const t of turrets.values()) release(t.root)
       for (const tr of tracers) release(tr.line)
       group.removeFromParent()

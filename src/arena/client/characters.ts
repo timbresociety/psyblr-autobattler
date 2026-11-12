@@ -18,6 +18,7 @@ import type { LibraryGait } from './library-gait.js'
 import type { CharacterLook, Gltf } from './character-look.js'
 import { buildModel, rigsOf } from './body-model.js'
 import { applyAttitude } from './metarig/attitude.js'
+import { akimbo, hangArms, hangHands } from './arms.js'
 import type { LoadedKit } from './held.js'
 import { rigOf, RIGS, type RigNames } from './rig.js'
 import { metarigRuntime, type MetarigRuntime } from './metarig/runtime.js'
@@ -144,11 +145,33 @@ function runSpeed(file: Gltf): number | null {
  */
 export const CLIP_RELEASE: Record<string, number> = { slash: 0.2, shoot: 0.1, cast: 0.28, ultimate: 0.45 }
 for (const pose of CAST_POSES) if (POSE_RELEASE[pose] > 0) CLIP_RELEASE[poseClip(pose)] ??= POSE_RELEASE[pose]
+// the turret's kneel-and-build: knelt and at work by 1.2 s (its own mark falls at the end of four seconds of work)
+CLIP_RELEASE.ual_fixing_kneeling = 1.2
+
+/**
+ * A long motion-captured clip (a combo, a long cast or set piece) plays only round its blow, from `lead` seconds before
+ * its release to `tail` after: played whole inside one cast it ran five to ten times too fast, every hit of a combo in
+ * one swing.
+ */
+const CAST_SPAN = { longer: 2.5, lead: 0.8, tail: 0.8 }
+
+/**
+ * Where each arm of a two-gun shot points, seen from above (radians out from straight ahead of its own shoulder): a
+ * two-handed shot's arms reach across to the middle, so each is turned until its hand is just outside its shoulder.
+ */
+const AKIMBO = 0.1
 
 /** Where a cast's clip is when the wind-up is `prep` done and the recovery `recover` done: the release frame at prep 1. */
 export function castTime(clip: string, duration: number, prep: number, recover: number): number {
+  const { from, release, to } = castSpan(clip, duration)
+  return prep < 1 ? from + prep * (release - from) : release + recover * (to - release)
+}
+
+/** The part of a cast's clip that plays (CAST_SPAN): from its start to its end, or round the release of a long one. */
+export function castSpan(clip: string, duration: number): { from: number; release: number; to: number } {
   const release = Math.min(CLIP_RELEASE[clip] ?? MOTION_RELEASE.get(clip) ?? duration / 2, duration)
-  return prep < 1 ? prep * release : release + recover * (duration - release)
+  const long = duration > CAST_SPAN.longer && (MOTION_RELEASE.has(clip) || clip in CLIP_RELEASE)
+  return { from: long ? Math.max(0, release - CAST_SPAN.lead) : 0, release, to: long ? Math.min(duration, release + CAST_SPAN.tail) : duration }
 }
 
 export interface CastClip {
@@ -390,7 +413,12 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const rig = rigOf(scene)
   const body = (map: THREE.Texture | null, normalMap: THREE.Texture | null) => characterMaterial(team, map, normalMap)
   // a body of ours takes its attitude with its posture; a generated hero's own skin takes it on its rest here
-  if (!buildModel(scene, look, kit, body, atlas)) applyAttitude(scene, look.attitude)
+  if (!buildModel(scene, look, kit, body, atlas)) {
+    applyAttitude(scene, look.attitude)
+    if (kit && look.arms) hangHands(scene, kit)
+  }
+  // weapons it swaps in and out: the melee set out for a blow, the ranged set for a shot
+  const arms = kit && look.arms ? hangArms(scene, look.arms, kit) : undefined
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh && !o.userData.noShadow) o.castShadow = true
   })
@@ -629,6 +657,50 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   // what the right hand holds is measured the first time its tip is asked for, once the model is in the scene
   const holder = scene.getObjectByName('socket:hand_r')
   let tip: THREE.Vector3 | undefined | null = holder ? null : undefined
+  // a gun in each hand (paired guns): neither hand takes the other's grip, and a shot turns each arm out to its own side
+  // (AKIMBO) and its hand back by as much, so each gun points straight ahead of its own shoulder (the clip, the one-hand
+  // gun's shot, has the off arm mirror the main one half a beat behind: heroes.ts akimboShot). Like the twist, put back
+  // before the next update
+  const twoGuns = akimbo(build.look?.arms)
+  let drawn: 'melee' | 'ranged' | undefined
+  let firing: string | undefined
+  // each side's upper arm, then its hand
+  const gunBones = twoGuns && rig.kind === 'standard' ? ['LeftArm', 'LeftHand', 'RightArm', 'RightHand'].map((name) => scene.getObjectByName(name)) : []
+  const unspread = gunBones.map(() => new THREE.Quaternion())
+  const spreadQ = new THREE.Quaternion()
+  const bodyQ = new THREE.Quaternion()
+  const bodyUp = new THREE.Vector3()
+  const bodyAhead = new THREE.Vector3()
+  const bodyLeft = new THREE.Vector3()
+  const shoulderAt = new THREE.Vector3()
+  const handAt = new THREE.Vector3()
+  let spread = false
+  const unspreadArms = () => {
+    if (spread) gunBones.forEach((bone, k) => bone!.quaternion.copy(unspread[k]))
+    spread = false
+  }
+  const spreadArms = (share: number) => {
+    if (share <= 0 || !gunBones.length || !gunBones.every(Boolean)) return
+    root.updateWorldMatrix(true, false)
+    bodyUp.set(0, 1, 0).applyQuaternion(root.getWorldQuaternion(bodyQ))
+    gunBones.forEach((bone, k) => unspread[k].copy(bone!.quaternion))
+    gunBones[0]!.parent!.updateWorldMatrix(true, true)
+    gunBones[2]!.parent!.updateWorldMatrix(true, true)
+    bodyAhead.set(0, 0, 1).applyQuaternion(bodyQ)
+    bodyLeft.crossVectors(bodyUp, bodyAhead)
+    for (const k of [0, 2]) {
+      const arm = gunBones[k]!
+      const hand = gunBones[k + 1]!
+      // +x is the hero's left: how far round toward it the hand now lies from its shoulder, seen from above, and the turn
+      // that puts it AKIMBO outside its own side; the hand turns back by as much, so its gun still points ahead
+      const reach = hand.getWorldPosition(handAt).sub(arm.getWorldPosition(shoulderAt))
+      const now = Math.atan2(reach.dot(bodyLeft), reach.dot(bodyAhead))
+      const by = ((k === 0 ? 1 : -1) * AKIMBO - now) * share
+      turn(arm, spreadQ.setFromAxisAngle(bodyUp, by))
+      turn(hand, spreadQ.setFromAxisAngle(bodyUp, -by))
+    }
+    spread = true
+  }
   // the Psyblr Human's twist bones (rig.ts): after every pose, each turns halfway toward the roll of the bone it follows
   // about its segment, so the skin twists along the limb instead of at the joint. Set outright, from its rest in the file.
   const twists = rig.twists.flatMap(({ bone, follows }) => {
@@ -687,6 +759,7 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   const fix =
     rig.kind === 'standard'
       ? fixupsFor(scene, root, metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, (out) => {
+          if (twoGuns && drawn === 'ranged') return undefined
           if (tip === null) tip = heldTip(holder!)
           return tip && holder ? holder.localToWorld(out.copy(tip)) : undefined
         }, 1.8 * heightScale(look.physique ?? {}))
@@ -696,8 +769,11 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
   if (import.meta.env.DEV && fix && typeof window !== 'undefined') {
     const probe = window as unknown as { __fix?: unknown[] }
     // `playing`: the clips sounding now and their weights, to read which set (unarmed or a weapon's) the hero moves on
-    const playing = () => (mixer as unknown as { _actions: THREE.AnimationAction[] })._actions.filter((a) => a.enabled && a.getEffectiveWeight() > 0.05).map((a) => `${a.getClip().name}(${a.getClip().duration.toFixed(2)}s):${a.getEffectiveWeight().toFixed(2)}`)
-    ;(probe.__fix ??= []).push({ hero: build.heroName, spread: metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, gaze, state: fix.state, playing })
+    const live = mixer as unknown as { _actions: THREE.AnimationAction[]; _isActiveAction: (a: THREE.AnimationAction) => boolean }
+    const playing = () => live._actions.filter((a) => a.enabled && live._isActiveAction(a) && a.getEffectiveWeight() > 0.05).map((a) => `${a.getClip().name}(${a.getClip().duration.toFixed(2)}s):${a.getEffectiveWeight().toFixed(2)}`)
+    // `clip`: a clip the hero has played, by name, to read its tracks; `root`: its model, to read where bones and pieces are
+    const clip = (name: string) => live._actions.find((a) => a.getClip().name === name)?.getClip()
+    ;(probe.__fix ??= []).push({ hero: build.heroName, spread: metarig?.spread ? extraSpread(metarig.spread, gender) : undefined, gaze, state: fix.state, playing, clip, root })
   }
   const runMeta = (dt: number, far: boolean) => {
     face?.update(dt, { detail: far ? 'mid' : 'near' })
@@ -725,12 +801,17 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       // undone in the reverse order they went on: the feet's bend, then the legs' swing, the head's steadying, the twist,
       // the back stood on a cast's hips
       unbend()
+      unspreadArms()
       fix?.undo()
       unswing()
       unsteady()
       untwist()
       unstand()
       ungrip()
+      // a blow brings the melee weapons out and a shot the ranged ones; what the right hand holds is measured again
+      const use = state.kind === 'charge' || (state.kind === 'cast' && (state.melee || state.slot === 'basic')) ? 'melee' : state.kind === 'cast' && state.slot === 'active1' ? 'ranged' : undefined
+      if (use) drawn = use
+      if (use && arms?.wield(use) && holder) tip = null
       // a basic attack's blow plays its own step of the chain, or the charged heavy blow
       const blow = state.kind === 'cast' && state.melee ? meleeClip(build, state.melee) : undefined
       // a shot or a spell from a crouch or prone fires from there, on that stance's own firing clip (owner, 2026-11-04)
@@ -782,10 +863,17 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         const fade = wanted === 'hurt' ? 0.05 : cast?.from ? 0.1 : (MOVE_FADE[wanted] ?? MOVE_FADE[state.kind] ?? 0.15)
         const again = 'seq' in state && state.kind !== 'cast' && state.seq !== moveSeq
         if (again) moveSeq = state.seq
-        if (again || (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted)))) play(wanted, fade, cast?.from)
+        // a cast not on the engine's clock plays through from where its span starts: a long clip's lead-in is skipped
+        const from = cast && !cast.from ? castSpan(wanted, actions.get(wanted)?.getClip().duration ?? 0).from : cast?.from
+        if (again || (wanted !== currentName && !(oneShotPlaying && LOCOMOTION.has(wanted)))) play(wanted, fade, from)
         // a cast on the engine's clock gives the body back as it ends, or is cut short
         layer = Math.max(0, layer - dt / fade)
-        if (!layer) shown = undefined
+        // its halves stop with it: still playing, the next held cast would weigh them in alongside its own
+        if (!layer && shown) {
+          shown.legs.stop()
+          shown.top.stop()
+          shown = undefined
+        }
       }
       // the run keeps pace with the ground it covers, so a planted foot stays put; backing away, it plays backwards
       if (current && currentName === 'run' && !strides) {
@@ -809,7 +897,9 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
         }
       }
       // the library's gait plays under the stand-in run, as much as its fades and a cast leave it, and under a cast's legs
-      const gaitShare = strides ? actions.get('run')!.getEffectiveWeight() : 0
+      // (only while the run runs: an action never played yet reports its starting weight of 1)
+      const running = actions.get('run')!
+      const gaitShare = strides && running.isRunning() ? running.getEffectiveWeight() : 0
       strides?.update(dt, gaitShare, layer * striding, ground !== undefined ? ground / root.scale.x : 0, heading, sprinting)
       mixer.update(dt)
       standOnCast(shown?.legs, layer * striding)
@@ -820,6 +910,10 @@ export function characterView(file: Gltf, look: CharacterLook, team: THREE.Color
       gripHands()
       gaze.mode = state.kind === 'cast' ? 'aim' : state.kind === 'dead' || state.kind === 'hit' || state.kind === 'slide' || state.kind === 'roll' ? 'off' : 'look'
       fix?.apply(dt, gaze)
+      // as much as the shot is on: the cast's layer on the engine's clock, or a whole-body shot's own weight as it plays out
+      const shooting = state.kind === 'cast' && state.slot === 'active1' && !state.melee
+      if (shooting && cast) firing = cast.clip
+      spreadArms(shooting && layer > 0 ? layer : current && currentName === firing ? current.getEffectiveWeight() : 0)
       solveTwists()
       posed = dt
     },

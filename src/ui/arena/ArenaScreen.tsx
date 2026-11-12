@@ -60,7 +60,7 @@ export function matchSetup(staged: StagingResult): MatchSetup {
   const side = (s: 0 | 1) => staged.formation[s].map((p) => staged.loadout[p.hero])
   const teams = ([0, 1] as const).map((s) => armyModifiers(side(s).map((e) => e.build))) as MatchSetup['teams']
   const formations = ([0, 1] as const).map((s) => staged.formation[s].map((p) => ({ x: p.x, y: p.y ?? 0, z: p.z }))) as MatchSetup['formations']
-  const setup: MatchSetup = { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: devSeed() ?? Date.now() % 100_000, side: staged.side, aiLevels: staged.aiLevels ?? [DEFAULT_AI_LEVEL, DEFAULT_AI_LEVEL] }
+  const setup: MatchSetup = { teams, formations, packages: [...side(0), ...side(1)].map((e) => e.pkg), seed: devSeed() ?? Date.now() % 100_000, side: staged.side, aiLevels: staged.aiLevels ?? [DEFAULT_AI_LEVEL, DEFAULT_AI_LEVEL], ...(staged.lab ? { lab: staged.lab } : {}) }
   if (!staged.dummy) return setup
   teams[1] = teams[1].map((c) => ({ ...c, mods: { ...c.mods, mul: { ...c.mods?.mul, maxHealth: DUMMY_HEALTH - 1 } } }))
   return { ...setup, idle: teams[1].map((_, j) => teams[0].length + j) }
@@ -276,7 +276,7 @@ export function KitReel({ build, onClose, start }: { build: Build; onClose: () =
 }
 
 /** `replay` plays a recorded match back (its player's inputs, the AI as it was) instead of a live one. */
-export function Fight({ staged, onBack, onRestart, back = 'Back to staging', replay }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string; replay?: Recording }) {
+export function Fight({ staged, onBack, onRestart, back = 'Back to staging', replay, onController }: { staged: StagingResult; onBack: () => void; onRestart: () => void; back?: string; replay?: Recording; onController?: (c: ArenaController | undefined) => void }) {
   const host = useRef<HTMLDivElement>(null)
   const [controller, setController] = useState<ArenaController>()
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -337,6 +337,7 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging', rep
           },
         )
         setController(c)
+        onController?.(c)
       })
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : String(e)))
     return () => {
@@ -347,7 +348,9 @@ export function Fight({ staged, onBack, onRestart, back = 'Back to staging', rep
       const rec = live?.recording()
       if (rec && rec.end > 0) void saveRecording(rec, true)
       live?.stop()
+      onController?.(undefined)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new listener never restarts the fight
   }, [staged, replay])
 
   const pause = useCallback(() => {

@@ -34,7 +34,7 @@ export function retuneFactor(steps: number): number {
 /** The mid-game sheet every template is priced against. */
 export const REFERENCE_SHEET: Pick<SecondarySheet, 'weaponDamage' | 'spiritPower'> = { weaponDamage: 60, spiritPower: 50 }
 
-const PASSIVE_TRIGGER_WEIGHT = { always: 1, onHit: 1, everyThirdHit: 0.4, lowHealth: 0.15, onKill: 0.15 } as const
+const PASSIVE_TRIGGER_WEIGHT = { always: 1, onHit: 1, everyThirdHit: 0.4, lowHealth: 0.15, onKill: 0.15, whenHit: 0.6 } as const
 const BUFF_WEIGHT = { damage: 160, attackSpeed: 140, moveSpeed: 60, damageReduction: 190, lifesteal: 150, evasion: 170 } as const
 /** Per second of control on one enemy; a stun is 110. Behaviour control (fear, taunt) costs a little more. */
 const CONTROL_WEIGHT: Record<ControlType, number> = { root: 75, silence: 70, disarm: 55, sleep: 70, blind: 45, grounded: 30, fear: 105, taunt: 100, break: 30 }
@@ -127,6 +127,34 @@ export function effectValue(effect: Effect, delivery: Delivery): number {
       return effect.seconds * 12
     case 'rewind':
       return effect.seconds * 45
+    case 'counter':
+      return effect.duration * 70
+    case 'summon':
+      return effect.count * effect.duration * (effect.what === 'titan' ? 40 : effect.what === 'decoy' ? 4 : 12)
+    case 'barrier':
+      return effect.length * effect.height * effect.duration * 0.55 + effect.health / 60
+    case 'terrain':
+      return effect.length * effect.duration * 0.3
+    case 'portal':
+      return effect.duration * 3
+    case 'copyKit':
+      return effect.duration * 20
+    case 'possess':
+      return effect.duration * 150 * area
+    case 'lift':
+      return (effect.hold * 115 + effect.distance * 9) * area
+    case 'revive':
+      return effect.share * 600 * TARGET_WEIGHT[effect.target]
+    case 'element':
+      return 40
+    case 'lockon':
+      return effect.duration * 60
+    case 'kitSwitch':
+      return effect.duration * 4
+    case 'fuse':
+      return effect.duration * 25
+    case 'traverse':
+      return effect.distance * 9 + effect.duration * 15
   }
 }
 

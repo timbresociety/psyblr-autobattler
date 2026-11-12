@@ -20,8 +20,9 @@ export interface Ctx {
 }
 
 export const hpFraction = (h: HeroState) => h.hp / h.maxHp
-export const enemiesOf = (m: MatchState, h: HeroState) => m.heroes.filter((o) => o.alive && o.team !== h.team)
-export const alliesOf = (m: MatchState, h: HeroState) => m.heroes.filter((o) => o.alive && o.team === h.team)
+/** Heroes in the fight on the other side, or on its own: a downed hero is neither target nor helper (GAME.md §4 Team). */
+export const enemiesOf = (m: MatchState, h: HeroState) => m.heroes.filter((o) => o.alive && !o.downed && !o.fused && o.team !== h.team)
+export const alliesOf = (m: MatchState, h: HeroState) => m.heroes.filter((o) => o.alive && !o.downed && !o.fused && o.team === h.team)
 export const sumBuff = (h: HeroState, stat: Stat) => h.buffs.reduce((s, b) => (b.stat === stat ? s + b.pct / 100 : s), 0)
 const magnitude = (e: { amount: number; ratio: number }, stat: number) => e.amount + e.ratio * stat
 /** Area support effects share a fixed total across the allies they reach. */
@@ -48,6 +49,8 @@ export const controlled = (h: HeroState, type: ControlType, now: number) => h.cc
  * attack (disarm) or to skills (silence, taunt); stuns, sleep, fear and displacement cut anything.
  */
 export function interrupt(ctx: Ctx, hero: HeroState, only?: 'basic' | 'skills') {
+  // a cast still charging is lost too (§4 Systems: a Counter cancels a charge)
+  if (only !== 'basic') hero.charging = undefined
   const a = hero.action
   if (!a || (only === 'basic' && a.slot !== 'basic') || (only === 'skills' && a.slot === 'basic')) return
   if (!a.released && ctx.match.tick < a.ends) ctx.events.push({ type: 'interrupt', hero: hero.id, slot: a.slot })
@@ -57,7 +60,7 @@ export function interrupt(ctx: Ctx, hero: HeroState, only?: 'basic' | 'skills') 
 
 export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: number, type: DamageType, slot: BuildSlot | 'dot', executeBonus = 0) {
   const { match } = ctx
-  if (!target.alive || target.invulnerableUntil > match.tick || raw <= 0) return
+  if (!target.alive || target.downed || target.invulnerableUntil > match.tick || raw <= 0) return
   // a blinded attacker's basic attacks miss, and evasion turns some aside
   if (slot === 'basic' || slot === 'active1') {
     const evasion = Math.min(ENGINE.evasionCap, sumBuff(target, 'evasion'))
@@ -100,7 +103,8 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
   // the sheet's lifesteal drinks from physical hits; a lifesteal buff drinks from every hit
   const lifesteal = (type === 'physical' ? sourceSetup.sheet.lifesteal : 0) + sumBuff(source, 'lifesteal') * 100
   if (lifesteal > 0 && slot !== 'dot') heal(source, (dealt * lifesteal) / 100)
-  if (target.hp <= 0) {
+  if (target.hp <= 0 && fate.goesDown(ctx, target)) fate.goDown(ctx, target)
+  else if (target.hp <= 0) {
     target.alive = false
     target.hp = 0
     target.knockback = undefined
@@ -108,6 +112,8 @@ export function dealDamage(ctx: Ctx, source: HeroState, target: HeroState, raw: 
     ctx.events.push({ type: 'death', hero: target.id })
     firePassive(ctx, source, 'onKill', undefined)
   }
+  // the striker's element rides the hit, the struck's when-hit passive answers it, and both meters fill (systems.ts)
+  if (slot !== 'dot') spells.hit(ctx, source, target, amount, slot)
 }
 
 /** Where a lingering field or a trap reaches: its centre and radius. */
@@ -285,6 +291,8 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     case 'form':
       if (e.kind === 'resize') setSize(ctx, caster, e.sizeClass)
       caster.formUntil = now + ticks(e.duration)
+      if (e.kind === 'form' && e.stages) caster.formStage = 1
+      if (template.switchTo) spells.form(ctx, caster, template, slot, e.duration)
       ctx.events.push({ type: 'form', hero: caster.id, phase: 'start', size: caster.size })
       break
     case 'reveal':
@@ -329,12 +337,27 @@ export function applyEffect(ctx: Ctx, caster: HeroState, template: Template, slo
     case 'wall':
     case 'trap':
     case 'turret':
+    case 'counter':
+    case 'summon':
+    case 'barrier':
+    case 'terrain':
+    case 'portal':
+    case 'copyKit':
+    case 'possess':
+    case 'lift':
+    case 'revive':
+    case 'element':
+    case 'lockon':
+    case 'kitSwitch':
+    case 'fuse':
+    case 'traverse':
       // movement is resolved by the delivery and `resolve`; execute rides on damage; the rest raise things in the world
+      // (world.ts) or are the Q library's (spells.ts), which `resolve` hands on
       break
   }
 }
 
-export type PassiveTrigger = 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill'
+export type PassiveTrigger = 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill' | 'whenHit'
 
 const PULL_TAGS = ['pull', 'hook', 'gravity', 'vortex', 'black-hole', 'drag']
 
@@ -342,7 +365,7 @@ const PULL_TAGS = ['pull', 'hook', 'gravity', 'vortex', 'black-hole', 'drag']
  * Start a knockback or pull as an engine trajectory over a few ticks (KTD3). Walls stop it. A pull drags toward
  * `origin`: the caster, or a zone's centre for a vortex.
  */
-function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Template, distanceM: number, forcePull = false, origin: Vec3 = caster.position) {
+export function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Template, distanceM: number, forcePull = false, origin: Vec3 = caster.position) {
   if (immune(target, ctx.match.tick)) return
   const pull = forcePull || template.delivery.kind === 'grapple' || template.tags.some((t) => PULL_TAGS.includes(t))
   const away = sub(target.position, origin)
@@ -379,7 +402,11 @@ function displace(ctx: Ctx, caster: HeroState, target: HeroState, template: Temp
  * can be raised there; a pulse of an existing field or trap passes its `area` instead and raises nothing new.
  */
 export function resolve(ctx: Ctx, caster: HeroState, template: Template, slot: BuildSlot, hit: HeroState[], at?: Vec3, area?: Area) {
+  hit = answered(ctx, caster, template, slot, hit)
   const effects = template.effects as Effect[]
+  // a Strike that reaches someone locks on and lands its blows one by one (systems.ts), instead of all at once
+  const lock = effects.find((e) => e.kind === 'lockon')
+  if (lock && hit.length && !area) return spells.apply(ctx, caster, template, slot, lock, hit, at, area)
   const spawn = at !== undefined && area === undefined
   // a trap keeps its effects for whoever steps in later
   const trap = effects.find((e) => e.kind === 'trap')
@@ -391,8 +418,37 @@ export function resolve(ctx: Ctx, caster: HeroState, template: Template, slot: B
     else if (e.kind === 'field') spawn && world.field(ctx, caster, template, slot, at, e)
     else if (e.kind === 'wall') spawn && world.wall(ctx, caster, at, e)
     else if (e.kind === 'turret') spawn && world.turret(ctx, caster, template, slot, at, e)
+    else if (SPELL_KINDS.has(e.kind)) spells.apply(ctx, caster, template, slot, e, hit, at, area)
     else applyEffect(ctx, caster, template, slot, e, hit, area)
   }
+}
+
+/** The Q library's effects (spells.ts): they raise, call in, take over or answer things, so `resolve` hands them on. */
+const SPELL_KINDS = new Set<Effect['kind']>(['counter', 'summon', 'barrier', 'terrain', 'portal', 'copyKit', 'possess', 'lift', 'revive', 'element', 'lockon', 'kitSwitch', 'fuse', 'traverse'])
+
+/** Enemies `hit` by a blow, less those a counter answered instead (§4 Q Counter): an answered blow lands nothing. */
+export function answered(ctx: Ctx, caster: HeroState, template: Template, slot: BuildSlot, hit: HeroState[]): HeroState[] {
+  if (!hit.some((u) => u.counter)) return hit
+  return hit.filter((u) => !(u.counter && spells.answer(ctx, caster, u, template, slot)))
+}
+
+/** Filled in by spells.ts, which needs `resolve` to strike back with a counter, so the two meet here. */
+export const spells = {
+  apply: (_ctx: Ctx, _caster: HeroState, _template: Template, _slot: BuildSlot, _e: Effect, _hit: HeroState[], _at?: Vec3, _area?: Area) => {},
+  answer: (_ctx: Ctx, _source: HeroState, _target: HeroState, _template: Template, _slot: BuildSlot): boolean => false,
+  /** A hit landed (not damage over time), for elements, the when-hit trigger and the power meter. */
+  hit: (_ctx: Ctx, _source: HeroState, _target: HeroState, _amount: number, _slot: BuildSlot | 'dot') => {},
+  /** A form with a moveset (§4 R): its `switchTo` slots hold while the form does. */
+  form: (_ctx: Ctx, _caster: HeroState, _template: Template, _slot: BuildSlot, _seconds: number) => {},
+}
+
+/**
+ * What happens to a hero whose health runs out, when the full kit lets it go down instead of dying (moveset.ts fills
+ * these in; it needs this module, so the two meet here).
+ */
+export const fate = {
+  goesDown: (_ctx: Ctx, _hero: HeroState): boolean => false,
+  goDown: (_ctx: Ctx, _hero: HeroState) => {},
 }
 
 /**
@@ -462,8 +518,12 @@ function passiveHolds(ctx: Ctx, hero: HeroState) {
   const source = `passive:${hero.id}`
   for (const e of passive.effects) {
     if (e.kind === 'buff') {
-      hero.buffs = hero.buffs.filter((b) => !(b.source === source && b.stat === e.stat))
-      hero.buffs.push({ stat: e.stat, pct: e.pct, until: now + 2, source })
+      // an aura's buff for the allies holds on each of them in its radius, the hero among them, while they stay there
+      for (const to of friendlyTargets(ctx, hero, passive, e.target)) {
+        if (!to.alive) continue
+        to.buffs = to.buffs.filter((x) => !(x.source === source && x.stat === e.stat))
+        to.buffs.push({ stat: e.stat, pct: e.pct, until: now + 2, source })
+      }
     } else if (e.kind === 'state' && e.type !== 'cleanse') {
       if (e.type === 'unstoppable') hero.unstoppableUntil = Math.max(hero.unstoppableUntil, now + 2)
       else if (e.type === 'invulnerable') hero.invulnerableUntil = Math.max(hero.invulnerableUntil, now + 2)

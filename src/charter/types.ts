@@ -67,10 +67,14 @@ export type SlotKind = 'melee' | 'ranged' | 'spell' | 'passive' | 'ultimate' | '
 export type BuildSlot = 'basic' | 'active1' | 'active2' | 'passive' | 'ultimate' | 'movement'
 
 /** Melee weapon styles (§4 V), named as the coverage manifest and the motions name them. */
-export type MeleeStyle = 'unarmed' | 'kicks' | 'blade' | 'greatsword' | 'shield' | 'staff' | 'club'
+export type MeleeStyle = 'unarmed' | 'kicks' | 'blade' | 'greatsword' | 'shield' | 'staff' | 'club' | 'paired' | 'axe' | 'spear' | 'whip'
 
-/** Ranged styles (§4 LMB): what the hand holds, which sets the clips and, for guns, the locomotion. */
-export type RangedStyle = 'pistol' | 'rifle' | 'thrown' | 'magic'
+/**
+ * Ranged styles (§4 LMB): what the hand holds, which sets the clips and, for guns, the locomotion. The locked library
+ * adds the body emitter (eye beams, breath), paired guns, the heavy gun (launchers, miniguns) and the bow; the magic
+ * hands are `magic` with `hands`.
+ */
+export type RangedStyle = 'pistol' | 'rifle' | 'thrown' | 'magic' | 'emitter' | 'paired' | 'heavy' | 'bow'
 
 /**
  * How a ranged weapon fires, on repeat (§5): `rate` shots a second at attack speed 1 (a burst counts as one), a
@@ -80,7 +84,11 @@ export type RangedStyle = 'pistol' | 'rifle' | 'thrown' | 'magic'
  */
 export interface RangedSpec {
   style: RangedStyle
-  mode: 'single' | 'burst' | 'pellets' | 'beam'
+  /**
+   * `auto` fires while held (as every weapon did before the locked library); with the full kit a played hero's `single`
+   * needs a press a shot. `channel` holds a beam on while held, which can clash with another (§4 Systems).
+   */
+  mode: 'single' | 'auto' | 'burst' | 'pellets' | 'beam' | 'channel'
   rate: number
   magazine: number
   reload: number
@@ -90,7 +98,14 @@ export interface RangedSpec {
 }
 
 /** The spell universe's families (§4 Q): each spell has exactly one, its main purpose. */
-export type SpellFamily = 'control' | 'displacement' | 'zone' | 'construct' | 'summon' | 'support' | 'curse' | 'burst' | 'vision' | 'trick'
+export type SpellFamily = 'counter' | 'control' | 'displacement' | 'zone' | 'construct' | 'summon' | 'support' | 'curse' | 'burst' | 'vision' | 'trick'
+
+/**
+ * The E row's kinds beyond a dash, a blink, a leap and a grapple (§4 E): teleport to a mark or a target, swap places,
+ * a dash that homes, a swing on a line, held flight, a glide, crawling up any wall, burrowing, riding an ally, and the
+ * four shared moves done better (Wall Run, Combat Roll, Power Slide, Zipline).
+ */
+export type TraverseKind = 'teleport' | 'swap' | 'homing' | 'swing' | 'flight' | 'glide' | 'wallCrawl' | 'burrow' | 'ride' | 'wallRun' | 'combatRoll' | 'powerSlide' | 'zipline'
 
 /** Every spell has one shape (§4). */
 export type SpellShape = 'projectile' | 'beam' | 'cone' | 'line' | 'zone' | 'aura' | 'tether' | 'placed'
@@ -146,7 +161,7 @@ export type Effect =
    * A transformation that keeps the hero's size: it marks a power-up as a form, so the hero's form look plays for
    * `duration` seconds. It changes no number; the template's other effects carry the power.
    */
-  | { kind: 'form'; duration: number }
+  | { kind: 'form'; duration: number; stages?: number }
   | { kind: 'control'; type: ControlType; duration: number }
   /** Launch into the air and hold there, helpless, for `duration` seconds. */
   | { kind: 'knockup'; height: number; duration: number }
@@ -173,9 +188,50 @@ export type Effect =
   /** Trick: an ally gets back the health it lost over the last `seconds` seconds. */
   | { kind: 'rewind'; seconds: number }
   | { kind: 'turret'; duration: number; interval: number; range: number; amount: number; ratio: number; scaling: ScalingStat; type: DamageType }
+  /**
+   * The locked library's new pieces (GAME.md §4). Counter: for `duration` seconds the next enemy hit is answered
+   * instead of landing: struck back with the template's other effects, slipped behind the striker, turned back on it,
+   * or drunk as health.
+   */
+  | { kind: 'counter'; duration: number; answer: 'strike' | 'substitute' | 'reflect' | 'absorb' }
+  /** Summon: `count` of something that moves and acts for `duration` seconds: minions, clones of the caster, decoys, or a titan. */
+  | { kind: 'summon'; what: 'minion' | 'clone' | 'decoy' | 'titan'; count: number; duration: number }
+  /** Construct: a one-way barrier across the aim at the landing point that stops enemy shots and lets the caster's side's through. */
+  | { kind: 'barrier'; length: number; height: number; duration: number; health: number }
+  /** Construct: ground to walk on: a ramp up along the aim, a platform, or a path along it (ice: quicker underfoot). */
+  | { kind: 'terrain'; shape: 'ramp' | 'platform' | 'path'; length: number; width: number; height: number; duration: number }
+  /** Construct: a pair of portals, by the caster and at the landing point, for `duration` seconds. */
+  | { kind: 'portal'; duration: number }
+  /** Trick: the caster takes the target's kit (its weapons and skills) for `duration` seconds. */
+  | { kind: 'copyKit'; duration: number }
+  /** Trick: the caster drives the target for `duration` seconds, turned against its own side, while its own body stands still. */
+  | { kind: 'possess'; duration: number }
+  /** Displacement: lift the target `height` metres, hold it `hold` seconds, then throw it `distance` metres along the caster's aim. */
+  | { kind: 'lift'; height: number; hold: number; distance: number }
+  /** Support (and Rally): revive a downed ally at range (`ally`), or every downed ally in reach (`allies`), at `share` of its health. */
+  | { kind: 'revive'; share: number; target: 'ally' | 'allies' }
+  /** F: an elemental sheath while on: every hit carries its element (flame burns, frost slows, lightning jolts). */
+  | { kind: 'element'; element: 'flame' | 'frost' | 'lightning' }
+  /** R Strike: lock on to the target and land `hits` blows over `duration` seconds, both held out of the fight meanwhile. */
+  | { kind: 'lockon'; hits: number; duration: number }
+  /** R Kit switch, or an R form's moveset: the template's `switchTo` kit replaces the caster's for `duration` seconds. */
+  | { kind: 'kitSwitch'; duration: number }
+  /** Fusion: the caster and its nearest ally merge into one, bigger and stronger, for `duration` seconds. */
+  | { kind: 'fuse'; duration: number }
+  /** E: how the caster moves (TraverseKind), for up to `duration` seconds of a held kind and `distance` metres of a moving one. */
+  | { kind: 'traverse'; how: TraverseKind; duration: number; distance: number }
+
+/**
+ * How a shot flies (§4 LMB): straight (the default), lobbed in an arc to where it's aimed, bouncing off walls,
+ * returning to the hand, homing on a target, or guided by the shooter's aim while it flies.
+ */
+export type Flight = 'straight' | 'lobbed' | 'bouncing' | 'returning' | 'homing' | 'guided'
 
 export interface Delivery {
   kind: 'melee' | 'projectile' | 'beam' | 'cone' | 'zone' | 'self' | 'aura' | 'dash' | 'blink' | 'grapple' | 'leap'
+  /** Projectiles: how the shot flies (straight when absent), and how often a bouncing one bounces. */
+  flight?: Flight
+  bounces?: number
   /** Metres to the target or the far edge of the effect. */
   range: number
   /** Metres; area effects only. */
@@ -191,7 +247,7 @@ export interface Delivery {
 }
 
 /** When a passive's effects apply. */
-export type PassiveTrigger = 'always' | 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill'
+export type PassiveTrigger = 'always' | 'onHit' | 'everyThirdHit' | 'lowHealth' | 'onKill' | 'whenHit'
 
 /** How the battle AI should use a template (R17). */
 export interface AiHint {
@@ -233,4 +289,15 @@ export interface Template {
   animationHook?: string
   /** A hand-tuned budget, recorded with its reason (KTD2). */
   override?: { budget: number; reason: string }
+  /**
+   * Hold to charge (§4 Systems, LMB and Q): held, it charges over `seconds`; let go, it fires at `min` times its
+   * magnitudes up to `max` fully charged.
+   */
+  charge?: { seconds: number; min: number; max: number }
+  /** Ability charges (§4 Systems): this many uses banked, each coming back over the cooldown in turn. */
+  charges?: number
+  /** The spendable power meter (§4 Systems): casting spends this share of it, and can't without it. */
+  cost?: number
+  /** The kit a Kit switch or a form's moveset brings (§4 R): these slots replace the caster's while it lasts. */
+  switchTo?: Partial<Record<BuildSlot, Template>>
 }

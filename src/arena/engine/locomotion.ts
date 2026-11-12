@@ -3,7 +3,8 @@ import { DT, ENGINE, ticks } from './calibration.js'
 import { atan2, clamp, cos, sin } from './maths.js'
 import { arenaExtent, ceilingOver, floorUnder, pushOut, roundTop, type MapLine } from './cover.js'
 import type { MatchEvent } from './events.js'
-import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type MatchState } from './state.js'
+import { KIT } from './kit-tuning.js'
+import { bodyRadius, capsule, MOVES, type Command, type HeroSetup, type HeroState, type JumpPad, type MatchState } from './state.js'
 import { moveShare } from './timing.js'
 
 /** Ground speed now: the sheet's move speed with buffs, the strongest slow, and any transformation's speed (KTD2). */
@@ -19,6 +20,14 @@ export function moveSpeed(hero: HeroState, setup: HeroSetup): number {
 
 const M = ENGINE.move
 const BUFFERED = MOVES.jump | MOVES.dodge
+
+/**
+ * A held E move (flight, a glide, a swing, crawling, burrowing, riding) moves its hero its own way. traverse.ts fills
+ * this in, since it needs this module; it returns false when the hero walks as usual this tick.
+ */
+export const traverseHook = {
+  move: (_hero: HeroState, _setup: HeroSetup, _command: Command, _match: MatchState, _pressed: number): boolean => false,
+}
 
 /**
  * Move one tick by the command, like Deadlock (KTD2; Forge goal, phase 2): nobody flies. On the ground the hero eases
@@ -70,6 +79,10 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     keep(pressed)
     return travelling(hero, match, now)
   }
+  if (hero.traverse && match && traverseHook.move(hero, setup, command, match, pressed)) {
+    keep(0)
+    return
+  }
   if (hero.zip && match?.lines) {
     keep(pressed & ~MOVES.jump)
     return riding(hero, match.lines, (pressed & MOVES.jump) !== 0, now, events)
@@ -78,6 +91,12 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     keep(0)
     return hanging(hero, match, mx, mz, steering, pressed, now, events)
   }
+  if (hero.wallRun && match?.cover) {
+    keep(pressed & ~MOVES.jump)
+    return wallRunning(hero, match, free, pressed, now, events)
+  }
+  // a jump pad throws whoever steps onto it (GAME.md §4 map routes)
+  if (!hero.airborne && free && match?.pads && padUnder(hero, match.pads, events)) takeOff(hero, Math.sqrt(v0(hero)))
   let missed = 0
   const person = match?.human === hero.id
   // stances (the canon): C crouches (at a run it slides instead), Ctrl lies prone (at a run it dives instead), either
@@ -100,6 +119,8 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
   hero.sprinting = (command.moves & MOVES.dash) !== 0 && hero.shiftSince >= 0 && now >= hero.dashUntil && !hero.airborne && !lowered && steering
   // a guard is up while X is held on the ground and nothing else is going on
   hero.blocking = (command.moves & MOVES.block) !== 0 && !hero.airborne && !hero.roll && !(hero.action && now < hero.action.ends && !hero.action.released) && free
+  // when X went down, for the perfect guard (combat.ts)
+  if (fresh & MOVES.block) hero.guardSince = now
   // Z rolls the way the hero steers (ahead when it doesn't), not where it aims (owner, 2026-11-03), untouchable for its
   // first moments
   if (pressed & MOVES.dodge && !(free && !hero.airborne && !hero.roll && hero.stamina >= 1)) missed |= MOVES.dodge
@@ -242,7 +263,8 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
       // hangs from one its hands reach; near a line, it catches it
       if (pressing && steering && free && !hero.launch) {
         startMantle(hero, match, mx, mz, now, events)
-        if (!hero.mantle && person && v.y <= 0 && now >= (hero.hangAfter ?? 0) && match) grabLedge(hero, match, mx, mz, now, events)
+        if (!hero.mantle && match) startWallRun(hero, match, mx, mz, now, events)
+        if (!hero.mantle && !hero.wallRun && person && v.y <= 0 && now >= (hero.hangAfter ?? 0) && match) grabLedge(hero, match, mx, mz, now, events)
       } else if (match?.lines && free && !hero.launch && now >= (hero.zipAfter ?? 0)) catchLine(hero, match.lines, mx, mz, steering, events)
       return
     }
@@ -274,6 +296,110 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     if (catchEdge(hero, match, steering ? mx : v.x, steering ? mz : v.z, now, events)) return
   }
   if (pressing && steering && free && !hero.airborne && !hero.roll && now >= hero.dashUntil) startMantle(hero, match, mx, mz, now, events)
+}
+
+/** Speed across the ground, squared. */
+const v0 = (hero: HeroState) => hero.velocity.x * hero.velocity.x + hero.velocity.z * hero.velocity.z
+
+/** The pad under a standing hero, if any, throws it up and along (GAME.md §4 map routes). Returns whether it did. */
+function padUnder(hero: HeroState, pads: readonly JumpPad[], events?: MatchEvent[]): boolean {
+  const p = hero.position
+  const pad = pads.find((d) => Math.abs(p.y - d.at.y) <= 0.15 && (p.x - d.at.x) * (p.x - d.at.x) + (p.z - d.at.z) * (p.z - d.at.z) <= d.r * d.r)
+  if (!pad) return false
+  hero.velocity.y = Math.sqrt(2 * M.gravity * pad.height)
+  if (pad.push) {
+    hero.velocity.x += pad.push.x
+    hero.velocity.z += pad.push.z
+  }
+  hero.airborne = true
+  hero.airJumps = 0
+  hero.slide = undefined
+  hero.stance = 'stand'
+  events?.push({ type: 'move', hero: hero.id, move: 'pad' })
+  return true
+}
+
+/**
+ * The face of a wall piece the body touches: the way it faces out (nx, nz). A block's nearest side, a column's
+ * radius. Nothing when the head is over its top.
+ */
+export function wallFace(hero: HeroState, match: MatchState, any: boolean): { piece: number; nx: number; nz: number } | undefined {
+  const { pieces, health } = match.cover!
+  const hits: number[] = []
+  pushOut(pieces, health, { ...hero.position }, bodyRadius(hero) + 0.08, capsule(hero).height, M.step, hits)
+  const p = hero.position
+  for (const i of hits) {
+    const piece = pieces[i]
+    if (!(piece.run || any) || piece.slope || p.y + capsule(hero).height * 0.5 > piece.top) continue
+    const s = piece.shape
+    if (s.kind === 'column') {
+      const d = Math.sqrt((p.x - s.x) * (p.x - s.x) + (p.z - s.z) * (p.z - s.z)) || 1
+      return { piece: i, nx: (p.x - s.x) / d, nz: (p.z - s.z) / d }
+    }
+    const ox = Math.abs(p.x - s.x) - s.hx
+    const oz = Math.abs(p.z - s.z) - s.hz
+    return ox > oz ? { piece: i, nx: Math.sign(p.x - s.x), nz: 0 } : { piece: i, nx: 0, nz: Math.sign(p.z - s.z) }
+  }
+  return undefined
+}
+
+/**
+ * An airborne hero pressed against a marked wall (or any wall, with the E skill Wall Run) while moving along it fast
+ * enough runs along it (KIT.wallRun).
+ */
+function startWallRun(hero: HeroState, match: MatchState, mx: number, mz: number, now: number, events?: MatchEvent[]) {
+  if (!match.cover || now < (hero.wallRunAfter ?? 0) || hero.slam || hero.launch || !match.fullKit) return
+  const face = wallFace(hero, match, (hero.anyWallUntil ?? 0) > now)
+  if (!face) return
+  const v = hero.velocity
+  // along the wall: a quarter turn from its face; the run goes the way the hero was moving along it, or steering
+  const tx = -face.nz
+  const tz = face.nx
+  const along = v.x * tx + v.z * tz
+  const steer = mx * tx + mz * tz
+  const way = Math.abs(along) >= KIT.wallRun.minSpeed ? Math.sign(along) : Math.abs(steer) > 0.3 && Math.abs(along) >= KIT.wallRun.minSpeed * 0.5 ? Math.sign(steer) : 0
+  if (!way) return
+  const time = (hero.anyWallUntil ?? 0) > now ? KIT.wallRun.time * 1.8 : KIT.wallRun.time
+  hero.wallRun = { from: now, until: now + ticks(time), dx: tx * way, dz: tz * way, nx: face.nx, nz: face.nz, piece: face.piece }
+  hero.airJumps = 0
+  hero.velocity.y = Math.max(v.y, 1.5)
+  events?.push({ type: 'move', hero: hero.id, move: 'wall-run' })
+}
+
+/** One tick on a wall: along it, sinking slowly; a jump kicks off it, and the end of the wall or the run drops the hero. */
+function wallRunning(hero: HeroState, match: MatchState, free: boolean, pressed: number, now: number, events?: MatchEvent[]) {
+  const w = hero.wallRun!
+  const v = hero.velocity
+  const done = () => {
+    hero.wallRun = undefined
+    hero.wallRunAfter = now + ticks(KIT.wallRun.again)
+    takeOff(hero, Math.sqrt(v0(hero)))
+  }
+  if (!free || pressed & (MOVES.crouch | MOVES.dodge)) return done()
+  if (pressed & MOVES.jump) {
+    done()
+    v.x = w.nx * KIT.wallRun.push + w.dx * KIT.wallRun.speed * 0.5
+    v.z = w.nz * KIT.wallRun.push + w.dz * KIT.wallRun.speed * 0.5
+    v.y = Math.sqrt(2 * M.gravity * M.jump * M.jumpScale[hero.size])
+    hero.airJumps = 0
+    takeOff(hero, Math.sqrt(v0(hero)))
+    events?.push({ type: 'move', hero: hero.id, move: 'wall-jump' })
+    return
+  }
+  // rising a little at first, then sinking
+  const t = (now - w.from) / Math.max(1, w.until - w.from)
+  v.x = w.dx * KIT.wallRun.speed
+  v.z = w.dz * KIT.wallRun.speed
+  v.y = t < 0.3 ? 1.2 : -KIT.wallRun.sink
+  const p = hero.position
+  const from = p.y
+  p.x += v.x * DT - w.nx * 0.03
+  p.y += v.y * DT
+  p.z += v.z * DT - w.nz * 0.03
+  keepOut(hero, match)
+  standOn(hero, match, Math.max(from, p.y))
+  const face = hero.airborne ? wallFace(hero, match, true) : undefined
+  if (now >= w.until || !hero.airborne || face?.piece !== w.piece) done()
 }
 
 /** A played hero leaves the ground: where from, and how fast across it, for its landing and its steering in the air. */

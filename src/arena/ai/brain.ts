@@ -7,7 +7,7 @@ import { alliesOf, enemiesOf, hpFraction } from '../engine/effects.js'
 import { PI, TAU, cos, distance, dot, length, lengthSq, sin, sub, wrapAngle } from '../engine/maths.js'
 import type { Arena } from '../engine/match.js'
 import { next } from '../engine/rng.js'
-import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
+import { AIM_STEPS, bodyRadius, capsule, MOVES, slotBit, standing, type BrainState, type Command, type HeroSetup, type HeroState, type MatchState } from '../engine/state.js'
 import { aimPoint, anglesTo, trackAim } from './aim.js'
 import { AI, useLevel } from './calibration.js'
 import { findPath, followRoute, navFor, nodeAt, type NavGraph } from './nav.js'
@@ -265,7 +265,7 @@ function incoming(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]) 
 function swingAt(m: MatchState, hero: HeroState, setups: readonly HeroSetup[]): boolean {
   for (const e of m.heroes) {
     const a = e.action
-    if (!e.alive || e.team === hero.team || !a || a.released) continue
+    if (!standing(e) || e.team === hero.team || !a || a.released) continue
     const d = setups[e.id].kit[a.slot].delivery
     if (d.kind !== 'melee' && d.kind !== 'cone') continue
     if (gapTo(e, hero) > d.range + ENGINE.meleeSlack) continue
@@ -362,15 +362,15 @@ function decide(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainSt
   const want = chooseTarget(m, hero, setup)
   if (want && want.id !== brain.target && brain.pending?.target !== want.id) {
     const delay = AI.reaction.min + Math.floor(next(m.ai) * (AI.reaction.max - AI.reaction.min + 1))
-    if (brain.target < 0 || !m.heroes[brain.target].alive) brain.target = want.id
+    if (brain.target < 0 || !standing(m.heroes[brain.target])) brain.target = want.id
     else brain.pending = { target: want.id, at: m.tick + delay }
   }
   // a target that slipped into stealth is lost until it shows itself again
   if (brain.target >= 0 && hidden(m, hero, m.heroes[brain.target])) brain.target = want?.id ?? -1
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
   brain.cast = undefined
-  brain.goal = objective(m, hero, target?.alive ? target : undefined)
-  if (!target || !target.alive) {
+  brain.goal = objective(m, hero, target && standing(target) ? target : undefined)
+  if (!target || !standing(target)) {
     if (brain.goal) plan(m, hero, brain, brain.goal, true)
     return
   }
@@ -456,7 +456,7 @@ function command(m: MatchState, hero: HeroState, setup: HeroSetup, brain: BrainS
     brain.pending = undefined
   }
   const target = brain.target >= 0 ? m.heroes[brain.target] : undefined
-  if (!target || !target.alive || hidden(m, hero, target)) return brain.goal ? walkTo(m, hero, brain, setup, brain.goal) : { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
+  if (!target || !standing(target) || hidden(m, hero, target)) return brain.goal ? walkTo(m, hero, brain, setup, brain.goal) : { moveX: 0, moveZ: 0, moves: 0, aimYaw: steps(brain.yaw), aimPitch: steps(brain.pitch), buttons: 0 }
   const from = chest(hero)
   const castTemplate = brain.cast ? setup.kit[brain.cast.slot] : undefined
   // out of melee reach it shoots its ranged weapon, so it leads the target by that weapon's shot speed

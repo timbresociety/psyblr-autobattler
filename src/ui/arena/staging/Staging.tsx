@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { AI_LEVELS_ORDER, DEFAULT_AI_LEVEL, type AiLevel } from '../../../arena/ai/calibration'
+import type { LabSetup } from '../../../arena/engine/lab'
 import type { Team } from '../../../arena/engine/state'
 import { shortName } from '../hud/format'
 import { RoleIcon } from '../../common/RoleIcon'
@@ -27,6 +28,8 @@ export interface StagingResult {
   dummy?: true
   /** How well the AI plays each side (§2), by team; Normal when absent. */
   aiLevels?: [AiLevel, AiLevel]
+  /** John's lab (engine/lab.ts): the deck set up for the checklist, and John's buttons. */
+  lab?: LabSetup
 }
 
 const AI_LABEL: Record<AiLevel, string> = { easy: 'Easy', normal: 'Normal', hard: 'Hard' }
