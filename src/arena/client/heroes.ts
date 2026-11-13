@@ -144,9 +144,9 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
   const l = await gltf(renderer)
   const load = (body: Parameters<typeof loadBuild>[0]) => loadBuild(body, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
   const color = new THREE.Color(TEAM_COLORS[team])
-  // a generated hero in place of this one's body: the match's cast names it (`?cast=`), or `/dev/try` does for the
-  // hero being tried
-  const mesh = (import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('mesh') : null) ?? (localCast()[index] || null)
+  // a generated hero in place of this one's body: the match's cast names it (`?cast=`), `/dev/try` does for the hero
+  // being tried, or the hero's own look does (roster.ts)
+  const mesh = (import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('mesh') : null) ?? (localCast()[index] || build.look?.mesh || null)
   const tried = mesh ? await import('../../kit/bench/hero-file.js') : undefined
   const generated = (await tried?.triedHeroes())?.find((h) => h.label === mesh && h.file)
   // a photo face is painted into the hero's own atlas first; without one (or if it fails) the shared atlas serves

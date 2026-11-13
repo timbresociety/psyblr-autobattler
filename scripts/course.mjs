@@ -107,7 +107,7 @@ if (ENTRY === 'lab') {
     throw new Error(`the lobby never got to ${what}`)
   }
   await until('the side', () => click('/blue side/i'))
-  await until('the squads', () => click('/Vanguard vs Outlaws/'))
+  await until('the squads', () => click('/Johns vs Legends/'))
   await wait(2000)
   await until('Start', () => click('/^\\s*Start\\s*$/'))
   await until('the match', () => run('!!window.__arena && window.__arena.arena.match.tick > 10'))

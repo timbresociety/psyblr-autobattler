@@ -1,3 +1,4 @@
+import { ROSTER } from '../arena/roster.js'
 import { SQUAD_NAME, STARTERS, type Starter } from '../arena/starters.js'
 import { ENGINE, ENGINE_CALIBRATION_VERSION } from '../arena/engine/calibration.js'
 import { famousMove, formLookOf, lookFromWords, templateWords } from '../arena/recipes/looks.js'
@@ -496,13 +497,28 @@ function starterCard(hero: Starter): string {
   const look = hero.build.look!
   const p = look.physique!
   const kit = BUILD_SLOTS.map((slot) => `<li><span class="slot">${SLOT_DOC[slot][0]}</span><span>${esc(getTemplate(hero.build.slots[slot].templateId).name)}</span></li>`)
-  return `<figure class="starter"><figcaption><b>${esc(hero.heroName)}</b><small>${SQUAD_NAME[hero.squad]} · ${getRole(hero.roleId).name} · ${SIZES[hero.sizeClass].label} · ${GENDER_LABEL[look.gender]}</small><p class="build">Weight ${num(p.weight)} · muscle ${num(p.muscle)} · age ${num(p.age)}</p><ul class="worn">${kit.join('')}</ul></figcaption></figure>`
+  return `<figure class="starter"><figcaption><b>${esc(hero.heroName)}</b><small>${SAMPLE_SQUAD[hero.squad]} · ${getRole(hero.roleId).name} · ${SIZES[hero.sizeClass].label} · ${GENDER_LABEL[look.gender]}</small><p class="build">Weight ${num(p.weight)} · muscle ${num(p.muscle)} · age ${num(p.age)}</p><ul class="worn">${kit.join('')}</ul></figcaption></figure>`
+}
+
+// the drawn sample's two squads, named apart from the roster's
+const SAMPLE_SQUAD: Record<Starter['squad'], string> = { vanguard: 'Sample A', outlaws: 'Sample B' }
+
+/** A roster hero: who it is, and each slot by its own name over the template it plays. */
+function rosterCard(hero: Starter): string {
+  const kit = BUILD_SLOTS.map((slot) => {
+    const spec = hero.build.slots[slot]
+    return `<li><span class="slot">${SLOT_DOC[slot][0]}</span><span>${esc(spec.name)} <small>${esc(getTemplate(spec.templateId).name)}</small></span></li>`
+  })
+  return `<figure class="starter"><figcaption><b>${esc(hero.heroName)}</b><small>${SQUAD_NAME[hero.squad]} · ${getRole(hero.roleId).name} · ${SIZES[hero.sizeClass].label}</small><ul class="worn">${kit.join('')}</ul></figcaption></figure>`
 }
 
 function startersExample(): string {
   return `
-<h3>The twenty starters</h3>
-<p>The heroes the game ships with are generated, two squads of ten, from one seed: every role at least once a squad, a kit drawn from each row's pool, an invented name, a body and colours. Nothing about them is hand-made, so each is a fair sample of what the Forge builds, and the balance gate holds them to the same band.</p>
+<h3>The roster</h3>
+<p>The heroes the game offers: the six Johns, one man at each of the six sizes, each fighting a different way, and six generated characters, each in its own mesh. Every slot is a catalogue template chosen for what the hero is, under the hero's own name for it.</p>
+<div class="starters">${ROSTER.map(rosterCard).join('')}</div>
+<h3>The balance sample</h3>
+<p>Twenty heroes generated from one seed, two squads of ten: every role at least once a squad, a kit drawn from each row's pool, an invented name, a body and colours. Nothing about them is hand-made, so each is a fair sample of what the Forge builds; the balance gate and the soak test use them, and no screen offers them.</p>
 <div class="starters">${STARTERS.map(starterCard).join('')}</div>`
 }
 

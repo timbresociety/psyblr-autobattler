@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { proposeBuild, type Build } from '../../charter/build'
 import type { BuildRecord, HeroResult, LoadoutDeps } from '../api'
-import { STARTERS } from '../../arena/starters'
+import { ROSTER } from '../../arena/roster'
 import { LoadoutScreen } from './LoadoutScreen'
 
 afterEach(cleanup)
@@ -72,17 +72,17 @@ describe('loadout (R18)', () => {
     expect(d.search).toHaveBeenCalledWith('Jen')
   })
 
-  it('with none of your own heroes, it points to the Forge and still lists the 20 starters', async () => {
+  it('with none of your own heroes, it points to the Forge and still lists the roster of twelve', async () => {
     const h = handlers()
     render(<LoadoutScreen deps={deps({ listBuilds: vi.fn(async () => []) })} {...h} />)
     expect(await screen.findByText(/haven't made a hero of your own yet/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Forge one' }))
     expect(h.onForge).toHaveBeenCalled()
-    const starters = within(screen.getByRole('list', { name: 'Starter heroes' })).getAllByRole('listitem')
-    expect(starters).toHaveLength(20)
+    const starters = within(screen.getByRole('list', { name: 'Roster' })).getAllByRole('listitem')
+    expect(starters).toHaveLength(12)
     // a starter can't be removed, only remixed into a new hero of your own
     expect(within(starters[0]).queryByRole('button', { name: /Remove/ })).toBeNull()
     fireEvent.click(within(starters[0]).getByRole('button', { name: 'Remix in Forge' }))
-    expect(h.onRemix).toHaveBeenCalledWith(expect.objectContaining({ heroName: expect.stringContaining(STARTERS[0].heroName) }))
+    expect(h.onRemix).toHaveBeenCalledWith(expect.objectContaining({ heroName: expect.stringContaining(ROSTER[0].heroName) }))
   })
 })

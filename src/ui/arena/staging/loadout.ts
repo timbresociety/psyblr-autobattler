@@ -9,8 +9,10 @@ import { kitNow, type LoadedKit } from '../../../arena/client/held.js'
 import type { Build } from '../../../charter/build.js'
 import type { RoleId } from '../../../charter/types.js'
 import type { HeroPackage } from '../../../forge/package.js'
+import { ROSTER } from '../../../arena/roster.js'
 import { STARTERS, starterBuild, type Squad } from '../../../arena/starters.js'
 import { benchHero } from '../../../arena/client/procedural-hero.js'
+import { GENERATED_HEROES, triedHeroes } from '../../../kit/bench/hero-file.js'
 import { liveDeps } from '../../api.js'
 
 /** One hero the streamer can place: a build, plus its package when it was forged. */
@@ -31,7 +33,11 @@ export const roleSymbol = (role: string) => ROLE_SYMBOL[role] ?? '•'
 
 export const starterEntry = (s: (typeof STARTERS)[number]): LoadoutEntry => ({ key: `starter:${s.id}`, build: starterBuild(s), symbol: roleSymbol(s.roleId), squad: s.squad, hue: s.hue })
 
-export const starterLoadout = (): LoadoutEntry[] => STARTERS.map(starterEntry)
+/** The roster every staging row begins with (roster.ts). */
+export const starterLoadout = (): LoadoutEntry[] => ROSTER.map(starterEntry)
+
+/** The twenty drawn starters, two squads of ten: the soak's full 10 v 10 (starters.ts). */
+export const sampleLoadout = (): LoadoutEntry[] => STARTERS.map(starterEntry)
 
 export interface LoadoutDeps {
   /** Heroes to add to the row, with their packages when forged. An empty query means the player's own heroes. */
@@ -75,8 +81,8 @@ const standIns = new Map<string, string>()
 let bustRenderer: THREE.WebGLRenderer | undefined | null
 const BUST_PX = 160
 
-/** Loaded with the busts up front: the bodies the starters wear and the medium ones; other bodies load when needed. */
-const BUILDS: BodyName[] = [...new Set<BodyName>(['m-medium', 'f-medium', ...STARTERS.map((s) => bodyFor(s.build))])]
+/** Loaded with the busts up front: the bodies the roster wears and the medium ones; other bodies load when needed. */
+const BUILDS: BodyName[] = [...new Set<BodyName>(['m-medium', 'f-medium', ...ROSTER.map((s) => bodyFor(s.build))])]
 const characters = new Map<BodyName, Gltf>()
 const wanted = new Set<BodyName>()
 const listeners = new Set<() => void>()
@@ -124,6 +130,32 @@ export async function characterFile(build: BodyName): Promise<Gltf> {
 /** Any other model through the same loader: a piece of gear. */
 export async function modelFile(url: string): Promise<Gltf> {
   return (await loader())(url)
+}
+
+/** Generated heroes' files by URL (the Johns share one), for a hero whose look wears one (look.mesh). */
+const meshFiles = new Map<string, Promise<Gltf>>()
+/** Each generated hero's file once loaded: null when the game has no such hero, or its file failed. */
+const meshes = new Map<string, Gltf | null>()
+let generated: ReturnType<typeof triedHeroes> | undefined
+const meshWanted = new Set<string>()
+
+/** The generated hero `label` wears, if it is in; starts the load the first time and redraws the busts when it lands. */
+function meshNow(label: string): Gltf | null | undefined {
+  if (meshes.has(label)) return meshes.get(label)
+  if (meshWanted.has(label)) return undefined
+  meshWanted.add(label)
+  generated ??= triedHeroes()
+  generated
+    .then(async (all) => {
+      const hero = all.find((h) => h.label === label && h.file)
+      if (!hero) return meshes.set(label, null)
+      const url = `${hero.root ?? GENERATED_HEROES}${hero.file}`
+      if (!meshFiles.has(url)) meshFiles.set(url, loader().then((load) => load(url)))
+      meshes.set(label, await meshFiles.get(url)!)
+    })
+    .catch(() => meshes.set(label, null))
+    .finally(changed)
+  return undefined
 }
 
 /**
@@ -195,6 +227,10 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   }
   if (!bustRenderer) return undefined
   const hue = hero.hue ?? heroHue(hero.heroName)
+  // a hero in a generated mesh (roster.ts) is drawn in it once it is in; our body stands in till then, or for good
+  // when the game has no such mesh
+  const worn = hero.build?.look?.mesh ? meshNow(hero.build.look.mesh) : null
+  if (worn) return meshBust(worn, cacheKey)
   const look = characterLook(hero.build ?? ({ heroName: hero.heroName, roleId: hero.roleId } as Build), hue)
   const file = characters.get(look.build)
   if (!file) want(look.build)
@@ -202,7 +238,7 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   const atlas = file ? heroAtlasNow(file, look, changed) : null
   // the held pieces load off the drawing path too: until every one is in, the bust waits and is not cached
   const kit = file ? kitNow(look.build, look.held, modelFile, changed) : undefined
-  const final = !!file && atlas !== undefined && kit !== null
+  const final = !!file && atlas !== undefined && kit !== null && worn !== undefined
   if (!final && standIns.has(cacheKey)) return standIns.get(cacheKey)
   const scene = new THREE.Scene()
   scene.add(new THREE.HemisphereLight(0xfff2e2, 0x3a3048, 1.5))
@@ -245,6 +281,49 @@ export function portrait(hero: PortraitHero, index = 0): string | undefined {
   const url = bustRenderer.domElement.toDataURL('image/png')
   release()
   ;(final ? busts : standIns).set(cacheKey, url)
+  return url
+}
+
+/** A generated hero's bust: its own mesh as the file stands, framed on its head as our bodies are. */
+function meshBust(file: Gltf, cacheKey: string): string {
+  const scene = new THREE.Scene()
+  scene.add(new THREE.HemisphereLight(0xfff2e2, 0x3a3048, 1.5))
+  const key = new THREE.DirectionalLight(0xffe2c4, 2.4)
+  key.position.set(1.5, 2.5, 2.5)
+  const rim = new THREE.DirectionalLight(0x9fc4ff, 2)
+  rim.position.set(-1.8, 2.2, -2)
+  scene.add(key, rim)
+  const model = cloneSkinned(file.scene)
+  scene.add(model)
+  model.updateMatrixWorld(true)
+  // turned to the camera: generated files face either way, and the feet say which (heel to toe, both feet, as each
+  // splays out)
+  const bone = (end: RegExp) => {
+    let found: THREE.Object3D | undefined
+    model.traverse((o) => {
+      if (!found && (o as THREE.Bone).isBone && end.test(o.name)) found = o
+    })
+    return found
+  }
+  const ahead = new THREE.Vector3()
+  for (const side of ['Left', 'Right']) {
+    const [foot, toe] = [bone(new RegExp(`${side}Foot$`, 'i')), bone(new RegExp(`${side}ToeBase$`, 'i'))]
+    if (foot && toe) ahead.add(toe.getWorldPosition(new THREE.Vector3()).sub(foot.getWorldPosition(new THREE.Vector3())))
+  }
+  if (ahead.x || ahead.z) model.rotation.y = -Math.atan2(ahead.x, ahead.z)
+  model.updateMatrixWorld(true)
+  // the file's own size: framed by how high its head stands over its feet, against our medium body's 1.62 m
+  const feet = new THREE.Box3().setFromObject(model).min.y
+  const head = bone(/head$/i)
+  const at = new THREE.Vector3(0, 1.62, 0)
+  head?.getWorldPosition(at)
+  const k = Math.max(0.2, (at.y - feet) / 1.62)
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.01 * k, 10 * k)
+  camera.position.set(at.x + 0.42 * k, at.y + 0.05 * k, at.z + 1.3 * k)
+  camera.lookAt(at.x, at.y - 0.12 * k, at.z)
+  bustRenderer!.render(scene, camera)
+  const url = bustRenderer!.domElement.toDataURL('image/png')
+  busts.set(cacheKey, url)
   return url
 }
 

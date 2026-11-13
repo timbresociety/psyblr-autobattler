@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { emptyFormation, MAX_PER_SIDE, SPACING } from './formation.js'
-import { starterLoadout } from './loadout.js'
+import { sampleLoadout, starterLoadout } from './loadout.js'
 import { byRank, defaultLineup, squadLineup, hasSquads, lineupName, matchup } from './presets.js'
 
-const roster = starterLoadout()
+// the matchups' rules, on the drawn sample's two squads of ten; the roster players see is checked first
+const roster = sampleLoadout()
 const squad = (heroes: number[]) => new Set(heroes.map((h) => roster[h].squad))
 const heroesOf = (f: ReturnType<typeof emptyFormation>, side: 0 | 1) => f[side].map((p) => p.hero)
 
 describe('staging matchups (U16)', () => {
-  it('the starters are two squads of ten', () => {
+  it('the roster is the Johns and the Legends, six a squad', () => {
+    const seen = starterLoadout()
+    expect(squadLineup(seen, 'vanguard')).toHaveLength(6)
+    expect(squadLineup(seen, 'outlaws')).toHaveLength(6)
+    expect(defaultLineup(seen, 0, 0, 10)).toHaveLength(6)
+  })
+
+  it('the sample is two squads of ten', () => {
     expect(hasSquads(roster)).toBe(true)
     expect(squadLineup(roster, 'vanguard')).toHaveLength(10)
     expect(squadLineup(roster, 'outlaws')).toHaveLength(10)
@@ -38,7 +46,7 @@ describe('staging matchups (U16)', () => {
     expect(roles.indexOf('marksman')).toBeGreaterThan(roles.lastIndexOf('fighter'))
   })
 
-  it('"Vanguard vs Outlaws" and its swap fill both sides from the right squads, from either side', () => {
+  it('"Johns vs Legends" and its swap fill both sides from the right squads, from either side', () => {
     for (const yourSide of [0, 1] as const) {
       const enemy = (1 - yourSide) as 0 | 1
       const f = matchup('squads', roster, yourSide, emptyFormation())
@@ -76,8 +84,8 @@ describe('staging matchups (U16)', () => {
   })
 
   it('names a lineup by its squad', () => {
-    expect(lineupName(roster, squadLineup(roster, 'vanguard'))).toBe('Vanguard')
-    expect(lineupName(roster, squadLineup(roster, 'outlaws'))).toBe('Outlaws')
+    expect(lineupName(roster, squadLineup(roster, 'vanguard'))).toBe('Johns')
+    expect(lineupName(roster, squadLineup(roster, 'outlaws'))).toBe('Legends')
     expect(lineupName(roster, [0, 15])).toBe('Mixed')
     expect(lineupName(roster, [])).toBe('Empty')
   })

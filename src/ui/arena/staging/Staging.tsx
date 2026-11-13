@@ -38,9 +38,9 @@ const TEAM = ['Blue', 'Red'] as const
 
 type Selected = { kind: 'loadout'; index: number } | { kind: 'placed'; side: Team; index: number }
 
-type Group = 'Your heroes' | 'Forged' | 'Vanguard' | 'Outlaws'
-const groupOf = (entry: LoadoutEntry): Group => (entry.squad ? (SQUAD_NAME[entry.squad] as Group) : entry.pkg ? 'Forged' : 'Your heroes')
-const GROUP_RANK: Record<Group, number> = { 'Your heroes': 0, Forged: 1, Vanguard: 2, Outlaws: 3 }
+// the row's groups, the squads by name (the Johns, then the Legends)
+const groupOf = (entry: LoadoutEntry): string => (entry.squad ? SQUAD_NAME[entry.squad] : entry.pkg ? 'Forged' : 'Your heroes')
+const GROUP_RANK: Record<string, number> = { 'Your heroes': 0, Forged: 1, [SQUAD_NAME.vanguard]: 2, [SQUAD_NAME.outlaws]: 3 }
 
 /** Why a spot was refused, as the notice under the board says it. */
 const NOTICE: Record<Reason, string> = {

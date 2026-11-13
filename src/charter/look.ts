@@ -81,6 +81,8 @@ export interface HeroLook {
   idle?: string
   /** How the hero carries itself moving and fighting (kit/anim/attitude.ts); neutral when absent. */
   attitude?: AttitudeId
+  /** A generated mesh the hero wears in place of our body: a label in public/heroes/generated/index.json. */
+  mesh?: string
   /** Rigid pieces in the body's hand sockets: a weapon in each hand. */
   gear?: Partial<Record<GearSlot, GearPiece>>
   /** Weapons swapped in and out of the hands by what the hero does (the dev lab's John); not saved with a hero. */
@@ -142,6 +144,7 @@ export function hydrateLook(raw: unknown): HeroLook | undefined {
   if (sculpt) look.sculpt = sculpt
   if (typeof input.idle === 'string' && CLIP_ID.test(input.idle)) look.idle = input.idle
   if (isAttitude(input.attitude) && input.attitude !== 'neutral') look.attitude = input.attitude
+  if (typeof input.mesh === 'string' && /^[a-z0-9-]{1,40}$/.test(input.mesh)) look.mesh = input.mesh
   // only a style the library animates in full (GAME.md §12; coverage.test.ts holds the library to it)
   if (typeof input.style === 'string' && (STYLES as readonly string[]).includes(input.style) && coverageOf(input.style)?.offered !== false) look.style = input.style as Style
   if (input.motions && typeof input.motions === 'object') {

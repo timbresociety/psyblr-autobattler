@@ -6,7 +6,7 @@ import { TAU } from '../../arena/engine/maths'
 import { Live, matchSetup } from './ArenaScreen'
 import { Unsupported } from './Loading'
 import { emptyFormation } from './staging/formation'
-import { starterLoadout } from './staging/loadout'
+import { sampleLoadout } from './staging/loadout'
 import { matchup } from './staging/presets'
 import { textureMb } from '../../arena/client/render/budget.js'
 import type { StagingResult } from './staging/Staging'
@@ -85,7 +85,7 @@ function SoakMatch({ index, options, recorder, onDone, onError }: { index: numbe
     let cancelled = false
     let controller: ArenaController | undefined
     let timer = 0
-    const loadout = starterLoadout()
+    const loadout = sampleLoadout()
     const staged: StagingResult = { side: 0, formation: matchup('squads', loadout, 0, emptyFormation(), seeded(options.seed + index)), loadout }
     const setup = { ...matchSetup(staged), seed: options.seed + index }
     recorder.context({ match: index, phase: 'loading', alive: 0, controlled: false, quality: 'full', pixelRatio: 1, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, textureMb: 0 })

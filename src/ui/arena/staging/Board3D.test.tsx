@@ -6,10 +6,10 @@ import type { BoardHandlers, BoardScene, BoardState } from './board-scene'
 import { Staging, type StagingResult } from './Staging'
 import type { LoadoutDeps } from './loadout'
 
-import { STARTERS } from '../../../arena/starters'
+import { ROSTER } from '../../../arena/roster'
 
-/** A starter's bust by its name: the first of its squad in the role. */
-const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp(STARTERS.find((s) => s.squad === squad && s.roleId === role)!.heroName)
+/** A roster hero's bust by its name: the first of its squad in the role, else the first in it. */
+const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp((ROSTER.find((s) => s.squad === squad && s.roleId === role) ?? ROSTER.find((s) => s.roleId === role))!.heroName)
 const MAGE = starter('vanguard', 'mage')
 const MARKSMAN = starter('vanguard', 'marksman')
 
@@ -62,10 +62,10 @@ describe('the 3D staging board', () => {
     const board = screen.getByRole('application', { name: 'Arena board' })
     expect(board.tagName).toBe('DIV')
     expect(fake.scene.update).toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Johns vs Legends' }))
     const last = fake.scene.update.mock.calls.at(-1)![0]
-    expect(last.formation[0]).toHaveLength(10)
-    expect(last.formation[1]).toHaveLength(10)
+    expect(last.formation[0]).toHaveLength(6)
+    expect(last.formation[1]).toHaveLength(6)
     expect(last.side).toBe(0)
   })
 
@@ -103,7 +103,7 @@ describe('the 3D staging board', () => {
 
   it('moves, selects and removes placed heroes through the scene', async () => {
     await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Johns vs Legends' }))
     const h = fake.handlers!()
     // selecting an enemy hero shows it and sets up the enemy side
     act(() => h.select({ side: 1, index: 0 }))
@@ -114,7 +114,7 @@ describe('the 3D staging board', () => {
     act(() => h.move(1, 0, BOUNDS.halfWidth - 0.5, 12))
     expect(screen.getByText('That spot is too close to the wall.')).toBeTruthy()
     act(() => h.remove(1, 0))
-    expect(screen.getByRole('radio', { name: /Enemy side/ }).textContent).toContain('(9/10)')
+    expect(screen.getByRole('radio', { name: /Enemy side/ }).textContent).toContain('(5/10)')
     // a placed hero in the hand lights the row up as a place to drop it
     act(() => h.dragging(true))
     expect(screen.getByRole('list', { name: 'Loadout' }).className).toContain('drop-off')
@@ -124,7 +124,7 @@ describe('the 3D staging board', () => {
 
   it('gives the renderer back before the match starts', async () => {
     const onStart = await open()
-    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Johns vs Legends' }))
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(fake.scene.dispose).toHaveBeenCalled()
     await act(async () => {})

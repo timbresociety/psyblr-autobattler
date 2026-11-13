@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router'
 import type { Build } from '../../charter/build'
 import { canRender } from '../../arena/client/match-view'
-import { STARTERS, starterBuild } from '../../arena/starters'
+import { ROSTER } from '../../arena/roster'
+import { starterBuild } from '../../arena/starters'
 import { liveDeps, type BuildRecord } from '../api'
 import { Fight, KitReel, TryIt } from './ArenaScreen'
 import { Unsupported } from './Loading'
@@ -76,7 +77,7 @@ export function RangeScreen() {
       gone = true
     }
   }, [])
-  const picks: Pick[] = [...(mine ?? []).map((r) => ({ key: r.id, name: r.build.heroName, build: r.build })), ...STARTERS.map((s) => ({ key: `starter:${s.id}`, name: s.build.heroName, build: starterBuild(s) }))]
+  const picks: Pick[] = [...(mine ?? []).map((r) => ({ key: r.id, name: r.build.heroName, build: r.build })), ...ROSTER.map((s) => ({ key: `starter:${s.id}`, name: s.build.heroName, build: starterBuild(s) }))]
   const chosen = picks.find((p) => p.key === params.get('hero')) ?? picks[0]
   const drill = (DRILLS.find((d) => d.id === params.get('drill')) ?? DRILLS[0]).id
   if (!canRender()) return <Unsupported />

@@ -12,8 +12,8 @@ import type { LoadoutEntry } from './loadout.js'
 export type MatchupId = 'squads' | 'squads-swapped' | 'mirror' | 'random'
 
 export const MATCHUPS: readonly { id: MatchupId; label: string; needsSquads: boolean }[] = [
-  { id: 'squads', label: 'Vanguard vs Outlaws', needsSquads: true },
-  { id: 'squads-swapped', label: 'Outlaws vs Vanguard', needsSquads: true },
+  { id: 'squads', label: `${SQUAD_NAME.vanguard} vs ${SQUAD_NAME.outlaws}`, needsSquads: true },
+  { id: 'squads-swapped', label: `${SQUAD_NAME.outlaws} vs ${SQUAD_NAME.vanguard}`, needsSquads: true },
   { id: 'mirror', label: 'Mirror', needsSquads: false },
   { id: 'random', label: 'Random', needsSquads: false },
 ]

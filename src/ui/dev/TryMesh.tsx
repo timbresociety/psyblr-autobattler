@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
-import { STARTERS, starterBuild } from '../../arena/starters'
+import { ROSTER } from '../../arena/roster'
+import { starterBuild } from '../../arena/starters'
 import { triedHeroes, type TriedHero } from '../../kit/bench/hero-file'
 import { Fight, KitReel } from '../arena/ArenaScreen'
 import type { StagingResult } from '../arena/staging/Staging'
@@ -14,7 +15,7 @@ export function TryMesh() {
   const [round, setRound] = useState(0)
   useEffect(() => void triedHeroes().then(setHeroes), [])
   const hero = heroes?.find((h) => h.label === params.get('mesh'))
-  const starter = STARTERS.find((s) => s.id === params.get('kit')) ?? STARTERS[0]
+  const starter = ROSTER.find((s) => s.id === params.get('kit')) ?? ROSTER[0]
   if (hero) {
     const build = hero.build ?? starterBuild(starter)
     if (build.look) build.look.gender = hero.gender
@@ -27,7 +28,7 @@ export function TryMesh() {
   return (
     <section className="credits">
       <h1>Try a generated hero</h1>
-      <p>One without a kit of its own fights with the first starter's. Add &kit= and a starter's id to change it.</p>
+      <p>One without a kit of its own fights with Tiny John's. Add &kit= and a roster hero's id to change it.</p>
       <ul>
         {heroes?.map((h) => (
           <li key={h.label}>

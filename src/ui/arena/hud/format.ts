@@ -12,9 +12,16 @@ export const cdLabel = (left: number) => (left > 0.05 ? String(Math.ceil(left)) 
 
 const plain = (name: string) => name.replace(/["“”][^"“”]*["“”]/g, ' ').split(/\s+/).filter(Boolean)
 
-/** The word a crowd knows a hero by: the surname, nickname dropped ('Elon "Starship" Musk' → 'Musk'). */
+// the roster's Johns are told apart by their size alone ('Tiny John', 'Colossal John': roster.ts)
+const SIZE_WORDS = new Set(['tiny', 'small', 'large', 'huge', 'colossal'])
+
+/**
+ * The word a crowd knows a hero by: the surname, nickname dropped ('Elon "Starship" Musk' → 'Musk'); a size and a name
+ * stay whole ('Tiny John').
+ */
 export function shortName(name: string): string {
   const words = plain(name)
+  if (words.length === 2 && SIZE_WORDS.has(words[0].toLowerCase())) return words.join(' ')
   if (words.length) return words[words.length - 1]
   const bare = name.replace(/["“”]/g, '').trim().split(/\s+/)
   return bare[bare.length - 1] || name

@@ -16,7 +16,8 @@ import { skillLookOf } from './recipes/looks.js'
 
 export type Squad = 'vanguard' | 'outlaws'
 
-export const SQUAD_NAME: Record<Squad, string> = { vanguard: 'Vanguard', outlaws: 'Outlaws' }
+// the roster's two squads (roster.ts): the Johns, and the characters; the drawn sample below uses the same two
+export const SQUAD_NAME: Record<Squad, string> = { vanguard: 'Johns', outlaws: 'Legends' }
 export const SQUADS: readonly Squad[] = ['vanguard', 'outlaws']
 
 export interface Starter {

@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Staging, type StagingResult } from './Staging'
 import { starterLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
 
-import { STARTERS } from '../../../arena/starters'
+import { ROSTER } from '../../../arena/roster'
 
-/** A starter's bust by its name: the first of its squad in the role. */
-const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp(STARTERS.find((s) => s.squad === squad && s.roleId === role)!.heroName)
+/** A roster hero's bust by its name: the first of its squad in the role, else the first in it. */
+const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp((ROSTER.find((s) => s.squad === squad && s.roleId === role) ?? ROSTER.find((s) => s.roleId === role))!.heroName)
 const MAGE = starter('vanguard', 'mage')
 const MARKSMAN = starter('vanguard', 'marksman')
 const TANK = starter('vanguard', 'tank')
@@ -97,7 +97,7 @@ describe('staging (U16)', () => {
     fireEvent.click(start())
     const result = onStart.mock.calls[0][0]
     expect(result.side).toBe(1)
-    expect(result.formation[0]).toHaveLength(10)
+    expect(result.formation[0]).toHaveLength(6)
     expect(result.formation[1]).toHaveLength(1)
     expect(result.aiLevels).toEqual(['hard', 'normal'])
   })
@@ -107,7 +107,7 @@ describe('staging (U16)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
     fireEvent.click(bustOf(CONTROLLER))
     const details = screen.getByRole('region', { name: 'Hero details' })
-    expect(details.textContent).toContain(STARTERS.find((h) => h.squad === 'outlaws' && h.roleId === 'controller')!.heroName)
+    expect(details.textContent).toContain(ROSTER.find((h) => h.squad === 'outlaws' && h.roleId === 'controller')!.heroName)
     expect(details.textContent).toContain('Ultimate')
   })
 
@@ -143,21 +143,21 @@ describe('staging (U16)', () => {
     expect(within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')).toHaveLength(starterLoadout().length)
   })
 
-  it('Quick battle goes from the side pick to two full armies, the Vanguard against the Outlaws, ready to start', async () => {
+  it('Quick battle goes from the side pick to two full armies, the Johns against the Legends, ready to start', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: /Quick battle/ }))
-    expect(screen.getByRole('radio', { name: 'Your side Vanguard (10/10)' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Your side Johns (6/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Legends (6/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     expect(onStart.mock.calls[0][0].side).toBe(0)
   })
 
-  it('"Vanguard vs Outlaws" sets up both sides from opposite squads in one click', async () => {
+  it('"Johns vs Legends" sets up both sides from opposite squads in one click', async () => {
     const onStart = await open()
     fireEvent.click(screen.getByRole('button', { name: 'Red side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
-    expect(screen.getByRole('radio', { name: 'Your side Vanguard (10/10)' })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Johns vs Legends' }))
+    expect(screen.getByRole('radio', { name: 'Your side Johns (6/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Legends (6/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Start' }))
     const { formation, loadout } = onStart.mock.calls[0][0]
     const squads = (s: 0 | 1) => new Set(formation[s].map((p) => loadout[p.hero].squad))
@@ -183,9 +183,9 @@ describe('staging (U16)', () => {
   it('mirror copies your lineup to the enemy, and Clear empties the side being set up', async () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Outlaws vs Vanguard' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Legends vs Johns' }))
     fireEvent.click(screen.getByRole('button', { name: 'Mirror' }))
-    expect(screen.getByRole('radio', { name: 'Enemy side Outlaws (10/10)' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Enemy side Legends (6/10)' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
     expect(screen.getByRole('radio', { name: 'Your side Empty (0/10)' })).toBeTruthy()
     expect((screen.getByRole('button', { name: 'Start' }) as HTMLButtonElement).disabled).toBe(true)
@@ -197,7 +197,7 @@ describe('staging (U16)', () => {
     const onStart = vi.fn<(r: StagingResult) => void>()
     render(<Staging onStart={onStart} deps={deps} />)
     fireEvent.click(screen.getByRole('button', { name: 'Blue side' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Vanguard vs Outlaws' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Johns vs Legends' }))
     const base = starterLoadout()[0]
     await act(async () => resolve([{ key: 'build:mine', build: { ...base.build, heroName: 'Dario' }, symbol: base.symbol }]))
     const row = within(screen.getByRole('list', { name: 'Loadout' })).getAllByRole('listitem')
