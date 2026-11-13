@@ -54,6 +54,13 @@ WEAPONS = {
     'round-shield': dict(name='Round shield', kind='offhand', length=0.7, up='+z', front='+x', shield=True),
     'recurve-bow': dict(name='Recurve bow', kind='offhand', length=1.5, up='+z', front='+x', grip=(-0.06, 0.37), keep_small=True),
     'quiver': dict(name='Quiver', kind='back', length=0.7, up='-z', front='+y', grip=0.5),
+    # the roster's characters' own (roster.ts): a ruby-hilted longsword, a holly wand, handcuffs held by a lock and
+    # thrown, a living branch swung as a whip, and a slab of wall a titan hurls, held from beneath
+    'gryffindor-sword': dict(name='Ruby-hilted sword', kind='hand', length=0.95, up='+z', front='+x', grip=0.15),
+    'holly-wand': dict(name='Holly wand', kind='hand', length=0.3, up='+z', front='+x', grip=0.12),
+    'handcuffs': dict(name='Handcuffs', kind='hand', length=0.26, up='+z', front='+x', grip=0.32),
+    'branch-whip': dict(name='Branch whip', kind='hand', length=1.1, up='+z', front='+x', grip=0.1),
+    'boulder': dict(name='Boulder', kind='hand', length=0.9, up='+z', front='+x', grip=0.08),
 }
 AXES = {'+x': (1, 0, 0), '-x': (-1, 0, 0), '+y': (0, 1, 0), '-y': (0, -1, 0), '+z': (0, 0, 1), '-z': (0, 0, -1)}
 # a shield's disc sits this far out from the palm, along +x (as tools/blender/pieces.py's own)

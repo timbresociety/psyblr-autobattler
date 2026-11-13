@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BUILD_SLOTS, hydrateBuild } from '../charter/build'
 import { ALL_SIZE_CLASSES } from '../charter/sizes'
+import { WEAPONS } from '../kit/weapons.gen'
 import { shortName } from '../ui/arena/hud/format'
 import { ROSTER } from './roster'
 
@@ -36,5 +37,20 @@ describe('the roster', () => {
 
   it('dresses each John in John’s mesh at its own size', () => {
     for (const hero of ROSTER.filter((h) => h.squad === 'vanguard')) expect(generated.some((g) => g.label === hero.build.look?.mesh), hero.heroName).toBe(true)
+  })
+
+  it('arms each hero from the weapon library: a sword for a sword, nothing for fists, feet and palms', () => {
+    const arms = (id: string) => ROSTER.find((h) => h.id === id)!.build.look?.arms?.map((a) => `${a.piece.id}:${a.use}`) ?? []
+    for (const hero of ROSTER) for (const arm of hero.build.look?.arms ?? []) {
+      expect(WEAPONS.some((w) => w.id === arm.piece.id), `${hero.heroName}: ${arm.piece.id}`).toBe(true)
+      expect(existsSync(`public${arm.piece.url}`), arm.piece.url).toBe(true)
+    }
+    expect(arms('harry')).toEqual(['gryffindor-sword:melee', 'holly-wand:ranged'])
+    expect(arms('l')).toEqual(['handcuffs:ranged'])
+    expect(arms('groot')).toEqual(['branch-whip:melee'])
+    expect(arms('attack-titan')).toEqual(['boulder:ranged'])
+    expect(arms('broly')).toEqual([])
+    expect(arms('iron-hulk')).toEqual([])
+    expect(arms('john')).toEqual(['katana:melee', 'pistol:ranged'])
   })
 })

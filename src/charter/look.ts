@@ -48,13 +48,14 @@ export interface GearPiece {
 
 /**
  * A weapon a hero swaps between a hand and a carry slot (kit/body/carry.ts): out for the attacks of its `use`, waiting
- * on `stow` while the other set is out. One without a hand (a quiver) only ever waits.
+ * on `stow` while the other set is out. One without a hand (a quiver) only ever waits; one without a slot (a boulder
+ * torn up for the throw) is only ever in the hand, and gone while the other set is out.
  */
 export interface ArmPiece {
   piece: GearPiece
   use: 'melee' | 'ranged'
   hand?: GearSlot
-  stow: CarrySlot
+  stow?: CarrySlot
 }
 
 /** A photo face: where it is stored, its size, and its landmarks as x, y pairs in its own pixels. */

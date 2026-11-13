@@ -1,9 +1,11 @@
 import { BUILD_SLOTS, proposeBuild, type Build } from '../charter/build.js'
-import { defaultLook } from '../charter/look.js'
+import { defaultLook, type ArmPiece } from '../charter/look.js'
 import type { Element, SkillLook } from '../charter/skill-look.js'
 import type { SizeClass } from '../charter/sizes.js'
 import type { BuildSlot, RoleId } from '../charter/types.js'
 import type { AttitudeId } from '../kit/anim/attitude.js'
+import type { CarrySlot } from '../kit/rig/metarig.js'
+import { labArms } from './lab/library.js'
 import { skillLookOf } from './recipes/looks.js'
 import type { Starter } from './starters.js'
 
@@ -40,10 +42,15 @@ interface Hero {
   element: Element
   /** Signature colour (0 to 1 round the wheel), for its suit and effects. */
   hue: number
+  /** The weapons it draws for its melee and its ranged attacks (public/kit/weapons); fists, feet and palms carry none. */
+  arms?: readonly ArmPiece[]
   slots: Record<BuildSlot, Skill>
   /** Skill looks written down by hand; the rest are read from the template and the element. */
   skills?: Partial<Record<BuildSlot, SkillLook>>
 }
+
+/** A weapon in the right hand, waiting on `stow` while the other set is out; with no slot it is only ever in the hand. */
+const held = (id: string, use: ArmPiece['use'], stow?: CarrySlot): ArmPiece => ({ piece: { id, url: `/kit/weapons/${id}.glb` }, use, hand: 'hand_r', ...(stow ? { stow } : {}) })
 
 const JOHNS: readonly Hero[] = [
   {
@@ -56,6 +63,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john-tiny',
     attitude: 'low',
     element: 'shadow',
+    arms: labArms('paired', 'thrown'),
     slots: {
       basic: { templateId: 'melee-paired', name: 'Pocket Knives', flavour: 'Two short blades, in and out before the big ones turn round' },
       active1: { templateId: 'assassin-throwing-knives', name: 'Flick Knives', flavour: 'Throws a knife from each hand' },
@@ -75,6 +83,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john-small',
     attitude: 'swagger',
     element: 'metal',
+    arms: labArms('kicks', 'rifle'),
     slots: {
       basic: { templateId: 'melee-kicks', name: 'Boot Work', flavour: 'Kicks to keep a diver off his rifle' },
       active1: { templateId: 'marksman-burst-fire', name: 'Three-Round Burst', flavour: 'A carbine fired in bursts of three' },
@@ -94,6 +103,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john',
     attitude: 'neutral',
     element: 'energy',
+    arms: labArms('blade', 'pistol'),
     slots: {
       basic: { templateId: 'melee-blade', name: 'House Blade', flavour: 'The champion’s one-hand sword, a three-blow chain' },
       active1: { templateId: 'shared-sidearm', name: 'Sidearm', flavour: 'A pistol on the hip for anything out of reach' },
@@ -113,6 +123,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john-large',
     attitude: 'brute',
     element: 'earth',
+    arms: labArms('shield', 'heavy'),
     slots: {
       basic: { templateId: 'melee-shield', name: 'Sword and Board', flavour: 'Sword and shield, the shield first' },
       active1: { templateId: 'tank-shoulder-cannon', name: 'Shoulder Cannon', flavour: 'A heavy cannon fired from the shoulder' },
@@ -132,6 +143,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john-huge',
     attitude: 'brute',
     element: 'tech',
+    arms: labArms('club', 'pistol'),
     slots: {
       basic: { templateId: 'melee-club', name: 'Wrench', flavour: 'A big wrench, swung like a hammer' },
       active1: { templateId: 'summoner-nail-gun', name: 'Nail Gun', flavour: 'A rivet gun from the repair kit' },
@@ -151,6 +163,7 @@ const JOHNS: readonly Hero[] = [
     mesh: 'john-colossal',
     attitude: 'neutral',
     element: 'light',
+    arms: labArms('staff', 'magic1'),
     slots: {
       basic: { templateId: 'melee-staff', name: 'Pole Staff', flavour: 'A staff as long as a pool cue, swept in wide arcs' },
       active1: { templateId: 'support-mending-shot', name: 'Mending Shot', flavour: 'A bolt of light that hurts foes and heals friends' },
@@ -200,6 +213,7 @@ const CHARACTERS: readonly Hero[] = [
     mesh: 'harry',
     attitude: 'neutral',
     element: 'light',
+    arms: [held('gryffindor-sword', 'melee', 'hip_l'), held('holly-wand', 'ranged', 'thigh_r')],
     slots: {
       basic: { templateId: 'melee-blade', name: 'Gryffindor Sword', flavour: 'The silver sword, drawn when a spell will not do', visual: 'silver blade, ruby hilt' },
       active1: { templateId: 'mage-arcane-bolt', name: 'Stupefy', flavour: 'A red stunning bolt from the wand', visual: 'red spell bolt, wand flick' },
@@ -219,6 +233,7 @@ const CHARACTERS: readonly Hero[] = [
     mesh: 'groot',
     attitude: 'neutral',
     element: 'nature',
+    arms: [held('branch-whip', 'melee', 'hip_r')],
     slots: {
       basic: { templateId: 'melee-whip', name: 'Branch Lash', flavour: 'His arms grow into branches and whip out', visual: 'bark limbs stretching' },
       active1: { templateId: 'support-siphon-beam', name: 'Sap Drain', flavour: 'A thread of green sap that drains a foe and feeds his friends', visual: 'green sap stream' },
@@ -240,6 +255,7 @@ const CHARACTERS: readonly Hero[] = [
     mesh: 'l',
     attitude: 'low',
     element: 'shadow',
+    arms: [held('handcuffs', 'ranged', 'hip_r')],
     slots: {
       basic: { templateId: 'melee-kicks', name: 'Capoeira', flavour: 'Kicks from a crouch, hands kept off the fight, as he fought Light', visual: 'low spinning kicks, bare feet' },
       active1: { templateId: 'controller-bolas', name: 'Handcuffs', flavour: 'Throws a pair of cuffs on a chain that binds the suspect’s legs', visual: 'steel cuffs, swinging chain' },
@@ -281,6 +297,7 @@ const CHARACTERS: readonly Hero[] = [
     mesh: 'attack-titan',
     attitude: 'brute',
     element: 'fire',
+    arms: [held('boulder', 'ranged')],
     slots: {
       basic: { templateId: 'melee-unarmed', name: 'Titan Fists', flavour: 'The hand-to-hand Annie taught him, at fifteen metres', visual: 'huge punches, steam off the knuckles' },
       active1: { templateId: 'assassin-throwing-knives', name: 'Boulder Throw', flavour: 'Tears up a slab of the floor and hurls it', visual: 'stone chunks, dust trail' },
@@ -303,7 +320,7 @@ function rostered(hero: Hero): Starter {
     const look = hero.skills?.[slot] ?? skillLookOf({ slots }, slot, hero.element)
     if (look) looks[slot] = look
   }
-  const look = { ...defaultLook(hero.roleId, hero.heroName, hue), gender: 'm' as const, mesh: hero.mesh, skills: looks, ...(hero.attitude === 'neutral' ? {} : { attitude: hero.attitude }) }
+  const look = { ...defaultLook(hero.roleId, hero.heroName, hue), gender: 'm' as const, mesh: hero.mesh, skills: looks, ...(hero.arms?.length ? { arms: hero.arms } : {}), ...(hero.attitude === 'neutral' ? {} : { attitude: hero.attitude }) }
   const build: Build = { ...proposal.build, slots, look, ...(hero.sizeClass === 'medium' ? {} : { sizeClass: hero.sizeClass }) }
   return { id: hero.id, squad: hero.squad, heroName: hero.heroName, roleId: hero.roleId, sizeClass: hero.sizeClass, hue, element: hero.element, build }
 }

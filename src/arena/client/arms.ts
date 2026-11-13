@@ -111,17 +111,18 @@ export function hangArms(model: THREE.Object3D, arms: readonly ArmPiece[], kit: 
   const scaleOf = (o: THREE.Object3D) => o.getWorldScale(new THREE.Vector3()).x
   const hung = arms.flatMap((arm) => {
     const file = kit.pieces.get(arm.piece.url)
-    const stow = model.getObjectByName(`socket:${arm.stow}`)
-    if (!file || !stow) return []
+    const stow = arm.stow ? model.getObjectByName(`socket:${arm.stow}`) : undefined
+    const hand = arm.hand ? model.getObjectByName(`socket:${arm.hand}`) : undefined
+    // a piece with no slot is only ever in the hand
+    if (!file || (arm.stow ? !stow : !hand)) return []
     const obj = file.scene.clone(true)
     obj.name = `arm:${arm.piece.id}`
     obj.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.castShadow = true
     })
-    const hand = arm.hand ? model.getObjectByName(`socket:${arm.hand}`) : undefined
     const rope = arm.hand && ROPES.has(arm.piece.id) ? makeRope(obj) : undefined
     // put away, a piece keeps the size its hand gives it (the hand's socket carries the hero's fit, gear.ts)
-    const size = hand ? scaleOf(hand) / scaleOf(stow) : arm.hand ? pieceFit(fit.hand, kit.drawn) : fit.body
+    const size = !stow ? 1 : hand ? scaleOf(hand) / scaleOf(stow) : arm.hand ? pieceFit(fit.hand, kit.drawn) : fit.body
     return [{ use: arm.use, obj, stow, hand, rope, away: stowed(obj, !!arm.hand, size) }]
   })
   if (!hung.length) return undefined
@@ -136,11 +137,11 @@ export function hangArms(model: THREE.Object3D, arms: readonly ArmPiece[], kit: 
         p.obj.quaternion.identity()
         p.obj.scale.setScalar(1)
         p.rope?.coil(false)
-      } else {
+      } else if (p.stow) {
         p.stow.add(p.obj)
         p.away.decompose(p.obj.position, p.obj.quaternion, p.obj.scale)
         p.rope?.coil(true)
-      }
+      } else p.obj.removeFromParent()
     }
     return true
   }
