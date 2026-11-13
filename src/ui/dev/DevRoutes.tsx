@@ -3,12 +3,13 @@ import { Link, Route, Routes } from 'react-router'
 
 const BenchScreen = lazy(() => import('../arena/BenchScreen').then((m) => ({ default: m.BenchScreen })))
 const SoakScreen = lazy(() => import('../arena/SoakScreen').then((m) => ({ default: m.SoakScreen })))
-// the physique bench and the replays are development tools only, never in a production build
+// John's lab, his moves and the generated heroes ship: they read only what is in public/
+const TryMesh = lazy(() => import('./TryMesh').then((m) => ({ default: m.TryMesh })))
+const JohnLab = lazy(() => import('./JohnLab').then((m) => ({ default: m.JohnLab })))
+const JohnMoves = lazy(() => import('./JohnMoves').then((m) => ({ default: m.JohnMoves })))
+// the physique bench, the clip sheets and the replays are development tools only, never in a production build
 const PhysiqueBench = import.meta.env.DEV ? lazy(() => import('./PhysiqueBench').then((m) => ({ default: m.PhysiqueBench }))) : undefined
 const ClipSheet = import.meta.env.DEV ? lazy(() => import('./ClipSheet').then((m) => ({ default: m.ClipSheet }))) : undefined
-const TryMesh = import.meta.env.DEV ? lazy(() => import('./TryMesh').then((m) => ({ default: m.TryMesh }))) : undefined
-const JohnLab = import.meta.env.DEV ? lazy(() => import('./JohnLab').then((m) => ({ default: m.JohnLab }))) : undefined
-const JohnMoves = import.meta.env.DEV ? lazy(() => import('./JohnMoves').then((m) => ({ default: m.JohnMoves }))) : undefined
 const ReplayScreen = import.meta.env.DEV ? lazy(() => import('./ReplayScreen').then((m) => ({ default: m.ReplayScreen }))) : undefined
 
 const TOOLS: readonly { path: string; label: string; hint: string; dev?: boolean }[] = [
@@ -16,9 +17,9 @@ const TOOLS: readonly { path: string; label: string; hint: string; dev?: boolean
   { path: 'soak', label: 'Soak', hint: 'Real 10 v 10s back to back for ten minutes, graded on frame time and memory' },
   { path: 'physique', label: 'Physique bench', hint: 'Twelve archetypes, face close-up and jiggle', dev: true },
   { path: 'clips', label: 'Clip sheets', hint: 'One clip on six bodies, frame by frame (the clip audit)', dev: true },
-  { path: 'try', label: 'Try a generated hero', hint: 'A generated mesh on our skeleton, in the arena against a dummy', dev: true },
-  { path: 'john', label: "John's lab", hint: 'Every kit interaction on John, every size and attitude, with the checklist', dev: true },
-  { path: 'moves', label: "John's moves", hint: 'John alone, the camera circling him, a button for every move he plays', dev: true },
+  { path: 'try', label: 'Try a generated hero', hint: 'A generated mesh on our skeleton, in the arena against a dummy' },
+  { path: 'john', label: "John's lab", hint: 'Every kit interaction on John, every size and attitude, with the checklist' },
+  { path: 'moves', label: "John's moves", hint: 'John alone, the camera circling him, a button for every move he plays' },
   { path: 'replay', label: 'Replays', hint: 'Matches played here, tick for tick, with their F9 marks', dev: true },
   { path: 'probe', label: 'Probe', hint: 'Scene rays and sound recording from a script, in any match', dev: true },
 ]
@@ -34,9 +35,9 @@ export function DevRoutes() {
       <Route path="soak" element={<Suspense fallback={wait('the soak test')}>{<SoakScreen />}</Suspense>} />
       {PhysiqueBench && <Route path="physique" element={<Suspense fallback={wait('the physique bench')}>{<PhysiqueBench />}</Suspense>} />}
       {ClipSheet && <Route path="clips" element={<Suspense fallback={wait('the clip sheets')}>{<ClipSheet />}</Suspense>} />}
-      {TryMesh && <Route path="try" element={<Suspense fallback={wait('the hero')}>{<TryMesh />}</Suspense>} />}
-      {JohnLab && <Route path="john" element={<Suspense fallback={wait("John's lab")}>{<JohnLab />}</Suspense>} />}
-      {JohnMoves && <Route path="moves" element={<Suspense fallback={wait("John's moves")}>{<JohnMoves />}</Suspense>} />}
+      <Route path="try" element={<Suspense fallback={wait('the hero')}>{<TryMesh />}</Suspense>} />
+      <Route path="john" element={<Suspense fallback={wait("John's lab")}>{<JohnLab />}</Suspense>} />
+      <Route path="moves" element={<Suspense fallback={wait("John's moves")}>{<JohnMoves />}</Suspense>} />
       {ReplayScreen && <Route path="replay/:name?" element={<Suspense fallback={wait('the replays')}>{<ReplayScreen />}</Suspense>} />}
       <Route path="probe" element={<ProbeHelp />} />
       <Route path="*" element={<DevIndex />} />

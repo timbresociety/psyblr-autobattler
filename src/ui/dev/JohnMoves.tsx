@@ -351,7 +351,7 @@ export function JohnMoves() {
         renderer.render(scene, camera)
         // the readout, a few times a second
         since += dt / pace.current.speed
-        if (import.meta.env.DEV && since > 0.2) {
+        if (since > 0.2) {
           since = 0
           const now = playingNow()
           if (now !== shown) setPlaying((shown = now))
