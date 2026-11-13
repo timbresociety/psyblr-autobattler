@@ -6,8 +6,8 @@ import { starterLoadout, type LoadoutDeps, type LoadoutEntry } from './loadout'
 
 import { ROSTER } from '../../../arena/roster'
 
-/** A roster hero's bust by its name: the first of its squad in the role, else the first in it. */
-const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp((ROSTER.find((s) => s.squad === squad && s.roleId === role) ?? ROSTER.find((s) => s.roleId === role))!.heroName)
+/** A roster hero's bust by its name (and the comma after it, which a one-letter name needs): the first of its squad in the role, else the first in it. */
+const starter = (squad: 'vanguard' | 'outlaws', role: string) => new RegExp((ROSTER.find((s) => s.squad === squad && s.roleId === role) ?? ROSTER.find((s) => s.roleId === role))!.heroName + ',')
 const MAGE = starter('vanguard', 'mage')
 const MARKSMAN = starter('vanguard', 'marksman')
 const TANK = starter('vanguard', 'tank')

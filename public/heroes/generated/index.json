@@ -204,5 +204,23 @@
   "gender": "m",
   "height": 2.96,
   "file": "john.glb"
+ },
+ {
+  "label": "l",
+  "gender": "m",
+  "height": 1.79,
+  "file": "l.glb"
+ },
+ {
+  "label": "iron-hulk",
+  "gender": "m",
+  "height": 2.3,
+  "file": "iron-hulk.glb"
+ },
+ {
+  "label": "attack-titan",
+  "gender": "m",
+  "height": 3,
+  "file": "attack-titan.glb"
  }
 ]

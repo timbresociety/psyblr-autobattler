@@ -17,7 +17,7 @@ import type { Starter } from './starters.js'
  * John fights a different way, so between them they show the kit library's families: blades and knives, kicks and
  * rifles, sword and gun, shield and cannon, hammer and turrets, staff and healing.
  *
- * Colossal John and Behemoth start colossal, which a forged hero cannot (GAME.md R44: only a form reaches it): the
+ * Colossal John and the Attack Titan start colossal, which a forged hero cannot (GAME.md R44: only a form reaches it): the
  * roster's builds go to the match as written, never through hydrateBuild.
  */
 
@@ -229,60 +229,65 @@ const CHARACTERS: readonly Hero[] = [
     },
   },
   {
-    id: 'sleepless',
-    hue: 0.68,
+    // L, the world's greatest detective (Death Note): crouched, barefoot, sugar in hand; fights Light with capoeira
+    // kicks and wins by reading his man, cuffing himself to his suspect and closing the case
+    id: 'l',
+    hue: 0.62,
     squad: 'outlaws',
-    heroName: 'Kei Sorrel',
+    heroName: 'L',
     roleId: 'controller',
     sizeClass: 'medium',
-    mesh: 'sleepless',
+    mesh: 'l',
     attitude: 'low',
     element: 'shadow',
     slots: {
-      basic: { templateId: 'melee-kicks', name: 'Lazy Kicks', flavour: 'Fights with his feet, hands kept in his pockets', visual: 'quick crouched kicks' },
-      active1: { templateId: 'controller-bolas', name: 'Case Thread', flavour: 'Throws a weighted thread that ties a foe’s legs', visual: 'red string, weighted ends' },
-      active2: { templateId: 'mage-spell-steal', name: 'I Know Your Move', flavour: 'Reads a foe and takes the next spell he was about to cast', visual: 'pale ink glyphs' },
-      passive: { templateId: 'controller-mind-fray', name: 'Sleepless Mind', flavour: 'Every foe he controls loses his nerve a little more', visual: 'ink-stain smudges' },
-      ultimate: { templateId: 'controller-labyrinth', name: 'The Trap Is Set', flavour: 'Every move was a clue: walls rise and close the case', visual: 'paper walls, chalk lines' },
-      movement: { templateId: 'shared-time-recall', name: 'Back to the Scene', flavour: 'Snaps back to where he stood a moment ago', visual: 'ink afterimage' },
+      basic: { templateId: 'melee-kicks', name: 'Capoeira', flavour: 'Kicks from a crouch, hands kept off the fight, as he fought Light', visual: 'low spinning kicks, bare feet' },
+      active1: { templateId: 'controller-bolas', name: 'Handcuffs', flavour: 'Throws a pair of cuffs on a chain that binds the suspect’s legs', visual: 'steel cuffs, swinging chain' },
+      active2: { templateId: 'mage-spell-steal', name: 'Deduction', flavour: 'Reads his suspect and takes the very move he was about to make', visual: 'pale case-file glyphs' },
+      passive: { templateId: 'controller-mind-fray', name: 'Five Percent', flavour: 'Every hit raises his suspicion and wears down the suspect’s nerve', visual: 'ink smudges on the foe' },
+      ultimate: { templateId: 'controller-labyrinth', name: 'Checkmate', flavour: 'Every clue was a wall: the case closes round the suspects and holds them', visual: 'paper walls, chalk lines' },
+      movement: { templateId: 'shared-time-recall', name: 'Back to the Scene', flavour: 'Returns to where he stood a moment ago to look again', visual: 'grey afterimage' },
     },
   },
   {
-    id: 'ironclad',
-    hue: 0.02,
+    // the Hulkbuster: Stark's heavy armour, built to stop the Hulk and dropped in pieces from orbit by Veronica
+    id: 'iron-hulk',
+    hue: 0.0,
     squad: 'outlaws',
-    heroName: 'Ironclad',
+    heroName: 'Iron Hulk',
     roleId: 'tank',
     sizeClass: 'large',
-    mesh: 'ironclad',
+    mesh: 'iron-hulk',
     attitude: 'brute',
     element: 'tech',
     slots: {
-      basic: { templateId: 'melee-unarmed', name: 'Piston Fists', flavour: 'Armoured fists driven by pistons', visual: 'steel gauntlets, hydraulic hiss' },
-      active1: { templateId: 'tank-shoulder-cannon', name: 'Shoulder Cannon', flavour: 'A cannon on the armour’s shoulder', visual: 'muzzle flash, smoke' },
-      active2: { templateId: 'tank-seismic-slam', name: 'Hydraulic Slam', flavour: 'Drives both fists into the floor and stuns all near', visual: 'shock ring, steam' },
-      passive: { templateId: 'tank-juggernaut', name: 'Heavy Plating', flavour: 'Once moving, nothing knocks him aside', visual: 'plates locking' },
-      ultimate: { templateId: 'tank-titan-form', name: 'Heavy Shell', flavour: 'Locks on the outer armour and grows into a walking fortress', visual: 'armour plates unfolding, glowing core' },
-      movement: { templateId: 'marksman-jetpack', name: 'Thrusters', flavour: 'Boot and back thrusters lift him into the air', visual: 'blue thruster flames' },
+      basic: { templateId: 'melee-unarmed', name: 'Hulkbuster Fists', flavour: 'Piston-driven gauntlets the size of a man', visual: 'red and gold gauntlets, hydraulic hiss' },
+      active1: { templateId: 'shared-ki-blast', name: 'Repulsor', flavour: 'An open palm fires a blast from the repulsor in the gauntlet', visual: 'white-blue palm blast' },
+      active2: { templateId: 'tank-seismic-slam', name: 'Ground Pound', flavour: 'Brings both fists down and stuns everyone near', visual: 'shock ring, sparks, cracked floor' },
+      passive: { templateId: 'tank-iron-skin', name: 'Hulkbuster Plating', flavour: 'Locks the armour plates shut when the damage gets heavy', visual: 'plates sliding shut, gold seams' },
+      ultimate: { templateId: 'tank-titan-form', name: 'Veronica', flavour: 'More armour drops from orbit and locks on: a walking fortress', visual: 'falling armour, glowing arc reactor' },
+      movement: { templateId: 'marksman-jetpack', name: 'Thrusters', flavour: 'Boot and back thrusters lift the whole suit', visual: 'blue-white thruster flames' },
     },
   },
   {
-    id: 'behemoth',
-    hue: 0.04,
+    // the Attack Titan (Attack on Titan): Eren's titan, which keeps moving forward, hardens its fists, heals in
+    // steam and at the end wakes the walls
+    id: 'attack-titan',
+    hue: 0.07,
     squad: 'outlaws',
-    heroName: 'Behemoth',
-    roleId: 'tank',
+    heroName: 'Attack Titan',
+    roleId: 'fighter',
     sizeClass: 'colossal',
-    mesh: 'behemoth',
+    mesh: 'attack-titan',
     attitude: 'brute',
     element: 'fire',
     slots: {
-      basic: { templateId: 'melee-unarmed', name: 'Titan Fists', flavour: 'Fists the size of a slot machine', visual: 'huge sweeping punches' },
-      active1: { templateId: 'tank-shockwave-punch', name: 'Steam Burst', flavour: 'Vents a blast of scalding steam from his body', visual: 'white steam cone' },
-      active2: { templateId: 'tank-sonic-shockwave', name: 'Roar', flavour: 'A roar that throws everyone in front of him back', visual: 'shock ring, flying chips' },
-      passive: { templateId: 'tank-regenerating-core', name: 'Steaming Flesh', flavour: 'Wounds close in a hiss of steam', visual: 'steam from the wounds' },
-      ultimate: { templateId: 'tank-earthquake', name: 'Stampede', flavour: 'Stomps across the floor and shakes everything down', visual: 'cracking floor, dust' },
-      movement: { templateId: 'tank-crater-leap', name: 'Titan Leap', flavour: 'One leap across the parlour, landing in a crater', visual: 'crater, dust ring' },
+      basic: { templateId: 'melee-unarmed', name: 'Titan Fists', flavour: 'The hand-to-hand Annie taught him, at fifteen metres', visual: 'huge punches, steam off the knuckles' },
+      active1: { templateId: 'assassin-throwing-knives', name: 'Boulder Throw', flavour: 'Tears up a slab of the floor and hurls it', visual: 'stone chunks, dust trail' },
+      active2: { templateId: 'tank-ground-sunder', name: 'Hardening Spikes', flavour: 'A line of hardened crystal spikes rips up the floor', visual: 'pale blue crystal spikes' },
+      passive: { templateId: 'fighter-second-wind', name: 'Regeneration', flavour: 'Wounds close in a hiss of steam', visual: 'steam pouring from the wounds' },
+      ultimate: { templateId: 'fighter-colossus-smash', name: 'The Rumbling', flavour: 'The walls’ titans wake and the ground shakes: everything near is stunned and crushed', visual: 'quaking floor, steam, giant footprints' },
+      movement: { templateId: 'tank-crater-leap', name: 'Titan Leap', flavour: 'One leap across the parlour, landing in a crater', visual: 'crater, dust ring, steam' },
     },
   },
 ]
