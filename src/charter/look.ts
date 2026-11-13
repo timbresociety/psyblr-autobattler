@@ -94,6 +94,11 @@ export interface HeroLook {
    * The movement skill's and the passive's come from a dev lab only: a saved look drops them (their kinds pick them).
    */
   motions?: Partial<Record<MotionSlot | 'movement' | 'passive', string>>
+  /**
+   * What each slot's skill is, where the slot's template is a stand-in for it (a dev lab only: recipes/motions.ts
+   * `skillKey`); a saved look has none, and its templates say.
+   */
+  kinds?: Partial<Record<BuildSlot, string>>
 }
 
 export const FACE_POINTS = 478

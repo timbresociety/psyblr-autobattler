@@ -35,6 +35,11 @@ export interface RecordedSetup {
   map: MapId
   /** John's lab (lab.ts): the house's blue deck set up for the checklist, and John's buttons. */
   lab?: LabSetup
+  /**
+   * The full kit's rules (GAME.md §4, MatchState.fullKit): on in every match played in the browser, where a person may
+   * take a hero. Part of what builds the match, so a recording made before they were on plays back as it was played.
+   */
+  fullKit?: boolean
 }
 
 /**
@@ -73,6 +78,7 @@ export function arenaFor(setup: RecordedSetup): Arena {
     map: setup.map,
   })
   if (setup.aiLevels) arena.match.aiLevels = setup.aiLevels
+  if (setup.fullKit) arena.match.fullKit = true
   if (setup.lab) labArena(arena, setup.lab)
   return arena
 }

@@ -5,7 +5,7 @@ import type { WebGPURenderer } from 'three/webgpu'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { SIZES } from '../../charter/sizes'
 import type { BuildSlot } from '../../charter/types'
-import type { AnimState, Way } from '../../arena/client/animation'
+import { STANCE, type AnimState, type Way } from '../../arena/client/animation'
 import { loadHeroView, type HeroView } from '../../arena/client/heroes'
 import { createRenderer, forceWebGLFlag } from '../../arena/client/render/renderer'
 import type { MeleeBlow } from '../../arena/engine/combat'
@@ -37,6 +37,17 @@ interface Move {
   /** What the body holds once the move is done: standing, unless the move leaves it crouched, hanging or down. */
   rest?: AnimState
   moving?: boolean
+  /**
+   * A held move on the ground going `heading` (radians from his hips, a quarter turn his left) at `speed` metres a
+   * second, sprinting or not: the gait's way and pace, as the arena hands them over (match-view.ts, `lean`).
+   */
+  travel?: Travel
+}
+
+interface Travel {
+  heading: number
+  speed: number
+  sprint?: boolean
 }
 
 const once = (state: AnimState, moving = false): Beat => ({ state, seconds: 0, moving })
@@ -49,6 +60,9 @@ const charged = (slot: BuildSlot, hold = 0.9, after = 0.6): Beat[] => [
 ]
 /** A held state the body keeps until another button. */
 const hold = (id: string, label: string, state: AnimState, moving = false): Move => ({ id, label, beats: () => [], rest: state, moving })
+/** Moving on the ground some way at some pace, his hips square to his aim. */
+const going = (id: string, label: string, travel: Travel): Move => ({ id, label, beats: () => [], rest: { kind: 'run' }, moving: true, travel })
+const SIDE = Math.PI / 2
 /** A one-shot: it plays out, then the body stands. */
 const shot = (id: string, label: string, state: AnimState, rest?: AnimState): Move => ({ id, label, beats: () => [once(state)], rest })
 
@@ -124,6 +138,17 @@ const GROUPS: readonly { title: string; note?: string; moves: readonly Move[] }[
     moves: [
       hold('idle', 'Stand', { kind: 'idle' }),
       hold('run', 'Run', { kind: 'run' }, true),
+      going('walk-ahead', 'Walk', { heading: 0, speed: 1.4 }),
+      going('walk-left', 'Walk left', { heading: SIDE, speed: 1.4 }),
+      going('walk-right', 'Walk right', { heading: -SIDE, speed: 1.4 }),
+      going('walk-back', 'Walk back', { heading: Math.PI, speed: 1.4 }),
+      going('jog-left', 'Jog left', { heading: SIDE, speed: 4 }),
+      going('jog-right', 'Jog right', { heading: -SIDE, speed: 4 }),
+      going('strafe-left', 'Strafe left, full speed', { heading: SIDE, speed: 6.5 }),
+      going('strafe-right', 'Strafe right, full speed', { heading: -SIDE, speed: 6.5 }),
+      going('sprint-left', 'Sprint left', { heading: SIDE, speed: 8, sprint: true }),
+      going('ahead-left', 'Jog ahead and left', { heading: SIDE / 2, speed: 4 }),
+      going('back-left', 'Jog back and left', { heading: SIDE * 1.5, speed: 4 }),
       hold('air', 'Fall', { kind: 'air' }),
       hold('crouch', 'Crouch', { kind: 'crouch' }),
       hold('crouch-move', 'Crouch walk', { kind: 'crouch_move' }, true),
@@ -155,6 +180,8 @@ interface Player {
   cut: boolean
   /** The last move, to play again on a loop. */
   last?: Move
+  /** Which way and how fast the held move goes, if it goes anywhere. */
+  travel?: Travel
   /** Seconds since the last move's beats ran out. */
   idle: number
 }
@@ -312,6 +339,10 @@ export function JohnMoves() {
             p.idle += dt
             if (p.idle >= LOOP_SECONDS) start(p.last)
           }
+          // the gait's way and pace for a move going somewhere; the view's own defaults for anything else
+          const go = beat ? undefined : p.travel
+          if (go) v.lean?.(0, Math.abs(go.heading) > STANCE.back.enter, go.speed, false, 0, go.heading, !!go.sprint)
+          else v.lean?.(0, false, undefined, false, 0, 0, false)
           v.pose(state, t, dt, moving)
           v.settle?.(dt)
           lastCast = state.kind === 'cast'
@@ -336,7 +367,7 @@ export function JohnMoves() {
         const beats = move.beats(() => ++seq.current)
         const first = beats[0]?.state
         const firstIsCast = !!first && (typeof first === 'function' ? first(0) : first).kind === 'cast'
-        player.current = { beats, at: 0, rest: move.rest ?? { kind: 'idle' }, restMoving: !!move.moving, cut: (lastCast && firstIsCast) || !beats.length, last: move, idle: 0 }
+        player.current = { beats, at: 0, rest: move.rest ?? { kind: 'idle' }, restMoving: !!move.moving, travel: move.travel, cut: (lastCast && firstIsCast) || !beats.length, last: move, idle: 0 }
       }
       startRef.current = start
     })

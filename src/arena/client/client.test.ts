@@ -47,9 +47,14 @@ describe('arena client core (U13)', () => {
     const hero = createHero(prepareHero(defaultBuild('fighter')), 0, 0, { x: 0, y: 0, z: 0 })
     const a = createAnimator()
     expect(settle(a, hero, 0.2, 1, 1 / 60).kind).toBe('run')
+    // the engine starts the action and says so, on the same tick
+    hero.action = { slot: 'active1', started: 2, release: 14, ends: 30, released: false }
     onEvents(a, 0, [{ type: 'cast', hero: 0, slot: 'active1', templateId: 'x', release: 14, ends: 30 }], 2)
     expect(settle(a, hero, 0, 2, 1 / 60).kind).toBe('cast')
-    for (let i = 0; i < 40; i++) settle(a, hero, 0, 3 + i, 1 / 60)
+    for (let i = 0; i < 40; i++) {
+      if (3 + i >= 30) hero.action = undefined
+      settle(a, hero, 0, 3 + i, 1 / 60)
+    }
     expect(a.state.kind).toBe('idle')
     onEvents(a, 0, [{ type: 'death', hero: 0 }], 50)
     expect(settle(a, hero, 1, 50, 1 / 60).kind).toBe('dead')
@@ -62,29 +67,26 @@ describe('arena client core (U13)', () => {
   it('plays each jump, dash and landing once as it happens, then gives the body back (phase 2)', () => {
     const hero = createHero(prepareHero(defaultBuild('fighter')), 0, 0, { x: 0, y: 0, z: 0 })
     const a = createAnimator()
-    const frames = (n: number, moved = 0) => {
-      for (let i = 0; i < n; i++) settle(a, hero, moved, 0, 1 / 60)
-      return a.state
-    }
     hero.airborne = true
+    hero.velocity.y = 16.9
     onEvents(a, 0, [{ type: 'move', hero: 0, move: 'jump' }], 1)
-    expect(frames(1)).toMatchObject({ kind: 'jump', seq: 1 })
-    expect(frames(30).kind).toBe('air')
+    expect(settle(a, hero, 0, 1)).toMatchObject({ kind: 'jump', seq: 1 })
     onEvents(a, 0, [{ type: 'move', hero: 0, move: 'air-jump' }], 40)
-    expect(frames(1)).toMatchObject({ kind: 'air_jump', seq: 2 })
-    // a dash straight after a dash starts over
+    expect(settle(a, hero, 0, 40)).toMatchObject({ kind: 'air_jump', seq: 2 })
+    // a dash straight after a dash starts over, and lasts as long as the engine carries the hero
     onEvents(a, 0, [{ type: 'move', hero: 0, move: 'dash' }], 50)
     onEvents(a, 0, [{ type: 'move', hero: 0, move: 'dash' }], 52)
-    expect(frames(1)).toMatchObject({ kind: 'dash', seq: 4 })
-    // a soft landing gives way at once to a hero that runs on; a standing one sinks into it a moment
+    hero.dashUntil = 64
+    expect(settle(a, hero, 0, 53)).toMatchObject({ kind: 'dash', seq: 4, air: true })
+    // a standing landing sinks into it a moment, then stands
     hero.airborne = false
-    onEvents(a, 0, [{ type: 'move', hero: 0, move: 'land', speed: 4 }], 60)
-    expect(frames(1, 0.1).kind).toBe('run')
+    hero.velocity.y = 0
+    hero.dashUntil = 0
     onEvents(a, 0, [{ type: 'move', hero: 0, move: 'land', speed: 4 }], 70)
-    expect(frames(2).kind).toBe('land')
-    expect(frames(20).kind).toBe('idle')
-    hero.slide = { from: 80, until: 120, x: 0, z: 1 }
-    expect(frames(1, 0.2).kind).toBe('slide')
+    expect(settle(a, hero, 0, 72).kind).toBe('land')
+    expect(settle(a, hero, 0, 100).kind).toBe('idle')
+    hero.slide = { from: 100, until: 140, x: 0, z: 1 }
+    expect(settle(a, hero, 0.2, 101).kind).toBe('slide')
   })
 })
 

@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js'
-import { animClip, animIndex, fitClip, restPose, type RestPose } from '../../arena/client/anim-library'
+import { animClip, animIndex, fitClip, legLength, REFERENCE_DEPTH, restPose, type RestPose } from '../../arena/client/anim-library'
 import { buildModel } from '../../arena/client/body-model'
 import { characterLook } from '../../arena/client/character-look'
 import { heroHue } from '../../arena/client/characters'
-import { libraryMoves, swung } from '../../arena/client/library-gait'
+import { floorLifted, libraryMoves, swung } from '../../arena/client/library-gait'
+import { packClip } from '../../arena/client/motion-pack'
+import { levelToes, soleHeights, torsoDepth } from '../../arena/client/feet'
 import { GAIT_CLIPS } from '../../arena/client/gait'
 import { applyAttitude } from '../../arena/client/metarig/attitude'
 import { ATTITUDE, SWING_TIER, isAttitude, type AttitudeId } from '../../kit/anim/attitude'
@@ -27,6 +29,9 @@ import { characterFile } from '../arena/staging/loadout'
 interface SheetAsk {
   clip?: string
   move?: string
+  /** A clip of the owner's local motion pack (motion-pack.ts), by its action or its id; `variant` picks which. */
+  pack?: string
+  variant?: number
   columns?: number
   bodies?: readonly string[]
   /** Camera round the hero, radians: 0 behind it, as the player sees it, a quarter turn from its left side. */
@@ -36,6 +41,11 @@ interface SheetAsk {
   to?: number
   /** The hips by the legs' true length, not standing height: what the audit tries on the generated heroes. */
   byLegs?: boolean
+  /**
+   * As the game fits it now: the hips by each body's own legs, a move on the floor lifted by its torso's depth, and its
+   * toes kept out of the floor (session 2's leg and floor fixes, clip audit faults 1-3).
+   */
+  fixed?: boolean
   /** A stand-in in each carry slot, as long as what it holds, its grip end marked: where stowed weapons ride. */
   carry?: boolean
 }
@@ -159,11 +169,21 @@ export function ClipSheet() {
     }
 
     const fitted = async (ask: SheetAsk, b: SheetBody) => {
-      const raw = ask.move ? (await movesOf(b.gender, b.attitude)).get(ask.move) : await animClip(b.gender, ask.clip!, 'standard').catch(() => undefined)
+      const raw = ask.pack ? await packClip(ask.pack, (await animIndex('standard'))!.bones, ask.variant) : ask.move ? (await movesOf(b.gender, b.attitude)).get(ask.move) : await animClip(b.gender, ask.clip!, 'standard').catch(() => undefined)
       // a gait loop swings as the body's attitude swings it (library-gait.ts libraryGait)
       const swing = b.attitude && ask.clip && (GAIT_CLIPS as readonly string[]).includes(ask.clip) ? ATTITUDE[b.attitude].swing : undefined
       const source = raw && swing ? swung(raw, swing, SWING_TIER[ask.clip!.split('_')[0] as keyof typeof SWING_TIER] ?? 1) : raw
       if (!source) return undefined
+      if (ask.fixed) {
+        const hips = b.model.getObjectByName('Hips')!
+        const rest = { ...b.rest, legs: legLength(b.model, hips) }
+        const clip = fitClip(source, b.gender, b.build, rest, 'standard')
+        const depth = torsoDepth(b.model, hips, b.model.getObjectByName('Neck')!, b.model.getObjectByName('Head'))
+        const reference = REFERENCE_DEPTH.standard![b.gender]
+        const out = ask.move && depth ? floorLifted(ask.move, clip, depth, reference, rest.hips.y) : clip
+        out.userData = { ...out.userData, fix: { legs: rest.legs, ratio: clip.userData.legRatio, depth } }
+        return out
+      }
       const clip = fitClip(source, b.gender, b.build, b.rest, 'standard')
       if (!ask.byLegs || !b.legs) return clip
       const out = clip.clone()
@@ -175,7 +195,7 @@ export function ClipSheet() {
 
     /** The metres the skin itself goes under the floor at its worst, by body: bones can't say this for a deep chest or a big head. */
     const low = async (ask: SheetAsk) => {
-      const out: Record<string, { depth: number; at: number; touch: number }> = {}
+      const out: Record<string, { depth: number; at: number; touch: number; fix?: unknown }> = {}
       const point = new THREE.Vector3()
       for (const b of (await bodies).filter((x) => !ask.bodies || ask.bodies.includes(x.label))) {
         const clip = await fitted(ask, b)
@@ -187,6 +207,12 @@ export function ClipSheet() {
         action.setLoop(THREE.LoopOnce, 1)
         action.clampWhenFinished = true
         action.play()
+        // fixed: the toes levelled on the ground, as the game's view does after planting (feet.ts levelToes)
+        const toes = (['Left', 'Right'] as const).map((side) => [`${side}ToeBase`, `${side}Toe_End`].map((n) => b.model.getObjectByName(n)!))
+        const feet = (['Left', 'Right'] as const).map((side) => b.model.getObjectByName(`${side}Foot`)!)
+        const aloft = !!ask.move && /^(jump|air|hang|zip|catch|climb|mantle|launched)/.test(ask.move)
+        const soles = ask.fixed && !aloft && toes.flat().every(Boolean) ? soleHeights(b.model, toes.flat(), b.model) : undefined
+        let levelled = 0
         // touch: the lowest the skin gets at its highest frame, so feet that never reach the floor show
         let depth = 0, at = 0, touch = -Infinity
         for (let time = 0; time < clip.duration; time += 1 / 12) {
@@ -194,6 +220,7 @@ export function ClipSheet() {
           action.time = time
           b.mixer.update(0)
           b.model.updateMatrixWorld(true)
+          if (soles) feet.forEach((foot, k) => (levelled += +levelToes(foot, toes[k], soles.slice(k * 2, k * 2 + 2), b.model)))
           for (const mesh of skins) {
             mesh.skeleton.update()
             const count = mesh.geometry.getAttribute('position').count
@@ -205,7 +232,7 @@ export function ClipSheet() {
           }
           touch = Math.max(touch, frame)
         }
-        out[b.label] = { depth: +depth.toFixed(3), at: +at.toFixed(2), touch: +touch.toFixed(3) }
+        out[b.label] = { depth: +depth.toFixed(3), at: +at.toFixed(2), touch: +touch.toFixed(3), ...(clip.userData.fix ? { fix: { ...clip.userData.fix, levelled } } : {}) }
         b.mixer.stopAllAction()
         b.mixer.uncacheClip(clip)
       }

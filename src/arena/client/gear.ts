@@ -1,11 +1,13 @@
 import * as THREE from 'three'
 import { GEAR_SLOTS, type GearSlot } from '../../charter/look.js'
 import type { Gltf } from './character-look.js'
+import { measureFit, pieceFit } from './fit.js'
 
 /**
  * Rigid pieces on a body: each is its own small model (public/kit/pieces/ or a player's generated one), hung on a
  * socket the Blender pipeline placed on the body's bones (tools/blender/humanlib/sockets.py). The piece follows every
- * clip through its bone, so nothing is rigged per piece, and any piece fits any body. Loading lives in held.ts.
+ * clip through its bone, so nothing is rigged per piece, and any piece fits any body: a hand's socket is scaled to the
+ * hand it is on (fit.ts). Loading lives in held.ts.
  */
 
 type Vec3 = [number, number, number]
@@ -71,13 +73,15 @@ function skinnedMesh(model: THREE.Object3D): THREE.SkinnedMesh | undefined {
 
 /**
  * An empty for each socket, parented to its bone at the socket's rest place. The skeleton's inverse bind matrices
- * take the rest pose into each bone's own space, so this works whatever pose the model is in when it's called.
+ * take the rest pose into each bone's own space, so this works whatever pose the model is in when it's called. Each is
+ * a hand's, scaled to the hero's hands as it is drawn (fit.ts, `drawn`): what hangs on it is modelled for the medium body's.
  */
-export function hangSockets(model: THREE.Object3D, sockets: BodySockets): Partial<Record<GearSlot, THREE.Object3D>> {
+export function hangSockets(model: THREE.Object3D, sockets: BodySockets, drawn = 1): Partial<Record<GearSlot, THREE.Object3D>> {
   const mesh = skinnedMesh(model)
   const out: Partial<Record<GearSlot, THREE.Object3D>> = {}
   if (!mesh) return out
   const { bones, boneInverses } = mesh.skeleton
+  const fit = pieceFit(measureFit(model).hand, drawn)
   for (const slot of GEAR_SLOTS) {
     const s = sockets[slot]
     const i = s ? bones.findIndex((b) => b.name === s.bone) : -1
@@ -85,6 +89,7 @@ export function hangSockets(model: THREE.Object3D, sockets: BodySockets): Partia
     const socket = new THREE.Object3D()
     socket.name = `socket:${slot}`
     boneInverses[i].clone().multiply(socketMatrix(s)).decompose(socket.position, socket.quaternion, socket.scale)
+    socket.scale.multiplyScalar(fit)
     bones[i].add(socket)
     out[slot] = socket
   }
@@ -109,9 +114,9 @@ export interface Piece {
 }
 
 /** Hang each piece on its socket. Pieces share their geometry with the loaded file; tinted materials are copies. */
-export function hangPieces(model: THREE.Object3D, pieces: readonly Piece[], sockets: BodySockets): THREE.Object3D[] {
+export function hangPieces(model: THREE.Object3D, pieces: readonly Piece[], sockets: BodySockets, drawn = 1): THREE.Object3D[] {
   if (!pieces.length) return []
-  const hung = hangSockets(model, sockets)
+  const hung = hangSockets(model, sockets, drawn)
   const worn: THREE.Object3D[] = []
   for (const piece of pieces) {
     const socket = hung[piece.socket]

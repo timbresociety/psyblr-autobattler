@@ -219,8 +219,12 @@ function grid(): THREE.Texture | undefined {
   return gridTexture
 }
 
-/** `baked` (client/baked.ts) draws every piece that never breaks in its place, dressed and lit in Blender. */
-export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapLine[] = [], baked?: THREE.Object3D): RuinsView {
+/**
+ * `baked` (client/baked.ts) draws every piece that never breaks in its place, dressed and lit in Blender: the first
+ * `own` of `pieces`, the map's own. Any after them were added to the match (John's lab puts a wall, a tower and the
+ * rest of its course on the deck, engine/lab.ts) and are drawn here as grey boxes, or they would block unseen.
+ */
+export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapLine[] = [], baked?: THREE.Object3D, own = pieces.length): RuinsView {
   const group = new THREE.Group()
   group.name = 'greybox'
   const proxies: THREE.Box3[] = []
@@ -258,12 +262,19 @@ export function buildGreybox(pieces: readonly CoverPiece[], lines: readonly MapL
       return
     }
     // the baked house has its pieces and their trims, all but a ramp's side strips
-    if (baked && !piece.slope) return
-    if (!baked) solids.push(shade(solid(piece), paint(piece, index)))
+    if (baked && !piece.slope && index < own) return
+    if (!baked || index >= own) solids.push(shade(solid(piece), paint(piece, index)))
     if (traversal(piece)) trims.push(...trim(piece))
   })
-  if (baked) group.add(baked)
-  else {
+  if (baked) {
+    group.add(baked)
+    if (solids.length) {
+      const added = new THREE.Mesh(mergeGeometries(solids)!, greyMat)
+      added.name = 'greybox:added'
+      added.castShadow = added.receiveShadow = true
+      group.add(added)
+    }
+  } else {
     const merged = mergeGeometries(solids)!
     bake(merged, pieces)
     const body = new THREE.Mesh(merged, greyMat)

@@ -47,7 +47,7 @@ const run = async (expression) => {
 
 await cdp('Page.enable')
 await cdp('Page.bringToFront')
-await cdp('Page.navigate', { url: `http://localhost:3110/dev/clips${process.env.SHEET_QUERY ?? ''}` })
+await cdp('Page.navigate', { url: `${process.env.SHEET_BASE ?? 'http://localhost:3110'}/dev/clips${process.env.SHEET_QUERY ?? ''}` })
 for (let i = 0; i < 120; i++) {
   await wait(1000)
   if (await run('!!window.__sheet').catch(() => false)) break

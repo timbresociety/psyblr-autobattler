@@ -132,6 +132,17 @@ export function move(hero: HeroState, setup: HeroSetup, command: Command, match?
     hero.stamina -= 1
     hero.stance = 'stand'
     hero.slide = undefined
+    // the cancel rule, for the hero a person plays: a roll gives up whatever it was doing. A blow or a shot still
+    // winding up never lands, a recovery ends there, and a lunge stops carrying the body; so nothing strikes from inside
+    // its roll, and the body is the roll's alone. (A wind-up that roots the hero, an ultimate's, can't be rolled out of:
+    // it isn't free to.) The AI's blows go on through its rolls as they did: cancelling them too takes the melee roles
+    // down far enough that the balance gate retunes the field (measured 2026-11-13), which is a retune of its own
+    const a = hero.action
+    if (person && a && now < a.ends) {
+      if (!a.released) events?.push({ type: 'interrupt', hero: hero.id, slot: a.slot })
+      hero.action = undefined
+      hero.lunge = undefined
+    }
     events?.push({ type: 'move', hero: hero.id, move: 'roll' })
   }
   if (hero.roll && now >= hero.roll.until) hero.roll = undefined

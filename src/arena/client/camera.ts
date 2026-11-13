@@ -15,6 +15,8 @@ import type { Vec3 } from '../engine/maths.js'
  * 0.38 of one to the right and a little over its head, level, with a 60 degree view. The hero stands left of centre
  * at 0.4 of the width, head near the middle, feet near the bottom, and the reticle sits just above and outside its
  * right shoulder (owner, 2026-11-04: ours sat far from the hero, and its rolls read off the line it looked along).
+ * These are a medium hero's metres: the boom is as many of the hero's own heights long, so each takes the hero's size
+ * (owner, 2026-11-13: a colossal hero, 1.6 times as broad from a medium one's distance, stood over the reticle).
  */
 export const HERO_CAMERA = { back: 3.4, right: 0.68, up: 2.0, pitchLimit: 1.2, eyes: 1.62, ahead: 0.12, fov: 60, pitch: 0 }
 /** Following a hero while watching: a little further back and higher than playing it, and how fast it turns with it. */
@@ -33,6 +35,18 @@ const BOOM_LIFT = { tries: [1, 2, 3], up: 8, down: 3 } as const
  * eyes are, in first person.
  */
 const EYES = { follow: 8, overHead: 0.08 }
+/**
+ * How the shoulder camera follows its hero up and down. Across the floor it is fixed to the hero, so aiming and
+ * strafing answer at once; up and down it eases toward the hero's feet at `rate` a second, never more than `rise`
+ * metres under them on the way up or `fall` over them on the way down. So a jump lifts the hero in the frame before the
+ * view follows, a landing settles instead of stopping dead, and steps and ramps don't shake the view. It trails a fall
+ * by half as much, so the hero stays clear of the bottom of the frame and the floor it is falling to stays in view.
+ */
+export const HERO_FOLLOW = { rate: 14, rise: 0.9, fall: 0.45 }
+/** How fast the boom takes a new size, per second, when the hero it is on changes size (a form that grows it). */
+const SIZE_FOLLOW = 3
+/** A wall has pulled the boom in this close, in a medium hero's metres: the camera is in the hero's head. */
+const TOO_CLOSE = 1.2
 /** How fast the camera goes to first person and back, in whole zooms a second. */
 const SCOPE_SPEED = 6
 /** Past this much of the zoom, the hero's own body hides so the camera sees out of its eyes. */
@@ -86,6 +100,10 @@ export class Cameras {
   private lift = 0
   /** How high the played hero's eyes are over its feet, followed smoothly (see EYES). */
   private eyes: number | undefined
+  /** The height the shoulder camera takes the hero's feet to be at, eased toward where they are (see HERO_FOLLOW). */
+  private level: number | undefined
+  /** The size of the hero the boom is on, against a medium one, followed smoothly (see SIZE_FOLLOW). */
+  private size: number | undefined
   /**
    * First person (the canon: the right button held zooms in): `scoping` while it's held, and `scope` how far the
    * camera has gone from over the shoulder to the hero's eyes, 0 to 1. The hero's own body hides past FIRST_PERSON.
@@ -136,11 +154,13 @@ export class Cameras {
     this.blend = 0
     this.boom = undefined
     this.lift = 0
+    this.level = undefined
+    this.size = undefined
   }
 
   /** Whether a wall has pulled the shoulder camera in so close it would sit inside the hero's head. */
   tooClose(): boolean {
-    return this.boom !== undefined && this.boom < 1.2
+    return this.boom !== undefined && this.boom < TOO_CLOSE * (this.size ?? 1)
   }
 
   /** Blend progress 0-1; 1 once settled. */
@@ -217,9 +237,10 @@ export class Cameras {
   /**
    * `hero` is the controlled hero, `followed` the hero the watching camera follows (its drawn position) and
    * `followedYaw` the way it faces, if any. `sight` is the controlled hero's eyes: how high they are over its feet in
-   * the stance it is in, and where its head bone is as last posed, which first person looks out from.
+   * the stance it is in, where its head bone is as last posed, which first person looks out from, and its size against
+   * a medium hero (`followedScale` for the followed one): the boom is that many times as long.
    */
-  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number, wall?: number, sight?: { eyes: number; head?: Vec3 }) {
+  update(dt: number, hero: Vec3 | undefined, proxies: THREE.Box3[], followed?: Vec3, followedYaw?: number, wall?: number, sight?: { eyes: number; head?: Vec3; scale?: number }, followedScale = 1) {
     const following = this.mode === 'free' && this.followed !== undefined && followed !== undefined
     if (this.mode === 'hero' && wall !== undefined) {
       const k = 1 - Math.exp(-dt * HANG_CAMERA.turn)
@@ -238,22 +259,29 @@ export class Cameras {
     const forward = new THREE.Vector3(Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), Math.cos(this.yaw) * Math.cos(this.pitch))
     const toward = this.mode === 'hero' && this.scoping ? 1 : 0
     this.scope += Math.sign(toward - this.scope) * Math.min(Math.abs(toward - this.scope), dt * SCOPE_SPEED)
+    const scale = this.mode === 'hero' && hero ? (sight?.scale ?? 1) : following ? followedScale : undefined
+    const size = scale === undefined ? 1 : this.size === undefined ? scale : this.size + (scale - this.size) * (1 - Math.exp(-dt * SIZE_FOLLOW))
+    this.size = scale === undefined ? undefined : size
     if (this.mode === 'hero' && hero) {
       const s = this.scope * this.scope * (3 - 2 * this.scope)
       const eyes = sight?.eyes ?? HERO_CAMERA.eyes
       this.eyes = this.eyes === undefined ? eyes : this.eyes + (eyes - this.eyes) * (1 - Math.exp(-dt * EYES.follow))
+      // up and down the view eases after the hero, within its lag; frame rate makes no difference to where it is
+      const eased = this.level === undefined ? hero.y : this.level + (hero.y - this.level) * (1 - Math.exp(-dt * HERO_FOLLOW.rate))
+      this.level = Math.max(hero.y - HERO_FOLLOW.rise, Math.min(hero.y + HERO_FOLLOW.fall, eased))
       // over the shoulder the boom hangs as far over the eyes in every stance; in first person it is the head itself
-      const behind = new THREE.Vector3(hero.x, hero.y + this.eyes + HERO_CAMERA.up - HERO_CAMERA.eyes, hero.z)
+      const behind = new THREE.Vector3(hero.x, this.level + this.eyes + (HERO_CAMERA.up - HERO_CAMERA.eyes) * size, hero.z)
       const head = sight?.head ? new THREE.Vector3(sight.head.x, sight.head.y + EYES.overHead, sight.head.z) : new THREE.Vector3(hero.x, hero.y + this.eyes, hero.z)
-      const pivot = underRoof(behind.lerp(head, s), hero.y, proxies)
-      target.copy(this.shoulder(dt, pivot, forward, -HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s, HERO_CAMERA.right * (1 - s), proxies))
+      const pivot = underRoof(behind.lerp(head, s), Math.min(hero.y, this.level), proxies)
+      target.copy(this.shoulder(dt, pivot, forward, (-HERO_CAMERA.back * (1 - s) + HERO_CAMERA.ahead * s) * size, HERO_CAMERA.right * (1 - s) * size, proxies))
     } else if (following) {
-      const pivot = underRoof(new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up, followed.z), followed.y, proxies)
-      target.copy(this.shoulder(dt, pivot, forward, -this.followBack, FOLLOW_CAMERA.right, proxies))
+      const pivot = underRoof(new THREE.Vector3(followed.x, followed.y + FOLLOW_CAMERA.up * size, followed.z), followed.y, proxies)
+      target.copy(this.shoulder(dt, pivot, forward, -this.followBack * size, FOLLOW_CAMERA.right * size, proxies))
       this.free.copy(target)
     } else {
       this.boom = undefined
       this.lift = 0
+      this.level = undefined
       target.copy(this.free)
     }
     const look = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(target, target.clone().add(forward), new THREE.Vector3(0, 1, 0)))

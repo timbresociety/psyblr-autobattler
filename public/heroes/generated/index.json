@@ -1,0 +1,178 @@
+[
+ {
+  "label": "broly",
+  "gender": "m",
+  "height": 2.4,
+  "file": "broly.glb",
+  "form": {
+   "file": "broly-form.glb",
+   "height": 3
+  },
+  "build": {
+   "heroName": "Broly",
+   "roleId": "fighter",
+   "slots": {
+    "basic": {
+     "name": "Rage Barrage",
+     "flavour": "Huge brawler punches and grabs, slams the enemy into the ground",
+     "visual": "heavy fists, green shockwave",
+     "templateId": "melee-unarmed",
+     "swapped": false,
+     "retuneSteps": 0
+    },
+    "active1": {
+     "name": "Ki Blast",
+     "flavour": "Fires a fast green energy blast from one hand",
+     "visual": "green energy bolt",
+     "templateId": "shared-ki-blast",
+     "swapped": false,
+     "retuneSteps": 0
+    },
+    "active2": {
+     "name": "Gigantic Slam",
+     "flavour": "Leaps and smashes the ground, shattering it around him",
+     "visual": "large green sphere, big explosion",
+     "templateId": "fighter-ground-breaker",
+     "swapped": false,
+     "retuneSteps": 0
+    },
+    "passive": {
+     "name": "Endless Rage",
+     "flavour": "Grows stronger the more damage he takes",
+     "visual": "green aura",
+     "templateId": "fighter-berserk",
+     "swapped": false,
+     "retuneSteps": 0
+    },
+    "ultimate": {
+     "name": "Berserk Form",
+     "flavour": "Transforms in a rage, growing into a giant titan with a green aura",
+     "visual": "muscle swell, green and gold aura",
+     "templateId": "fighter-avatar-form",
+     "swapped": false,
+     "retuneSteps": 0
+    },
+    "movement": {
+     "name": "Berserk Rush",
+     "flavour": "Charges forward through the air and rams anything in the way",
+     "visual": "green streak",
+     "templateId": "fighter-gap-closer",
+     "swapped": false,
+     "retuneSteps": 0
+    }
+   },
+   "spread": {
+    "strength": 12,
+    "agility": 12,
+    "intellect": 6
+   },
+   "gate": {
+    "state": "draft"
+   },
+   "sizeClass": "large",
+   "look": {
+    "gender": "m",
+    "colors": {
+     "skin": "#ba7f5e",
+     "iris": "#79248f",
+     "brow": "#24190f"
+    },
+    "skills": {
+     "basic": {
+      "element": "energy",
+      "palette": [
+       "#eaffe0",
+       "#5dff6a",
+       "#0f9d3a"
+      ],
+      "form": "flurry",
+      "pose": "slam"
+     },
+     "active1": {
+      "element": "energy",
+      "palette": [
+       "#eaffe0",
+       "#5dff6a",
+       "#0f9d3a"
+      ],
+      "form": "bolt",
+      "pose": "palm"
+     },
+     "active2": {
+      "element": "energy",
+      "palette": [
+       "#eaffe0",
+       "#5dff6a",
+       "#0f9d3a"
+      ],
+      "form": "quake",
+      "pose": "slam"
+     },
+     "passive": {
+      "element": "energy",
+      "palette": [
+       "#eaffe0",
+       "#5dff6a",
+       "#0f9d3a"
+      ],
+      "form": "glow"
+     },
+     "ultimate": {
+      "element": "energy",
+      "palette": [
+       "#fff8b0",
+       "#9dff3a",
+       "#d9b800"
+      ],
+      "transformation": {
+       "entry": "burst",
+       "aura": "flame",
+       "growth": "swell"
+      },
+      "callout": true,
+      "form": "glow"
+     },
+     "movement": {
+      "element": "energy",
+      "palette": [
+       "#eaffe0",
+       "#5dff6a",
+       "#0f9d3a"
+      ],
+      "form": "streak"
+     }
+    }
+   }
+  }
+ },
+ {
+  "label": "harry",
+  "gender": "m",
+  "height": 1.7,
+  "file": "harry.glb"
+ },
+ {
+  "label": "groot",
+  "gender": "m",
+  "height": 1,
+  "file": "groot.glb"
+ },
+ {
+  "label": "john",
+  "gender": "m",
+  "height": 1.85,
+  "file": "john.glb"
+ },
+ {
+  "label": "large-john",
+  "gender": "m",
+  "height": 2.1,
+  "file": "large-john.glb"
+ },
+ {
+  "label": "colossal-john",
+  "gender": "m",
+  "height": 3,
+  "file": "colossal-john.glb"
+ }
+]

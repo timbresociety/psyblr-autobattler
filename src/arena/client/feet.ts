@@ -153,3 +153,137 @@ export function legReach(upper: THREE.Object3D, lower: THREE.Object3D, end: THRE
   ankle.setFromMatrixPosition(end.matrixWorld)
   turn(lower, spin.setFromUnitVectors(from.subVectors(ankle, knee).normalize(), to.copy(hip).addScaledVector(goal, d).sub(knee).normalize()))
 }
+
+const joint = new THREE.Vector3()
+const reach = new THREE.Vector3()
+const raised = new THREE.Vector3()
+const level = new THREE.Quaternion()
+
+/**
+ * Lift a foot's toes back out of the floor (clip audit 2026-11-05, fault 2): a body whose feet are longer than the
+ * clip's performer's pushes its toes under the floor whenever the heel comes up. The foot turns about the ankle, toes
+ * up, until the lower of its joints `toes` (the ball, the tip) stands no lower than it does at rest: `rest`, each
+ * one's height then, in `ground`'s units over its origin (the floor). World matrices must be current, and are kept
+ * current. True when it turned the foot.
+ */
+export function levelToes(foot: THREE.Object3D, toes: readonly THREE.Object3D[], rest: readonly number[], ground: THREE.Object3D): boolean {
+  ankle.setFromMatrixPosition(foot.matrixWorld)
+  ground.worldToLocal(ankle)
+  let worst = -1
+  let under = 0.002
+  toes.forEach((toe, k) => {
+    const y = ground.worldToLocal(joint.setFromMatrixPosition(toe.matrixWorld)).y
+    if (rest[k] - y > under) ((under = rest[k] - y), (worst = k))
+  })
+  if (worst < 0) return false
+  // the ankle-to-toe line, raised by what that joint is under and swung up round the ankle at its own length
+  ground.worldToLocal(reach.setFromMatrixPosition(toes[worst].matrixWorld)).sub(ankle)
+  const length = reach.length()
+  const y = Math.min(reach.y + under, length * 0.95)
+  const flat = Math.hypot(reach.x, reach.z)
+  if (flat < 1e-4) return false
+  raised.set((reach.x / flat) * Math.sqrt(length * length - y * y), y, (reach.z / flat) * Math.sqrt(length * length - y * y))
+  // a turn in the ground's frame, carried into the world's
+  ground.getWorldQuaternion(parentTurn)
+  level.setFromUnitVectors(reach.normalize(), raised.normalize())
+  level.premultiply(parentTurn).multiply(boneTurn.copy(parentTurn).invert())
+  turn(foot, level)
+  return true
+}
+
+/**
+ * How far a body's torso reaches in front of its hips and behind them at rest, in the units of the hips' parent (the
+ * hips track's), the body facing +z: the skin bound mostly to the back's bones, from the hips up to the neck, in the
+ * bind pose (the arms hang beside it). A deep chest, a belly or a pack goes under the floor where a slim body lies on
+ * it (clip audit 2026-11-05, fault 3). `head`: how far the skin on `head` and below it (hair, horns, a snout) reaches
+ * from its joint in front, behind and on top, what a body lying on its face, on its back or rolled over its head lies on.
+ */
+export function torsoDepth(model: THREE.Object3D, hips: THREE.Object3D, neck: THREE.Object3D, head?: THREE.Object3D): { front: number; back: number; head: HeadReach } | undefined {
+  const frame = hips.parent
+  if (!frame) return undefined
+  model.updateMatrixWorld(true)
+  const into = new THREE.Matrix4()
+  const point = new THREE.Vector3()
+  const low = new THREE.Vector3()
+  const high = new THREE.Vector3()
+  const crown = new THREE.Vector3()
+  let front = -Infinity
+  let back = -Infinity
+  const reach: HeadReach = { front: 0, back: 0, top: 0 }
+  model.traverse((o) => {
+    const skin = o as THREE.SkinnedMesh
+    if (!skin.isSkinnedMesh) return
+    const bones = skin.skeleton.bones
+    const [h, n] = [bones.indexOf(hips as THREE.Bone), bones.indexOf(neck as THREE.Bone)]
+    const position = skin.geometry.getAttribute('position')
+    const joints = skin.geometry.getAttribute('skinIndex')
+    const weights = skin.geometry.getAttribute('skinWeight')
+    if (h < 0 || n < 0 || !position || !joints || !weights) return
+    // the back: the hips and every bone between them and the neck
+    const spine = new Set<number>()
+    for (let b: THREE.Object3D | null = neck.parent; b && b !== frame; b = b.parent) if (bones.includes(b as THREE.Bone)) spine.add(bones.indexOf(b as THREE.Bone))
+    // the head: its bone and everything hung from it
+    const top = new Set<number>()
+    head?.traverse((b) => bones.includes(b as THREE.Bone) && top.add(bones.indexOf(b as THREE.Bone)))
+    into.copy(frame.matrixWorld).invert().multiply(skin.matrixWorld).multiply(skin.bindMatrix)
+    const at = (k: number, out: THREE.Vector3) => out.setFromMatrixPosition(new THREE.Matrix4().copy(skin.skeleton.boneInverses[k]).invert()).applyMatrix4(into)
+    at(h, low)
+    at(n, high)
+    if (head && top.size) at(bones.indexOf(head as THREE.Bone), crown)
+    for (let i = 0; i < position.count; i++) {
+      let share = 0
+      let onHead = 0
+      for (let k = 0; k < 4; k++) {
+        const j = joints.getComponent(i, k)
+        if (spine.has(j)) share += weights.getComponent(i, k)
+        if (top.has(j)) onHead += weights.getComponent(i, k)
+      }
+      if (share < 0.5 && onHead < 0.5) continue
+      point.fromBufferAttribute(position, i).applyMatrix4(into)
+      if (onHead >= 0.5) {
+        reach.front = Math.max(reach.front, point.z - crown.z)
+        reach.back = Math.max(reach.back, crown.z - point.z)
+        reach.top = Math.max(reach.top, point.y - crown.y)
+        continue
+      }
+      if (point.y < low.y || point.y > high.y) continue
+      front = Math.max(front, point.z - low.z)
+      back = Math.max(back, low.z - point.z)
+    }
+  })
+  return front > -Infinity ? { front, back, head: reach } : undefined
+}
+
+/** A head's reach from its joint at rest: in front (+z), behind and above. */
+export type HeadReach = { front: number; back: number; top: number }
+
+/**
+ * How high each of `joints` stands over the soles at rest, in `ground`'s units: its height in the bind pose over the
+ * lowest point of any skin bound to it (the body, or the shoes it wears). An attitude's bent rest lifts the skin and
+ * the joints alike. Undefined when nothing is skinned to them.
+ */
+export function soleHeights(model: THREE.Object3D, joints: readonly THREE.Object3D[], ground: THREE.Object3D): number[] | undefined {
+  const skins: THREE.SkinnedMesh[] = []
+  model.traverse((o) => {
+    const mesh = o as THREE.SkinnedMesh
+    if (mesh.isSkinnedMesh && joints.every((j) => mesh.skeleton.bones.includes(j as THREE.Bone))) skins.push(mesh)
+  })
+  if (!skins.length) return undefined
+  model.updateMatrixWorld(true)
+  ground.updateMatrixWorld(true)
+  const into = new THREE.Matrix4()
+  const point = new THREE.Vector3()
+  let floor = Infinity
+  for (const skin of skins) {
+    // bind space into the ground's frame: the skin's bind matrix, its place in the world, the ground's frame
+    into.copy(ground.matrixWorld).invert().multiply(skin.matrixWorld).multiply(skin.bindMatrix)
+    const position = skin.geometry.getAttribute('position')
+    for (let i = 0; i < position.count; i++) floor = Math.min(floor, point.fromBufferAttribute(position, i).applyMatrix4(into).y)
+  }
+  const skin = skins[0]
+  into.copy(ground.matrixWorld).invert().multiply(skin.matrixWorld).multiply(skin.bindMatrix)
+  return joints.map((j) => {
+    const bind = new THREE.Matrix4().copy(skin.skeleton.boneInverses[skin.skeleton.bones.indexOf(j as THREE.Bone)]).invert()
+    return Math.max(0, point.setFromMatrixPosition(bind).applyMatrix4(into).y - floor)
+  })
+}

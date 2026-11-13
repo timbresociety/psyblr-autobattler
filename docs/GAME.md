@@ -123,6 +123,7 @@ The canon's table, with the owner's change of 2026-11-02: **jump is Space, melee
 | Melee combo | **V** tap, chaining: 1st, 2nd, 3rd hit, the 3rd knocks back |
 | Heavy melee | **V** hold, release to land the charged blow |
 | Block | X (breaks the attacker's combo and blocks damage) |
+| Interact: revive a downed ally (hold), team-up (press beside an ally) | G |
 | Ranged (Skill 1) | Left click |
 | Spell (Skill 2) | Q |
 | Movement skill | E |
@@ -675,7 +676,7 @@ Size and mass scale jump height (§5).
 - **a slide ends crouched**, and **Ctrl at a run dives into prone**;
 - **shots and spells fire from a crouch or prone**, on those stances' own firing clips; only a melee blow stands the hero up first;
 - **the body faces where the camera looks**, and a roll goes straight the way it is pressed, not over a shoulder;
-- **the crosshair is the centre of the camera's view, always:** over the shoulder, the camera rides at the hero's eye height for its stance, so standing, crouched or prone the crosshair keeps its place against the hero; first person looks out of the hero's head, crosshair centred.
+- **the crosshair is the centre of the camera's view, always:** over the shoulder, the camera rides at the hero's eye height for its stance, so standing, crouched or prone the crosshair keeps its place against the hero; first person looks out of the hero's head, crosshair centred. The camera stands as many of the hero's own heights behind it, beside it and above it at every size (a medium hero's 3.4 m back, 0.68 m right and 0.38 m over the eyes, times the size class's scale), so a tiny hero and a colossal one are framed alike and neither stands over the crosshair; it eases out when a form grows the hero. A watched hero is followed the same way.
 
 **Jump pads are in (owner, 2026-11-10),** reversing the 2026-11-04 "rather than floating platforms or arbitrary jump pads": they are shared map pieces, like ziplines. Jump pads and movement skills (E) can add shortcuts, but no important area may need one.
 
@@ -1090,6 +1091,7 @@ Upper-body layers blend aiming and firing over the legs. Melee styles that hold 
 
 ## Changelog
 
+- 2026-11-13: The owner confirmed two rules from the combat and traversal pass (docs/plans/2026-11-13-combat-traversal.md): G is the interact key, for reviving a downed ally and for a team-up (§3); and a dodge roll cancels the blow in progress for a played hero only, the AI's blows going on through its rolls (§5).
 - 2026-11-10: The owner signed session 1: the locked library (§4), the weapon carry slots and stow table, and the clip audit report. Kit switch is R's eighth shape; alternate fire is out; staff, thrust and flexible clips come from phone recordings through video-to-motion; session 2 builds the fixes for bodies that sink into the floor.
 - 2026-11-10: Jump pads are in (§4, §7). Tripo's motions don't fit our heroes, so staff, thrust and flexible clips need another source. Kit switch and alternate fire put to the owner with recommendations.
 - 2026-11-07: Owner's answers to session 1's six questions recorded in §4: yes to every new mechanic, F is an aura (forms move to R), E keeps enhanced shared moves, melee families by combat action (a scythe plays the axe's swings), weapon carry slots that never clash, attitude sets for combat and traversal only. The locked library is drafted in §4 for signature. Proper aura and spell effects are session 4's.

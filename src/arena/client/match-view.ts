@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { BUILD_SLOTS } from '../../charter/build.js'
 import type { Style } from '../../charter/motions.js'
+import { SIZES } from '../../charter/sizes.js'
 import type { BuildSlot } from '../../charter/types.js'
 import type { AiLevel } from '../ai/calibration.js'
 import type { HeroPackage } from '../../forge/package.js'
@@ -203,6 +204,12 @@ export interface Seat {
   held: () => boolean
   /** Run n ticks at the next frame and draw it; resolves once that frame is drawn. */
   step: (n: number) => Promise<SeatRow>
+  /**
+   * Draw the next frame `seconds` of match time on, through the live clock: the ticks that fit run, and the frame is
+   * drawn between the last two states by what's left over. So a script sees a 30, 60 or 120 Hz display's own frames
+   * (1/120 s draws every tick twice, half a tick apart).
+   */
+  frame: (seconds: number) => Promise<SeatRow>
   /** What the played (or followed) hero and the camera are doing now. */
   row: () => SeatRow
 }
@@ -711,8 +718,11 @@ function drawHeroes(
     // impostor not at all
     const every = POSE_EVERY[tier] * (frame.slowFar && tier !== 'near' ? 2 : 1) * (hide ? 2 : 1)
     const far = tier !== 'near'
-    // casts run on the engine's clock, between ticks too, so a clip's release frame lands on its release tick
-    const pose = settle(animators[i], h, moved, frame.clock, frame.dt)
+    // casts run on the engine's clock, between ticks too, so a clip's release frame lands on its release tick; a
+    // cast's follow-through is its clip's, which the view knows
+    const casting = animators[i].state.kind === 'cast' ? animators[i].state : undefined
+    const pose = settle(animators[i], h, moved, frame.clock, frame.dt, { tick: arena.match.tick, alpha: frame.alpha, tail: casting ? view.tail?.(casting) : undefined })
+    view.squash?.(animators[i].squash)
     const scaled = frame.dt * frame.timeScale
     const moving = moved > 0.01
     // the hips turn partway toward the way the hero moves, the legs run the rest at an angle and the chest twists to
@@ -721,7 +731,7 @@ function drawHeroes(
     // way it carries the hero (the way WASD sent it, owner 2026-11-03), its chest turned to the aim as far as it twists,
     // and only a jump straight up or a cast in the air faces the aim whole. A view that can't twist faces its aim whole.
     // The run keeps pace with the ground covered
-    const ground = h.airborne ? 0 : moved * ENGINE.tickHz
+    const ground = h.airborne && !h.wallRun ? 0 : moved * ENGINE.tickHz
     const striding = pose.kind === 'run' || (pose.kind === 'cast' && pose.prep !== undefined && ground > STANCE.stride)
     const flying = h.airborne && pose.kind !== 'cast' && moved * ENGINE.tickHz > STANCE.airTravel
     // a roll, like a slide, faces along its line: the body turns into it and tumbles the way it goes, to the side too, as
@@ -729,7 +739,7 @@ function drawHeroes(
     // facing the aim and plays that way's clip instead (animation.ts, Way)
     const way = animators[i].way
     const sideways = way !== undefined && way !== 'forward' && !(pose.kind === 'roll' && way !== 'back')
-    const mode = pose.kind === 'slide' || pose.kind === 'dive' || ((pose.kind === 'roll' || flying) && !sideways) ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne || pose.kind === 'roll' ? 'square' : 'stand'
+    const mode = pose.kind === 'slide' || pose.kind === 'dive' || pose.kind === 'wall_run' || ((pose.kind === 'roll' || flying) && !sideways) ? 'slide' : pose.kind === 'dash' || (striding && !h.airborne) ? 'run' : h.airborne || pose.kind === 'roll' ? 'square' : 'stand'
     // a view on the motion library's gait sidesteps and backpedals square to its aim, but turns into a dash
     const strafes = view.strafes === true && pose.kind !== 'dash'
     // the played hero faces along the camera's line, as MHUR's do, and looks along it; only a cast's arms reach for the
@@ -762,6 +772,11 @@ function drawHeroes(
       return at
     }
     view.root.position.set(at.x, at.y, at.z)
+    // a climb whose clip was made with its own way up and over is drawn along that way from the top of this ledge
+    // down: it ends where the engine's climb ends, and on the way the body rises and crosses the edge as its hands
+    // and feet were posed for. The engine's own straight path stays what it collides and is hit by
+    const climbed = h.mantle && view.travel?.(pose)
+    if (climbed && h.mantle) climbAlong(view.root.position, h.mantle, climbed)
     yawQ.setFromAxisAngle(up, s?.body ?? faces)
     const tumble = physics?.rotation(i)
     if (tumble) view.root.quaternion.set(tumble.x, tumble.y, tumble.z, tumble.w).multiply(yawQ)
@@ -771,6 +786,16 @@ function drawHeroes(
     ctx.swinging[i] = view.settle?.(scaled, far) ?? false
     return at
   })
+}
+
+/**
+ * Where a climbing body is drawn: from the engine's end of the climb, `way.y` metres up (under it, while the body is
+ * below the top) and `way.z` of the way back across to where the climb started; `way.share` of the way there from
+ * where `out` has it (the engine's place), while the climb's pose is still blending in. Written to `out`.
+ */
+export function climbAlong(out: THREE.Vector3, m: NonNullable<HeroState['mantle']>, way: { y: number; z: number; share?: number }): THREE.Vector3 {
+  const k = way.share ?? 1
+  return out.set(out.x + (m.x1 + (m.x0 - m.x1) * way.z - out.x) * k, out.y + (m.y1 + way.y - out.y) * k, out.z + (m.z1 + (m.z0 - m.z1) * way.z - out.z) * k)
 }
 
 const palms = new THREE.Vector3()
@@ -840,8 +865,10 @@ export async function startArena(host: HTMLElement, setup: MatchSetup, onProgres
 async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, total: number) => void, keepPhysics: (p: CosmeticPhysics | undefined) => void, signal?: AbortSignal): Promise<ArenaController> {
   const { renderer, scene, camera, map } = stage
   // the range's drills (a dummy standing idle) play without the house's edge and vault
-  // every live match is recorded from its setup, so it can be played again tick for tick (engine/replay.ts)
-  const recorded: RecordedSetup = setup.replay?.setup ?? { teams: setup.teams, seed: setup.seed, formations: setup.formations, idle: setup.idle, aiLevels: setup.aiLevels, side: setup.side, map: LIVE_MAP, ...(setup.lab ? { lab: setup.lab } : {}) }
+  // every live match is recorded from its setup, so it can be played again tick for tick (engine/replay.ts); and every
+  // one plays the full kit (GAME.md §4), since a person may take a hero in any of them. An older recording says
+  // nothing of it and plays back without, as it was played
+  const recorded: RecordedSetup = setup.replay?.setup ?? { teams: setup.teams, seed: setup.seed, formations: setup.formations, idle: setup.idle, aiLevels: setup.aiLevels, side: setup.side, map: LIVE_MAP, fullKit: true, ...(setup.lab ? { lab: setup.lab } : {}) }
   const arena = arenaFor(recorded)
   const recorder: Recorder | undefined = setup.replay ? undefined : createRecorder(recorded, import.meta.env.MODE)
   const feed = setup.replay ? playback(setup.replay) : undefined
@@ -892,7 +919,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // Instinct in grey boxes (GAME.md §8), or the ruins
   const cover = arena.match.cover
   const baked = cover && arena.match.map === 'house' ? await loadBakedHouse(stage.sun, renderer) : undefined
-  const ruins = cover ? (arena.match.map === 'house' ? buildGreybox(cover.pieces, arena.match.lines, baked) : buildRuins(cover.pieces)) : undefined
+  const ruins = cover ? (arena.match.map === 'house' ? buildGreybox(cover.pieces, arena.match.lines, baked, MAPS.house.pieces.length) : buildRuins(cover.pieces)) : undefined
   if (ruins) {
     scene.add(ruins.group)
     map.proxies.push(...ruins.proxies)
@@ -957,6 +984,7 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
   // the seat: held, nothing moves on wall time; `step` books ticks for the next frame
   let seatHeld = false
   let booked = 0
+  let bookedSeconds = 0
   let stepped: ((row: SeatRow) => void)[] = []
   // the animation clock: time drawn so far (slowed with the fight), not the wall's, so a held frame stays put
   let shown = 0
@@ -981,9 +1009,11 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     const speed = seatHeld ? 1 : (hooks.speed?.() ?? 1)
     // a long step draws as one frame of at most MAX_FRAME_SECONDS, as a stalled live frame does: cloth, debris and blends
     // integrate in small steps, and a four-second one blows them apart
-    const dt = seatHeld ? Math.min(MAX_FRAME_SECONDS, booked / ENGINE.tickHz) : wall
-    const run = seatHeld ? { ticks: booked, alpha: 1 } : frame(clock, dt * speed)
+    const timed = seatHeld && bookedSeconds > 0
+    const dt = timed ? Math.min(MAX_FRAME_SECONDS, bookedSeconds) : seatHeld ? Math.min(MAX_FRAME_SECONDS, booked / ENGINE.tickHz) : wall
+    const run = seatHeld && !timed ? { ticks: booked, alpha: 1 } : frame(clock, dt * speed)
     booked = 0
+    bookedSeconds = 0
     const { ticks, alpha } = run
     const scale = hooks.timeScale?.() ?? 1
     const elapsed = clock.paused && !seatHeld ? 0 : dt * speed * ENGINE.tickHz
@@ -1036,8 +1066,8 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
     // the shoulder camera rides at the played hero's eye height for its stance, and first person looks out of its head
     const me = arena.match.human
     const head = me !== undefined && cameras.scope > 0 ? headBone(views[me].root)?.getWorldPosition(headAt) : undefined
-    const sight = me !== undefined ? { eyes: capsule(arena.match.heroes[me]).height * (HERO_CAMERA.eyes / ENGINE.capsule.height), head } : undefined
-    cameras.update(dt, me !== undefined ? drawn[me] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz), sight)
+    const sight = me !== undefined ? { eyes: capsule(arena.match.heroes[me]).height * (HERO_CAMERA.eyes / ENGINE.capsule.height), head, scale: SIZES[arena.match.heroes[me].size].scale } : undefined
+    cameras.update(dt, me !== undefined ? drawn[me] : undefined, map.proxies, follow !== undefined ? drawn[follow] : undefined, follow !== undefined ? arena.match.heroes[follow].yaw : undefined, hang && Math.atan2(-hang.nx, -hang.nz), sight, follow !== undefined ? SIZES[arena.match.heroes[follow].size].scale : 1)
     // in first person the camera looks out of the hero's eyes, so its own body isn't drawn; nor is the body of a hero
     // played or followed when a wall has pulled the camera into its head; on a ledge the body stays, or a hero hanging
     // in a narrow gap leaves nothing on screen but the wall (owner, 2026-11-05)
@@ -1136,6 +1166,11 @@ async function run(stage: Stage, setup: MatchSetup, onProgress: (done: number, t
       step: (n) =>
         new Promise<SeatRow>((resolve) => {
           booked += Math.max(0, Math.floor(n))
+          stepped.push(resolve)
+        }),
+      frame: (seconds) =>
+        new Promise<SeatRow>((resolve) => {
+          bookedSeconds += Math.max(0, seconds)
           stepped.push(resolve)
         }),
       row: () => seatRow(),

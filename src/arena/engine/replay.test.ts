@@ -82,3 +82,27 @@ describe('session recording and replay (owner, 2026-11-03)', () => {
     expect(replay(bent).diverged?.tick).toBe(Math.ceil(row[0] / CHECK_EVERY) * CHECK_EVERY)
   })
 })
+
+describe('the full kit in a played match (combat and traversal pass, 2026-11-13)', () => {
+  it('is on when the setup says so, and off for a recording made before it could say', () => {
+    expect(arenaFor({ ...setup(), fullKit: true }).match.fullKit).toBe(true)
+    expect(arenaFor(setup()).match.fullKit).toBeUndefined()
+  })
+
+  it('a recorded match with it on replays to the same state', () => {
+    const s = { ...setup(), fullKit: true }
+    const arena = arenaFor(s)
+    const rules = matchRules(arena)
+    const rec = createRecorder(s)
+    arena.match.human = 0
+    while (arena.match.tick < 600 && arena.match.winner === undefined) {
+      const command = scripted(arena.match.tick)
+      rec.input(arena, command)
+      advance(arena, rules, s.idle, command)
+      rec.after(arena)
+    }
+    const again = replay(rec.recording)
+    expect(again.diverged).toBeUndefined()
+    expect(hashState(again.arena.match)).toBe(hashState(arena.match))
+  })
+})

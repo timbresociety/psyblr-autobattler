@@ -1,10 +1,10 @@
 import type { Build } from '../../charter/build'
 import { defaultLook } from '../../charter/look'
 import { ALL_SIZE_CLASSES, SIZES, type SizeClass } from '../../charter/sizes'
-import type { MeleeStyle } from '../../charter/types'
+import type { BuildSlot, MeleeStyle } from '../../charter/types'
 import { heroHue } from '../../arena/client/character-look'
 import type { BotMode, LabBot } from '../../arena/engine/lab'
-import { MELEE_SETS, shotClips, skillClips } from '../../arena/recipes/motions'
+import { MELEE_SETS, shotClips, skillClips, templateKey } from '../../arena/recipes/motions'
 import { DEFAULT_KIT, labArms, labTemplate, lmb as lmbWeapon, LMB_FAMILIES, V_OPTIONS, type LabKit, type LmbFamily, type LmbFlight, type LmbMode } from '../../arena/lab/library'
 import { STARTERS, starterBuild } from '../../arena/starters'
 import type { AttitudeId } from '../../kit/anim/attitude'
@@ -111,13 +111,18 @@ export function johnBuild(prefs: Prefs, john: John): Build {
     if (clip) taken.add(clip)
     return clip
   }
-  const shot = own(shotClips(lmbWeapon(prefs.lmb.family, prefs.lmb.mode, prefs.lmb.flight)))
+  const weapon = lmbWeapon(prefs.lmb.family, prefs.lmb.mode, prefs.lmb.flight)
+  const shot = own(shotClips(weapon))
   if (shot) build.look.motions = { ...build.look.motions, active1: shot }
+  // and what each is, for any other source of clips that goes by that (the stand-ins' own templates would say otherwise)
+  const kinds: Partial<Record<BuildSlot, string | undefined>> = { active1: templateKey(weapon, 'active1') }
   for (const slot of ['active2', 'movement', 'passive', 'ultimate'] as const) {
     const pick = labTemplate(prefs.kit[slot])?.template
     const clip = pick && own(skillClips(pick, slot, style))
     if (clip) build.look.motions = { ...build.look.motions, [slot]: clip }
+    if (pick) kinds[slot] = templateKey(pick, slot)
   }
+  build.look.kinds = Object.fromEntries(Object.entries(kinds).filter(([, key]) => key)) as Partial<Record<BuildSlot, string>>
   delete build.look.gear
   build.look.arms = labArms(style, prefs.lmb.family)
   return build

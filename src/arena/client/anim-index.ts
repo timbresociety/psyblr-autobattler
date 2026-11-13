@@ -49,7 +49,11 @@ export interface AnimIndex {
 /** A clip's tags on a gender's body, if the library has them. */
 export const clipTags = (index: AnimIndex | undefined, gender: Gender, clip: string): ClipTags | undefined => index?.genders[gender]?.tags?.[clip]
 
-/** Seconds into each combat clip where its blow lands, from the index's marks as each index loads (see castTime). */
+/**
+ * Seconds into each combat clip where its blow lands, from the index's marks as each index loads: in the clip's own
+ * seconds as the library has it, under its own name. A clip that plays cut, retimed or renamed finds its mark through
+ * its source (clip-source.ts, characters.ts castSpan).
+ */
 export const MOTION_RELEASE = new Map<string, number>()
 
 const indexes = new Map<RigKind, Promise<AnimIndex | undefined>>()

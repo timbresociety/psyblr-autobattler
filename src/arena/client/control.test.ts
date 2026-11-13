@@ -47,6 +47,8 @@ describe('takeover and controls (U17)', () => {
     expect(moves('ControlLeft')).toBe(MOVES.prone)
     expect(moves('KeyZ')).toBe(MOVES.dodge)
     expect(moves('KeyX')).toBe(MOVES.block)
+    // G is the interact key: held by a downed ally it revives, pressed by a standing one it asks for a team-up
+    expect(moves('KeyG')).toBe(MOVES.interact)
     const buttons = (...keys: string[]) => commandFrom({ held: new Set(keys) }, 0, 0).buttons
     expect(buttons('KeyV')).toBe(slotBit('basic'))
     expect(buttons('Mouse0')).toBe(slotBit('active1'))

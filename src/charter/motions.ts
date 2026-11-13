@@ -41,31 +41,30 @@ export const MOTIONS: readonly Motion[] = [
     punch_combo: 'Punch combo',
     combo_punch: 'Combo punch',
     quad_punch: 'Four punches',
-    punch_to_elbow_combo: 'Punch to elbow',
+    short_hook_punch_to_the_head: 'Short hook',
     knee_jabs_to_uppercut: 'Knees to uppercut',
+    elbow_uppercut_combo: 'Elbow uppercut',
     illegal_knee: 'Knee',
   }),
   ...m('heavy', 'unarmed', {
-    elbow_uppercut_combo: 'Elbow uppercut',
     flying_knee_punch_combo: 'Flying knee',
-    surprise_uppercut: 'Surprise uppercut',
+    long_hook_punch_to_the_head: 'Long hook',
   }),
   ...m('light', 'kicks', {
     roundhouse_kick: 'Roundhouse',
     side_kick: 'Side kick',
-    inside_crescent_kick: 'Crescent kick',
+    male_thrust_kick_with_the_lead_foot: 'Lead thrust kick',
     mma_kick: 'Low kick',
     knee_kick_lead: 'Knee, kick',
-    flip_kick: 'Flip kick',
-    scissor_kick: 'Scissor kick',
+    double_front_snap_kick: 'Double snap kick',
   }),
   ...m('heavy', 'kicks', {
-    hurricane_kick: 'Hurricane kick',
+    roundhouse_kick_with_the_rear_foot: 'Rear roundhouse',
     flying_kick: 'Flying kick',
-    spin_flip_kick: 'Spinning flip kick',
-    back_flip_to_uppercut: 'Backflip uppercut',
-    drop_kick: 'Drop kick',
-    flying_bicycle_kick: 'Bicycle kick',
+    martelo_2: 'Martelo',
+    '360_leg_sweep_kick': 'Leg sweep',
+    male_thrust_kick_with_the_rear_foot: 'Rear thrust kick',
+    standing_melee_kick: 'Standing kick',
   }),
   // melee, blades and clubs
   // a one-hand edge cuts wide and stabs; a pair of short blades fights close, inside and outside the guard
@@ -75,12 +74,11 @@ export const MOTIONS: readonly Motion[] = [
   ...m('heavy', 'paired', { dual_weapon_combo: 'Twin blade combo' }),
   ...m('heavy', 'greatsword', { two_hand_sword_combo: 'Two-hand combo' }),
   // smash: the two-handed bat swings, for the maul
-  ...m('light', 'club', { club_swing_single: 'Club swing', club_swing_double: 'Double swing', two_hand_club_combo: 'Two-hand club combo', club_swing_strike: 'Club strike', one_hand_club_combo: 'Club combo' }),
+  ...m('light', 'club', { club_swing_single: 'Club swing', club_swing_double: 'Double swing', two_hand_club_combo: 'Two-hand club combo', one_hand_club_combo: 'Club combo' }),
   ...m('heavy', 'club', { heavy_weapon_swing: 'Ground smash', club_swing_homerun: 'Home run' }),
   // a pole held in both hands: the staff jabs with its end, sweeps its shaft and spins; the spear thrusts
   ...m('light', 'staff', { rifle_butt_smash: 'End jab', rifle_punch: 'Shaft strike', butterfly_twirl: 'Spinning sweep' }),
   ...m('light', 'spear', { gs_great_sword_attack: 'Thrust', thrust_slash: 'Thrust and sweep', bayonet_stab: 'Lunging impale' }),
-  ...m('heavy', 'spear', { charge: 'Charging thrust' }),
   // a lash: rising, overhead and wound-up cracks of the arm, and a flail swung round in both hands
   ...m('light', 'whip', { bash: 'Rising lash', mutant_punch: 'Overhead crack', goalie_throw: 'Wound-up crack' }),
   ...m('heavy', 'whip', { russian_kettlebell_swing: 'Flail swing' }),
@@ -95,7 +93,7 @@ export const MOTIONS: readonly Motion[] = [
   }),
   ...m('heavy', 'greatsword', { gs_great_sword_jump_attack: 'Leaping cleave', gs_great_sword_slide_attack: 'Sliding cut' }),
   ...m('heavy', 'staff', { gs_great_sword_high_spin_attack: 'Spinning strike' }),
-  ...m('spell', 'greatsword', { gs_great_sword_casting: 'Blade rite', gs_great_sword_power_up: 'Blade surge' }),
+  ...m('spell', 'greatsword', { gs_great_sword_casting: 'Blade rite' }),
   ...m('light', 'shield', {
     ss_sword_and_shield_slash: 'Shield slash',
     ss_sword_and_shield_slash_2: 'Low slash',
@@ -106,7 +104,7 @@ export const MOTIONS: readonly Motion[] = [
     ss_sword_and_shield_attack_2: 'Lunge',
   }),
   ...m('heavy', 'shield', { ss_sword_and_shield_attack_3: 'Driving cut', ss_sword_and_shield_attack_4: 'Shield combo', ss_sword_and_shield_kick: 'Shield kick' }),
-  ...m('spell', 'shield', { ss_sword_and_shield_casting: 'Oath', ss_sword_and_shield_casting_2: 'Rally', ss_sword_and_shield_power_up: 'Bulwark' }),
+  ...m('spell', 'shield', { ss_sword_and_shield_casting_2: 'Rally', ss_sword_and_shield_power_up: 'Bulwark' }),
   // chop and reap: the axe pack's chops and sweeps (its two kicks are no axe's blows, owner 2026-11-11)
   ...m('light', 'axe', {
     axe_standing_melee_attack_downward: 'Chop',
@@ -123,23 +121,20 @@ export const MOTIONS: readonly Motion[] = [
   ...m('ultimate', 'axe', { axe_standing_melee_run_jump_attack: 'Leaping chop' }),
   ...m('passive', 'axe', { axe_standing_taunt_battlecry: 'Axe cry', axe_standing_taunt_chest_thump: 'Axe thump' }),
   // ranged
-  ...m('ranged', 'pistol', { pistol_fire: 'Pistol shot', ual_pistol_shoot: 'Snap shot', shooting_pistol: 'Pistol volley', shooting_gun: 'Gun shot', gunplay: 'Gunplay', pistol_aim: 'Aimed shot' }),
-  ...m('ranged', 'rifle', { firing_rifle: 'Rifle fire', fire_rifle: 'Rifle shot', shoot_rifle: 'Rifle burst', crouch_rapid_fire: 'Rapid fire' }),
+  ...m('ranged', 'pistol', { pistol_fire: 'Pistol shot', ual_pistol_shoot: 'Snap shot', pistol_aim: 'Aimed shot' }),
+  ...m('ranged', 'rifle', { shoot_rifle: 'Rifle shot', firing_rifle: 'Rifle fire', crouch_rapid_fire: 'Rapid fire' }),
   ...m('ranged', 'bow', { standing_aim_recoil: 'Loose', shooting_arrow: 'Draw and loose', standing_draw_arrow: 'Nock' }),
   ...m('light', 'rifle', { rifle_turn_and_kick: 'Turn and kick' }),
-  ...m('heavy', 'pistol', { pistol_whip: 'Pistol whip' }),
+  ...m('heavy', 'pistol', { hook_punch_with_the_rear_hand: 'Rear hook' }),
   ...m('ranged', 'any', {
     throw: 'Throw',
     throwing: 'Overhand throw',
     throw_object: 'Hurl',
     rifle_toss_grenade: 'Lobbed toss',
-    run_and_throw_grenade: 'Running throw',
-    frisbee_throw: 'Disc throw',
   }),
   ...m('ranged', 'magic', {
     fireball: 'Fireball',
     magic_standing_1h_magic_attack_01: 'Bolt',
-    magic_standing_1h_magic_attack_02: 'Flick bolt',
     magic_standing_1h_magic_attack_03: 'Sidearm bolt',
     magic_standing_2h_magic_attack_01: 'Blast',
     magic_standing_2h_magic_attack_02: 'Pushing blast',
@@ -152,7 +147,6 @@ export const MOTIONS: readonly Motion[] = [
     magic_heal: 'Heal',
     casting_spell: 'Casting',
     spell_cast: 'Spell',
-    spell_casting: 'Incantation',
     two_hand_spell_casting: 'Two-hand cast',
     wide_arm_spell_casting: 'Wide cast',
     magic_spell_casting: 'Weave',
@@ -161,29 +155,22 @@ export const MOTIONS: readonly Motion[] = [
   }),
   // movement
   ...m('movement', 'any', {
-    sprinting_forward_roll: 'Sprinting roll',
     running_dive_roll: 'Diving roll',
     dive_roll: 'Dive roll',
     aerial_evade: 'Aerial evade',
     corkscrew_evade: 'Corkscrew',
-    big_jump: 'Great leap',
     sprint_to_backslide: 'Backslide',
   }),
   // ultimates
   ...m('ultimate', 'any', {
     mutant_jump_attack: 'Crashing leap',
     jump_attack: 'Leaping strike',
-    flying_shoulder_throw: 'Shoulder throw',
-    shoulder_throw_aggressor: 'Throw down',
-    knock_off_assailant: 'Shake off',
-    capoeira: 'Capoeira',
   }),
   ...m('ultimate', 'magic', { magic_standing_2h_magic_area_attack_01: 'Ground burst', magic_standing_2h_magic_area_attack_02: 'Nova' }),
   // passive toggles
   ...m('passive', 'any', { standing_taunt_battlecry: 'Battle cry', standing_taunt_chest_thump: 'Chest thump', taunt: 'Taunt' }),
   // the body's own moves
   ...m('dodge', 'any', {
-    standing_dodge_forward: 'Dodge forward',
     standing_dodge_backward: 'Dodge back',
     standing_dodge_left: 'Dodge left',
     standing_dodge_right: 'Dodge right',
@@ -192,16 +179,15 @@ export const MOTIONS: readonly Motion[] = [
     backflip: 'Backflip',
   }),
   // guards that hold: each weapon's own, then bare hands'
-  ...m('block', 'greatsword', { gs_great_sword_blocking: 'Blade guard' }),
+  ...m('block', 'greatsword', { gs_great_sword_blocking_2: 'Blade guard' }),
   ...m('block', 'shield', { ss_sword_and_shield_block_idle: 'Shield guard', ss_sword_and_shield_crouch_block_idle: 'Low shield guard' }),
   ...m('block', 'staff', { axe_standing_block_idle: 'Staff guard' }),
   ...m('block', 'magic', { magic_standing_block_idle: 'Ward' }),
-  ...m('block', 'any', { standing_block_idle: 'Guard', blocking: 'Block' }),
-  ...m('react', 'any', { standing_block_start: 'Guard up', standing_block_end: 'Guard down', standing_block_react_large: 'Guard hit', body_block: 'Body block', hit_to_head: 'Hit to head', hit_to_body: 'Hit to body', big_hit_to_head: 'Big hit to head', big_stomach_hit: 'Big hit to gut', big_side_hit: 'Big side hit', receiving_a_big_uppercut: 'Rocked' }),
+  ...m('block', 'any', { standing_block_idle: 'Guard' }),
+  ...m('react', 'any', { standing_block_start: 'Guard up', standing_block_end: 'Guard down', standing_block_react_large: 'Guard hit', body_block: 'Body block', receiving_a_medium_hit_to_the_head_from_a_left: 'Hit to head', hit_to_body: 'Hit to body', big_hit_to_head: 'Big hit to head', big_stomach_hit: 'Big hit to gut', big_side_hit: 'Big side hit', receiving_a_big_uppercut: 'Rocked' }),
   ...m('knockdown', 'any', {
     knocked_down: 'Knocked down',
     getting_up: 'Getting up',
-    stand_up: 'Stand up',
     inverted_double_kick_to_kip_up: 'Kip up',
     fall_a_loop: 'Falling',
     fall_a_land_to_standing_idle_01: 'Land',
@@ -209,24 +195,19 @@ export const MOTIONS: readonly Motion[] = [
     falling_to_landing: 'Hard landing',
     sweep_fall: 'Swept',
     shoulder_hit_and_fall: 'Spun down',
-    flying_back_death: 'Blown back',
     falling_back_death: 'Falls back',
-    getting_thrown: 'Thrown',
   }),
-  ...m('jump', 'any', { jump: 'Jump', running_jump: 'Running jump', jump_up: 'Jump up' }),
+  ...m('jump', 'any', { unarmed_jump: 'Jump', running_jump: 'Running jump' }),
   ...m('move', 'any', {
-    sprint_forward: 'Sprint',
-    sprint_forward_left: 'Sprint left',
-    sprint_forward_right: 'Sprint right',
+    sprint: 'Sprint',
     sprint_backward: 'Sprint back',
     idle_to_sprint: 'Burst',
     crouch_to_prone: 'Go prone',
     prone_to_crouch_transition: 'Up from prone',
-    prone_idle: 'Prone',
+    prone_forward_stop: 'Prone',
     prone_forward: 'Crawl',
-    crawl_backwards_in_prone: 'Crawl back',
+    crawling_backwards: 'Crawl back',
     prone_left_turn: 'Prone turn left',
-    prone_right_turn: 'Prone turn right',
     prone_roll: 'Prone roll',
     crouch_walk_forward: 'Crouch walk',
     crouch_walk_back: 'Crouch back',
@@ -235,7 +216,6 @@ export const MOTIONS: readonly Motion[] = [
     crouch_idle: 'Crouch',
     running_slide_pose: 'Slide',
     rifle_aiming_idle: 'Rifle aim',
-    aiming_gun: 'Gun aim',
   }),
 ]
 
@@ -281,12 +261,12 @@ export const MOTION_SKILL: Partial<Record<MotionSlot, BuildSlot>> = { combo1: 'b
 export const COMMON_MOTIONS = {
   passive: { clip: 'spell_cast', label: 'Passive on and off (F)' },
   movement: { clip: 'idle_to_sprint', label: 'Movement skill (E)' },
-  dodge: { clip: 'sprinting_forward_roll', label: 'Dodge roll' },
+  dodge: { clip: 'quick_roll_to_run', label: 'Dodge roll' },
   slide: { clip: 'running_slide_pose', label: 'Crouch slide' },
-  dash: { clip: 'standing_dodge_forward', label: 'Dash ahead (Shift)' },
+  dash: { clip: 'idle_to_sprint', label: 'Dash ahead (Shift)' },
   move: { clip: 'jog', label: 'Move (jog)' },
   sprint: { clip: 'run', label: 'Sprint (run)' },
-  prone: { clip: 'prone_idle', label: 'Prone' },
+  prone: { clip: 'prone_forward_stop', label: 'Prone' },
   crouch: { clip: 'crouch_idle', label: 'Crouch' },
 } as const
 
@@ -303,10 +283,10 @@ export const SLOT_KINDS: Record<BuildSlot, readonly MotionKind[]> = {
 /** Words in a skill's name or tags that say what the body does, and the clips and kinds that show it, best first. */
 const FITS: readonly { words: RegExp; clips?: readonly string[]; kinds: readonly MotionKind[] }[] = [
   // raising a wall or armour: the hero calls it up with its weapon raised (the guard itself is the Block's own motion)
-  { words: /\b(barricade|wall|shield|bulwark|fortify|fortress|rampart|block|guard|iron|skin|hide|unshaken|immovable|unbreakable|stone|armor|phalanx|aegis|bastion|cover)\b/, clips: ['ss_sword_and_shield_power_up', 'gs_great_sword_power_up', 'ss_sword_and_shield_casting_2'], kinds: ['spell'] },
+  { words: /\b(barricade|wall|shield|bulwark|fortify|fortress|rampart|block|guard|iron|skin|hide|unshaken|immovable|unbreakable|stone|armor|phalanx|aegis|bastion|cover)\b/, clips: ['ss_sword_and_shield_power_up', 'ss_sword_and_shield_casting_2'], kinds: ['spell'] },
   { words: /\b(heal|renew|mend|regen|recover|second-wind|sanctuary|blessing|benediction|cleanse|restore)\b/, clips: ['magic_heal'], kinds: ['spell'] },
-  { words: /\b(throw|throwing|toss|hurl|hook|chain|bolas|knife|knives|kunai|grenade|dice|net|harpoon|shuriken)\b/, clips: ['throw', 'throwing', 'throw_object', 'grenade_throw', 'frisbee_throw', 'throwing_dice', 'throw_grenade'], kinds: ['ranged'] },
-  { words: /\b(rifle|gun|shot|shoot|sniper|cannon|pistol|bullet|blaster|shotgun|nail-gun|rail)\b/, clips: ['firing_rifle', 'fire_rifle', 'shoot_rifle', 'shooting_gun', 'shooting_pistol', 'gunplay'], kinds: ['ranged'] },
+  { words: /\b(throw|throwing|toss|hurl|hook|chain|bolas|knife|knives|kunai|grenade|dice|net|harpoon|shuriken)\b/, clips: ['throw', 'throwing', 'throw_object'], kinds: ['ranged'] },
+  { words: /\b(rifle|gun|shot|shoot|sniper|cannon|pistol|bullet|blaster|shotgun|nail-gun|rail)\b/, clips: ['shoot_rifle', 'pistol_fire', 'ual_pistol_shoot'], kinds: ['ranged'] },
   { words: /\b(rally|war-cry|cry|roar|bloodlust|rage|fury|taunt|focus|instinct|precision|aim)\b/, kinds: ['passive', 'spell'] },
   { words: /\b(slam|smash|stomp|quake|leap|crater|avalanche|meteor)\b/, clips: ['mutant_jump_attack', 'jump_attack', 'gs_great_sword_jump_attack', 'axe_standing_melee_run_jump_attack'], kinds: ['ultimate', 'heavy'] },
 ]

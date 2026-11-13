@@ -16,10 +16,11 @@ import { formLookOf, skillLookOf } from '../recipes/looks.js'
 import { formCharacterLook, V2_BODIES } from './character-look.js'
 import { characterLook, characterView, heroHue, loadBuild } from './characters.js'
 import { heroAtlas } from './face/hero-face.js'
-import { akimboed, libraryGait, libraryMoves } from './library-gait.js'
+import { akimboed, cut, libraryGait, libraryMoves, named, type LibraryGait } from './library-gait.js'
+import { packGait, packMoves, packSkills } from './motion-pack.js'
 import { WEAPON_MOVES, weaponOf } from '../../kit/anim/weapon-gait.js'
 import { animIndex } from './anim-index.js'
-import { blockMotion, carriedStyle, meleeSet, skillMotion } from '../recipes/motions.js'
+import { blockMotion, carriedStyle, meleeSet, skillKey, skillMotion } from '../recipes/motions.js'
 import type { RigKind } from './rig.js'
 import { akimbo, handFrames } from './arms.js'
 import { loadKit } from './held.js'
@@ -86,9 +87,15 @@ export interface HeroView {
   aim?: (yaw: number, pitch: number) => void
   /** Whether it sidesteps and backpedals on clips of its own, its hips square to its aim (see CharacterView.strafes). */
   strafes?: boolean
+  /** Sink the hips over a landing taken at a run (see CharacterView.squash). */
+  squash?: (metres: number) => void
+  /** Seconds a cast's clip follows through after its contact frame (see CharacterView.tail). */
+  tail?: (state: AnimState) => number
+  /** A climb's own travel, where its clip has one (see CharacterView.travel). */
+  travel?: (state: AnimState) => { y: number; z: number; share: number } | undefined
 }
 
-const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle', mantle: 'jump', land_roll: 'dive', land_heavy: 'idle', zip: 'dive', rail: 'idle', catch: 'climb', climb: 'climb', hang: 'climb', hang_left: 'climb', hang_right: 'climb', dive: 'dive' }
+const PRESET_FOR: Record<AnimState['kind'], Preset> = { idle: 'idle', run: 'run', air: 'dive', jump: 'jump', air_jump: 'jump', dash: 'run', slide: 'run', land: 'idle', cast: 'slash', hit: 'hurt', stunned: 'hurt', dead: 'fall', roll: 'dive', block: 'idle', crouch: 'idle', crouch_move: 'walk', prone: 'idle', prone_move: 'walk', launched: 'dive', charge: 'idle', toggle: 'idle', mantle: 'jump', land_roll: 'dive', land_heavy: 'idle', zip: 'dive', rail: 'idle', catch: 'climb', climb: 'climb', hang: 'climb', hang_left: 'climb', hang_right: 'climb', dive: 'dive', down: 'fall', get_up: 'idle', block_hit: 'hurt', regain: 'dive', wall_run: 'run', glide: 'dive', swing: 'dive', crawl: 'climb', ride: 'idle' }
 
 function proceduralView(build: Build, index: number, fallback: boolean): HeroView {
   const hue = heroHue(build.heroName)
@@ -106,6 +113,24 @@ function proceduralView(build: Build, index: number, fallback: boolean): HeroVie
   }
 }
 
+/** Where a tab remembers its local cast (below). */
+export const LOCAL_CAST = 'local-cast'
+
+/**
+ * Generated heroes in an ordinary match (public/heroes/generated, kit/bench/hero-file.ts): `?cast=john,large-john` on
+ * any page gives the match's heroes those bodies in order, the played one first; an empty place keeps the hero's own
+ * body, and `?cast=` alone clears it. The tab remembers it (main.tsx reads it as the page opens), so it lasts from the
+ * lobby into the match. Until the roster offers them, this is how one is put in a fight.
+ */
+export function localCast(): readonly string[] {
+  if (typeof sessionStorage === 'undefined') return []
+  try {
+    return (sessionStorage.getItem(LOCAL_CAST) ?? '').split(',').map((label) => label.trim())
+  } catch {
+    return []
+  }
+}
+
 /** How a hero carries itself (kit/anim/attitude.ts); `/dev/try?attitude=` tries one on the played hero (dev only). */
 function attitudeOf(build: Build): AttitudeId {
   return build.look?.attitude ?? 'neutral'
@@ -119,8 +144,9 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
   const l = await gltf(renderer)
   const load = (body: Parameters<typeof loadBuild>[0]) => loadBuild(body, (url) => l.load(url) as Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[] }>)
   const color = new THREE.Color(TEAM_COLORS[team])
-  // `/dev/try`: the hero being tried wears a generated test mesh in place of its body (dev only; the file is under .scratch)
-  const mesh = import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('mesh') : null
+  // a generated hero in place of this one's body: the match's cast names it (`?cast=`), or `/dev/try` does for the
+  // hero being tried
+  const mesh = (import.meta.env?.DEV && index === 0 ? new URLSearchParams(location.search).get('mesh') : null) ?? (localCast()[index] || null)
   const tried = mesh ? await import('../../kit/bench/hero-file.js') : undefined
   const generated = (await tried?.triedHeroes())?.find((h) => h.label === mesh && h.file)
   // a photo face is painted into the hero's own atlas first; without one (or if it fails) the shared atlas serves
@@ -137,9 +163,23 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
       libraryGait(gender, build.look?.idle, rig, weaponOf(carriedStyle(build)), attitudeOf(build)),
       rig === 'standard' ? animIndex(rig).then(() => libraryMoves(gender, rig, [...BUILD_SLOTS.flatMap((slot) => skillMotion(build, slot) ?? []), ...Object.values(meleeSet(build) ?? {}).flat()], { ...weaponMoves(build), block: blockMotion(build), ...toggleMove(build) }, attitudeOf(build)).then((m) => akimboShot(build, m))) : undefined,
     ])
+    // its weapons are sized to its hands as it is drawn: a body of ours at its size class and its physique's height, a
+    // generated hero at its own (fit.ts)
+    kit.drawn = worn ? 1 : SIZE_SCALE[shape.sizeClass ?? 'medium'] * heightFactor(shape.look?.physique)
     // a generated hero's hands take their sockets where our body of its gender has them, on its own hand bones
     if (worn && kit.sockets && shapeLook.arms) kit.hands = handFrames(made.scene, kit.sockets)
-    return characterView(file, shapeLook, color, build, atlas, kit, gait, moves)
+    // in development, where the owner's motion pack is on this machine, an unarmed hero moves on its shared movement
+    // set and its kit's own clips, over the library's (motion-pack.ts); a build has no pack and changes nothing here
+    const [packed, strides] = rig === 'standard' && gait && moves && !weaponOf(carriedStyle(build)) ? await withPack(gait, moves, Object.values(meleeSet(build) ?? {}).flat(), attitudeOf(build)) : [moves, gait]
+    // and every hero, armed or not, takes the pack's clip for each of its skills the pack has one for
+    const slots = BUILD_SLOTS.flatMap((slot): (readonly [string, string])[] => {
+      // (the F's flourish plays under the toggle's own name: toggleMove)
+      const clip = slot === 'passive' ? (toggleMove(build).toggle && 'toggle') : skillMotion(build, slot)
+      const key = skillKey(build, slot)
+      return clip && key ? [[clip, key]] : []
+    })
+    const skills = rig === 'standard' && gait && packed ? await packSkills(gait.bones, slots, { named, cut }) : undefined
+    return characterView(file, shapeLook, color, build, atlas, kit, strides, skills?.size ? new Map([...packed!, ...skills]) : packed)
   }
   const chosen = build.sizeClass ?? 'medium'
   const view = await dressed(build)
@@ -182,6 +222,9 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
     tip: (out) => shown().tip(out),
     lean: (twist, back, speed, planted, legs, heading, sprint) => shown().lean(twist, back, speed, planted, legs, heading, sprint),
     aim: (yaw, pitch) => shown().aim(yaw, pitch),
+    squash: (metres) => shown().squash(metres),
+    tail: (state) => shown().tail(state),
+    travel: (state) => shown().travel(state),
     get strafes() {
       return shown().strafes
     },
@@ -196,6 +239,15 @@ async function arenaCharacter(given: Build, index: number, team: number, rendere
       size = next
     },
   }
+}
+
+/** A hero's moves and gait with the motion pack's over them, where there is a pack: its clips for the moves and loops it has, the library's for the rest. */
+async function withPack(gait: LibraryGait, moves: Map<string, THREE.AnimationClip>, kit: readonly string[], attitude: AttitudeId): Promise<[Map<string, THREE.AnimationClip>, LibraryGait]> {
+  const [own, loops] = await Promise.all([packMoves(gait.bones, kit, { named, cut }, attitude), packGait(gait.bones, { named, cut }, attitude)])
+  if (!own.size && !loops) return [moves, gait]
+  const packed = new Map([...moves, ...own])
+  const strides: LibraryGait = loops ? { ...gait, clips: new Map([...gait.clips, ...loops.clips]), gaits: { ...gait.gaits, ...loops.gaits }, ...(loops.stance ? { stance: loops.stance } : {}) } : gait
+  return [packed, strides]
 }
 
 /** How long a form takes to swell into its new size: short, so what's drawn stays what can be hit. */

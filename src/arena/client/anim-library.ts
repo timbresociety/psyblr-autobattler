@@ -1,8 +1,12 @@
 import * as THREE from 'three'
 import type { Gender } from '../../charter/look.js'
 import { animFolder, animIndex, animIndexNow, setOf, type AnimIndex } from './anim-index.js'
+import type { HeadReach } from './feet.js'
 import type { RigKind } from './rig.js'
 import { retargetClip } from '../../kit/rig/retarget.js'
+import { CLIP_LEGS, CLIP_TRIMS, CLIP_TURNS } from '../../kit/anim/trims.js'
+import { RIGS } from './rig.js'
+import { derived } from './clip-source.js'
 
 /**
  * Motion-captured clips from Ready Player Me's animation library, retargeted onto the heroes' rig by
@@ -31,12 +35,74 @@ export function animClip(gender: Gender, name: string, rig: RigKind = 'legacy'):
       if (!idx || !setOf(idx, gender, name)) return undefined
       const r = await fetch(`${animFolder(rig)}/${gender}/${name}.json`)
       if (!r.ok) throw new Error(`${key}: ${r.status}`)
-      return toClip(name, (await r.json()) as ClipFile, idx)
+      const own = turnedBack(trimmed(toClip(name, (await r.json()) as ClipFile, idx)))
+      const under = CLIP_LEGS[name]
+      const legs = under ? await animClip(gender, under, rig) : undefined
+      return legs ? onLegs(own, legs, RIGS[rig].legBones) : own
     })
     clip.catch(() => clips.delete(key))
     clips.set(key, clip)
   }
   return clip
+}
+
+/** `clip` cut to the part of it that plays (kit/anim/trims.ts), at its own pace; the whole clip when it has no trim. */
+export function trimmed(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const trim = CLIP_TRIMS[clip.name]
+  if (!trim) return clip
+  const from = trim[0]
+  const to = Math.min(trim[1] ?? clip.duration, clip.duration)
+  const tracks = clip.tracks.map((track) => {
+    const width = track.getValueSize()
+    // the keys inside the window, with the window's own ends sampled so the cut starts and ends exactly there
+    const inside = Array.from(track.times).filter((t) => t > from + 1e-4 && t < to - 1e-4)
+    const times = [from, ...inside, to]
+    // a quaternion track samples by slerp, as the mixer does
+    const sample = (track as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant()
+    const values = new Float32Array(times.length * width)
+    times.forEach((t, n) => values.set(sample.evaluate(t), n * width))
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(times, (t) => t - from), values)
+  })
+  return derived(clip, new THREE.AnimationClip(clip.name, to - from, tracks), from)
+}
+
+/**
+ * `clip` standing on another clip's legs (kit/anim/trims.ts CLIP_LEGS): the hips and legs (`legBones`) from `legs`,
+ * played at their own pace and looped, at `clip`'s keys; the rest of the body from `clip`.
+ */
+export function onLegs(clip: THREE.AnimationClip, legs: THREE.AnimationClip, legBones: ReadonlySet<string>): THREE.AnimationClip {
+  const isLeg = (track: THREE.KeyframeTrack) => legBones.has(THREE.PropertyBinding.parseTrackName(track.name).nodeName)
+  const times = clip.tracks.find((t) => t.name.endsWith('.quaternion'))?.times ?? Float32Array.from([0, clip.duration])
+  const under = legs.tracks.filter(isLeg).map((track) => {
+    const width = track.getValueSize()
+    const sample = (track as unknown as { createInterpolant(): THREE.Interpolant }).createInterpolant()
+    const values = new Float32Array(times.length * width)
+    times.forEach((t, n) => values.set(sample.evaluate(t % legs.duration), n * width))
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(times), values)
+  })
+  return derived(clip, new THREE.AnimationClip(clip.name, clip.duration, [...clip.tracks.filter((t) => !isLeg(t)), ...under]))
+}
+
+/** `clip` turned back to the way it's named (kit/anim/trims.ts CLIP_TURNS): its hips' facing and path both. */
+export function turnedBack(clip: THREE.AnimationClip): THREE.AnimationClip {
+  const degrees = CLIP_TURNS[clip.name]
+  if (!degrees) return clip
+  const r = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (degrees * Math.PI) / 180)
+  const q = new THREE.Quaternion()
+  const v = new THREE.Vector3()
+  const tracks = clip.tracks.map((track) => {
+    if (track.name !== 'Hips.quaternion' && track.name !== 'Hips.position') return track
+    const values = new Float32Array(track.values)
+    const width = track.getValueSize()
+    for (let i = 0; i < values.length; i += width)
+      if (width === 4) q.fromArray(values, i).premultiply(r).toArray(values, i)
+      else v.fromArray(values, i).applyQuaternion(r).toArray(values, i)
+    const Track = track.constructor as new (name: string, times: Float32Array, values: Float32Array) => THREE.KeyframeTrack
+    return new Track(track.name, Float32Array.from(track.times), values)
+  })
+  return derived(clip, new THREE.AnimationClip(clip.name, clip.duration, tracks))
 }
 
 /** Track-major frame-to-frame changes back to frame-major values. */
@@ -77,6 +143,8 @@ export interface RestPose {
   rotations: Map<string, THREE.Quaternion>
   /** Where the hips stand at rest: the file's, raised by however much longer its proportions made the legs. */
   hips: THREE.Vector3
+  /** Its thigh and shin, hip joint to knee to ankle, in the hips' units: how far its hips move (retarget.ts legRatio). */
+  legs?: number
   /** An attitude's bent legs (metarig/attitude.ts), which every clip fitted to this rest is grounded for. */
   ground?: Ground
   /**
@@ -88,6 +156,35 @@ export interface RestPose {
 
 /** The chain from the hips down each leg to the toes' tip, in order. */
 const LEG_CHAIN = ['UpLeg', 'Leg', 'Foot', 'ToeBase', 'Toe_End']
+
+/**
+ * The thigh and shin of the body each gender's clips are read off (public/heroes/v2/<gender>-medium.glb, whose rest is
+ * the index's), hip joint to knee to ankle in metres. The legacy rig's bodies scale by standing height, as before.
+ */
+export const REFERENCE_LEGS: Readonly<Partial<Record<RigKind, Readonly<Record<Gender, number>>>>> = { standard: { m: 0.883, f: 0.8444 } }
+
+/** The same bodies' torsos (feet.ts torsoDepth), metres in front of the hips and behind them, and their heads' reach: what the clips lie on. */
+export const REFERENCE_DEPTH: Readonly<Partial<Record<RigKind, Readonly<Record<Gender, { front: number; back: number; head: HeadReach }>>>>> = {
+  standard: {
+    m: { front: 0.138, back: 0.1, head: { front: 0.172, back: 0.075, top: 0.227 } },
+    f: { front: 0.153, back: 0.107, head: { front: 0.16, back: 0.08, top: 0.229 } },
+  },
+}
+
+/** A model's thigh and shin, both legs' mean, in the units of its hips' parent (the hips track's); undefined without legs. */
+export function legLength(model: THREE.Object3D, hips: THREE.Object3D): number | undefined {
+  const parent = hips.parent
+  if (!parent) return undefined
+  model.updateMatrixWorld(true)
+  const lengths: number[] = []
+  for (const side of ['Left', 'Right']) {
+    const joints = ['UpLeg', 'Leg', 'Foot'].map((part) => model.getObjectByName(side + part))
+    if (joints.some((j) => !j)) continue
+    const [hip, knee, ankle] = joints.map((j) => parent.worldToLocal(j!.getWorldPosition(new THREE.Vector3())))
+    lengths.push(hip.distanceTo(knee) + knee.distanceTo(ankle))
+  }
+  return lengths.length ? lengths.reduce((a, b) => a + b) / lengths.length : undefined
+}
 
 export interface Ground {
   /** The hips' bone, and each leg bone's local offset and scale (the chain, both sides). */
@@ -122,7 +219,8 @@ export function restPose(model: THREE.Object3D, bones: readonly string[]): RestP
   model.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh && typeof o.userData.legDrop === 'number') drop = Math.max(drop, o.userData.legDrop)
   })
-  const rest: RestPose = { rotations, hips: hips.position.clone().add(new THREE.Vector3(0, drop, 0)) }
+  const legs = legLength(model, hips)
+  const rest: RestPose = { rotations, hips: hips.position.clone().add(new THREE.Vector3(0, drop, 0)), ...(legs ? { legs } : {}) }
   const given = model.userData.attitudeTurns as Record<string, number[]> | undefined
   if (given) {
     const bones = new Map<string, { position: THREE.Vector3; scale: THREE.Vector3 }>()
@@ -136,7 +234,7 @@ export function restPose(model: THREE.Object3D, bones: readonly string[]): RestP
     const turns = new Map(Object.entries(given).map(([name, q]) => [name, new THREE.Quaternion().fromArray(q)]))
     rest.ground = { hips: hips.name, bones, turns }
     const plain = new Map([...rotations].map(([name, q]) => [name, turns.has(name) ? q.clone().premultiply(turns.get(name)!.clone().invert()) : q]))
-    rest.plain = { rotations: plain, hips: rest.hips }
+    rest.plain = { rotations: plain, hips: rest.hips, ...(legs ? { legs } : {}) }
   }
   mine.set(key, rest)
   return rest
@@ -193,21 +291,37 @@ export function groundClip(clip: THREE.AnimationClip, ground: Ground): THREE.Ani
 const fitted = new WeakMap<THREE.AnimationClip, WeakMap<RestPose, THREE.AnimationClip>>()
 
 /**
+ * Whether a clip goes down to the floor from standing: its hips drop below 65% of where it starts, as a slam, a grab
+ * thrown down or a blast struck into the ground does (0.40 to 0.63) and no blow on its feet does (0.72 and up). Such a
+ * clip plays on the rest without the attitude, as the moves the engine lays down do (library-gait.ts PLAIN): a hunch
+ * and bent knees put its hands 10 to 40 cm through the floor (all-moves check, 2026-11-13).
+ */
+function downAtFloor(clip: THREE.AnimationClip): boolean {
+  const hips = clip.tracks.find((t) => t.name.endsWith('.position'))?.values
+  if (!hips || hips.length < 3 || hips[1] <= 0) return false
+  let low = Infinity
+  for (let i = 1; i < hips.length; i += 3) low = Math.min(low, hips[i])
+  return low < hips[1] * 0.65
+}
+
+/**
  * A clip on one body (src/kit/rig/retarget.ts): each bone's turn from the gender's reference rest put on this body's
- * own rest, and the hips' travel scaled by its leg-length ratio. Cached per clip and rest pose. `body` names the body
+ * own rest, and the hips' travel scaled by its legs against the reference body's. Cached per clip and rest pose. `body` names the body
  * for messages only.
  */
 export function fitClip(clip: THREE.AnimationClip, gender: Gender, body: string, rest: RestPose, rig: RigKind = 'legacy'): THREE.AnimationClip {
   const idx = animIndexNow(rig)
   if (!idx) return clip
-  if (clip.userData.plain && rest.plain) rest = rest.plain
+  if ((clip.userData.plain || downAtFloor(clip)) && rest.plain) rest = rest.plain
   let mine = fitted.get(clip)
   if (!mine) fitted.set(clip, (mine = new WeakMap()))
   const done = mine.get(rest)
   if (done) return done
-  const ref = idx.genders[gender]
-  if (!ref) throw new Error(`${body}: no ${gender} clips`)
-  const fit = retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips }, { rest: rest.rotations, hips: rest.hips.toArray() })
+  // a clip keyed on one gender's medium body whoever plays it (the motion pack's, motion-pack.ts) is read off that body
+  const keyed = (clip.userData.rest as Gender | undefined) ?? gender
+  const ref = idx.genders[keyed]
+  if (!ref) throw new Error(`${body}: no ${keyed} clips`)
+  const fit = retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips, legs: REFERENCE_LEGS[rig]?.[keyed] }, { rest: rest.rotations, hips: rest.hips.toArray(), legs: rest.legs })
   const out = rest.ground ? groundClip(fit, rest.ground) : fit
   mine.set(rest, out)
   return out

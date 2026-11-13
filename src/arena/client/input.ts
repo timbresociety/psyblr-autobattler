@@ -7,11 +7,12 @@ import { AIM_STEPS, MOVES, slotBit, type Command } from '../engine/state.js'
  * relative to the camera; Space jumps (again in the air for the double jump); Z rolls the way WASD steers; Shift tapped dashes and held
  * sprints; C crouches (at a run it slides) and Ctrl lies prone, each again to stand; V strikes (tapped, chaining
  * into a combo) or charges a heavy blow (held, let go to land it); X guards; left click is Skill 1, Q Skill 2, E the
- * movement skill, F turns the passive on and off, R the ultimate; the right button held zooms to first person (the
+ * movement skill, F turns the passive on and off, R the ultimate; G held beside a downed ally revives it, and pressed
+ * beside a standing one asks for a team-up (GAME.md §4 Team); the right button held zooms to first person (the
  * camera's, not the engine's). Pointer lock holds the mouse in a fight, so Ctrl+click never reaches the page.
  */
 
-export type Action = BuildSlot | 'jump' | 'dash' | 'crouch' | 'prone' | 'dodge' | 'block' | 'zoom' | 'forward' | 'back' | 'left' | 'right'
+export type Action = BuildSlot | 'jump' | 'dash' | 'crouch' | 'prone' | 'dodge' | 'block' | 'interact' | 'zoom' | 'forward' | 'back' | 'left' | 'right'
 
 export const BINDINGS: Record<string, Action> = {
   KeyW: 'forward',
@@ -30,6 +31,7 @@ export const BINDINGS: Record<string, Action> = {
   ControlLeft: 'prone',
   KeyV: 'basic',
   KeyX: 'block',
+  KeyG: 'interact',
   Mouse0: 'active1',
   KeyQ: 'active2',
   KeyE: 'movement',
@@ -60,7 +62,7 @@ export function commandFrom(input: InputState, cameraYaw: number, cameraPitch: n
   const moveZ = Math.cos(cameraYaw) * f + Math.sin(cameraYaw) * r
   let buttons = 0
   for (const slot of BUILD_SLOTS) if (held(slot)) buttons |= slotBit(slot)
-  const moves = (['jump', 'dash', 'crouch', 'prone', 'dodge', 'block'] as const).reduce((bits, move) => bits | (held(move) ? MOVES[move] : 0), 0)
+  const moves = (['jump', 'dash', 'crouch', 'prone', 'dodge', 'block', 'interact'] as const).reduce((bits, move) => bits | (held(move) ? MOVES[move] : 0), 0)
   input.tapped?.clear()
   // the aim is where the crosshair points (aim.ts) when it's known, else straight along the camera
   return { moveX, moveZ, moves, aimYaw: steps(aim?.yaw ?? cameraYaw), aimPitch: steps(aim?.pitch ?? cameraPitch), buttons }

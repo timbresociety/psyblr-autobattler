@@ -150,9 +150,9 @@ function hangHeld(model: THREE.Object3D, held: Partial<Record<GearSlot, GearPiec
     const file = kit.pieces.get(piece.url)
     if (file) pieces.push({ name: slot, socket: slot, file, ...(piece.color ? { color: piece.color } : {}) })
   }
-  if (pieces.length) return hangPieces(model, pieces, shapedSockets(kit.sockets, rest, shaped))
+  if (pieces.length) return hangPieces(model, pieces, shapedSockets(kit.sockets, rest, shaped), kit.drawn)
   // a hero who swaps weapons in and out (arms.ts) needs its hands' sockets even while they hold nothing
-  if (armed) hangSockets(model, shapedSockets(kit.sockets, rest, shaped))
+  if (armed) hangSockets(model, shapedSockets(kit.sockets, rest, shaped), kit.drawn)
   return []
 }
 

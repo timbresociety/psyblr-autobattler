@@ -44,6 +44,11 @@ export interface LoadedKit {
    * the sockets were measured on, so they ride its hand bones where they ride ours (heroes.ts).
    */
   hands?: Partial<Record<GearSlot, THREE.Matrix4>>
+  /**
+   * The scale the hero is drawn at in the world: its size class's, with its physique's height (heroes.ts); 1 when
+   * unset, and for a generated hero, drawn at its own height. Its weapons are sized to its hands at that scale (fit.ts).
+   */
+  drawn?: number
 }
 
 const heldUrls = (held: Partial<Record<GearSlot, GearPiece>>) => [...new Set(GEAR_SLOTS.flatMap((slot) => (held[slot] ? [held[slot]!.url] : [])))]

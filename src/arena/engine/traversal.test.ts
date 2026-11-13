@@ -244,6 +244,32 @@ describe('ceilings (§8)', () => {
 })
 
 describe('a press that comes a moment early waits for its moment (owner playtest, 2026-11-03)', () => {
+  it('a played hero\'s roll gives up the blow in progress: it never lands from inside the roll (the cancel rule)', () => {
+    const s = solo()
+    s.m.human = 0
+    // a blow winding up, as the engine starts one (deliveries.ts cast)
+    s.h.action = { slot: 'basic', started: s.m.tick, release: s.m.tick + 9, ends: s.m.tick + 20, released: false, melee: { step: 0 } }
+    s.h.lunge = { x: 0, z: 0.1, until: s.m.tick + 8, target: 0 }
+    s.step(go(0, 1, MOVES.dodge))
+    expect(s.h.roll).toBeDefined()
+    expect(s.h.action).toBeUndefined()
+    expect(s.h.lunge).toBeUndefined()
+    expect(s.events.some((e) => e.type === 'interrupt' && e.slot === 'basic')).toBe(true)
+    // a recovery ends there too, with nothing to interrupt
+    const r = solo()
+    r.m.human = 0
+    r.h.action = { slot: 'basic', started: r.m.tick, release: r.m.tick, ends: r.m.tick + 12, released: true }
+    r.step(go(0, 1, MOVES.dodge))
+    expect(r.h.action).toBeUndefined()
+    expect(r.events.some((e) => e.type === 'interrupt')).toBe(false)
+    // the AI's blow goes on through its roll, as the balance gate's fights have it
+    const ai = solo()
+    ai.h.action = { slot: 'basic', started: ai.m.tick, release: ai.m.tick + 9, ends: ai.m.tick + 20, released: false, melee: { step: 0 } }
+    ai.step(go(0, 1, MOVES.dodge))
+    expect(ai.h.roll).toBeDefined()
+    expect(ai.h.action).toBeDefined()
+  })
+
   it('a roll pressed as a climb ends rolls the moment the hero stands on top', () => {
     const { m, h, step, moves } = solo({ pieces: [block(0, 4, 3, 2, 1.3)] })
     m.human = 0

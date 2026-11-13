@@ -15,6 +15,17 @@ export interface Gaze {
   pitch: number
   /** 'aim' brings the back round as well (a cast or a shot), 'look' the neck and head, 'off' nothing. */
   mode: 'aim' | 'look' | 'off'
+  /**
+   * Run once the look and aim are on and before the off hand takes its grip: the view's own turn of what the hands hold
+   * onto the aim (characters.ts pointWeapon), so the grip is taken on the weapon where it ends up.
+   */
+  point?: () => void
+  /**
+   * The least the off hand takes of its grip (0 to 1): a long gun, a launcher or a staff is held in both hands through
+   * its shot, wherever the clip left the off hand. Without it the grip is taken only as far as the clip brings the hand
+   * near.
+   */
+  grip?: number
 }
 
 export interface Fixups {
@@ -107,14 +118,18 @@ export function fixups(scene: THREE.Object3D, root: THREE.Object3D, spread: Spre
         const target = v[1].set(Math.sin(gaze.yaw) * cp, Math.sin(gaze.pitch), Math.cos(gaze.yaw) * cp)
         state.aimLeft = aimChain(chain, facing, target, up.clone(), weight)
       } else state.aimLeft = 0
+      gaze.point?.()
       // the off hand onto a two-handed grip, when the clip brings it near
       state.grip = 0
       const tipAt = main && off.arm && off.fore && off.hand ? tip(v[1]) : undefined
       if (tipAt) {
+        // by the hero as it stands in the world: `height` is the body's own, and a size class scales the whole of it (a
+        // colossal hero's hand, 1.6 times as far from its weapon in metres, took no grip at all)
+        const tall = Math.max(height, 1.8 * root.getWorldScale(v[3]).y)
         const palm = main!.getWorldPosition(v[2])
-        const grip = v[1].sub(palm).normalize().multiplyScalar((GRIP_SPAN * height) / 1.8).add(palm)
+        const grip = v[1].sub(palm).normalize().multiplyScalar((GRIP_SPAN * tall) / 1.8).add(palm)
         const hand = off.hand!.getWorldPosition(v[3])
-        const w = gripWeight(hand.distanceTo(grip), height)
+        const w = Math.max(gaze.grip ?? 0, gripWeight(hand.distanceTo(grip), tall))
         state.grip = w
         if (w > 0) {
           const goal = hand.lerp(grip, w).clone()

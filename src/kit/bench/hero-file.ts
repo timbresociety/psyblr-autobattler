@@ -14,7 +14,14 @@ export interface TriedHero {
   build?: Build
   /** The mesh its ultimate transforms it into, and how tall that stands. */
   form?: { file: string; height: number }
+  /** The folder its files are in, with its closing slash; the local generator's exports without one. */
+  root?: string
 }
+
+/** Where the game's own generated heroes are: their meshes, and index.json listing them (scripts/generated-heroes.mjs). */
+export const GENERATED_HEROES = '/heroes/generated/'
+/** Where the generator's exports are kept on a development machine, as it made them. */
+const LOCAL_HEROES = '/.scratch/tripo-in/'
 
 /** What of the motion library's index a rebound hero stands on. */
 interface HeroIndex {
@@ -25,10 +32,17 @@ interface HeroIndex {
 /** The generated test heroes the local list names; none when there is no list. */
 export const auditHeroes = (): Promise<AuditHero[]> => fetch(`/${AUDIT_HEROES_FILE}`).then((r) => r.json() as Promise<AuditHero[]>).catch(() => [])
 
-/** The heroes `/dev/try` can wear: any a local .scratch/tripo-in/try.json lists with a kit of its own, then the audit's. */
+/**
+ * The generated heroes a match can wear: the game's own (GENERATED_HEROES), then, on a development machine, any more
+ * the local lists name that the game has not been given yet (try.json, with a kit of its own, then the audit's).
+ */
 export const triedHeroes = async (): Promise<readonly TriedHero[]> => {
-  const local = await fetch('/.scratch/tripo-in/try.json').then((r) => r.json() as Promise<TriedHero[]>).catch(() => [])
-  return [...local, ...(await auditHeroes()).filter((h) => !local.some((l) => l.label === h.label))]
+  const list = (url: string) => fetch(url).then((r) => (r.ok ? (r.json() as Promise<TriedHero[]>) : [])).catch(() => [] as TriedHero[])
+  const own = (await list(`${GENERATED_HEROES}index.json`)).map((h) => ({ ...h, root: GENERATED_HEROES }))
+  if (!import.meta.env?.DEV) return own
+  const local = await list(`${LOCAL_HEROES}try.json`)
+  const more = [...local, ...(await auditHeroes()).filter((h) => !local.some((l) => l.label === h.label))]
+  return [...own, ...more.filter((h) => !own.some((o) => o.label === h.label))]
 }
 
 /**
@@ -38,7 +52,7 @@ export const triedHeroes = async (): Promise<readonly TriedHero[]> => {
 export async function reboundFile(hero: TriedHero, ours: THREE.Object3D, idx: HeroIndex, load: (url: string) => Promise<{ scene: THREE.Object3D }>): Promise<{ scene: THREE.Group; animations: THREE.AnimationClip[]; rebuilt: Rebuilt }> {
   const ref = idx.genders[hero.gender]!
   idx.bones.forEach((name, k) => ours.getObjectByName(name)?.quaternion.fromArray(ref.rest[k] as number[]))
-  const { scene: file } = await load(`/.scratch/tripo-in/${hero.file!}`)
+  const { scene: file } = await load(`${hero.root ?? LOCAL_HEROES}${hero.file!}`)
   file.updateMatrixWorld(true)
   let mesh: THREE.SkinnedMesh | undefined
   file.traverse((o) => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) mesh = o as THREE.SkinnedMesh })

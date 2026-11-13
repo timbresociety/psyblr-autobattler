@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import * as THREE from 'three'
-import { toClip, type ClipFile } from '../../arena/client/anim-library.js'
+import { legLength, REFERENCE_LEGS, toClip, type ClipFile } from '../../arena/client/anim-library.js'
 import type { AnimIndex } from '../../arena/client/anim-index.js'
 import { applyPosture } from '../../arena/client/metarig/posture.js'
 import { meshRest } from '../../arena/client/metarig/upgrade.js'
@@ -76,7 +76,8 @@ export const fileClip = (name: string, gender: string, idx: AnimIndex) => toClip
 /** `clip` (on the gender's medium body) fitted to `body`, the way fitClip does in the game. */
 export function onBody(clip: THREE.AnimationClip, body: AuditBody, idx: AnimIndex): THREE.AnimationClip {
   const ref = idx.genders[body.gender]!
-  return retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips }, { rest: body.rotations, hips: body.hips.toArray() })
+  const legs = legLength(body.model, body.model.getObjectByName('Hips')!)
+  return retargetClip(clip, { bones: idx.bones, rest: ref.rest, hips: ref.hips, legs: REFERENCE_LEGS.standard![body.gender] }, { rest: body.rotations, hips: body.hips.toArray(), legs })
 }
 
 export interface Kinematics {

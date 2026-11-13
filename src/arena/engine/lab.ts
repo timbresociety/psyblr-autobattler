@@ -36,11 +36,20 @@ export interface LabState {
 const DECK = 4.5
 const HEALTH = 5
 
-/** The pieces on the deck: a marked wall to run, a column, a ledge to hang from and mantle. */
+/**
+ * The pieces on the deck: a marked wall to run, a column, a ledge to mantle, and the rest of the traversal course
+ * (scripts/course.mjs): a low block to mantle from the ground, a slab overhead that a jump under it meets (3.2 m of
+ * headroom, so the tallest John still stands there), and a tower to hang from.
+ */
 export const LAB_PIECES: readonly CoverPiece[] = [
   { shape: { kind: 'block', x: 7.65, z: -27, hx: 0.25, hz: 5 }, base: DECK, top: DECK + 4, run: true, look: 'wall' },
   { shape: { kind: 'column', x: 4.5, z: -27, r: 0.5 }, base: DECK, top: DECK + 5, look: 'pillar' },
   { shape: { kind: 'block', x: -6, z: -11.5, hx: 1.5, hz: 1.5 }, base: DECK, top: DECK + 2.1, look: 'grey' },
+  { shape: { kind: 'block', x: 14, z: -37, hx: 1.5, hz: 0.6 }, base: DECK, top: DECK + 1, look: 'grey' },
+  { shape: { kind: 'block', x: 19, z: -38, hx: 1.5, hz: 1.5 }, base: DECK + 3.2, top: DECK + 3.5, look: 'grey' },
+  // a tower to hang from: the 2.1 m ledge is too low for a medium body's hang (its feet 2.2 m under its hands), and a
+  // jump from the deck reaches this one's edge with the hands, not the feet
+  { shape: { kind: 'block', x: -16, z: -47, hx: 1.5, hz: 1.5 }, base: DECK, top: DECK + 6, look: 'grey' },
 ]
 export const LAB_PAD: JumpPad = { at: { x: 5.5, y: DECK, z: -12 }, r: 0.9, height: 6 }
 /** A zipline down the left strip, high enough at its far end for the smallest body to jump to. */

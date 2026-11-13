@@ -3,6 +3,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { attribute, float, normalView, positionViewDirection, smoothstep, uniform, vec3 } from 'three/tsl'
 import { clone as cloneRig } from 'three/addons/utils/SkeletonUtils.js'
 import { BUILD_SLOTS } from '../../../charter/build.js'
+import { SIZES } from '../../../charter/sizes.js'
 import { FAMILY_OF } from '../../../charter/skill-look.js'
 import type { BuildSlot } from '../../../charter/types.js'
 import { transformOf } from '../../../forge/form.js'
@@ -555,16 +556,19 @@ export function createEffects(ctrl: ArenaController, packages: (HeroPackage | un
 
   // where a skill leaves the hero: its leading palm as last drawn, else its chest (a body without hands, or a view not
   // yet stood where the hero is)
+  // (how far a palm may be from the chest, and a weapon's far end from the palm, goes by the body's size: a colossal
+  // hero's staff head is two and a half metres from its hand, and was taken for a view not yet in place)
+  const reachOf = (hero: number) => SIZES[arena.match.heroes[hero].size]?.scale ?? 1
   const handOf = (hero: number, dir: THREE.Vector3) => {
     const body = v3(chest(arena.match.heroes[hero]))
     const palm = ctrl.views[hero]?.hand?.(dir, new THREE.Vector3())
-    return palm && palm.distanceToSquared(body) < 9 ? palm : body
+    return palm && palm.distanceToSquared(body) < (3 * reachOf(hero)) ** 2 ? palm : body
   }
   // where a shot leaves (§6): the far end of what the hand holds (a gun's muzzle, a staff's head), else the palm
   const muzzleOf = (hero: number, dir: THREE.Vector3) => {
     const palm = handOf(hero, dir)
     const tip = ctrl.views[hero]?.tip?.(new THREE.Vector3())
-    return tip && tip.distanceToSquared(palm) < 4 ? tip : palm
+    return tip && tip.distanceToSquared(palm) < (2 * reachOf(hero)) ** 2 ? tip : palm
   }
   // a spell or an ultimate that lands somewhere (a shot, a zone, a leap, a nova) bursts there once; a beam, a cone or a
   // blow bursts on each body it reaches

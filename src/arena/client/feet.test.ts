@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
-import { PLANT, hipYaw, legReach, planter } from './feet.js'
+import { PLANT, hipYaw, legReach, levelToes, planter } from './feet.js'
 
 /** A leg hanging from a hip a metre up: a 0.45 m thigh, a 0.45 m shin with the knee bent a little forward (+z), a foot. */
 function leg() {
@@ -141,5 +141,47 @@ describe('feet that stay where they land (Forge goal, phase 2)', () => {
     wants.forEach((w) => (w.x += 5))
     const out = run(frame, (o) => feet.place(wants, 0, frame, true, o))
     expect(out[0].x).toBeCloseTo(5.1)
+  })
+})
+
+describe('toes kept out of the floor (clip audit 2026-11-05, fault 2)', () => {
+  /** A long foot on a grown body: the ankle 9 cm up, the ball 18 cm ahead, the tip 8 cm further, tipped toe down. */
+  function foot(tip: number) {
+    const ground = new THREE.Group()
+    ground.position.set(3, 0.5, -2)
+    ground.scale.setScalar(2)
+    ground.rotation.y = 0.7
+    const ankle = new THREE.Object3D()
+    ankle.position.set(0, 0.09, 0)
+    const ball = new THREE.Object3D()
+    ball.position.set(0, -0.06, 0.17)
+    const end = new THREE.Object3D()
+    end.position.set(0, -0.005, 0.08)
+    ground.add(ankle)
+    ankle.add(ball)
+    ball.add(end)
+    ankle.rotation.x = tip
+    ground.updateMatrixWorld(true)
+    const height = (o: THREE.Object3D) => ground.worldToLocal(new THREE.Vector3().setFromMatrixPosition(o.matrixWorld)).y
+    return { ground, ankle, ball, end, height }
+  }
+  const rest = [0.03, 0.025]
+
+  it('turns a foot whose toes go under the floor up about its ankle, until the lower joint stands at its rest height', () => {
+    // the heel up: the toes 6 to 9 cm under the floor
+    const f = foot(0.6)
+    expect(Math.min(f.height(f.ball), f.height(f.end))).toBeLessThan(0)
+    const ankle = f.ankle.getWorldPosition(new THREE.Vector3())
+    expect(levelToes(f.ankle, [f.ball, f.end], rest, f.ground)).toBe(true)
+    expect(Math.min(f.height(f.ball) - rest[0], f.height(f.end) - rest[1])).toBeCloseTo(0, 4)
+    // the ankle stays where it was
+    expect(f.ankle.getWorldPosition(new THREE.Vector3()).distanceTo(ankle)).toBeLessThan(1e-6)
+  })
+
+  it('leaves a foot alone whose toes are clear of the floor', () => {
+    const f = foot(-0.2)
+    const before = f.ankle.quaternion.clone()
+    expect(levelToes(f.ankle, [f.ball, f.end], rest, f.ground)).toBe(false)
+    expect(f.ankle.quaternion.equals(before)).toBe(true)
   })
 })

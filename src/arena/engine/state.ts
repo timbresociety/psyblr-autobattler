@@ -325,8 +325,10 @@ export interface MatchState {
   aiLevels?: readonly [AiLevel, AiLevel]
   /**
    * The locked library's new rules (GAME.md §4): knockdowns, the perfect guard, the V moveset's dash, air, launcher,
-   * slam and grab, the downed state and reviving. The lab and played matches turn them on; the balance gate's AI-only
-   * fights run without them until they are retuned on them.
+   * slam and grab, the downed state and reviving. Every match played in the browser turns them on (replay.ts
+   * RecordedSetup.fullKit, set by the live arena), and so does the lab; the balance gate's AI-only fights run without
+   * them until they are retuned on them (fullkit.bench.test.ts compares the two: who wins hardly moves, and the AI,
+   * which never holds the interact key, leaves its downed to bleed out).
    */
   fullKit?: boolean
   /**

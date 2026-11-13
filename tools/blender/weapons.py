@@ -44,7 +44,7 @@ WEAPONS = {
     'scythe': dict(name='War scythe', kind='hand', length=1.7, up='-z', front='+x', grip=0.74),
     'warhammer': dict(name='Warhammer', kind='hand', length=1.2, up='-z', front='+x', grip=0.8),
     'spear': dict(name='Spear', kind='hand', length=2.0, up='-z', front='+x', grip=0.7),
-    'bo-staff': dict(name='Bo staff', kind='hand', length=1.8, up='+z', front='+x', grip=0.43, crop=0.235),
+    'bo-staff': dict(name='Bo staff', kind='hand', length=1.8, up='+z', front='+x', grip=0.43, crop=0.235, girth=0.7),
     'whip': dict(name='Bullwhip', kind='hand', length=1.0, up='+z', front='+x', grip=0.88),
     'wand': dict(name='Wand', kind='hand', length=0.35, up='-z', front='+x', grip=0.88),
     'mage-staff': dict(name='Mage staff', kind='hand', length=1.8, up='-z', front='+x', grip=0.58),
@@ -59,6 +59,8 @@ AXES = {'+x': (1, 0, 0), '-x': (-1, 0, 0), '+y': (0, 1, 0), '-y': (0, -1, 0), '+
 # a shield's disc sits this far out from the palm, along +x (as tools/blender/pieces.py's own)
 SHIELD_OUT = 0.05
 # `crop` cuts away everything below that height in the principal frame (a stand it was stood on), then frames it again
+# `girth` thins a piece across its length by that much (the generated pole came out 10 cm through its wrapping, where a
+# hand closes round 4; at 0.45 it read as a rod, owner 2026-11-13)
 # loose parts with less than this share of the surface are generation litter (stray strands, floating flecks)
 LITTER = 0.004
 
@@ -426,6 +428,8 @@ def main():
         obj = load(os.path.join(src, wid, 'small.glb'))
         tidy(obj, spec.get('keep_small', False), spec.get('longest', False))
         framed(obj, spec)
+        if spec.get('girth'):
+            obj.data.transform(Matrix.Diagonal((spec['girth'], spec['girth'], 1, 1)))
         obj.data.transform(placed(obj, spec))
         obj.name = wid
         tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)

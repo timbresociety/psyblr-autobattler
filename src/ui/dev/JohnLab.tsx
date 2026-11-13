@@ -79,6 +79,9 @@ export function JohnLab() {
       const search = new URLSearchParams()
       if (j.hero) search.set('mesh', j.hero.label)
       if (next.attitude !== 'neutral') search.set('attitude', next.attitude)
+      // `?motion=library` plays the licensed library alone (arena/client/motion-pack.ts): kept through a restart
+      const motion = new URLSearchParams(window.location.search).get('motion')
+      if (motion) search.set('motion', motion)
       setParams(search, { replace: true })
       setStaged(labStaging(next, j))
       setRound((r) => r + 1)
@@ -96,18 +99,25 @@ export function JohnLab() {
     if (mustRestart) restart(merged)
   }
 
-  /** Put an option on a button: at once if it can be, or with a restart. */
+  /** The clips John's buttons play with these picks: a hero's clips are loaded with it, so a pick that changes one needs a restart. */
+  const clipsOf = (p: Prefs) => JSON.stringify(johnBuild(p, john).look?.motions ?? {})
+  /**
+   * Put an option on a button: at once if it can be, or with a restart. A pick that plays another clip restarts too:
+   * put on at once, the engine cast the new skill and the body went on playing the last pick's motion.
+   */
   const pick = (slot: BuildSlot, id: string) => {
     const kit = { ...prefs.kit, [slot]: id }
     const c = controller.current
-    const live = !!c && slot !== 'basic' && slot !== 'active1' && equip(c.arena, slot, id, true)
+    const same = clipsOf({ ...prefs, kit }) === clipsOf(prefs)
+    const live = !!c && slot !== 'basic' && slot !== 'active1' && same && equip(c.arena, slot, id, true)
     change({ kit }, !live)
   }
   const pickLmb = (lmb: Prefs['lmb']) => {
     const id = lmbId(lmb.family, lmb.mode, lmb.flight)
     const c = controller.current
     // a new grip needs its clips: a restart; a new way to fire or fly goes on at once
-    const live = !!c && lmb.family === prefs.lmb.family && equip(c.arena, 'active1', id, true)
+    const next = { ...prefs, lmb, kit: { ...prefs.kit, active1: id } }
+    const live = !!c && lmb.family === prefs.lmb.family && clipsOf(next) === clipsOf(prefs) && equip(c.arena, 'active1', id, true)
     change({ lmb, kit: { ...prefs.kit, active1: id } }, !live)
   }
   const setBot = (bot: LabBot, mode: BotMode) => {

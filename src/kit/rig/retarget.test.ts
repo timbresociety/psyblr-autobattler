@@ -33,6 +33,17 @@ describe('dynamic retargeting (§9.6)', () => {
     expect(out.userData.legRatio).toBeCloseTo(1.3)
   })
 
+  it('scales the hips by thigh and shin where both are known, not by a hip joint set high above the legs (clip audit fault 1)', () => {
+    // hips stand 1.3 times as high, but on legs only 1.1 times as long: a bent knee drops the hips by the legs'
+    const high = { rest: new Map<string, Quaternion>(), hips: [0, 1.3, 0], legs: 0.99 }
+    expect(legRatio({ ...src, legs: 0.9 }, high)).toBeCloseTo(1.1)
+    const p = retargetClip(clip, { ...src, legs: 0.9 }, high).tracks.find((t) => t.name === 'Hips.position')!.values
+    expect(p[1]).toBeCloseTo(1.3, 6)
+    expect(p[4]).toBeCloseTo(1.3 - 0.1 * 1.1, 6)
+    // either side unmeasured: standing height, as before
+    expect(legRatio(src, high)).toBeCloseTo(1.3)
+  })
+
   it('keys nothing but rotations and the hips', () => {
     const out = retargetClip(clip, src, { rest: new Map([['LeftArm', new Quaternion()]]), hips: [0, 0.8, 0] })
     expect(out.tracks.map((t) => t.name)).toEqual(['LeftArm.quaternion', 'Hips.position'])

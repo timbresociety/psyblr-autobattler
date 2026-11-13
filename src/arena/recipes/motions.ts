@@ -51,10 +51,11 @@ export interface MeleeSet {
 const GRAB = 'grab_and_slam'
 
 export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
-  // jab, cross, hook; the knee-and-elbow string charges; the uppercut lifts
+  // jab, cross, hook; the long hook, thrown from the hip, charges (the elbow combo's arms never reach out); the uppercut
+  // lifts
   unarmed: {
     chain: ['lead_jab', 'cross_punch', 'hook_punch'],
-    heavy: 'elbow_uppercut_combo',
+    heavy: 'long_hook_punch_to_the_head',
     block: 'standing_block_idle',
     dash: 'flying_knee_punch_combo',
     air: 'mutant_punch',
@@ -68,9 +69,12 @@ export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
     heavy: 'spinning_back_kick_advancing',
     block: 'standing_block_idle',
     dash: 'flying_kick',
+    // a kick spun off the ground with no take-off or landing of its own: right in the air, where the body already is
     air: 'hurricane_kick',
-    slam: 'drop_kick',
-    launcher: 'flip_kick',
+    // the plunge lands on a driving rear-foot kick (the drop kick ended on all fours, turned off the aim)
+    slam: 'male_thrust_kick_with_the_rear_foot',
+    // the snap kicks rise into the body (the flip kick ended crouched, a metre off the spot)
+    launcher: 'double_front_snap_kick',
     grab: GRAB,
     flurry: 'butterfly_kick_advancing',
   },
@@ -100,11 +104,14 @@ export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
   greatsword: {
     chain: ['gs_great_sword_slash', 'gs_great_sword_slash_4', 'gs_great_sword_slash_3'],
     heavy: 'two_hand_sword_combo',
-    block: 'gs_great_sword_blocking',
+    // the steady hold (the first blocking clip is a half-second raise, which looped popped twice a second)
+    block: 'gs_great_sword_blocking_2',
     dash: 'gs_great_sword_slide_attack',
     air: 'gs_great_sword_high_spin_attack',
     slam: 'gs_great_sword_jump_attack',
-    launcher: 'gs_great_sword_slash_2',
+    // the two-handed swing that comes up from behind the hip and on over the head (the pack's own second slash chops
+    // down over the top: nothing of it rises into the target; kit check, 2026-11-13)
+    launcher: 'club_swing_homerun',
     grab: GRAB,
     flurry: 'gs_great_sword_slash_5',
   },
@@ -119,15 +126,17 @@ export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
     grab: GRAB,
     flurry: 'ss_sword_and_shield_slash_5',
   },
-  // a pole in both hands: its end jabs and its shaft sweeps, then it spins
+  // a pole in both hands: its end jabs and its shaft sweeps, then it whirls overhead (a long-hafted axe's high whirl,
+  // both hands on the haft: the acrobat's twirl it had spun the body through the air with the pole in one hand)
   staff: {
-    chain: ['rifle_butt_smash', 'rifle_punch', 'butterfly_twirl'],
+    chain: ['rifle_butt_smash', 'rifle_punch', 'axe_standing_melee_attack_360_high'],
     heavy: 'gs_great_sword_high_spin_attack',
     block: 'standing_block_idle',
-    dash: 'run_and_swing',
+    // the pole swept low on the slide in (run_and_swing tumbles onto its back in the air)
+    dash: 'gs_great_sword_slide_attack',
     air: 'gs_great_sword_slash_3',
     slam: 'jump_attack',
-    launcher: 'gs_great_sword_slash_2',
+    launcher: 'club_swing_homerun',
     grab: GRAB,
     flurry: 'axe_standing_melee_combo_attack_ver_1',
   },
@@ -136,7 +145,9 @@ export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
     chain: ['club_swing_single', 'club_swing_double', 'two_hand_club_combo'],
     heavy: 'heavy_weapon_swing',
     block: 'standing_block_idle',
-    dash: 'club_swing_strike',
+    // the bat swung through from the run (the club strike stood three seconds with the bar at the hip, and the run and
+    // swing tumbles onto its back in the air)
+    dash: 'cmu_baseball_swing',
     air: 'jump_attack',
     slam: 'mutant_jump_attack',
     launcher: 'club_swing_homerun',
@@ -151,33 +162,39 @@ export const MELEE_SETS: Record<MeleeStyle, MeleeSet> = {
     dash: 'axe_standing_melee_combo_attack_ver_1',
     air: 'axe_standing_melee_combo_attack_ver_3',
     slam: 'axe_standing_melee_run_jump_attack',
-    launcher: 'axe_standing_melee_attack_360_high',
+    // the rising two-handed swing (the high spin is flat at the hip: nothing of it lifts)
+    launcher: 'club_swing_homerun',
     grab: GRAB,
     flurry: 'axe_standing_melee_combo_attack_ver_2',
   },
-  // thrust, thrust and cut, drive in; the charge runs it through
+  // thrust, thrust and cut, a low driving thrust, both hands driving in; the lunge runs it through (the charge clip is
+  // a pointed command, not a thrust, and the swordplay lunge lets go with one hand to swing overhead). The twin stab's
+  // marked blow is its left hand's: the spear, in the right, pointed back over the shoulder on it (kit check,
+  // 2026-11-13). The first thrust and the lunge hold the spear their own way in the hand (characters.ts HOLDS)
   spear: {
-    chain: ['gs_great_sword_attack', 'thrust_slash', 'bayonet_stab'],
-    heavy: 'charge',
+    chain: ['gs_great_sword_attack', 'thrust_slash', 'ss_sword_and_shield_attack'],
+    heavy: 'bayonet_stab',
     block: 'standing_block_idle',
     dash: 'ss_sword_and_shield_attack_2',
     air: 'stabbing',
     slam: 'jump_attack',
-    launcher: 'gs_great_sword_slash_2',
+    launcher: 'club_swing_homerun',
     grab: GRAB,
-    flurry: 'double_dagger_stab',
+    flurry: 'one_hand_sword_combo',
   },
   // a lash from the shoulder, a crack across, a whole-arm cast; the heavy whirls it overhead
   whip: {
     chain: ['bash', 'mutant_punch', 'goalie_throw'],
     heavy: 'russian_kettlebell_swing',
     block: 'standing_block_idle',
-    dash: 'run_and_swing',
+    // a one-arm cut carried forward
+    dash: 'slash_advance',
     air: 'throw',
     slam: 'jump_attack',
     launcher: 'uppercut',
     grab: GRAB,
-    flurry: 'pistol_whip',
+    // one arm lashing again and again
+    flurry: 'one_hand_club_combo',
   },
 }
 
@@ -190,19 +207,29 @@ export type ShotWay = 'single' | 'burst' | 'auto' | 'spread' | 'held' | 'charge'
 
 /** The shots, by grip and way of firing, best first; a way a grip has no clip for fires its single shot. */
 export const SHOT_CLIPS: Record<ShotGrip, Partial<Record<ShotWay, readonly string[]>> & { single: readonly string[] }> = {
-  pistol: { single: ['pistol_fire'], burst: ['shooting_pistol'], auto: ['ual_pistol_shoot'], spread: ['shooting_pistol'], held: ['pistol_aim_idle'], charge: ['pistol_aim_idle'] },
+  // the gun raised and fired; quick snaps for a burst or full auto (shooting_pistol peeked round cover, gun at the face)
+  pistol: { single: ['pistol_fire'], burst: ['ual_pistol_shoot'], auto: ['ual_pistol_shoot'], spread: ['pistol_fire'], held: ['pistol_aim_idle'], charge: ['pistol_aim_idle'] },
   // the one-hand gun's shot with a gun in each hand: the off arm mirrors the main one half a beat behind, squared to the
   // front, each arm turned out to its own side, so the two fire in turn (heroes.ts akimboShot; the library has no two-gun shot)
   paired: { single: ['pistol_fire'], held: ['pistol_aim_idle'], charge: ['pistol_aim_idle'] },
-  rifle: { single: ['shoot_rifle'], burst: ['firing_rifle'], auto: ['firing_rifle'], held: ['rifle_aiming_idle'], charge: ['rifle_aiming_idle'] },
-  // braced low for its kick
-  heavy: { single: ['fire_rifle'], burst: ['crouch_rapid_fire'], auto: ['firing_rifle'], held: ['rifle_aiming_idle'], charge: ['rifle_aiming_idle'] },
-  bow: { single: ['standing_aim_recoil'], burst: ['standing_draw_arrow'], auto: ['standing_draw_arrow'], held: ['standing_aim_idle_01'], charge: ['standing_aim_overdraw'] },
-  thrown: { single: ['throw'], burst: ['throwing'], auto: ['throw_object'], spread: ['frisbee_throw'], held: ['throwing'], charge: ['goalie_throw', 'throw'], lobbed: ['rifle_toss_grenade'] },
-  magic1: { single: ['magic_standing_1h_magic_attack_01'], burst: ['magic_standing_1h_magic_attack_01'], auto: ['ual_spell_simple_shoot'], spread: ['magic_standing_1h_magic_attack_02'], held: ['ual_spell_simple_idle_loop'], charge: ['ual_spell_simple_idle_loop'] },
+  // the rifle raised to the eye and fired, standing on the aim's own legs (kit/anim/trims.ts CLIP_LEGS: the shot's own
+  // legs ran on the spot, and firing_rifle never lifts the rifle from the hip)
+  rifle: { single: ['shoot_rifle'], burst: ['shoot_rifle'], auto: ['shoot_rifle'], held: ['rifle_aiming_idle'], charge: ['rifle_aiming_idle'] },
+  // braced low for its kick, on one knee
+  // a launcher is fired standing, shouldered as the long gun is (the crouched burst dropped into a squat for one shot
+  // and was up again within the second, the tube held out in front of the chest)
+  heavy: { single: ['firing_rifle'], burst: ['firing_rifle'], auto: ['firing_rifle'], held: ['rifle_aiming_idle'], charge: ['rifle_aiming_idle'] },
+  // a quick shot is the shot again from the draw it holds (the arrow-from-the-quiver clip let go half way to the string)
+  bow: { single: ['standing_aim_recoil'], burst: ['standing_aim_recoil'], auto: ['standing_aim_recoil'], held: ['standing_aim_idle_01'], charge: ['standing_aim_overdraw'] },
+  thrown: { single: ['throw'], burst: ['throwing'], auto: ['throw_object'], spread: ['throwing'], held: ['throwing'], charge: ['goalie_throw', 'throw'], lobbed: ['rifle_toss_grenade'] },
+  // the wand thrust out at the target, every way it fires: the simple-spell clips cast with the left arm, raised, while
+  // the wand hung in the right at the hip, and the third attack swept it down past the knee (kit check, 2026-11-13)
+  magic1: { single: ['magic_standing_1h_magic_attack_01'], held: ['magic_standing_1h_magic_attack_01'], charge: ['magic_standing_1h_magic_attack_01'] },
   magic2: { single: ['magic_standing_2h_magic_attack_01'], burst: ['magic_standing_2h_magic_attack_01'], auto: ['magic_standing_2h_magic_attack_01'], spread: ['magic_standing_2h_magic_area_attack_02'], held: ['magic_standing_2h_magic_attack_03'], charge: ['magic_standing_2h_magic_attack_03'] },
-  // from the body, not a weapon: a push from the palms
-  emitter: { single: ['ual_spell_simple_shoot'], burst: ['ual_spell_simple_shoot'], auto: ['ual_spell_simple_shoot'], spread: ['ual_push_loop'], held: ['ual_push_loop'], charge: ['ual_push_loop'] },
+  // both palms pushed out for a shot, and for a blast, a beam or a charge (owner, 2026-11-13: the wand's own thrust
+  // made it one-hand magic without the wand, and a straight punch made it a brawler; the simple shot raised an arm 50
+  // to 70 degrees over the target, and the push loop squatted on its heels leaning back)
+  emitter: { single: ['magic_standing_2h_magic_attack_02'], spread: ['magic_standing_2h_magic_attack_03'], held: ['magic_standing_2h_magic_attack_03'], charge: ['magic_standing_2h_magic_attack_03'] },
 }
 
 type Shooting = Pick<Template, 'name' | 'delivery' | 'charge'> & { ranged?: Template['ranged'] }
@@ -263,12 +290,15 @@ export const CAST_CLIPS: Record<CastShape, readonly string[]> = {
   portal: ['wide_arm_spell_casting'],
   turret: ['ual_fixing_kneeling', 'ual_pickup_table'],
   trap: ['stomping'],
-  totem: ['ss_sword_and_shield_casting'],
+  // the blade driven into the ground where the totem stands (the shield's own cast turned the body 72 degrees off the aim)
+  totem: ['gs_great_sword_casting', 'stomping'],
   // Trick
   swapHealth: ['magic_standing_2h_magic_attack_04'],
   steal: ['magic_standing_1h_magic_attack_03'],
-  rewind: ['spell_casting'],
-  copyKit: ['magic_standing_1h_magic_attack_02', 'magic_standing_1h_magic_attack_03'],
+  // a low lunge rising into the cast that turns it back (spell_casting faced 67 degrees off the aim); a hand thrown out
+  // at the one it copies, or both drawing it in for a hero whose shot already throws that hand
+  rewind: ['casting_spell', 'magic_standing_1h_cast_spell_01'],
+  copyKit: ['magic_standing_1h_magic_attack_01', 'magic_standing_2h_cast_spell_01'],
   // a hand reached out and held on the one it takes
   possess: ['pointing_forward', 'taunt_gesture'],
   // Control: a stun slams an area; a root grips from a cast
@@ -302,12 +332,13 @@ export const MOVEMENT_CLIPS: Record<MovementKind, readonly string[]> = {
   dash: ['idle_to_sprint'],
   homing: ['flying_kick'],
   // a standing long jump: launched, carried, landed on the feet (the big jump dives into a roll)
-  leap: ['cmu_standing_long_jump', 'big_jump'],
+  leap: ['cmu_standing_long_jump'],
   // reaching up for the line it fired
   grapple: ['jump_to_hang'],
   swing: ['start_swinging'],
   flight: ['flying'],
   glide: ['falling_in_the_air_idle'],
+  // a climbing loop, hand over hand up the wall (no good as a mantle, which tops out; right for crawling up one)
   wallCrawl: ['climbing_up_wall'],
   // a dive away into the ground
   burrow: ['jump_away'],
@@ -347,7 +378,8 @@ export const ULTIMATE_CLIPS: Record<UltimateShape, readonly string[]> = {
   domain: ['gs_great_sword_casting'],
   rally: ['rallying'],
   rampage: ['standing_taunt_battlecry'],
-  form: ['gs_great_sword_power_up'],
+  // powering up into the form (the greatsword power-up barely moves in three seconds)
+  form: ['ss_sword_and_shield_power_up', 'standing_taunt_battlecry'],
   giant: ['standing_taunt_chest_thump'],
   fusion: ['clap_while_standing'],
   titan: ['casting_spell'],
@@ -569,6 +601,32 @@ export function skillMotion(build: Build, slot: BuildSlot): string | undefined {
     return build.look?.motions?.[slot] ?? (template && skillClips(template, slot)?.[0]) ?? COMMON_MOTIONS[slot].clip
   }
   return kitMotions(build)[slot === 'basic' ? 'combo1' : slot]
+}
+
+/**
+ * What a slot's skill is, as the tables above file it: `shot:emitter:single`, `cast:stun`, `move:leap`, `aura:element`,
+ * `ult:form`. Undefined for a slot the catalogue doesn't know, and for V (its blows are its family's, MELEE_SETS). A
+ * second source of clips keys its own by this (the development motion pack, motion-pack.ts PACK_SKILLS).
+ */
+export function skillKey(build: Pick<Build, 'slots' | 'look'>, slot: BuildSlot): string | undefined {
+  return build.look?.kinds?.[slot] ?? templateKey(templateOf(build, slot), slot)
+}
+
+/** `skillKey` for a template in a slot. */
+export function templateKey(t: Template | undefined, slot: BuildSlot): string | undefined {
+  if (!t) return undefined
+  if (slot === 'active1') {
+    const grip = shotGrip(t)
+    return grip && `shot:${grip}:${shotWay(t)}`
+  }
+  if (slot === 'active2') {
+    const shape = castShape(t)
+    return shape && `cast:${shape}`
+  }
+  if (slot === 'movement') return `move:${movementKind(t)}`
+  if (slot === 'passive') return `aura:${auraKind(t)}`
+  if (slot === 'ultimate') return `ult:${ultimateShape(t)}`
+  return undefined
 }
 
 /** The clip a basic attack's blow plays: its move of the moveset's, the charged heavy blow, or its step of the chain. */
